@@ -11,8 +11,23 @@ export default defineConfig({
     loader: "tsx",
     include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
   },
+  base: "./",
+  build: {
+    assetsInlineLimit: () => true,
+    chunkSizeWarningLimit: 100_000_000,
+    cssCodeSplit: false,
+    assetsDir: "",
+    rollupOptions: {
+      external: ["kaioken"],
+      output: {
+        inlineDynamicImports: true,
+      },
+    },
+  },
   plugins: [
-    viteSingleFile(),
+    viteSingleFile({
+      useRecommendedBuildConfig: false,
+    }),
     {
       enforce: "post",
       buildEnd: (err) => {

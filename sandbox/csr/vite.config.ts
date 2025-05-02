@@ -9,10 +9,16 @@ export default defineConfig({
     //exclude: ["kaioken"],
   },
   esbuild: {
-    sourcemap: false,
+    //sourcemap: false,
     supported: {
       "top-level-await": true, //browsers can handle top-level-await features
     },
   },
-  plugins: [kaioken()],
+  plugins: [
+    kaioken({
+      devtools: {
+        pathname: "/__devtools__",
+      },
+    }),
+  ],
 })

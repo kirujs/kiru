@@ -8,7 +8,10 @@ export type {
   GlobalEventAttributes,
   EventAttributes,
   StyleObject,
+  ClassNameArray,
 }
+
+type ClassNameArray = Array<string | false | undefined>
 
 type StyleObject = Prettify<
   Partial<
@@ -32,6 +35,22 @@ type ValidPath = `/${string}`
 type ValidUrlOrPath = ValidUrl | ValidPath | string
 type ListOfUrlsOrPaths = string
 type FileName = string
+
+type MediaPreload = "none" | "metadata" | "auto" | ""
+type HTMLMediaElementAttrs = {
+  autoplay?: boolean
+  controls?: boolean
+  crossOrigin?: string
+  currentTime?: number
+  loop?: boolean
+  muted?: boolean
+  playbackRate?: number
+  preload?: MediaPreload
+  preservesPitch?: boolean
+  src?: string
+  srcObject?: MediaProvider | null
+  volume?: number
+}
 
 type FormAction = ValidUrlOrPath
 type InputType =
@@ -191,7 +210,7 @@ type ErrorableElementTags = "img" | "iframe" | "link" | "script" | "source"
 type GlobalAttributes = {
   accessKey?: string
   autocapitalize?: "on" | "off" | "none" | "sentences" | "words" | "characters"
-  className?: string
+  className?: string | ClassNameArray
   contentEditable?: boolean
   dir?: Direction
   draggable?: boolean | "auto"
@@ -295,13 +314,7 @@ interface HtmlElementAttributes {
   }
   article: {}
   aside: {}
-  audio: {
-    src?: ValidUrlOrPath
-    controls?: boolean
-    autoplay?: boolean
-    loop?: boolean
-    muted?: boolean
-  }
+  audio: HTMLMediaElementAttrs
   b: {}
   base: {
     href?: ValidUrlOrPath
@@ -531,6 +544,7 @@ interface HtmlElementAttributes {
   pre: {}
   progress: {
     value?: string | number
+    min?: string | number
     max?: string | number
   }
   q: {
@@ -676,15 +690,20 @@ interface HtmlElementAttributes {
   u: {}
   ul: {}
   var: {}
-  video: {
-    src?: ValidUrlOrPath
+  video: HTMLMediaElementAttrs & {
+    disablePictureInPicture?: boolean
+    playsInline?: boolean
     poster?: ValidUrlOrPath
     width?: string | number
     height?: string | number
-    autoplay?: boolean
-    controls?: boolean
-    loop?: boolean
-    muted?: boolean
+    onenterpictureinpicture?: (
+      this: HTMLVideoElement,
+      ev: PictureInPictureEvent
+    ) => void
+    onleavepictureinpicture?: (
+      this: HTMLVideoElement,
+      ev: PictureInPictureEvent
+    ) => void
   }
 }
 

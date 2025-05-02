@@ -1,6 +1,6 @@
-import { createElement } from "./element.js"
+import { createElement, Fragment } from "./element.js"
 
-export { jsx }
+export { jsx, jsx as jsxs, jsx as jsxDEV, Fragment }
 
 function jsx(
   type: Kaioken.VNode["type"],

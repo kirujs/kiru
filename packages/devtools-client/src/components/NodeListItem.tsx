@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useContext } from "kaioken"
-import { Chevron } from "devtools-shared"
+import { ChevronIcon } from "devtools-shared"
 import { useDevtoolsStore } from "../store"
 import {
   getNodeName,
@@ -77,11 +77,13 @@ export function NodeListItem({
             inspectComponent.value = null
             setSelectedNode(isSelected ? null : (node as any))
           }}
-          className={`flex gap-2 items-center cursor-pointer mb-1 scroll-m-12 ${isSelected ? "font-medium bg-primary selected-vnode" : ""}`}
+          className={`flex gap-2 items-center cursor-pointer mb-1 scroll-m-12 ${
+            isSelected ? "font-medium bg-primary selected-vnode" : ""
+          }`}
           data-id={id}
         >
           {showChildren && (
-            <Chevron
+            <ChevronIcon
               className={`cursor-pointer transition ${
                 collapsed ? "" : "rotate-90"
               }`}

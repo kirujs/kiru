@@ -1,5 +1,6 @@
 import { useCallback } from "kaioken"
 import { popup } from "../store"
+import { broadcastChannel, BroadcastChannelMessage } from "devtools-shared"
 
 type SavedSize = {
   width: number
@@ -34,9 +35,9 @@ export const useDevTools = () => {
       if (!w)
         return console.error("[kaioken]: Unable to open devtools window"), rej()
 
-      const handleReady = () => {
-        // @ts-expect-error We have our own custom type here
-        window.__kaioken?.off("devtools:ready", handleReady)
+      const handleReady = (e: MessageEvent<BroadcastChannelMessage>) => {
+        if (e.data.type !== "ready") return
+        broadcastChannel.removeEventListener(handleReady)
         console.debug("[kaioken]: devtools window opened")
         res(w)
         popup.value = w
@@ -45,8 +46,7 @@ export const useDevTools = () => {
           popup.value = null
         }
       }
-      // @ts-expect-error We have our own custom type here
-      window.__kaioken?.on("devtools:ready", handleReady)
+      broadcastChannel.addEventListener(handleReady)
 
       w.onresize = () => {
         sessionStorage.setItem(

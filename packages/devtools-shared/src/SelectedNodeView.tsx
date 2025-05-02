@@ -1,15 +1,10 @@
-import { AppContext, useEffect, useMemo, useRequestUpdate } from "kaioken"
-import {
-  applyObjectChangeFromKeys,
-  getComponentFileLink,
-  getNodeName,
-} from "./utils"
+import { AppContext, useEffect, useRequestUpdate } from "kaioken"
+import { isVNodeDeleted } from "../../lib/dist/utils.js"
+import { applyObjectChangeFromKeys, getNodeName } from "./utils"
 import { NodeDataSection } from "./NodeDataSection"
-import { RefreshIcon } from "./RefreshIcon"
 import { ValueEditor } from "./ValueEditor"
-import { ExternalLinkIcon } from "./ExternalLinkIcon"
-import { FLAG } from "../../lib/dist/constants"
-import { bitmapOps } from "../../lib/dist/bitmap"
+import { RefreshIcon } from "./icons"
+import { FileLink } from "./FileLink"
 
 type SelectedNodeViewProps = {
   selectedApp: AppContext
@@ -29,7 +24,7 @@ export function SelectedNodeView({
   useEffect(() => {
     const handleUpdate = (appCtx: AppContext) => {
       if (appCtx !== selectedApp) return
-      if (bitmapOps.isFlagSet(selectedNode, FLAG.DELETION)) {
+      if (isVNodeDeleted(selectedNode)) {
         setSelectedNode(null)
       } else {
         requestUpdate()
@@ -39,11 +34,6 @@ export function SelectedNodeView({
     kaiokenGlobal?.on("update", handleUpdate)
     return () => kaiokenGlobal?.off("update", handleUpdate)
   }, [])
-
-  const fileLink = useMemo<string | null>(
-    () => getComponentFileLink(selectedNode),
-    [selectedNode]
-  )
 
   const refresh = () => {
     if (!selectedNode || !selectedApp?.mounted) return
@@ -60,22 +50,7 @@ export function SelectedNodeView({
       <h2 className="flex justify-between items-center font-bold mb-2 pb-2 border-b-2 border-neutral-800">
         <div className="flex gap-2 items-center">
           {"<" + getNodeName(selectedNode) + ">"}
-          {fileLink && (
-            <a
-              className="flex items-center gap-1 text-[10px] opacity-50 hover:opacity-100 transition-opacity"
-              href={fileLink}
-              onclick={(e) => {
-                e.preventDefault()
-                // @ts-expect-error we have our own event
-                kaiokenGlobal?.emit("devtools:openEditor", fileLink)
-              }}
-              //target="_top"
-              title="Open in editor"
-            >
-              Open in editor
-              <ExternalLinkIcon width="0.65rem" height="0.65rem" />
-            </a>
-          )}
+          <FileLink fn={selectedNode.type} />
         </div>
         <button onclick={refresh}>
           <RefreshIcon className="w-5 h-5" />
@@ -186,14 +161,15 @@ function HookTreeDisplay({
       </NodeDataSection>
     )
   }
-  const { name, debug, ...rest } = node
-  const data = debug?.get ? debug.get() : rest
+  const { name, dev, cleanup, ...rest } = node as Kaioken.Hook<{}>
+  const devtools = dev?.devtools
+  const data = typeof devtools?.get === "function" ? devtools.get() : rest
 
   const handleChange = (keys: string[], value: unknown) => {
-    if (!selectedApp?.mounted || !debug?.set) return
-    const data = debug.get()
+    if (!selectedApp?.mounted || !devtools?.set || !devtools?.get) return
+    const data = devtools.get()
     applyObjectChangeFromKeys(data, keys, value)
-    debug.set(data)
+    devtools.set(data)
   }
 
   return (
@@ -203,7 +179,7 @@ function HookTreeDisplay({
         <ValueEditor
           data={data}
           onChange={handleChange}
-          mutable={!!debug?.set}
+          mutable={!!devtools?.set}
           objectRefAcc={[]}
         />
       </div>

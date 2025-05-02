@@ -26,8 +26,8 @@ export const esbuildPluginTransform: EsbuildInlineTransform = async (
 }
 
 export const options = {
-  //inject: ["kaioken"],
   entryPoints: ["src/index.ts", "src/style.css"],
+  external: ["kaioken"],
   jsx: "transform",
   outdir: "dist",
   jsxFactory: "kaioken.createElement",
@@ -51,7 +51,7 @@ export function writeFile(content: string) {
   fs.mkdirSync("dist")
   fs.writeFileSync(
     "dist/index.js",
-    `export default \`(() => {${content.replace(/[`\\$]/g, "\\$&")}\n})()\``,
+    `export default \`${content.replace(/[`\\$]/g, "\\$&")}\n\``,
     {
       encoding: "utf-8",
     }

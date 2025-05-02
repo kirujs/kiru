@@ -130,20 +130,15 @@ program
 
     console.log(`Downloading project template '${templateUrl}'...`)
     try {
-      const git = simpleGit()
-      await git.clone(templateUrl, dest)
+      await simpleGit().clone(templateUrl, dest)
+      fs.rmSync(`${dest}/.git`, { recursive: true, force: true })
+      simpleGit(dest).init()
     } catch (error) {
       console.error(
         `[create-kaioken]: An error occurred while cloning the template:`,
         error
       )
       return
-    }
-
-    // remove '.git' folder
-    const gitFolder = `${dest}/.git`
-    if (fs.existsSync(gitFolder)) {
-      fs.rmSync(gitFolder, { recursive: true, force: true })
     }
 
     const availablePackageManagers = await detectPackageManager()

@@ -12,4 +12,4 @@ esbuild.buildSync({
   write: true,
 })
 
-fs.copyFileSync("./types.d.ts", "dist/index.d.ts")
+fs.copyFileSync("./src/types.d.ts", "dist/index.d.ts")

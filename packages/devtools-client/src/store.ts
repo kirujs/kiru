@@ -1,20 +1,23 @@
 import { AppContext, createStore, signal } from "kaioken"
 import { isDevtoolsApp } from "./utils"
+import { broadcastChannel } from "devtools-shared"
 
-export const kaiokenGlobal =
-  "window" in globalThis
-    ? (window.opener.__kaioken as typeof window.__kaioken)
-    : undefined
+export let kaiokenGlobal: typeof window.__kaioken
+let runAnyway = true
+if ("window" in globalThis) {
+  if (window.opener) {
+    kaiokenGlobal = window.opener.__kaioken
+  } else if (runAnyway) {
+    kaiokenGlobal = window.__kaioken
+  }
+}
 
 export const toggleElementToVnode = signal(false)
-kaiokenGlobal?.on(
-  // @ts-expect-error We have our own custom type here
-  "devtools:toggleInspect",
-  // @ts-expect-error We have our own custom type here
-  ({ value }) => {
-    toggleElementToVnode.value = !!value
+broadcastChannel.addEventListener((e) => {
+  if (e.data.type === "set-inspect-enabled") {
+    toggleElementToVnode.value = e.data.value
   }
-)
+})
 
 const initialApps = (kaiokenGlobal?.apps ?? []).filter(
   (app) => !isDevtoolsApp(app)
@@ -52,12 +55,11 @@ export const useDevtoolsStore = createStore(
 )
 
 kaiokenGlobal?.on("mount", (app) => {
-  if (!isDevtoolsApp(app)) {
-    useDevtoolsStore.methods.addApp(app)
-    const selected = useDevtoolsStore.getState().selectedApp
-    if (!selected) {
-      useDevtoolsStore.methods.setSelectedApp(app)
-    }
+  if (isDevtoolsApp(app)) return
+  useDevtoolsStore.methods.addApp(app)
+  const selected = useDevtoolsStore.getState().selectedApp
+  if (!selected) {
+    useDevtoolsStore.methods.setSelectedApp(app)
   }
 })
 kaiokenGlobal?.on("unmount", (app) => {

@@ -11,14 +11,13 @@ const handleSearch: ElementProps<"input">["oninput"] = (e) => {
   if (inspectComponent.value) inspectComponent.value = null
 }
 
-export function AppView() {
+export function AppVDomView() {
   const { value: app } = useDevtoolsStore((state) => state.selectedApp)
   const { searchRef } = useKeyboardControls()
 
   return (
     <div className="flex-grow p-2 sticky top-0">
       <div className="flex gap-4 pb-2 border-b-2 border-neutral-800 mb-2 items-center">
-        <h2 className="font-bold flex-shrink-0">App View</h2>
         <input
           ref={searchRef}
           className="bg-[#171616] px-1 py-2 w-full focus:outline focus:outline-primary"

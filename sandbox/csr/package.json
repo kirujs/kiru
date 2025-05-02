@@ -17,7 +17,7 @@
     "vite-plugin-kaioken": "workspace:^"
   },
   "dependencies": {
-    "@kaioken-core/hooks": "0.0.8",
+    "@kaioken-core/hooks": "0.0.9",
     "kaioken": "workspace:^"
   }
 }

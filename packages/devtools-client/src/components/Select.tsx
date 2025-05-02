@@ -6,6 +6,7 @@ type SelectOption =
   | {
       key: Key
       text: string
+      disabled?: boolean
     }
   | string
 
@@ -22,14 +23,19 @@ export function Select(
 
   return (
     <select
-      className={"p-2 " + className || ""}
+      className={className}
       onchange={(e) => onChange?.(e.target.value)}
       {...rest}
     >
       {props.options.map((item) => {
         const key = typeof item === "object" ? String(item.key) : item
+        const disabled = typeof item === "object" && item.disabled
         return (
-          <option value={key} selected={value?.toString() === key}>
+          <option
+            value={key}
+            selected={value?.toString() === key}
+            disabled={disabled}
+          >
             {typeof item === "object" ? item.text : item}
           </option>
         )

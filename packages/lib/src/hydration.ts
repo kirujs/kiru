@@ -1,4 +1,3 @@
-import type { Scheduler } from "./scheduler"
 import type { MaybeDom, SomeDom } from "./types.utils"
 
 export const hydrationStack = {
@@ -28,12 +27,12 @@ export const hydrationStack = {
   bumpChildIndex: function () {
     this.childIdxStack[this.childIdxStack.length - 1]++
   },
-  captureEvents: function (element: Element, scheduler: Scheduler) {
+  captureEvents: function (element: Element) {
     toggleEvtListeners(element, true)
-    scheduler.nextIdle(() => {
-      toggleEvtListeners(element, false)
-      while (this.eventDeferrals.length) this.eventDeferrals.shift()!()
-    })
+  },
+  releaseEvents: function (element: Element) {
+    toggleEvtListeners(element, false)
+    while (this.eventDeferrals.length) this.eventDeferrals.shift()!()
   },
 }
 

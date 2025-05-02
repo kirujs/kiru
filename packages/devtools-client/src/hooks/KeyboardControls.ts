@@ -1,4 +1,4 @@
-import { useKeyStroke } from "@kaioken-core/hooks"
+import { useKeyStroke } from "devtools-shared"
 import { inspectComponent, KeyboardMap } from "../signal"
 import { useDevtoolsStore } from "../store"
 import { useRef } from "kaioken"

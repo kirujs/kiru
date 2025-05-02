@@ -1,30 +1,88 @@
 import * as kaioken from "kaioken"
-import { twMerge } from "tailwind-merge"
 import { Flame } from "./icon/Flame"
 import { useAnchorPos } from "./hooks/useAnchorPos"
-import { useEffectDeep, useSpring } from "@kaioken-core/hooks"
 import {
   useSignal,
   Transition,
   useEffect,
   useLayoutEffect,
   useRef,
+  useAppContext,
 } from "kaioken"
 import { useDevTools } from "./hooks/useDevtools"
 import { InspectComponent } from "./components/InspectComponent"
 import { PageInfo } from "./icon/PageInfo"
 import { SquareMouse } from "./icon/SquareMouse"
 import { toggleElementToVnode } from "./store"
+import { broadcastChannel, useEffectDeep } from "devtools-shared"
 
 const handleToggleInspect = () => {
-  window.__kaioken?.emit(
-    // @ts-expect-error We have our own custom type here
-    "devtools:toggleInspect",
-    { value: !toggleElementToVnode.value }
-  )
+  toggleElementToVnode.value = !toggleElementToVnode.value
+  broadcastChannel.send({
+    type: "set-inspect-enabled",
+    value: toggleElementToVnode.value,
+  })
+}
+
+type Vec2 = {
+  x: number
+  y: number
+}
+
+type LerpedVec2Signal = kaioken.Signal<Vec2> & {
+  set: (value: Vec2, options?: { hard?: boolean }) => void
+}
+
+function useLerpedVec2(
+  value: Vec2,
+  options: { damping: number }
+): LerpedVec2Signal {
+  const { damping } = options
+  const current = useSignal(value)
+  const target = useRef(value)
+
+  useEffect(() => {
+    let frameId: number | null = null
+    const callback: FrameRequestCallback = () => {
+      const dist = Math.sqrt(
+        Math.pow(target.current.x - current.value.x, 2) +
+          Math.pow(target.current.y - current.value.y, 2)
+      )
+      if (dist < 5) {
+        return
+      }
+      const nextX =
+        current.value.x + (target.current.x - current.value.x) * damping
+      const nextY =
+        current.value.y + (target.current.y - current.value.y) * damping
+
+      current.value = {
+        x: nextX,
+        y: nextY,
+      }
+
+      frameId = window.requestAnimationFrame(callback)
+    }
+    frameId = window.requestAnimationFrame(callback)
+    return () => {
+      if (frameId != null) {
+        window.cancelAnimationFrame(frameId)
+      }
+    }
+  }, [value.x, value.y])
+
+  return Object.assign(current, {
+    set: (value: Vec2, options: { hard?: boolean }): void => {
+      target.current = value
+      if (options?.hard) {
+        current.value = value
+      }
+    },
+  }) as LerpedVec2Signal
 }
 
 export default function App() {
+  const appCtx = useAppContext()
   const toggled = useSignal(false)
   const handleOpen = useDevTools()
   const {
@@ -32,7 +90,6 @@ export default function App() {
     anchorRef,
     viewPortRef,
     startMouse,
-    elementBound,
     snapSide,
     updateAnchorPos,
   } = useAnchorPos()
@@ -40,29 +97,23 @@ export default function App() {
     snapSide.value === "left" || snapSide.value === "right"
   const isMounted = useRef(false)
 
-  const [springBtnCoords, setSpringBtnCoords] = useSpring(anchorCoords.value, {
+  const smoothedCoords = useLerpedVec2(anchorCoords.value, {
     damping: 0.4,
   })
 
   useLayoutEffect(() => {
     if (isMounted.current === false) {
-      setSpringBtnCoords(anchorCoords.value, {
+      smoothedCoords.set(anchorCoords.value, {
         hard: true,
       })
     }
 
     isMounted.current = true
-  }, [Math.round(elementBound.width), Math.round(elementBound.height)])
+  }, [])
 
   useEffectDeep(() => {
-    setSpringBtnCoords(anchorCoords.value)
+    smoothedCoords.set(anchorCoords.value)
   }, [anchorCoords.value])
-
-  useEffect(() => {
-    if (toggled.value) {
-      updateAnchorPos()
-    }
-  }, [toggled.value, updateAnchorPos])
 
   return (
     <>
@@ -72,9 +123,14 @@ export default function App() {
       />
       <div
         ref={anchorRef}
-        className={`flex ${isHorizontalSnap ? "flex-col" : ""} ${toggled.value ? "rounded-3xl" : "rounded-full"} p-1 gap-1 items-center will-change-transform bg-crimson`}
+        draggable
+        className={`flex ${isHorizontalSnap ? "flex-col" : ""} ${
+          toggled.value ? "rounded-3xl" : "rounded-full"
+        } p-1 gap-1 items-center will-change-transform bg-crimson`}
         style={{
-          transform: `translate3d(${Math.round(springBtnCoords.x)}px, ${Math.round(springBtnCoords.y)}px, 0)`,
+          transform: `translate3d(${Math.round(
+            smoothedCoords.value.x
+          )}px, ${Math.round(smoothedCoords.value.y)}px, 0)`,
         }}
       >
         <Transition
@@ -101,7 +157,9 @@ export default function App() {
                   title="Toggle Component Inspection"
                   onclick={handleToggleInspect}
                   style={{ transform: `scale(${scale})`, opacity }}
-                  className={`transition text-white rounded-full p-1 hover:bg-[#0003] ${toggleElementToVnode.value ? "bg-[#0003]" : ""}`}
+                  className={`transition text-white rounded-full p-1 hover:bg-[#0003] ${
+                    toggleElementToVnode.value ? "bg-[#0003]" : ""
+                  }`}
                 >
                   <SquareMouse width={16} height={16} />
                 </button>
@@ -110,12 +168,19 @@ export default function App() {
           }}
         />
         <button
-          className={twMerge(
-            "bg-crimson rounded-full p-1",
-            startMouse.value && "pointer-events-none"
-          )}
-          onclick={() => {
+          className={
+            "bg-crimson rounded-full p-1" +
+            (startMouse.value ? " pointer-events-none" : "")
+          }
+          onclick={async () => {
             toggled.value = !toggled.value
+            appCtx.flushSync()
+            // wait for frame after next
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                updateAnchorPos()
+              })
+            })
           }}
           tabIndex={-1}
         >

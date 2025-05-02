@@ -3,7 +3,7 @@ import { Button } from "./atoms/Button"
 
 const count = signal(0)
 
-export function MemoExample() {
+export default function MemoExample() {
   return (
     <div id="memo">
       <span>Count: {count.value}</span>

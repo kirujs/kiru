@@ -5,7 +5,7 @@ ThemeContext.displayName = "ThemeContext"
 const ThemeContextDispatcher = createContext<() => void>(() => {})
 ThemeContextDispatcher.displayName = "ThemeContextDispatcher"
 
-export function ContextExample() {
+export default function ContextExample() {
   const [themeA, setThemeA] = useState<"light" | "dark">("light")
   const [themeB, setThemeB] = useState<"light" | "dark">("light")
   return (

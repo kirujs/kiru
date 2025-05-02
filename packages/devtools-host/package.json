@@ -14,20 +14,19 @@
   "keywords": [],
   "license": "ISC",
   "devDependencies": {
-    "@types/node": "^22.7.4",
+    "@types/node": "^22.10.1",
     "autoprefixer": "^10.4.20",
     "esbuild": "^0.24.0",
     "esbuild-plugin-inline-import": "^1.1.0",
-    "esbuild-style-plugin": "^1.6.3",
-    "npm-run-all": "^4.1.5",
-    "postcss": "^8.4.47",
-    "tailwindcss": "^3.4.13",
-    "tsx": "^4.19.1"
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.16",
+    "tsx": "^4.19.2"
   },
   "dependencies": {
-    "@kaioken-core/hooks": "0.0.8",
-    "devtools-shared": "workspace:^",
-    "kaioken": "workspace:^",
-    "tailwind-merge": "^2.5.2"
+    "@kaioken-core/hooks": "0.0.9",
+    "devtools-shared": "workspace:^"
+  },
+  "peerDependencies": {
+    "kaioken": "workspace:^"
   }
 }

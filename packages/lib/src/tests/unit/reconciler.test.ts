@@ -5,7 +5,7 @@ import { ctx } from "../../globals.js"
 import * as kaioken from "../../index.js"
 import { FLAG } from "../../constants.js"
 import { shuffle } from "./utils.js"
-import { bitmapOps } from "../../bitmap.js"
+import { flags } from "../../flags.js"
 import { commitSnapshot } from "../../utils.js"
 
 describe("reconciler", () => {
@@ -95,7 +95,7 @@ describe("reconciler", () => {
         const prev = c?.prev
         if (prev === undefined || prev.index < i) {
           assert.strictEqual(
-            bitmapOps.isFlagSet(c!, FLAG.PLACEMENT),
+            flags.get(c!.flags, FLAG.PLACEMENT),
             true,
             `[${opName}]: ${i}th child should have flag "placement"`
           )

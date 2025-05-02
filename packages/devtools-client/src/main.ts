@@ -1,9 +1,8 @@
 import "./index.css"
 import { mount } from "kaioken"
 import { App } from "./App"
-import { kaiokenGlobal } from "./store"
+import { broadcastChannel } from "devtools-shared"
 
-mount(App, document.body).then(() => {
-  // @ts-expect-error We have our own custom type here
-  kaiokenGlobal?.emit("devtools:ready")
+mount(App, document.getElementById("app")!).then(() => {
+  broadcastChannel.send({ type: "ready" })
 })

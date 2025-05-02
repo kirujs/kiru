@@ -10,7 +10,7 @@ import {
 import { tracking, signalSubsMap } from "./globals.js"
 import { type SignalSubscriber, ReadonlySignal } from "./types.js"
 import { node } from "../globals.js"
-import { useHook, useHookHMRInvalidation } from "../hooks/utils.js"
+import { useHook } from "../hooks/utils.js"
 import { generateRandomID } from "../generateId.js"
 
 export class Signal<T> {
@@ -166,30 +166,31 @@ export const signal = <T>(initial: T, displayName?: string) => {
 }
 
 export const useSignal = <T>(initial: T, displayName?: string) => {
-  if (__DEV__) {
-    useHookHMRInvalidation(initial, displayName)
-  }
   return useHook(
     "useSignal",
     { signal: undefined as any as Signal<T> },
-    ({ hook, isInit, vNode }) => {
-      if (isInit) {
-        if (__DEV__) {
-          hook.debug = {
+    ({ hook, isInit }) => {
+      if (__DEV__) {
+        hook.dev = {
+          reinitUponRawArgsChanged: true,
+          devtools: {
             get: () => ({
               displayName: hook.signal.displayName,
               value: hook.signal.peek(),
             }),
             set: ({ value }) => {
-              hook.signal.sneak(value)
+              hook.signal.value = value
             },
-          }
-          if (hook.signal && vNode.hmrUpdated) {
-            hook.signal.value = initial
-          }
+          },
         }
-        hook.signal ??= new Signal(initial, displayName)
+        if (isInit && hook.dev.rawArgsChanged) {
+          hook.signal.value = initial
+          return hook.signal
+        }
+      }
+      if (isInit) {
         hook.cleanup = () => Signal.dispose(hook.signal)
+        hook.signal = new Signal(initial, displayName)
       }
       return hook.signal
     }

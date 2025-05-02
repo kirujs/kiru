@@ -9,6 +9,11 @@ type UseContextHookState<T> = {
   warnIfNotFound: boolean
 }
 
+/**
+ * Gets the current value of a context provider created by the context.
+ *
+ * @see https://kaioken.dev/docs/hooks/useContext
+ */
 export function useContext<T>(
   context: Kaioken.Context<T>,
   warnIfNotFound = true
@@ -25,18 +30,19 @@ const useContextCallback = <T>({
   isInit,
   vNode,
 }: HookCallbackState<UseContextHookState<T>>) => {
-  if (isInit) {
-    if (__DEV__) {
-      hook.debug = {
+  if (__DEV__) {
+    hook.dev = {
+      devtools: {
         get: () => ({
           contextName: hook.context.Provider.displayName || "",
           value: hook.ctxNode
             ? hook.ctxNode.props.value
             : hook.context.default(),
         }),
-      }
+      },
     }
-
+  }
+  if (isInit) {
     let n = vNode.parent
     while (n) {
       if (n.type === $CONTEXT_PROVIDER) {

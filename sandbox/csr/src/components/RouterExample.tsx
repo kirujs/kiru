@@ -1,6 +1,7 @@
-import { useState, useRouter, Link, Router, Route } from "kaioken"
+import { useState } from "kaioken"
+import { useRouter, Link, Router, Route } from "kaioken/router"
 
-export function RouterExample() {
+export default function RouterExample() {
   const [count, setCount] = useState(0)
   const {
     params,

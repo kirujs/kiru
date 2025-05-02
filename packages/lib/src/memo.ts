@@ -1,6 +1,5 @@
-import { createElement } from "./element.js"
-import { useRef } from "./hooks/useRef.js"
-import { useVNode } from "./hooks/utils.js"
+import { $MEMO } from "./constants.js"
+import { __DEV__ } from "./env.js"
 
 function _arePropsEqual<T extends Record<string, unknown>>(
   prevProps: T,
@@ -15,38 +14,28 @@ function _arePropsEqual<T extends Record<string, unknown>>(
   return true
 }
 
+export type MemoFn = Function & {
+  [$MEMO]: {
+    arePropsEqual: (
+      prevProps: Record<string, unknown>,
+      nextProps: Record<string, unknown>
+    ) => boolean
+  }
+}
+
 export function memo<T extends Record<string, unknown> = {}>(
   fn: Kaioken.FC<T>,
   arePropsEqual: (prevProps: T, nextProps: T) => boolean = _arePropsEqual
 ): (props: T) => JSX.Element {
-  const memo = function (props: T) {
-    const prevProps = useRef<T | null>(null)
-    const vNode = useRef<Kaioken.VNode | null>(null)
-    const thisNode = useVNode()
-    thisNode.props = props
-    thisNode.depth = (thisNode.parent?.depth || 0) + 1
+  return Object.assign(fn, {
+    [$MEMO]: { arePropsEqual },
+  })
+}
 
-    if (
-      vNode.current &&
-      prevProps.current &&
-      arePropsEqual(prevProps.current, props)
-    ) {
-      vNode.current.props = props
-      prevProps.current = props
-      vNode.current.frozen = true
-      return vNode.current
-    }
-
-    prevProps.current = props
-
-    if (!vNode.current) {
-      vNode.current = createElement(fn, props)
-    } else {
-      Object.assign(vNode.current.props, props)
-    }
-    vNode.current.frozen = false
-    return vNode.current
-  }
-  memo.displayName = "Kaioken.memo"
-  return memo
+export function isMemoFn(fn: any): fn is MemoFn {
+  return (
+    typeof fn === "function" &&
+    fn[$MEMO] &&
+    typeof fn[$MEMO].arePropsEqual === "function"
+  )
 }

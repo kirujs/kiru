@@ -4,6 +4,7 @@ export const $CONTEXT_PROVIDER = Symbol.for("kaioken.contextProvider")
 export const $FRAGMENT = Symbol.for("kaioken.fragment")
 export const $KAIOKEN_ERROR = Symbol.for("kaioken.error")
 export const $HMR_ACCEPT = Symbol.for("kaioken.hmrAccept")
+export const $MEMO = Symbol.for("kaioken.memo")
 
 export const CONSECUTIVE_DIRTY_LIMIT = 50
 

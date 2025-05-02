@@ -1,7 +1,7 @@
 import type { AppContext } from "./appContext"
 import type { FunctionVNode } from "./types.utils"
-import { bitmapOps } from "./bitmap.js"
-import { CONSECUTIVE_DIRTY_LIMIT, FLAG } from "./constants.js"
+import { flags } from "./flags.js"
+import { $MEMO, CONSECUTIVE_DIRTY_LIMIT, FLAG } from "./constants.js"
 import { commitWork, createDom, hydrateDom } from "./dom.js"
 import { __DEV__ } from "./env.js"
 import { KaiokenError } from "./error.js"
@@ -9,7 +9,8 @@ import { ctx, node, nodeToCtxMap, renderMode } from "./globals.js"
 import { hydrationStack } from "./hydration.js"
 import { assertValidElementProps } from "./props.js"
 import { reconcileChildren } from "./reconciler.js"
-import { isExoticVNode, traverseApply, vNodeContains } from "./utils.js"
+import { isExoticVNode, latest, traverseApply, vNodeContains } from "./utils.js"
+import { isMemoFn } from "./memo.js"
 
 type VNode = Kaioken.VNode
 
@@ -33,10 +34,7 @@ export class Scheduler {
     post: [] as Function[],
   }
 
-  constructor(
-    private appCtx: AppContext<any>,
-    private maxFrameMs = 50
-  ) {
+  constructor(private appCtx: AppContext<any>, private maxFrameMs = 50) {
     const timeRemaining = () => this.frameDeadline - window.performance.now()
     const deadline = {
       didTimeout: false,
@@ -56,6 +54,7 @@ export class Scheduler {
     this.currentTreeIndex = 0
     this.nextIdleEffects = []
     this.deletions = []
+    this.effectCallbacks = { pre: [], post: [] }
     this.frameDeadline = 0
     this.pendingCallback = undefined
     this.sleep()
@@ -75,14 +74,22 @@ export class Scheduler {
     }
   }
 
-  nextIdle(fn: (scheduler: this) => void) {
+  nextIdle(fn: (scheduler: this) => void, wakeUpIfIdle = true) {
     this.nextIdleEffects.push(fn)
-    this.wake()
+    if (wakeUpIfIdle) this.wake()
+  }
+
+  flushSync() {
+    if (this.frameHandle !== null) {
+      globalThis.cancelAnimationFrame(this.frameHandle)
+      this.frameHandle = null
+    }
+    this.workLoop()
   }
 
   queueUpdate(vNode: VNode) {
-    if ("frozen" in vNode) {
-      vNode.frozen = false
+    if (vNode.prev?.memoizedProps) {
+      delete vNode.prev.memoizedProps
     }
     if (this.isImmediateEffectsMode) {
       this.immediateEffectDirtiedRender = true
@@ -177,7 +184,7 @@ export class Scheduler {
   }
 
   queueDelete(vNode: VNode) {
-    traverseApply(vNode, (n) => bitmapOps.setFlag(n, FLAG.DELETION))
+    traverseApply(vNode, (n) => (n.flags = flags.set(n.flags, FLAG.DELETION)))
     this.deletions.push(vNode)
   }
 
@@ -190,26 +197,23 @@ export class Scheduler {
 
   private workLoop(deadline?: IdleDeadline): void {
     ctx.current = this.appCtx
-    let shouldYield = false
-    while (this.nextUnitOfWork && !shouldYield) {
+    while (this.nextUnitOfWork) {
       this.nextUnitOfWork =
         this.performUnitOfWork(this.nextUnitOfWork) ??
         this.treesInProgress[++this.currentTreeIndex]
 
-      shouldYield =
-        (deadline && deadline.timeRemaining() < 1) ??
-        (!deadline && !this.nextUnitOfWork)
+      if ((deadline?.timeRemaining() ?? 1) < 1) break
     }
 
     if (this.isFlushReady()) {
       while (this.deletions.length) {
         commitWork(this.deletions.shift()!)
       }
-      const tip = [...this.treesInProgress]
+      const treesInProgress = [...this.treesInProgress]
       this.treesInProgress = []
       this.currentTreeIndex = 0
-      for (const t of tip) {
-        commitWork(t)
+      for (const tree of treesInProgress) {
+        commitWork(tree)
       }
 
       this.isImmediateEffectsMode = true
@@ -249,51 +253,47 @@ export class Scheduler {
   }
 
   private performUnitOfWork(vNode: VNode): VNode | void {
-    const frozen = "frozen" in vNode && vNode.frozen === true
-    const skip = frozen && !bitmapOps.isFlagSet(vNode, FLAG.PLACEMENT)
-    if (!skip) {
-      try {
-        if (typeof vNode.type === "function") {
-          this.updateFunctionComponent(vNode as FunctionVNode)
-        } else if (isExoticVNode(vNode)) {
-          vNode.child =
-            reconcileChildren(
-              this.appCtx,
-              vNode,
-              vNode.child || null,
-              vNode.props.children
-            ) || undefined
-        } else {
-          this.updateHostComponent(vNode)
+    let renderChild = true
+    try {
+      const { type, props } = vNode
+      if (typeof type === "function") {
+        renderChild = this.updateFunctionComponent(vNode as FunctionVNode)
+      } else if (isExoticVNode(vNode)) {
+        vNode.child =
+          reconcileChildren(
+            this.appCtx,
+            vNode,
+            vNode.child || null,
+            props.children
+          ) || undefined
+      } else {
+        this.updateHostComponent(vNode)
+      }
+    } catch (error) {
+      window.__kaioken?.emit(
+        "error",
+        this.appCtx,
+        error instanceof Error ? error : new Error(String(error))
+      )
+      if (KaiokenError.isKaiokenError(error)) {
+        if (error.customNodeStack) {
+          setTimeout(() => {
+            throw new Error(error.customNodeStack)
+          })
         }
-      } catch (error) {
-        window.__kaioken?.emit(
-          "error",
-          this.appCtx,
-          error instanceof Error ? error : new Error(String(error))
-        )
-        if (KaiokenError.isKaiokenError(error)) {
-          if (error.customNodeStack) {
-            setTimeout(() => {
-              throw new Error(error.customNodeStack)
-            })
-          }
-          if (error.fatal) {
-            throw error
-          }
-          console.error(error)
-          return
-        }
-        setTimeout(() => {
+        if (error.fatal) {
           throw error
-        })
-      }
-      if (vNode.child) {
-        if (renderMode.current === "hydrate" && vNode.dom) {
-          hydrationStack.push(vNode.dom)
         }
-        return vNode.child
+        console.error(error)
+        return
       }
+      setTimeout(() => {
+        throw error
+      })
+    }
+
+    if (renderChild && vNode.child) {
+      return vNode.child
     }
 
     let nextNode: VNode | undefined = vNode
@@ -320,6 +320,17 @@ export class Scheduler {
   }
 
   private updateFunctionComponent(vNode: FunctionVNode) {
+    const { type, props } = vNode
+    if (isMemoFn(type)) {
+      vNode.memoizedProps = props
+      if (
+        vNode.prev?.memoizedProps &&
+        type[$MEMO].arePropsEqual(vNode.prev.memoizedProps, props) &&
+        !vNode.hmrUpdated
+      ) {
+        return false
+      }
+    }
     try {
       node.current = vNode
       nodeToCtxMap.set(vNode, this.appCtx)
@@ -328,7 +339,7 @@ export class Scheduler {
       do {
         this.isRenderDirtied = false
         this.appCtx.hookIndex = 0
-        newChildren = vNode.type(vNode.props)
+        newChildren = latest(type)(props)
         if (__DEV__) {
           delete vNode.hmrUpdated
         }
@@ -348,6 +359,7 @@ export class Scheduler {
           vNode.child || null,
           newChildren
         ) || undefined
+      return true
     } finally {
       node.current = undefined
     }
@@ -363,11 +375,10 @@ export class Scheduler {
         } else {
           vNode.dom = createDom(vNode)
         }
-      }
-
-      if (vNode.dom) {
-        // @ts-expect-error we apply vNode to the dom node
-        vNode.dom!.__kaiokenNode = vNode
+        if (__DEV__) {
+          // @ts-expect-error we apply vNode to the dom node
+          vNode.dom!.__kaiokenNode = vNode
+        }
       }
 
       vNode.child =
@@ -377,6 +388,10 @@ export class Scheduler {
           vNode.child || null,
           vNode.props.children
         ) || undefined
+
+      if (vNode.child && renderMode.current === "hydrate") {
+        hydrationStack.push(vNode.dom!)
+      }
     } finally {
       node.current = undefined
     }

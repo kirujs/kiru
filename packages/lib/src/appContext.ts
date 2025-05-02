@@ -1,4 +1,4 @@
-import { bitmapOps } from "./bitmap.js"
+import { flags } from "./flags.js"
 import { FLAG } from "./constants.js"
 import { createElement } from "./element.js"
 import { __DEV__ } from "./env.js"
@@ -16,6 +16,11 @@ export interface AppContextOptions {
    * @default 50
    */
   maxFrameMs?: number
+  /**
+   * Enables runtime hook invalidation
+   * @default false
+   */
+  useRuntimeHookInvalidation?: boolean
   name?: string
 }
 
@@ -32,7 +37,7 @@ export class AppContext<T extends Record<string, unknown> = {}> {
   constructor(
     private appFunc: (props: T) => JSX.Element,
     private appProps = {},
-    private options?: AppContextOptions
+    public options?: AppContextOptions
   ) {
     this.id = appCounter++
     this.name = options?.name ?? "App-" + this.id
@@ -43,9 +48,6 @@ export class AppContext<T extends Record<string, unknown> = {}> {
     return new Promise<AppContext<T>>((resolve) => {
       if (this.mounted) return resolve(this)
       this.scheduler = new Scheduler(this, this.options?.maxFrameMs ?? 50)
-      if (renderMode.current === "hydrate") {
-        hydrationStack.captureEvents(this.root!, this.scheduler)
-      }
       const appNode = createElement(this.appFunc, this.appProps as T)
       this.rootNode = createElement(
         this.root!.nodeName.toLowerCase(),
@@ -55,18 +57,23 @@ export class AppContext<T extends Record<string, unknown> = {}> {
       this.rootNode.depth = 0
       appNode.depth = 1
       if (__DEV__) {
-        if (this.root) {
-          this.root.__kaiokenNode = this.rootNode
-        }
+        this.root!.__kaiokenNode = this.rootNode
       }
 
       this.rootNode.dom = this.root
-      this.scheduler.queueUpdate(this.rootNode)
+      if (renderMode.current === "hydrate") {
+        hydrationStack.captureEvents(this.root!)
+      }
       this.scheduler.nextIdle(() => {
+        if (renderMode.current === "hydrate") {
+          hydrationStack.releaseEvents(this.root!)
+        }
         this.mounted = true
         window.__kaioken?.emit("mount", this as AppContext<any>)
         resolve(this)
-      })
+      }, false)
+      this.scheduler.queueUpdate(this.rootNode)
+      this.scheduler.flushSync()
     })
   }
 
@@ -107,21 +114,29 @@ export class AppContext<T extends Record<string, unknown> = {}> {
     })
   }
 
-  requestUpdate(vNode: VNode) {
-    if (bitmapOps.isFlagSet(vNode, FLAG.DELETION)) return
+  flushSync() {
+    this.scheduler?.flushSync()
+  }
+
+  requestUpdate(vNode?: VNode) {
+    if (!vNode) {
+      if (!this.mounted || !this.rootNode) return
+      vNode = this.rootNode
+    }
+    if (flags.get(vNode.flags, FLAG.DELETION)) return
     if (renderMode.current === "hydrate") {
       return this.scheduler?.nextIdle((s) => {
-        !bitmapOps.isFlagSet(vNode, FLAG.DELETION) && s.queueUpdate(vNode)
+        !flags.get(vNode.flags, FLAG.DELETION) && s.queueUpdate(vNode)
       })
     }
     this.scheduler?.queueUpdate(vNode)
   }
 
   requestDelete(vNode: VNode) {
-    if (bitmapOps.isFlagSet(vNode, FLAG.DELETION)) return
+    if (flags.get(vNode.flags, FLAG.DELETION)) return
     if (renderMode.current === "hydrate") {
       return this.scheduler?.nextIdle((s) => {
-        !bitmapOps.isFlagSet(vNode, FLAG.DELETION) && s.queueDelete(vNode)
+        !flags.get(vNode.flags, FLAG.DELETION) && s.queueDelete(vNode)
       })
     }
     this.scheduler?.queueDelete(vNode)

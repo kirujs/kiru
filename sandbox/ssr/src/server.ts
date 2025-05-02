@@ -1,7 +1,7 @@
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import express from "express"
-import { renderPage } from "vike/server"
+import { renderPage, createDevMiddleware } from "vike/server"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -16,17 +16,8 @@ async function startServer() {
   if (isProduction) {
     app.use(express.static(`${root}/dist/client`))
   } else {
-    // Instantiate Vite's development server and integrate its middleware to our server.
-    // ⚠️ We should instantiate it *only* in development. (It isn't needed in production
-    // and would unnecessarily bloat our server in production.)
-    const vite = await import("vite")
-    const viteDevMiddleware = (
-      await vite.createServer({
-        root,
-        server: { middlewareMode: true },
-      })
-    ).middlewares
-    app.use(viteDevMiddleware)
+    const { devMiddleware } = await createDevMiddleware({ root })
+    app.use(devMiddleware)
   }
 
   /**

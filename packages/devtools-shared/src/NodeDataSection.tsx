@@ -1,5 +1,5 @@
 import { type ElementProps, useCallback, useEffect, useState } from "kaioken"
-import { Chevron } from "./Chevron"
+import { ChevronIcon } from "./icons"
 
 type NodeDataSectionProps = {
   title: string
@@ -31,10 +31,14 @@ export function NodeDataSection({
       <button
         onclick={handleToggleCollapsed}
         disabled={disabled}
-        className={`${disabled ? "opacity-50 cursor-default" : "cursor-pointer"}`}
+        className={`${
+          disabled ? "opacity-50 cursor-default" : "cursor-pointer"
+        }`}
       >
         <span className="flex items-center gap-2 font-medium">
-          <Chevron className={`transition ${collapsed ? "" : "rotate-90"}`} />
+          <ChevronIcon
+            className={`transition ${collapsed ? "" : "rotate-90"}`}
+          />
           {title}
         </span>
       </button>

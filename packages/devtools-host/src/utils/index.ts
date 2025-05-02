@@ -1,7 +1,8 @@
-import { useElementBounding } from "@kaioken-core/hooks"
-import { isFragment } from "kaioken/utils"
+import { isFragment } from "../../../lib/dist/utils.js"
 import { DEFAULT_ANCHOR_POS, PADDING } from "./constants"
 import { Storage } from "./types"
+import { useElementBounding } from "devtools-shared"
+import "../../../lib/src/types"
 
 export const reinitializeAnchorPos = (
   storage: Storage,
@@ -17,13 +18,14 @@ export const reinitializeAnchorPos = (
   let forceY: number | null = null
   if (storage.snapSide === "left") {
     forceX =
-      (viewPortRef.current.offsetWidth - elementBound.width) * -1 + PADDING
+      (viewPortRef.current.offsetWidth - elementBound.width.value) * -1 +
+      PADDING
   } else if (storage.snapSide === "right") {
     forceX = -PADDING
   } else if (storage.snapSide === "bottom") {
     forceY = -PADDING
   } else if (storage.snapSide === "top") {
-    forceY = (window.innerHeight - elementBound.height) * -1 + PADDING
+    forceY = (window.innerHeight - elementBound.height.value) * -1 + PADDING
   }
 
   return {
@@ -36,7 +38,7 @@ export const getComponentVnodeFromElement = (domNode: Element | null) => {
   if (domNode == null) return null
 
   let parentComponent: Kaioken.VNode | null = null
-  let parent = (domNode?.__kaiokenNode as Kaioken.VNode)?.parent
+  let parent = domNode?.__kaiokenNode?.parent
   while (parent) {
     if (typeof parent.type === "function" && !isFragment(parent)) {
       parentComponent = parent

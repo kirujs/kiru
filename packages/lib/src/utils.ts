@@ -1,16 +1,19 @@
 import { node, nodeToCtxMap, renderMode } from "./globals.js"
-import { $CONTEXT_PROVIDER, $FRAGMENT, REGEX_UNIT } from "./constants.js"
+import { $CONTEXT_PROVIDER, $FRAGMENT, FLAG, REGEX_UNIT } from "./constants.js"
 import { unwrap } from "./signals/utils.js"
 import { KaiokenError } from "./error.js"
 import type { AppContext } from "./appContext"
 import type { ExoticVNode } from "./types.utils"
 import { __DEV__ } from "./env.js"
+import { flags } from "./flags.js"
 
 export {
   isVNode,
   isFragment,
+  isLazy,
   isContextProvider,
   isExoticVNode,
+  isVNodeDeleted,
   vNodeContains,
   getCurrentVNode,
   getVNodeAppContext,
@@ -18,11 +21,13 @@ export {
   traverseApply,
   postOrderApply,
   findParent,
+  classNamePropToString,
   propToHtmlAttr,
   propValueToHtmlAttrValue,
   propsToElementAttributes,
-  styleObjectToCss,
+  styleObjectToString,
   shallowCompare,
+  deepCompare,
   sideEffectsEnabled,
   encodeHtmlEntities,
   noop,
@@ -53,10 +58,14 @@ function latest<T>(thing: T): T {
 }
 
 /**
- * Returns true if called during DOM or hydration render mode.
+ * Returns false if called during "stream" or "string" render modes.
  */
 function sideEffectsEnabled(): boolean {
   return renderMode.current === "dom" || renderMode.current === "hydrate"
+}
+
+function isVNodeDeleted(vNode: VNode): boolean {
+  return flags.get(vNode.flags, FLAG.DELETION)
 }
 
 function isVNode(thing: unknown): thing is VNode {
@@ -70,10 +79,16 @@ function isExoticVNode(thing: unknown): thing is ExoticVNode {
   )
 }
 
-function isFragment(
-  thing: unknown
-): thing is VNode & { type: typeof $FRAGMENT } {
-  return isVNode(thing) && thing.type === $FRAGMENT
+function isFragment(vNode: VNode): vNode is VNode & { type: typeof $FRAGMENT } {
+  return vNode.type === $FRAGMENT
+}
+
+function isLazy(vNode: VNode): boolean {
+  return (
+    typeof vNode.type === "function" &&
+    "displayName" in vNode.type &&
+    vNode.type.displayName === "Kaioken.lazy"
+  )
 }
 
 function isContextProvider(
@@ -182,54 +197,130 @@ function findParent(
   return undefined
 }
 
-function shallowCompare<T>(objA: T, objB: T): boolean {
-  if (Object.is(objA, objB)) {
-    return true
-  }
+function compare<T>(a: T, b: T, deep = false): boolean {
+  // Fast path: identity comparison
+  if (a === b) return true
+
+  // Handle primitive types and null/undefined
   if (
-    typeof objA !== "object" ||
-    objA === null ||
-    typeof objB !== "object" ||
-    objB === null
+    a == null ||
+    b == null ||
+    typeof a !== "object" ||
+    typeof b !== "object"
   ) {
     return false
   }
 
-  if (objA instanceof Map && objB instanceof Map) {
-    if (objA.size !== objB.size) return false
+  // Handle arrays efficiently
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false
 
-    for (const [key, value] of objA) {
-      if (!Object.is(value, objB.get(key))) {
-        return false
+    if (deep) {
+      for (let i = 0; i < a.length; i++) {
+        if (!compare(a[i], b[i], true)) return false
+      }
+    } else {
+      for (let i = 0; i < a.length; i++) {
+        if (!Object.is(a[i], b[i])) return false
       }
     }
     return true
   }
 
-  if (objA instanceof Set && objB instanceof Set) {
-    if (objA.size !== objB.size) return false
+  // Handle Maps
+  if (a instanceof Map && b instanceof Map) {
+    if (a.size !== b.size) return false
 
-    for (const value of objA) {
-      if (!objB.has(value)) {
-        return false
+    for (const [key, valueA] of a) {
+      if (!b.has(key)) return false
+
+      const valueB = b.get(key)
+      if (deep) {
+        if (!compare(valueA, valueB, true)) return false
+      } else {
+        if (!Object.is(valueA, valueB)) return false
       }
     }
     return true
   }
 
-  const keysA = Object.keys(objA)
-  if (keysA.length !== Object.keys(objB).length) {
-    return false
-  }
-  for (const keyA of keysA) {
-    if (
-      !Object.prototype.hasOwnProperty.call(objB, keyA as string) ||
-      !Object.is(objA[keyA as keyof T], objB[keyA as keyof T])
-    ) {
-      return false
+  // Handle Sets more efficiently
+  if (a instanceof Set && b instanceof Set) {
+    if (a.size !== b.size) return false
+
+    if (deep) {
+      // For deep equality of Sets, we need to compare the values themselves
+      // Convert to arrays and sort for comparison
+      const aValues = Array.from(a)
+      const bValues = Array.from(b)
+
+      if (aValues.length !== bValues.length) return false
+
+      // Simple compare doesn't work for objects in Sets with deep comparison
+      // Using a matching algorithm instead
+      for (const valueA of aValues) {
+        // Find matching element in bValues
+        let found = false
+        for (let i = 0; i < bValues.length; i++) {
+          if (compare(valueA, bValues[i], true)) {
+            bValues.splice(i, 1) // Remove the matched element
+            found = true
+            break
+          }
+        }
+        if (!found) return false
+      }
+      return true
+    } else {
+      // Regular Set comparison
+      for (const valueA of a) {
+        if (!b.has(valueA)) return false
+      }
+      return true
     }
   }
+
+  // Handle Date objects
+  if (a instanceof Date && b instanceof Date) {
+    return a.getTime() === b.getTime()
+  }
+
+  // Handle RegExp objects
+  if (a instanceof RegExp && b instanceof RegExp) {
+    return a.toString() === b.toString()
+  }
+
+  // Handle plain objects
+  const keysA = Object.keys(a)
+  const keysB = Object.keys(b)
+
+  if (keysA.length !== keysB.length) return false
+
+  // Use a Set for faster key lookup
+  const keySet = new Set(keysB)
+
+  for (const key of keysA) {
+    if (!keySet.has(key)) return false
+
+    const valueA = a[key as keyof T]
+    const valueB = b[key as keyof T]
+
+    if (deep) {
+      if (!compare(valueA, valueB, true)) return false
+    } else {
+      if (!Object.is(valueA, valueB)) return false
+    }
+  }
+
   return true
+}
+
+function deepCompare<T>(a: T, b: T): boolean {
+  return compare(a, b, true)
+}
+
+function shallowCompare<T>(a: T, b: T): boolean {
+  return compare(a, b, false)
 }
 
 function encodeHtmlEntities(text: string): string {
@@ -341,6 +432,7 @@ const booleanAttributes = [
   "noshade",
   "novalidate",
   "nowrap",
+  "open",
   "popover",
   "readonly",
   "required",
@@ -382,6 +474,7 @@ function propToHtmlAttr(key: string): string {
       return key.toLowerCase()
 
     default:
+      if (key.indexOf("-") > -1) return key
       if (key.startsWith("aria"))
         return "aria-" + key.substring(4).toLowerCase()
 
@@ -468,7 +561,7 @@ const snakeCaseAttrs = new Map([
   ["xHeight", "x-height"],
 ])
 
-function styleObjectToCss(obj: Partial<CSSStyleDeclaration>): string {
+function styleObjectToString(obj: Partial<CSSStyleDeclaration>): string {
   let cssString = ""
   for (const key in obj) {
     const cssKey = key.replace(REGEX_UNIT.ALPHA_UPPER_G, "-$&").toLowerCase()
@@ -477,17 +570,37 @@ function styleObjectToCss(obj: Partial<CSSStyleDeclaration>): string {
   return cssString
 }
 
+function classNamePropToString(className: unknown): string {
+  if (typeof className === "string") return className
+  if (Array.isArray(className)) return className.filter(Boolean).join(" ")
+  return ""
+}
+
+function stylePropToString(style: unknown) {
+  if (typeof style === "string") return style
+  if (typeof style === "object" && !!style) return styleObjectToString(style)
+  return ""
+}
+
 function propValueToHtmlAttrValue(key: string, value: unknown): string {
   return key === "style" && typeof value === "object" && !!value
-    ? styleObjectToCss(value)
+    ? styleObjectToString(value)
     : String(value)
 }
 function propsToElementAttributes(props: Record<string, unknown>): string {
   const attrs: string[] = []
-  const keys = Object.keys(props).filter(propFilters.isProperty)
+  const { className, style, ...rest } = props
+  if (className) {
+    attrs.push(`class="${classNamePropToString(unwrap(className))}"`)
+  }
+  if (style) {
+    attrs.push(`style="${stylePropToString(unwrap(style))}"`)
+  }
+
+  const keys = Object.keys(rest).filter(propFilters.isProperty)
   for (let i = 0; i < keys.length; i++) {
     const k = keys[i]
-    const val = unwrap(props[k])
+    let val = unwrap(props[k])
     if (val === null || val === undefined) continue
 
     const key = propToHtmlAttr(k)
@@ -501,12 +614,22 @@ function propsToElementAttributes(props: Record<string, unknown>): string {
           continue
         }
     }
-    attrs.push(`${key}="${propValueToHtmlAttrValue(k, val)}"`)
+    attrs.push(`${key}="${val}"`)
   }
   return attrs.join(" ")
 }
 
-function safeStringify(value: unknown): string {
+type SafeStringifyOptions = {
+  /**
+   * By default, functions are stringified. Specify `false` to instead produce `[FUNCTION (${fn.name})]`.
+   */
+  functions: boolean
+}
+
+function safeStringify(
+  value: unknown,
+  opts: SafeStringifyOptions = { functions: true }
+): string {
   const seen = new WeakSet()
   return JSON.stringify(value, (_, value) => {
     if (typeof value === "object" && value !== null) {
@@ -516,6 +639,7 @@ function safeStringify(value: unknown): string {
       seen.add(value)
     }
     if (typeof value === "function") {
+      if (!opts.functions) return `[FUNCTION (${value.name || "anonymous"})]`
       return value.toString()
     }
     return value

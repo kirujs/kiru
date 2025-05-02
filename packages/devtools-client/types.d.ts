@@ -1,2 +1,2 @@
-declare const devtoolsUiScript: string
-export default devtoolsUiScript
+declare const devtoolsClientBuild: string
+export default devtoolsClientBuild

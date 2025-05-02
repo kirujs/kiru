@@ -1,6 +1,6 @@
 import { useModel } from "kaioken"
 
-export function UseModelExample() {
+export default function UseModelExample() {
   return (
     <div className="flex flex-col gap-2">
       <ModelInputText />

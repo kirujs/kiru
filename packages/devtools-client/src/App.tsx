@@ -1,104 +1,97 @@
-import { kaiokenGlobal, toggleElementToVnode, useDevtoolsStore } from "./store"
-import { CogIcon, SelectedNodeView, SettingsProvider } from "devtools-shared"
-import { AppView } from "./components/AppView"
-import { Select } from "./components/Select"
-import { FiftyFiftySplitter } from "./components/FiftyFiftySplitter"
-import { SquareMouse } from "./icons/SquareMouse"
-import { SettingsDrawer } from "devtools-shared/src/Settings"
-import { type AppContext, useEffect, useRequestUpdate } from "kaioken"
-import { inspectComponent } from "./signal"
+import {
+  AppViewIcon,
+  CogIcon,
+  SettingsProvider,
+  StoresViewIcon,
+} from "devtools-shared"
+import { signal } from "kaioken"
+import { AppTabView } from "./tabs/AppTabView"
+import { StoresTabView } from "./tabs/StoresTabView"
+import { SettingsEditor } from "devtools-shared/src/Settings"
 
-const handleToggleInspect = () => {
-  if (!window.opener) return
-  kaiokenGlobal?.emit(
-    // @ts-expect-error We have our own custom type here
-    "devtools:toggleInspect",
-    { value: !toggleElementToVnode.value }
+type TabViewProps = { active: boolean; children: JSX.Element }
+
+const TabView = (props: TabViewProps) => {
+  return (
+    <main
+      className="flex flex-col flex-1 max-h-[calc(100vh-1rem)] overflow-y-auto"
+      style={props.active ? {} : { display: "none" }}
+    >
+      {props.children}
+    </main>
   )
 }
 
+const APP_TABS = {
+  Apps: {
+    Icon: AppViewIcon,
+    View: (props: { active: boolean }) => {
+      return (
+        <TabView active={props.active}>
+          <AppTabView />
+        </TabView>
+      )
+    },
+  },
+  Stores: {
+    Icon: StoresViewIcon,
+    View: (props: { active: boolean }) => {
+      return (
+        <TabView active={props.active}>
+          <StoresTabView />
+        </TabView>
+      )
+    },
+  },
+  Settings: {
+    Icon: CogIcon,
+    View: (props: { active: boolean }) => {
+      return (
+        <TabView active={props.active}>
+          <SettingsEditor />
+        </TabView>
+      )
+    },
+  },
+}
+
+const selectedTab = signal<keyof typeof APP_TABS>("Apps")
+
 export function App() {
-  const {
-    value: { apps, selectedApp, selectedNode },
-    setSelectedApp,
-    setSelectedNode,
-  } = useDevtoolsStore(({ apps, selectedApp, selectedNode }) => ({
-    apps,
-    selectedApp,
-    selectedNode,
-  }))
-
-  const requestUpdate = useRequestUpdate()
-  useEffect(() => {
-    const handleUpdate = (appCtx: AppContext) => {
-      if (appCtx !== selectedApp) return
-      requestUpdate()
-    }
-    kaiokenGlobal?.on("update", handleUpdate)
-    return () => kaiokenGlobal?.off("update", handleUpdate)
-  }, [selectedApp])
-
-  useEffect(() => {
-    const handleSelectNode = (
-      ctx: AppContext,
-      vnode: Kaioken.VNode & { type: Function }
-    ) => {
-      setSelectedApp(ctx)
-      setSelectedNode(vnode)
-      inspectComponent.value = vnode
-      toggleElementToVnode.value = false
-    }
-    // @ts-expect-error
-    kaiokenGlobal?.on("devtools:selectNode", handleSelectNode)
-    // @ts-expect-error
-    return () => kaiokenGlobal?.off("devtools:selectNode", handleSelectNode)
-  }, [selectedApp])
-
   return (
     <SettingsProvider>
-      {(settingsCtx) => (
-        <>
-          <header className="flex items-center justify-between gap-4 p-2 bg-neutral-800 border-b border-black border-opacity-30">
-            <div className="flex items-center gap-4 p-2">
-              <Select
-                className="bg-neutral-700 text-white rounded"
-                options={[
-                  { text: "Select App", key: "" },
-                  ...apps.map((app) => app.name),
-                ]}
-                value={selectedApp?.name ?? ""}
-                onChange={(name) =>
-                  setSelectedApp(apps.find((a) => a.name === name)!)
-                }
-              />
-              <button
-                title="Toggle Component Inspection"
-                onclick={handleToggleInspect}
-                className={`p-1 rounded ${toggleElementToVnode.value ? "bg-neutral-900" : ""}`}
-              >
-                <SquareMouse />
-              </button>
-            </div>
-            <div>
-              <button onclick={() => settingsCtx.setOpen(!settingsCtx.open)}>
-                <CogIcon />
-              </button>
-            </div>
-          </header>
-          <FiftyFiftySplitter>
-            {selectedApp && <AppView />}
-            {selectedNode && selectedApp && (
-              <SelectedNodeView
-                selectedApp={selectedApp}
-                selectedNode={selectedNode}
-                setSelectedNode={setSelectedNode}
-                kaiokenGlobal={kaiokenGlobal}
-              />
-            )}
-          </FiftyFiftySplitter>
-          <SettingsDrawer />
-        </>
-      )}
+      <nav className="flex flex-col gap-2 justify-between p-2 bg-neutral-400 bg-opacity-5 border border-neutral-400 border-opacity-5 rounded">
+        <div className="flex flex-col gap-2">
+          {Object.keys(APP_TABS).map((key) => (
+            <TabButton key={key} title={key as keyof typeof APP_TABS} />
+          ))}
+        </div>
+      </nav>
+      {Object.entries(APP_TABS).map(([title, { View }]) => (
+        <View key={title} active={selectedTab.value === title} />
+      ))}
     </SettingsProvider>
+  )
+}
+
+function TabButton({ title }: { title: keyof typeof APP_TABS }) {
+  const { Icon } = APP_TABS[title]
+  return (
+    <button
+      key={title}
+      onclick={() => {
+        selectedTab.value = title
+      }}
+      className={
+        "flex items-center px-2 py-1 gap-2 rounded border text-xs border-white border-opacity-10" +
+        (selectedTab.value === title
+          ? " bg-white bg-opacity-5 text-neutral-100"
+          : " hover:bg-white hover:bg-opacity-10 text-neutral-400")
+      }
+      title={title}
+    >
+      <Icon className="text-primary" />
+      <span className="hidden sm:inline">{title}</span>
+    </button>
   )
 }

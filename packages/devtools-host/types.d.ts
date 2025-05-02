@@ -1,2 +1,2 @@
-declare const devtoolsScript: string
-export default devtoolsScript
+declare const devtoolsHostBuild: string
+export default devtoolsHostBuild

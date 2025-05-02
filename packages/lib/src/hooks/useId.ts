@@ -1,6 +1,12 @@
 import { __DEV__ } from "../env.js"
 import { HookCallback, useHook } from "./utils.js"
 
+/**
+ * Creates a unique id for the current node. This is derived based on the node's position in your application tree.
+ * Useful for assigning predictable ids to elements.
+ *
+ * @see https://kaioken.dev/docs/hooks/useId
+ */
 export function useId() {
   return useHook("useId", createUseIdState, useIdCallback)
 }
@@ -17,7 +23,9 @@ const createUseIdState = (): UseIdState => ({
 
 const useIdCallback: HookCallback<UseIdState> = ({ hook, isInit, vNode }) => {
   if (__DEV__) {
-    hook.debug = { get: () => ({ id: hook.id }) }
+    hook.dev = {
+      devtools: { get: () => ({ id: hook.id }) },
+    }
   }
   if (isInit || vNode.index !== hook.idx) {
     hook.idx = vNode.index

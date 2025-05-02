@@ -5,7 +5,7 @@ import { $HMR_ACCEPT } from "../constants.js"
 import { node } from "../globals.js"
 import type { HMRAccept } from "../hmr.js"
 import { sideEffectsEnabled } from "../utils.js"
-import { useHook, useHookHMRInvalidation } from "../hooks/utils.js"
+import { useHook } from "../hooks/utils.js"
 
 export class ComputedSignal<T> extends Signal<T> {
   protected $getter: () => T
@@ -74,9 +74,6 @@ export const computed = <T>(
 }
 
 export const useComputed = <T>(getter: () => T, displayName?: string) => {
-  if (__DEV__) {
-    useHookHMRInvalidation(getter, displayName)
-  }
   return useHook(
     "useComputedSignal",
     {
@@ -84,11 +81,13 @@ export const useComputed = <T>(getter: () => T, displayName?: string) => {
     },
     ({ hook, isInit, vNode }) => {
       if (__DEV__) {
-        hook.debug = {
-          get: () => ({
-            displayName: hook.signal.displayName,
-            value: hook.signal.peek(),
-          }),
+        hook.dev = {
+          devtools: {
+            get: () => ({
+              displayName: hook.signal.displayName,
+              value: hook.signal.peek(),
+            }),
+          },
         }
         if (!isInit && vNode.hmrUpdated) {
           // isInit would be true if this is our initial render or if  the

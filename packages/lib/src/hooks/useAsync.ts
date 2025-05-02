@@ -1,13 +1,8 @@
 import { __DEV__ } from "../env.js"
 import { noop } from "../utils.js"
-import {
-  depsRequireChange,
-  sideEffectsEnabled,
-  useHook,
-  useHookHMRInvalidation,
-} from "./utils.js"
+import { depsRequireChange, sideEffectsEnabled, useHook } from "./utils.js"
 
-export type UseAsyncResult<T> = (
+export type UseAsyncState<T> = (
   | /** loading*/ {
       data: null
       loading: true
@@ -27,6 +22,10 @@ export type UseAsyncResult<T> = (
   invalidate: () => void
 }
 
+export type UseAsyncCallbackContext = {
+  abortSignal: AbortSignal
+}
+
 export class UseAsyncError extends Error {
   constructor(message: unknown) {
     super(message instanceof Error ? message.message : String(message))
@@ -36,24 +35,21 @@ export class UseAsyncError extends Error {
 }
 
 type AsyncTaskState<T> = {
-  deps: unknown[]
-  promise: Promise<T>
-  result: T | null
+  data: T | null
   loading: boolean
   error: Error | null
-  invalidated?: boolean
+  abortController: AbortController
 }
-
-function invalidateTask<T>(task: AsyncTaskState<T> | null) {
-  if (task) {
-    task.invalidated = true
-  }
-}
-
+/**
+ * Runs an asynchronous function on initial render, or when a value provided in the [dependency
+ * array](https://kaioken.dev/docs/hooks/dependency-arrays) has changed.
+ *
+ * @see https://kaioken.dev/docs/hooks/useAsync
+ */
 export function useAsync<T>(
-  func: () => Promise<T>,
+  func: (ctx: UseAsyncCallbackContext) => Promise<T>,
   deps: unknown[]
-): UseAsyncResult<T> {
+): UseAsyncState<T> {
   if (!sideEffectsEnabled())
     return {
       data: null,
@@ -61,56 +57,50 @@ export function useAsync<T>(
       error: null,
       invalidate: noop,
     }
-  if (__DEV__) {
-    useHookHMRInvalidation(...arguments)
-  }
   return useHook(
     "useAsync",
     {
-      task: null as AsyncTaskState<T> | null,
+      deps,
+      id: 0,
+      task: null as any as AsyncTaskState<T>,
       load: noop as (
-        deps: unknown[],
-        func: () => Promise<T>,
-        isInit: boolean
+        func: (ctx: UseAsyncCallbackContext) => Promise<T>
       ) => void,
     },
     ({ hook, isInit, update }) => {
+      if (__DEV__) {
+        hook.dev = { devtools: { get: () => ({ value: hook.task }) } }
+      }
       if (isInit) {
-        if (__DEV__) {
-          hook.debug = { get: () => ({ value: hook.task }) }
-        }
-        hook.cleanup = () => invalidateTask(hook.task)
-        hook.load = (deps, func, isInit) => {
-          invalidateTask(hook.task)
+        hook.cleanup = () => abortTask(hook.task)
+        hook.load = (func) => {
+          let invalidated = false
+          const abortController = new AbortController()
+          abortController.signal.addEventListener("abort", () => {
+            invalidated = true
+          })
+          const id = ++hook.id
           const task: AsyncTaskState<T> = (hook.task = {
-            deps,
-            promise: func(),
-            result: null,
+            abortController,
+            data: null,
             loading: true,
             error: null,
           })
-          if (!isInit) update()
-          task.promise
+          func({ abortSignal: abortController.signal })
             .then((result: T) => {
-              if (task.invalidated) return
-              if (depsRequireChange(deps, task.deps)) {
-                task.invalidated = true
-                return
-              }
+              if (id !== hook.id) abortTask(task)
+              if (invalidated) return
 
-              task.result = result
+              task.data = result
               task.loading = false
               task.error = null
               update()
             })
             .catch((error) => {
-              if (task.invalidated) return
-              if (depsRequireChange(deps, task.deps)) {
-                task.invalidated = true
-                return
-              }
+              if (id !== hook.id) abortTask(task)
+              if (invalidated) return
 
-              task.result = null
+              task.data = null
               task.loading = false
               task.error = new UseAsyncError(error)
               update()
@@ -118,23 +108,26 @@ export function useAsync<T>(
         }
       }
 
-      if (isInit || depsRequireChange(deps, hook.task?.deps)) {
-        hook.load(deps, func, isInit)
+      if (isInit || depsRequireChange(deps, hook.deps)) {
+        abortTask(hook.task)
+        hook.deps = deps
+        hook.load(func)
       }
 
+      const { abortController, ...rest } = hook.task
       return {
-        data: hook.task?.result || null,
-        loading: hook.task?.loading || false,
-        error: hook.task?.error || null,
+        ...rest,
         invalidate: () => {
-          if (hook.task) {
-            hook.task.invalidated = true
-            hook.task = null
-          }
-          hook.load(deps, func, isInit)
-          //hook.load([], func, false)
+          abortTask(hook.task)
+          hook.load(func)
+          update()
         },
-      } as UseAsyncResult<T>
+      } as UseAsyncState<T>
     }
   )
+}
+
+function abortTask<T>(task: AsyncTaskState<T> | null): void {
+  if (task === null || task.abortController.signal.aborted) return
+  task.abortController.abort()
 }

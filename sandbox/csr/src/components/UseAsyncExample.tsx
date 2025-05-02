@@ -16,19 +16,19 @@ interface Product {
   images: string[]
 }
 
-export function UseAsyncExample() {
+export default function UseAsyncExample() {
   const [count, setCount] = useState(0)
   const [productId, setProductId] = useState(1)
-
-  const { data, loading, error, invalidate } = useAsync<Product>(async () => {
-    const res = await fetch(`https://dummyjson.com/products/${productId}`).then(
-      (r) => r.json()
-    )
-    if ("message" in res) throw res.message
-    return res
-  }, [productId])
-
-  console.log("result", data)
+  const { data, loading, error, invalidate } = useAsync<Product>(
+    async ({ abortSignal }) => {
+      const res = await fetch(`https://dummyjson.com/products/${productId}`, {
+        signal: abortSignal,
+      })
+      if (!res.ok) throw new Error(res.statusText)
+      return res.json()
+    },
+    [productId]
+  )
 
   return (
     <div>

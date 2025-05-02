@@ -4,23 +4,27 @@ import {
   depsRequireChange,
   sideEffectsEnabled,
   useHook,
-  useHookHMRInvalidation,
 } from "./utils.js"
 
+/**
+ * Runs a function before the component is rendered, or when a value provided in the optional [dependency
+ * array](https://kaioken.dev/docs/hooks/dependency-arrays) has changed.
+ *
+ * @see https://kaioken.dev/docs/hooks/useLayoutEffect
+ * */
 export function useLayoutEffect(
   callback: () => void | (() => void),
   deps?: unknown[]
 ): void {
   if (!sideEffectsEnabled()) return
-  if (__DEV__) {
-    useHookHMRInvalidation(...arguments)
-  }
   return useHook(
     "useLayoutEffect",
     { deps },
     ({ hook, isInit, queueEffect }) => {
       if (__DEV__) {
-        hook.debug = { get: () => ({ callback, dependencies: hook.deps }) }
+        hook.dev = {
+          devtools: { get: () => ({ callback, dependencies: hook.deps }) },
+        }
       }
       if (isInit || depsRequireChange(deps, hook.deps)) {
         hook.deps = deps

@@ -1,6 +1,6 @@
 import { memo, useEffect, useState } from "kaioken"
 
-export function BigListExample() {
+export default function BigListExample() {
   const [toggle, setToggle] = useState(false)
 
   let startTime = performance.now()

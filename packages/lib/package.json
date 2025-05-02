@@ -1,70 +1,46 @@
 {
   "name": "kaioken",
-  "version": "0.35.8",
+  "version": "0.38.1",
   "description": "A powerful, easy-to-use rendering library with a tiny footprint",
-  "main": "index.js",
+  "main": "dist/index.js",
   "type": "module",
   "homepage": "https://kaioken.dev",
   "exports": {
     ".": {
-      "require": {
-        "types": "./index.d.ts",
-        "default": "./index.js"
-      },
-      "import": {
-        "types": "./index.d.ts",
-        "default": "./index.js"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./form": {
+      "types": "./dist/form/index.d.ts",
+      "default": "./dist/form/index.js"
+    },
+    "./router": {
+      "types": "./dist/router/index.d.ts",
+      "default": "./dist/router/index.js"
+    },
+    "./swr": {
+      "types": "./dist/swr.d.ts",
+      "default": "./dist/swr.js"
     },
     "./utils": {
-      "require": {
-        "types": "./utils.d.ts",
-        "default": "./utils.js"
-      },
-      "import": {
-        "types": "./utils.d.ts",
-        "default": "./utils.js"
-      }
+      "types": "./dist/utils.d.ts",
+      "default": "./dist/utils.js"
     },
     "./ssr/client": {
-      "require": {
-        "types": "./ssr/client.d.ts",
-        "default": "./ssr/client.js"
-      },
-      "import": {
-        "types": "./ssr/client.d.ts",
-        "default": "./ssr/client.js"
-      }
+      "types": "./dist/ssr/client.d.ts",
+      "default": "./dist/ssr/client.js"
     },
     "./ssr/server": {
-      "require": {
-        "types": "./ssr/server.d.ts",
-        "default": "./ssr/server.js"
-      },
-      "import": {
-        "types": "./ssr/server.d.ts",
-        "default": "./ssr/server.js"
-      }
+      "types": "./dist/ssr/server.d.ts",
+      "default": "./dist/ssr/server.js"
     },
     "./jsx-dev-runtime": {
-      "require": {
-        "types": "./jsx-dev-runtime.d.ts",
-        "default": "./jsx-dev-runtime.js"
-      },
-      "import": {
-        "types": "./jsx-dev-runtime.d.ts",
-        "default": "./jsx-dev-runtime.js"
-      }
+      "types": "./dist/jsx.d.ts",
+      "default": "./dist/jsx.js"
     },
     "./jsx-runtime": {
-      "require": {
-        "types": "./jsx-runtime.d.ts",
-        "default": "./jsx-runtime.js"
-      },
-      "import": {
-        "types": "./jsx-runtime.d.ts",
-        "default": "./jsx-runtime.js"
-      }
+      "types": "./dist/jsx.d.ts",
+      "default": "./dist/jsx.js"
     }
   },
   "repository": {
@@ -86,12 +62,11 @@
   "author": "LankyMoose",
   "license": "ISC",
   "devDependencies": {
-    "@types/chai": "^5.0.0",
+    "@types/chai": "^5.0.1",
     "@types/jsdom": "^21.1.7",
-    "@types/mocha": "^10.0.8",
-    "chai": "^5.1.1",
-    "mocha": "^10.7.3",
+    "@types/mocha": "^10.0.10",
+    "chai": "^5.1.2",
     "ts-mocha": "^10.0.0",
-    "typescript": "^5.6.2"
+    "typescript": "^5.7.2"
   }
 }

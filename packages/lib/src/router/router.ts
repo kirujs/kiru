@@ -5,6 +5,7 @@ import {
   useContext,
   useLayoutEffect,
   useRef,
+  useAppContext,
 } from "../hooks/index.js"
 import { __DEV__ } from "../env.js"
 import {
@@ -18,10 +19,26 @@ import { getVNodeAppContext, noop } from "../utils.js"
 import { node } from "../globals.js"
 import type { ElementProps } from "../types"
 
-export interface LinkProps extends ElementProps<"a"> {
+export interface LinkProps extends Omit<ElementProps<"a">, "href"> {
+  /**
+   * The relative path to navigate to. If `inherit` is true,
+   * the path will be relative to the parent <Route> component.
+   */
   to: string
+  /**
+   * Event handler called when the link is clicked.
+   * If you call `e.preventDefault()`, the navigation will not happen.
+   */
   onclick?: (e: Event) => void
+  /**
+   * Specifies whether to replace the current history entry
+   * instead of adding a new one.
+   */
   replace?: boolean
+  /**
+   * If true, the path used for `to` will be relative to the parent <Route> component.
+   * @default false
+   */
   inherit?: boolean
 }
 export function Link({ to, onclick, replace, inherit, ...props }: LinkProps) {
@@ -41,14 +58,16 @@ export function Link({ to, onclick, replace, inherit, ...props }: LinkProps) {
     ...props,
     href,
     onclick: (e: Event) => {
+      onclick?.(e)
+      if (e.defaultPrevented) return
       e.preventDefault()
       navigate(href, { replace })
-      onclick?.(e)
     },
   })
 }
 
 type RouterCtx = {
+  viewTransition: Kaioken.RefObject<ViewTransition>
   queueSyncNav: (callback: () => void) => void
   params: Record<string, string>
   query: Record<string, string>
@@ -57,6 +76,7 @@ type RouterCtx = {
   isDefault: boolean
 }
 const RouterContext = createContext<RouterCtx>({
+  viewTransition: { current: null },
   queueSyncNav: noop,
   params: {},
   query: {},
@@ -64,7 +84,7 @@ const RouterContext = createContext<RouterCtx>({
   basePath: undefined,
   isDefault: true,
 })
-RouterContext.displayName = "RouterContextProvider"
+RouterContext.displayName = "Router"
 
 function setQuery(query: Record<string, string>) {
   const url = new URL(window.location.href)
@@ -73,9 +93,14 @@ function setQuery(query: Record<string, string>) {
   window.dispatchEvent(new PopStateEvent("popstate", { state: {} }))
 }
 
+/**
+ * Gets state and methods provided by a parent <Router>.
+ *
+ * @see https://kaioken.dev/docs/api/routing
+ */
 export function useRouter() {
-  const { params, query } = useContext(RouterContext)
-  return { params, query, setQuery }
+  const { viewTransition, params, query } = useContext(RouterContext)
+  return { viewTransition, params, query, setQuery }
 }
 
 export function navigate(to: string, options?: { replace?: boolean }) {
@@ -105,15 +130,34 @@ export function navigate(to: string, options?: { replace?: boolean }) {
   return routerCtx.queueSyncNav(doNav), null
 }
 
-interface RouterProps {
+export interface RouterProps {
+  /**
+   * Base path for all routes in this router. Use this
+   * to add a prefix to all routes
+   */
   basePath?: string
+  /**
+   * Enable ViewTransition API for navigations
+   */
+  transition?: boolean
+  /**
+   * Children to render - the only supported children are <Route> components
+   */
   children?: JSX.Children
 }
 const initLoc = () => ({
   pathname: window.location.pathname,
   search: window.location.search,
 })
+
+/**
+ * Main router component.
+ *
+ * @see https://kaioken.dev/docs/api/routing
+ */
 export function Router(props: RouterProps) {
+  const appCtx = useAppContext()
+  const viewTransition = useRef<ViewTransition | null>(null)
   const syncNavCallback = useRef<(() => void) | null>(null)
   const parentRouterContext = useContext(RouterContext, false)
   const dynamicParentPath = parentRouterContext.isDefault
@@ -133,9 +177,22 @@ export function Router(props: RouterProps) {
 
   useLayoutEffect(() => {
     const handler = () => {
-      setLoc({
-        pathname: window.location.pathname,
-        search: window.location.search,
+      if (!document.startViewTransition || !props.transition) {
+        return setLoc({
+          pathname: window.location.pathname,
+          search: window.location.search,
+        })
+      }
+
+      viewTransition.current = document.startViewTransition(() => {
+        setLoc({
+          pathname: window.location.pathname,
+          search: window.location.search,
+        })
+        appCtx.flushSync()
+      })
+      viewTransition.current.finished.then(() => {
+        viewTransition.current = null
       })
     }
     window.addEventListener("popstate", handler)
@@ -199,23 +256,21 @@ export function Router(props: RouterProps) {
   }
   const params = { ...parentRouterContext.params, ...parsedParams }
 
-  return createElement(
-    RouterContext.Provider,
-    {
-      value: {
-        params,
-        query,
-        basePath: props.basePath,
-        routePath:
-          (dynamicParentPath || "") +
-          (props.basePath || "") +
-          (route?.props.path || ""),
-        isDefault: false,
-        queueSyncNav: (callback: () => void) => {
-          syncNavCallback.current = callback
-        },
-      } satisfies RouterCtx,
+  return RouterContext.Provider({
+    value: {
+      params,
+      query,
+      routePath:
+        (dynamicParentPath || "") +
+        (props.basePath || "") +
+        (route?.props.path || ""),
+      basePath: props.basePath,
+      isDefault: false,
+      queueSyncNav: (callback: () => void) => {
+        syncNavCallback.current = callback
+      },
+      viewTransition: viewTransition,
     },
-    route ?? fallbackRoute ?? null
-  )
+    children: route ?? fallbackRoute ?? null,
+  })
 }

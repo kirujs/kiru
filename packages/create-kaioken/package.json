@@ -1,6 +1,6 @@
 {
   "name": "create-kaioken",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "type": "module",
   "description": "A command-line tool for quickly creating Kaioken applications from a template.",
   "scripts": {

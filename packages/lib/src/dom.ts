@@ -6,17 +6,18 @@ import {
   propToHtmlAttr,
   svgTags,
   postOrderApply,
+  classNamePropToString,
 } from "./utils.js"
 import { cleanupHook } from "./hooks/utils.js"
 import { ELEMENT_TYPE, FLAG } from "./constants.js"
 import { Signal, unwrap } from "./signals/index.js"
-import { ctx, renderMode } from "./globals.js"
+import { renderMode } from "./globals.js"
 import { hydrationStack } from "./hydration.js"
 import { StyleObject } from "./types.dom.js"
 import { isPortal } from "./portal.js"
 import { __DEV__ } from "./env.js"
 import { KaiokenError } from "./error.js"
-import { bitmapOps } from "./bitmap.js"
+import { flags } from "./flags.js"
 import type {
   DomVNode,
   ElementVNode,
@@ -59,8 +60,8 @@ function createDom(vNode: VNode): SomeDom {
     t == ELEMENT_TYPE.text
       ? createTextNode(vNode)
       : svgTags.includes(t)
-        ? document.createElementNS("http://www.w3.org/2000/svg", t)
-        : document.createElement(t)
+      ? document.createElementNS("http://www.w3.org/2000/svg", t)
+      : document.createElement(t)
   //setDomRef(vNode, dom)
   return dom
 }
@@ -140,11 +141,7 @@ function updateDom(vNode: VNode) {
   const keys = new Set([...Object.keys(prevProps), ...Object.keys(nextProps)])
 
   keys.forEach((key) => {
-    if (key === "innerHTML") {
-      return setInnerHTML(vNode.dom as any, nextProps[key], prevProps[key])
-    }
-
-    if (propFilters.internalProps.includes(key)) {
+    if (propFilters.internalProps.includes(key) && key !== "innerHTML") {
       if (key === "ref" && prevProps[key] !== nextProps[key]) {
         if (prevProps[key]) {
           setDomRef(prevProps[key], null)
@@ -191,11 +188,9 @@ function updateDom(vNode: VNode) {
           (vNode.cleanups[key](), delete vNode.cleanups[key])
       }
       if (Signal.isSignal(nextProps[key])) {
-        const cb: (v: any) => void = (v: any) => {
-          setProp(vNode, dom, key, v, unwrap(vNode.prev?.props[key]))
-          emitGranularSignalChange(nextProps[key])
-        }
-        const unsub = nextProps[key].subscribe(cb)
+        const unsub = nextProps[key].subscribe((value) => {
+          setProp(vNode, dom, key, value, null)
+        })
         ;(vNode.cleanups ??= {})[key] = unsub
         return setProp(
           vNode,
@@ -219,18 +214,9 @@ function updateDom(vNode: VNode) {
   })
 }
 
-function emitGranularSignalChange(signal: Signal<any>) {
-  if (__DEV__) {
-    if (Signal.subscribers(signal).size === 1) {
-      window.__kaioken?.emit("update", ctx.current)
-    }
-  }
-}
-
 function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
   ;(vNode.cleanups ??= {})["nodeValue"] = signal.subscribe((v) => {
     textNode.nodeValue = v
-    emitGranularSignalChange(signal)
   })
 }
 
@@ -241,7 +227,10 @@ function hydrateDom(vNode: VNode) {
       message: `Hydration mismatch - no node found`,
       vNode,
     })
-  const nodeName = dom.nodeName.toLowerCase()
+  let nodeName = dom.nodeName
+  if (svgTags.indexOf(nodeName) === -1) {
+    nodeName = nodeName.toLowerCase()
+  }
   if ((vNode.type as string) !== nodeName) {
     throw new KaiokenError({
       message: `Hydration mismatch - expected node of type ${vNode.type.toString()} but received ${nodeName}`,
@@ -301,7 +290,7 @@ function handleAttributeRemoval(
   return false
 }
 
-export function setDomAttribute(element: Element, key: string, value: unknown) {
+function setDomAttribute(element: Element, key: string, value: unknown) {
   const isBoolAttr = booleanAttributes.includes(key)
 
   if (handleAttributeRemoval(element, key, value, isBoolAttr)) return
@@ -327,28 +316,52 @@ function setProp(
   value: unknown,
   prev: unknown
 ) {
-  if (key === "style") return setStyleProp(vNode, element, value, prev)
-  if (key === "value" && needsExplicitValueSet(element)) {
-    element.value = value === undefined || value === null ? "" : String(value)
-    return
-  } else if (key === "checked" && element.nodeName === "INPUT") {
-    ;(element as HTMLInputElement).checked = Boolean(value)
-    return
+  if (value === prev) return
+  switch (key) {
+    case "style":
+      return setStyleProp(vNode, element, value, prev)
+    case "className":
+      return setClassName(element, value)
+    case "innerHTML":
+      return setInnerHTML(element, value)
+    case "muted":
+      ;(element as HTMLMediaElement).muted = Boolean(value)
+      return
+    case "value":
+      if (needsExplicitValueSet(element)) {
+        element.value =
+          value === undefined || value === null ? "" : String(value)
+      } else {
+        element.setAttribute("value", value === undefined ? "" : String(value))
+      }
+      return
+    case "checked":
+      if (element.nodeName === "INPUT") {
+        ;(element as HTMLInputElement).checked = Boolean(value)
+      } else {
+        element.setAttribute("checked", String(value))
+      }
+      return
+    default:
+      setDomAttribute(element, propToHtmlAttr(key), value)
+      break
   }
-
-  setDomAttribute(element, propToHtmlAttr(key), value)
 }
 
-function setInnerHTML(element: SomeElement, value: unknown, prev: unknown) {
-  if (Signal.isSignal(value)) {
-    element.innerHTML = value.toString()
-  }
-  if (value === prev) return
+function setInnerHTML(element: SomeElement, value: unknown) {
   if (value === null || value === undefined || typeof value === "boolean") {
     element.innerHTML = ""
     return
   }
   element.innerHTML = String(value)
+}
+
+function setClassName(element: SomeElement, value: unknown) {
+  if (value === null || value === undefined || typeof value === "boolean") {
+    element.removeAttribute("class")
+    return
+  }
+  element.setAttribute("class", classNamePropToString(value))
 }
 
 function setStyleProp(
@@ -414,13 +427,6 @@ function getDomParent(vNode: VNode): ElementVNode {
   return parentNode as ElementVNode
 }
 
-const DIR = {
-  UP: 0,
-  DOWN: 1,
-} as const
-
-type Dir = (typeof DIR)[keyof typeof DIR]
-
 function placeDom(
   vNode: DomVNode,
   mntParent: ElementVNode,
@@ -433,78 +439,80 @@ function placeDom(
   }
   if (mntParent.dom.childNodes.length === 0) {
     mntParent.dom.appendChild(dom)
-  } else {
+    return
+  }
+  /**
+   * scan from vNode, up, down, then right (repeating) to find previous dom
+   */
+  let prevDom: MaybeDom
+  let currentParent = vNode.parent!
+  let furthestParent = currentParent
+  let child = currentParent.child!
+
+  /**
+   * to prevent sibling-traversal beyond the mount parent or the node
+   * we're placing, we're creating a 'bounds' for our traversal.
+   */
+  const dBounds: VNode[] = [vNode]
+  const rBounds: VNode[] = [vNode]
+  let parent = vNode.parent
+  while (parent && parent !== mntParent) {
+    rBounds.push(parent)
+    parent = parent.parent
+  }
+
+  const siblingCheckpoints: VNode[] = []
+  while (child && currentParent.depth >= mntParent.depth) {
     /**
-     * scan from vNode, up, down, then right (repeating) to find previous dom
+     * keep track of siblings we've passed for later,
+     * as long as they're within bounds.
      */
-    let prevDom: MaybeDom
-    let currentParent = vNode.parent!
-    let furthestParent = currentParent
-    let child = currentParent.child!
-    let dir: Dir = DIR.DOWN
-    const seenNodes = new Set<VNode>([vNode])
-    const siblingCheckpoints: VNode[] = []
-    while (child && currentParent.depth >= mntParent.depth) {
-      if (child !== vNode) {
-        /**
-         * We're going to try to traverse downwards first,
-         * but keep track of siblings we've skipped for later.
-         * To prevent traversing beyond the node that we're
-         * placing, we only allow traversal of siblings
-         * encountered during downwards traversal.
-         */
-        if (child.sibling && dir === DIR.DOWN) {
-          siblingCheckpoints.push(child.sibling)
-        }
-
-        // prevent downwards traversal through portals
-        if (!isPortal(child)) {
-          const dom = child.dom
-          // traverse downwards if no dom for this child
-          if (!dom && child.child && !seenNodes.has(child.child)) {
-            currentParent = child
-            child = currentParent.child!
-            seenNodes.add(child)
-            dir = DIR.DOWN
-            continue
-          }
-          // dom found, we can continue upwards / right
-          if (dom?.isConnected) {
-            prevDom = dom
-          }
-        }
-      }
-
-      // reverse and traverse through most recent sibling checkpoint
-      if (siblingCheckpoints.length) {
-        child = siblingCheckpoints.pop()!
-        currentParent = child.parent!
+    if (child.sibling && rBounds.indexOf(child) === -1) {
+      siblingCheckpoints.push(child.sibling)
+    }
+    // downwards traversal
+    if (!isPortal(child) && dBounds.indexOf(child) === -1) {
+      dBounds.push(child)
+      const dom = child.dom
+      // traverse downwards if no dom for this child
+      if (!dom && child.child) {
+        currentParent = child
+        child = currentParent.child!
         continue
       }
-
-      if (prevDom) break // no need to continue traversal
-      if (!furthestParent.parent) break // we've reached the root of the tree
-
-      // continue our upwards crawl from the furthest parent
-      currentParent = furthestParent.parent
-      furthestParent = currentParent
-      child = currentParent.child!
-      dir = DIR.UP
+      // dom found, we can continue up/right traversal
+      if (dom?.isConnected) {
+        prevDom = dom
+      }
     }
 
-    if (!prevDom) {
-      mntParent.dom.prepend(dom)
-    } else {
-      prevDom.after(dom)
+    // reverse and traverse through most recent sibling checkpoint
+    if (siblingCheckpoints.length) {
+      child = siblingCheckpoints.pop()!
+      currentParent = child.parent!
+      continue
     }
+
+    if (prevDom) break // no need to continue traversal
+    if (!furthestParent.parent) break // we've reached the root of the tree
+
+    // continue our upwards crawl from the furthest parent
+    currentParent = furthestParent.parent
+    furthestParent = currentParent
+    child = currentParent.child!
   }
+
+  if (!prevDom) {
+    return mntParent.dom.prepend(dom)
+  }
+  prevDom.after(dom)
 }
 
 function commitWork(vNode: VNode) {
   if (renderMode.current === "hydrate") {
     return traverseApply(vNode, commitSnapshot)
   }
-  if (bitmapOps.isFlagSet(vNode, FLAG.DELETION)) {
+  if (flags.get(vNode.flags, FLAG.DELETION)) {
     return commitDeletion(vNode)
   }
   handlePrePlacementFocusPersistence()
@@ -531,7 +539,7 @@ function commitWork(vNode: VNode) {
            * appending children will yeet em into the abyss.
            */
           delete node.props.innerHTML
-          setInnerHTML(node.dom as SomeElement, "", node.prev.props.innerHTML)
+          setInnerHTML(node.dom as SomeElement, "")
           // remove innerHTML from prev to prevent our ascension pass from doing this again
           delete node.prev.props.innerHTML
         }
@@ -541,7 +549,7 @@ function commitWork(vNode: VNode) {
           // prevent scope applying to descendants of this element node
           currentPlacementScope.active = false
         }
-      } else if (bitmapOps.isFlagSet(node, FLAG.PLACEMENT)) {
+      } else if (flags.get(node.flags, FLAG.PLACEMENT)) {
         currentPlacementScope = { parent: node, active: true }
         placementScopes.push(currentPlacementScope)
       }
@@ -553,7 +561,7 @@ function commitWork(vNode: VNode) {
         currentPlacementScope.active = true
         inheritsPlacement = true
       }
-      if (bitmapOps.isFlagSet(node, FLAG.DELETION)) {
+      if (flags.get(node.flags, FLAG.DELETION)) {
         return commitDeletion(node)
       }
       if (node.dom) {
@@ -585,12 +593,12 @@ function commitDom(
   if (
     inheritsPlacement ||
     !vNode.dom.isConnected ||
-    bitmapOps.isFlagSet(vNode, FLAG.PLACEMENT)
+    flags.get(vNode.flags, FLAG.PLACEMENT)
   ) {
     const parent = hostNode?.node ?? getDomParent(vNode)
     placeDom(vNode, parent, hostNode?.lastChild?.dom)
   }
-  if (!vNode.prev || bitmapOps.isFlagSet(vNode, FLAG.UPDATE)) {
+  if (!vNode.prev || flags.get(vNode.flags, FLAG.UPDATE)) {
     updateDom(vNode)
   }
   if (hostNode) {

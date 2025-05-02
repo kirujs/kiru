@@ -1,6 +1,6 @@
 import type { ElementProps } from "kaioken"
 
-export function Chevron(props: ElementProps<"svg">) {
+export function ChevronIcon(props: ElementProps<"svg">) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

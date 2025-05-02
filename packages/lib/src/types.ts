@@ -1,8 +1,4 @@
-import type {
-  ReadonlySignal,
-  Signal as SignalClass,
-  SignalLike,
-} from "./signals"
+import type { ReadonlySignal, Signal, Signal as SignalClass } from "./signals"
 import type { $CONTEXT, $CONTEXT_PROVIDER, $FRAGMENT } from "./constants"
 import type { KaiokenGlobalContext } from "./globalContext"
 import type {
@@ -22,8 +18,8 @@ type HTMLTagToElement<T extends keyof HtmlElementAttributes> =
   T extends keyof HTMLElementTagNameMap
     ? HTMLElementTagNameMap[T]
     : T extends keyof HTMLElementDeprecatedTagNameMap
-      ? HTMLElementDeprecatedTagNameMap[T]
-      : never
+    ? HTMLElementDeprecatedTagNameMap[T]
+    : never
 
 type SVGTagToElement<T extends keyof SvgElementAttributes> =
   T extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[T] : never
@@ -36,26 +32,26 @@ type WebComponentTag = `${string}-${string}`
 type SignalableHtmlElementAttributes<Tag extends keyof HtmlElementAttributes> =
   {
     [K in keyof HtmlElementAttributes[Tag]]:
-      | SignalLike<HtmlElementAttributes[Tag][K]>
+      | Signal<HtmlElementAttributes[Tag][K]>
       | HtmlElementAttributes[Tag][K]
   }
 type SignalableSvgElementAttributes<Tag extends keyof SvgElementAttributes> = {
   [K in keyof SvgElementAttributes[Tag]]:
     | SvgElementAttributes[Tag][K]
-    | SignalLike<SvgElementAttributes[Tag][K]>
+    | Signal<SvgElementAttributes[Tag][K]>
 }
 type SignalableAriaProps = {
-  [K in keyof ARIAMixin]?: ARIAMixin[K] | SignalLike<ARIAMixin[K]>
+  [K in keyof ARIAMixin]?: ARIAMixin[K] | Signal<ARIAMixin[K]>
 }
 type SignalableGlobalAttributes = {
   [K in keyof GlobalAttributes]:
     | GlobalAttributes[K]
-    | SignalLike<GlobalAttributes[K]>
+    | Signal<GlobalAttributes[K]>
 }
 type SignalableSvgGlobalAttributes = {
   [K in keyof SvgGlobalAttributes]:
     | SvgGlobalAttributes[K]
-    | SignalLike<SvgGlobalAttributes[K]>
+    | Signal<SvgGlobalAttributes[K]>
 }
 
 type ElementMap = {
@@ -146,14 +142,24 @@ declare global {
     type FCProps<T = {}> = T & { children?: JSX.Children }
     type InferProps<T> = T extends Kaioken.FC<infer P> ? P : never
 
-    interface HookDebug<T extends Record<string, any>> {
+    interface HookDevtoolsProvisions<T extends Record<string, any>> {
       get: () => T
       set?: (value: ReturnType<this["get"]>) => void
     }
     type Hook<T> = T & {
       cleanup?: () => void
-      debug?: HookDebug<any>
       name?: string
+      dev?: {
+        devtools?: HookDevtoolsProvisions<any>
+        /**
+         * If true, during development, when the raw arguments of the hook change,
+         * the hook will persist instead of being recreated.
+         * During the next render, `isInit` will be set to `true`, indicating
+         * that the hook should be reinitialized.
+         */
+        reinitUponRawArgsChanged?: boolean
+        readonly rawArgsChanged?: boolean
+      }
     }
     type RefObject<T> = {
       readonly current: T | null
@@ -194,12 +200,12 @@ declare global {
       sibling?: VNode
       prev?: VNode
       flags: number
-      frozen?: boolean
       effects?: Array<Function>
       immediateEffects?: Array<Function>
       prevStyleStr?: string
       prevStyleObj?: StyleObject
       hmrUpdated?: boolean
+      memoizedProps?: Record<string, any>
     }
   }
 

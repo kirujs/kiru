@@ -21,8 +21,6 @@ export function getNodeName(node: Kaioken.VNode) {
   )
 }
 
-export const getComponentFileLink = (
-  node: Kaioken.VNode & { type: Function }
-): string =>
-  // @ts-ignore
-  node.type.__devtoolsFileLink ?? null
+export const getFileLink = (
+  fn: Function & { __devtoolsFileLink?: string }
+): string | null => fn.__devtoolsFileLink ?? null

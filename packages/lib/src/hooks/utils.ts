@@ -13,12 +13,20 @@ export {
   useHookHMRInvalidation,
   useRequestUpdate,
   HookDebugGroupAction,
-  type Hook,
+  HMR_INVALIDATE_HOOK_SENTINEL_INTERNAL_USE_ONLY,
+  type HookState,
   type HookCallback,
-  type HookCallbackState,
+  type HookCallbackContext as HookCallbackState,
 }
 
-type DevHook<T> = Hook<T> & {
+type HookState<T> = Kaioken.Hook<T>
+
+const $HOOK_INVALIDATED = Symbol.for("kaioken.hookInvalidated")
+const HMR_INVALIDATE_HOOK_SENTINEL_INTERNAL_USE_ONLY: HookState<any> = {
+  [$HOOK_INVALIDATED]: true,
+}
+
+type DevHook<T> = HookState<T> & {
   devInvalidationValue?: string
 }
 
@@ -29,10 +37,24 @@ let nextHookDevInvalidationValue: string | undefined
  * Used to mark a hook as invalidated on HMR.
  * Arguments passed to this function will be used to
  * determine if the hook should be re-initialized.
+ * @deprecated - Hooks are now automatically reinitialized when devtools detect that the arguments changed, and can be persisted in this case with the `hook.debug.reinitUponRawArgsChanged` option.
+If reinitialized in this way, the `hook.rawArgsChanged` property will be set to true.
+
+To continue using this behavior, enable the `useRuntimeHookInvalidation` option when initializing your app context.
+ *
  */
 const useHookHMRInvalidation = (...values: unknown[]) => {
   if (__DEV__) {
-    nextHookDevInvalidationValue = safeStringify(values)
+    console.warn(
+      `[kaioken]: useHookHMRInvalidation is deprecated and will be removed in a future release.
+Hooks are now automatically reinitialized when devtools detect that the arguments changed, and can be persisted in this case with the \`hook.debug.reinitUponRawArgsChanged\` option.
+If reinitialized in this way, the \`hook.rawArgsChanged\` property will be set to true.
+      `
+    )
+    const ctx = getVNodeAppContext(node.current!)
+    if (ctx.options?.useRuntimeHookInvalidation) {
+      nextHookDevInvalidationValue = safeStringify(values)
+    }
   }
 }
 
@@ -89,23 +111,44 @@ const useVNode = () => {
   return n
 }
 
-type Hook<T> = Kaioken.Hook<T>
-
-type HookCallbackState<T> = {
-  hook: Hook<T>
+type HookCallbackContext<T> = {
+  /**
+   * The current state of the hook
+   */
+  hook: HookState<T>
+  /**
+   * Indicates if this is the first time the hook has been initialized,
+   * or if `state.dev.reinitUponRawArgsChanged` has been set to `true`
+   * and its raw arguments were changed.
+   */
   isInit: boolean
+  /**
+   * Queues the current component to be re-rendered
+   */
   update: () => void
+  /**
+   * Queues an effect to be run, either immediately or on the next render
+   */
   queueEffect: (callback: Function, opts?: { immediate?: boolean }) => void
+  /**
+   * The VNode associated with the current component
+   */
   vNode: Kaioken.VNode
+  /**
+   * The index of the current hook.
+   * You can count on this being stable across renders,
+   * and unique across separate hooks in the same component.
+   */
+  index: number
 }
-type HookCallback<T> = (state: HookCallbackState<T>) => any
+type HookCallback<T> = (state: HookCallbackContext<T>) => any
 
 let currentHookName: string | null = null
 const nestedHookWarnings = new Set<string>()
 
 function useHook<
   T extends () => Record<string, unknown>,
-  U extends HookCallback<ReturnType<T>>,
+  U extends HookCallback<ReturnType<T>>
 >(hookName: string, hookInitializer: T, callback: U): ReturnType<U>
 
 function useHook<T extends Record<string, unknown>, U extends HookCallback<T>>(
@@ -118,10 +161,10 @@ function useHook<
   T,
   U extends T extends () => Record<string, unknown>
     ? HookCallback<ReturnType<T>>
-    : HookCallback<T>,
+    : HookCallback<T>
 >(
   hookName: string,
-  hookDataOrInitializer: Kaioken.Hook<T> | (() => Kaioken.Hook<T>),
+  hookDataOrInitializer: HookState<T> | (() => HookState<T>),
   callback: U
 ): ReturnType<U> {
   const vNode = node.current
@@ -141,20 +184,6 @@ function useHook<
   }
 
   const ctx = getVNodeAppContext(vNode)
-  const oldHook = (
-    vNode.prev
-      ? vNode.prev.hooks?.at(ctx.hookIndex)
-      : vNode.hooks?.at(ctx.hookIndex)
-  ) as Hook<T> | undefined
-  const hook =
-    oldHook ??
-    (typeof hookDataOrInitializer === "function"
-      ? hookDataOrInitializer()
-      : { ...hookDataOrInitializer })
-
-  if (!vNode.hooks) vNode.hooks = []
-  vNode.hooks[ctx.hookIndex++] = hook
-
   const queueEffect = (callback: Function, opts?: { immediate?: boolean }) => {
     if (opts?.immediate) {
       ;(vNode.immediateEffects ??= []).push(callback)
@@ -163,39 +192,51 @@ function useHook<
     ;(vNode.effects ??= []).push(callback)
   }
 
+  const index = ctx.hookIndex++
+
   if (__DEV__) {
-    if (!oldHook) hook.name = hookName
-    currentHookName = hookName
-    if (oldHook && oldHook.name !== hookName) {
-      console.warn(
-        `[kaioken]: hooks must be called in the same order. Hook "${hookName}" was called in place of "${oldHook.name}". Strange things may happen.`
-      )
+    let oldHook = (
+      vNode.prev ? vNode.prev.hooks?.at(index) : vNode.hooks?.at(index)
+    ) as HookState<T> | undefined
+    if (oldHook && $HOOK_INVALIDATED in oldHook) {
+      oldHook = undefined
     }
-    const oldAsDevHook = oldHook as DevHook<T> | undefined
-    const asDevHook = hook as DevHook<T>
-    let hmrInvalid = false
-    if (nextHookDevInvalidationValue !== undefined) {
-      if (!oldAsDevHook) {
-        asDevHook.devInvalidationValue = nextHookDevInvalidationValue // store our initial 'devInvalidationValue'
-      } else if (
-        vNode.hmrUpdated &&
-        (oldAsDevHook.devInvalidationValue !== nextHookDevInvalidationValue ||
-          // handle cases where we just call 'useHookHMRInvalidation()', like in `useWatch`
-          (oldAsDevHook.devInvalidationValue === "[]" &&
-            nextHookDevInvalidationValue === "[]"))
-      ) {
-        hmrInvalid = true
-        asDevHook.devInvalidationValue = nextHookDevInvalidationValue
+
+    currentHookName = hookName
+
+    let hook: HookState<T>
+    if (!oldHook) {
+      hook =
+        typeof hookDataOrInitializer === "function"
+          ? hookDataOrInitializer()
+          : { ...hookDataOrInitializer }
+      hook.name = hookName
+    } else {
+      hook = oldHook
+      if (oldHook.name !== hookName) {
+        console.warn(
+          `[kaioken]: hooks must be called in the same order. Hook "${hookName}" was called in place of "${oldHook.name}". Strange things may happen.`
+        )
       }
     }
 
+    vNode.hooks ??= []
+    vNode.hooks[index] = hook
+
+    const hmrRuntimeInvalidated =
+      ctx.options?.useRuntimeHookInvalidation &&
+      doRuntimeHookInvalidation(vNode, hook, oldHook)
+
     try {
+      const dev = hook.dev ?? {}
+      const shouldReinit = dev?.rawArgsChanged && dev?.reinitUponRawArgsChanged
       const res = (callback as HookCallback<T>)({
-        hook: hook,
-        isInit: !oldHook || hmrInvalid,
+        hook,
+        isInit: Boolean(!oldHook || hmrRuntimeInvalidated || shouldReinit),
         update: () => ctx.requestUpdate(vNode),
         queueEffect,
         vNode,
+        index,
       })
       return res
     } catch (error) {
@@ -203,21 +244,69 @@ function useHook<
     } finally {
       currentHookName = null
       nextHookDevInvalidationValue = undefined
+      if (hook.dev) {
+        // @ts-ignore - Reset the rawArgsChanged flag
+        hook.dev.rawArgsChanged = false
+      }
     }
   }
 
   try {
+    const oldHook = (
+      vNode.prev ? vNode.prev.hooks?.at(index) : vNode.hooks?.at(index)
+    ) as HookState<T> | undefined
+
+    let hook: HookState<T>
+    if (!oldHook) {
+      hook =
+        typeof hookDataOrInitializer === "function"
+          ? hookDataOrInitializer()
+          : { ...hookDataOrInitializer }
+    } else {
+      hook = oldHook
+    }
+
+    vNode.hooks ??= []
+    vNode.hooks[index] = hook
+
     const res = (callback as HookCallback<T>)({
-      hook: hook,
+      hook,
       isInit: !oldHook,
       update: () => ctx.requestUpdate(vNode),
       queueEffect,
       vNode,
+      index,
     })
     return res
   } catch (error) {
     throw error
   }
+}
+
+function doRuntimeHookInvalidation<T>(
+  vNode: Kaioken.VNode,
+  hook: HookState<T>,
+  oldHook: HookState<T> | undefined
+): boolean {
+  if (nextHookDevInvalidationValue === undefined) return false
+
+  let hmrInvalid = false
+  const oldAsDevHook = oldHook as DevHook<T> | undefined
+  const asDevHook = hook as DevHook<T>
+
+  if (!oldAsDevHook) {
+    asDevHook.devInvalidationValue = nextHookDevInvalidationValue // store our initial 'devInvalidationValue'
+  } else if (
+    vNode.hmrUpdated &&
+    (oldAsDevHook.devInvalidationValue !== nextHookDevInvalidationValue ||
+      // handle cases where we just call 'useHookHMRInvalidation()', like in `useWatch`
+      (oldAsDevHook.devInvalidationValue === "[]" &&
+        nextHookDevInvalidationValue === "[]"))
+  ) {
+    asDevHook.devInvalidationValue = nextHookDevInvalidationValue
+    hmrInvalid = true
+  }
+  return hmrInvalid
 }
 
 function error_hookMustBeCalledTopLevel(hookName: string): never {
