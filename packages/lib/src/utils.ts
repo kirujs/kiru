@@ -46,7 +46,7 @@ type VNode = Kiru.VNode
 
 const noop: () => void = Object.freeze(() => {})
 
-function className(...classes: (string | false | undefined)[]): string {
+function className(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(" ")
 }
 
