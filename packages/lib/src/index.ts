@@ -3,6 +3,7 @@ import { createKiruGlobalContext } from "./globalContext.js"
 
 export type * from "./types"
 export * from "./signals/index.js"
+export * from "./action.js"
 export * from "./appContext.js"
 export * from "./cloneVNode.js"
 export * from "./context.js"
