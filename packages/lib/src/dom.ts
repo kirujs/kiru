@@ -4,7 +4,7 @@ import {
   propFilters,
   propToHtmlAttr,
   getVNodeAppContext,
-} from "./utils.js"
+} from "./utils/index.js"
 import {
   booleanAttributes,
   FLAG_PLACEMENT,

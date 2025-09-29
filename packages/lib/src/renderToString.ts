@@ -5,10 +5,10 @@ import {
   encodeHtmlEntities,
   propsToElementAttributes,
   isExoticType,
-} from "./utils.js"
+  assertValidElementProps,
+} from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import { $HYDRATION_BOUNDARY, voidElements } from "./constants.js"
-import { assertValidElementProps } from "./props.js"
 import { HYDRATION_BOUNDARY_MARKER } from "./ssr/hydrationBoundary.js"
 import { __DEV__ } from "./env.js"
 

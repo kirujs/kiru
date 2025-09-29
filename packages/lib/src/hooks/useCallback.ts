@@ -1,5 +1,6 @@
 import { __DEV__ } from "../env.js"
-import { depsRequireChange, useHook, sideEffectsEnabled } from "./utils.js"
+import { sideEffectsEnabled } from "../utils/index.js"
+import { depsRequireChange, useHook } from "./utils.js"
 
 /**
  * Creates a memoized callback function.

@@ -1,6 +1,6 @@
 import { $KIRU_ERROR } from "./constants.js"
 import { __DEV__ } from "./env.js"
-import { findParent, noop } from "./utils.js"
+import { findParent, noop } from "./utils/index.js"
 
 type KiruErrorOptions =
   | string

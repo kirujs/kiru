@@ -1,6 +1,6 @@
 import assert from "node:assert"
 import { describe, it } from "node:test"
-import { generateRandomID } from "../../generateId.js"
+import { generateRandomID } from "../../utils/generateId.js"
 
 describe("generateId", () => {
   it("generate 1,000,000 ids and check for collisions", () => {

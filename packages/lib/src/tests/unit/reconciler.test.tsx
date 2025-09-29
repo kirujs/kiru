@@ -3,7 +3,7 @@ import assert from "node:assert"
 import { reconcileChildren } from "../../reconciler.js"
 import * as kiru from "../../index.js"
 import { shuffle } from "./utils.js"
-import { commitSnapshot } from "../../utils.js"
+import { commitSnapshot } from "../../utils/index.js"
 import { FLAG_PLACEMENT } from "../../constants.js"
 
 const commitChildren = (node: Kiru.VNode) => {

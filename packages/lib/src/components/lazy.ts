@@ -1,18 +1,18 @@
-import { createElement } from "./element.js"
-import { __DEV__ } from "./env.js"
-import { KiruError } from "./error.js"
-import { node, renderMode } from "./globals.js"
-import { useContext } from "./hooks/useContext.js"
-import { useRef } from "./hooks/useRef.js"
-import { useRequestUpdate } from "./hooks/utils.js"
-import { hydrationStack } from "./hydration.js"
-import { flushSync, nextIdle } from "./scheduler.js"
+import { createElement } from "../element.js"
+import { __DEV__ } from "../env.js"
+import { KiruError } from "../error.js"
+import { node, renderMode } from "../globals.js"
+import { useContext } from "../hooks/useContext.js"
+import { useRef } from "../hooks/useRef.js"
+import { useRequestUpdate } from "../hooks/utils.js"
+import { hydrationStack } from "../hydration.js"
+import { flushSync, nextIdle } from "../scheduler.js"
 import {
   HYDRATION_BOUNDARY_MARKER,
   HydrationBoundaryContext,
-} from "./ssr/hydrationBoundary.js"
-import type { SomeDom } from "./types.utils"
-import { noop } from "./utils.js"
+} from "../ssr/hydrationBoundary.js"
+import { noop } from "../utils/index.js"
+import type { SomeDom } from "../types.utils"
 
 interface FCModule {
   default: Kiru.FC<any>

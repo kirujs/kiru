@@ -3,12 +3,12 @@ import { useHook } from "./hooks/utils.js"
 import { Signal } from "./signals/base.js"
 import { AsyncTaskState } from "./types.utils.js"
 import {
-  noop,
   deepCompare,
+  noop,
   safeStringify,
-  sideEffectsEnabled,
   shallowCompare,
-} from "./utils.js"
+  sideEffectsEnabled,
+} from "./utils/index.js"
 
 export type UseSWRState<T> = AsyncTaskState<T, UseSWRError> & {
   mutate: (callback: () => Promise<T>) => void

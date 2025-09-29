@@ -1,5 +1,5 @@
 import { $FRAGMENT, FLAG_PLACEMENT, FLAG_UPDATE } from "./constants.js"
-import { getVNodeAppContext, isVNode, latest } from "./utils.js"
+import { getVNodeAppContext, isVNode, latest } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import { __DEV__ } from "./env.js"
 import { createElement, Fragment } from "./element.js"

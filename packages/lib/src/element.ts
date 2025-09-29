@@ -1,6 +1,6 @@
 import { $FRAGMENT, $MEMO, FLAG_MEMO } from "./constants.js"
-import { isMemoFn } from "./memo.js"
-import { isValidElementKeyProp, isValidElementRefProp } from "./props.js"
+import { isMemoFn } from "./components/memo.js"
+import { isValidElementKeyProp, isValidElementRefProp } from "./utils/index.js"
 
 export function createElement<T extends Kiru.VNode["type"]>(
   type: T,

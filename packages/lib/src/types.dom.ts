@@ -1,4 +1,4 @@
-import { Signal } from "./signals"
+import type { Signal } from "./signals"
 import type { Prettify, Signalable } from "./types.utils"
 
 export type {

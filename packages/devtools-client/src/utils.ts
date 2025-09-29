@@ -1,4 +1,4 @@
-import { isFragment, isLazy, isMemo } from "../../lib/dist/utils.js"
+import { isFragment, isLazy, isMemo } from "kiru/utils"
 
 export function getNodeName(node: Kiru.VNode) {
   return (

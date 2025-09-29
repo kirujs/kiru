@@ -1,6 +1,7 @@
+import { sideEffectsEnabled } from "../utils/index.js"
 import { node } from "../globals.js"
 import { __DEV__ } from "../env.js"
-import { sideEffectsEnabled, useHook } from "./utils.js"
+import { useHook } from "./utils.js"
 
 /**
  * Wraps a function to be called within effects and other callbacks.

@@ -1,7 +1,6 @@
 import { flushSync } from "../scheduler.js"
 import { node } from "../globals.js"
-import { noop } from "../utils.js"
-import { sideEffectsEnabled } from "./utils.js"
+import { noop, sideEffectsEnabled } from "../utils/index.js"
 
 /**
  * Allows you to easily use the [View Transition API](https://developer.mozilla.org/en-US/docs/Web/API/Document/startViewTransition)

@@ -16,7 +16,12 @@ import type {
   HTMLTagToElement,
   SVGTagToElement,
 } from "./types.dom"
-import { AsyncTaskState, Prettify, Signalable, SomeDom } from "./types.utils"
+import type {
+  AsyncTaskState,
+  Prettify,
+  Signalable,
+  SomeDom,
+} from "./types.utils"
 import type { AppContext } from "./appContext"
 
 export type { AsyncTaskState, ElementProps, Prettify, Signalable, StyleObject }

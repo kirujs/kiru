@@ -1,7 +1,7 @@
 import * as kiru from "kiru"
 import { useEffect, useMemo, useRef } from "kiru"
 import { getComponentVnodeFromElement, getNearestElm } from "../utils"
-import { vNodeContains } from "../../../lib/dist/utils.js"
+import { vNodeContains } from "kiru/utils"
 import { toggleElementToVnode, popup } from "../store"
 import { useDevTools } from "../hooks/useDevtools"
 import {

@@ -1,5 +1,6 @@
+import { sideEffectsEnabled } from "../utils/index.js"
 import { __DEV__ } from "../env.js"
-import { depsRequireChange, sideEffectsEnabled, useHook } from "./utils.js"
+import { depsRequireChange, useHook } from "./utils.js"
 
 /**
  * Creates a memoized value that only changes when the [dependency

@@ -4,7 +4,7 @@ import { __DEV__ } from "./env.js"
 import { GenericHMRAcceptor } from "./hmr.js"
 import { useState } from "./hooks/useState.js"
 import { requestUpdate } from "./scheduler.js"
-import { traverseApply } from "./utils.js"
+import { traverseApply } from "./utils/index.js"
 
 export function createContext<T>(defaultValue: T): Kiru.Context<T> {
   const ctx: Kiru.Context<T> = {

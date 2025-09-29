@@ -1,8 +1,7 @@
-import { isFragment } from "../../../lib/dist/utils.js"
+import { isFragment } from "kiru/utils"
 import { DEFAULT_ANCHOR_POS, PADDING } from "./constants"
 import { Storage } from "./types"
 import { useElementBounding } from "devtools-shared"
-import "../../../lib/src/types"
 
 export const reinitializeAnchorPos = (
   storage: Storage,

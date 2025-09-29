@@ -15,16 +15,16 @@
       "default": "./dist/form/index.js"
     },
     "./router": {
-      "types": "./dist/router/index.d.ts",
-      "default": "./dist/router/index.js"
+      "types": "./dist/components/router/index.d.ts",
+      "default": "./dist/components/router/index.js"
     },
     "./swr": {
       "types": "./dist/swr.d.ts",
       "default": "./dist/swr.js"
     },
     "./utils": {
-      "types": "./dist/utils.d.ts",
-      "default": "./dist/utils.js"
+      "types": "./dist/utils/index.d.ts",
+      "default": "./dist/utils/index.js"
     },
     "./ssr": {
       "types": "./dist/ssr/index.d.ts",

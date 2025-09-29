@@ -1,5 +1,5 @@
 import { AppContext, useEffect, useRequestUpdate, requestUpdate } from "kiru"
-import { isVNodeDeleted } from "../../lib/dist/utils.js"
+import { isVNodeDeleted } from "kiru/utils"
 import { applyObjectChangeFromKeys, getNodeName } from "./utils"
 import { NodeDataSection } from "./NodeDataSection"
 import { ValueEditor } from "./ValueEditor"

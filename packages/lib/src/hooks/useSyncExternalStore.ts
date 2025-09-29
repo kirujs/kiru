@@ -1,7 +1,7 @@
 import { node } from "../globals.js"
 import { KiruError } from "../error.js"
-import { noop } from "../utils.js"
-import { sideEffectsEnabled, useHook } from "./utils.js"
+import { noop, sideEffectsEnabled } from "../utils/index.js"
+import { useHook } from "./utils.js"
 import { __DEV__ } from "../env.js"
 
 /**

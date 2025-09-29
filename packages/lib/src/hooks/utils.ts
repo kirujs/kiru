@@ -1,9 +1,8 @@
 import { KiruError } from "../error.js"
 import { __DEV__ } from "../env.js"
 import { hookIndex, node } from "../globals.js"
-import { noop } from "../utils.js"
+import { noop } from "../utils/index.js"
 import { requestUpdate } from "../scheduler.js"
-export { sideEffectsEnabled } from "../utils.js"
 export {
   cleanupHook,
   depsRequireChange,

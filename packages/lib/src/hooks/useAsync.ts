@@ -1,6 +1,6 @@
 import { __DEV__ } from "../env.js"
-import { noop } from "../utils.js"
-import { depsRequireChange, sideEffectsEnabled, useHook } from "./utils.js"
+import { noop, sideEffectsEnabled } from "../utils/index.js"
+import { depsRequireChange, useHook } from "./utils.js"
 import type { AsyncTaskState } from "../types.utils.js"
 
 export type UseAsyncState<T> = AsyncTaskState<T, UseAsyncError> & {
@@ -48,7 +48,9 @@ export function useAsync<T>(
       deps,
       id: 0,
       task: null as any as InternalTaskState<T>,
-      load: noop as (func: (ctx: UseAsyncCallbackContext) => Promise<T>) => void,
+      load: noop as (
+        func: (ctx: UseAsyncCallbackContext) => Promise<T>
+      ) => void,
     },
     ({ hook, isInit, isHMR, update }) => {
       if (__DEV__) {

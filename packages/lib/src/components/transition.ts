@@ -1,8 +1,8 @@
-import { useCallback } from "./hooks/useCallback.js"
-import { useEffect } from "./hooks/useEffect.js"
-import { useLayoutEffect } from "./hooks/useLayoutEffect.js"
-import { useRef } from "./hooks/useRef.js"
-import { useState } from "./hooks/useState.js"
+import { useCallback } from "../hooks/useCallback.js"
+import { useEffect } from "../hooks/useEffect.js"
+import { useLayoutEffect } from "../hooks/useLayoutEffect.js"
+import { useRef } from "../hooks/useRef.js"
+import { useState } from "../hooks/useState.js"
 
 export type TransitionState = "entering" | "entered" | "exiting" | "exited"
 interface TransitionProps {

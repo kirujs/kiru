@@ -1,5 +1,6 @@
 import { __DEV__ } from "../env.js"
-import { sideEffectsEnabled, useHook } from "./utils.js"
+import { sideEffectsEnabled } from "../utils/index.js"
+import { useHook } from "./utils.js"
 
 /**
  * Creates a ref object. Useful for persisting values between renders or getting

@@ -23,9 +23,7 @@
     "tsx": "^4.20.3"
   },
   "dependencies": {
-    "devtools-shared": "workspace:^"
-  },
-  "peerDependencies": {
+    "devtools-shared": "workspace:^",
     "kiru": "workspace:^"
   }
 }

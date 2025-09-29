@@ -23,14 +23,14 @@ import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
 import { hookIndex, node, renderMode } from "./globals.js"
 import { hydrationStack } from "./hydration.js"
-import { assertValidElementProps } from "./props.js"
+import { assertValidElementProps } from "./utils/index.js"
 import { reconcileChildren } from "./reconciler.js"
 import {
   latest,
   traverseApply,
   isExoticType,
   getVNodeAppContext,
-} from "./utils.js"
+} from "./utils/index.js"
 import type { AppContext } from "./appContext"
 
 type VNode = Kiru.VNode

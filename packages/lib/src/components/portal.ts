@@ -1,9 +1,9 @@
-import { FLAG_STATIC_DOM } from "./constants.js"
-import { __DEV__ } from "./env.js"
-import { KiruError } from "./error.js"
-import { renderMode } from "./globals.js"
-import { useVNode } from "./hooks/utils.js"
-import { nextIdle, requestUpdate } from "./scheduler.js"
+import { FLAG_STATIC_DOM } from "../constants.js"
+import { __DEV__ } from "../env.js"
+import { KiruError } from "../error.js"
+import { renderMode } from "../globals.js"
+import { useVNode } from "../hooks/utils.js"
+import { nextIdle, requestUpdate } from "../scheduler.js"
 
 interface PortalProps {
   children?: JSX.Children

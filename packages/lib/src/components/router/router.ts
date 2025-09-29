@@ -1,23 +1,23 @@
-import { createElement } from "../element.js"
+import { createElement } from "../../element.js"
 import {
   useState,
   useMemo,
   useContext,
   useLayoutEffect,
   useRef,
-} from "../hooks/index.js"
-import { __DEV__ } from "../env.js"
+} from "../../hooks/index.js"
+import { __DEV__ } from "../../env.js"
+import { createContext } from "../../context.js"
+import { isRoute, Route } from "./route.js"
+import { noop } from "../../utils/index.js"
+import { node } from "../../globals.js"
+import type { ElementProps } from "../../types.js"
+import { flushSync, nextIdle } from "../../scheduler.js"
 import {
   parsePathParams,
   parseSearchParams,
   routeMatchesPath,
 } from "./routerUtils.js"
-import { createContext } from "../context.js"
-import { isRoute, Route } from "./route.js"
-import { noop } from "../utils.js"
-import { node } from "../globals.js"
-import type { ElementProps } from "../types"
-import { flushSync, nextIdle } from "../scheduler.js"
 
 export interface LinkProps extends Omit<ElementProps<"a">, "href"> {
   /**

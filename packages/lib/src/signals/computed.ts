@@ -1,7 +1,7 @@
 import { __DEV__ } from "../env.js"
 import { $HMR_ACCEPT } from "../constants.js"
 import { useHook } from "../hooks/utils.js"
-import { latest } from "../utils.js"
+import { latest } from "../utils/index.js"
 import { effectQueue, signalSubsMap } from "./globals.js"
 import { executeWithTracking } from "./effect.js"
 import { Signal } from "./base.js"

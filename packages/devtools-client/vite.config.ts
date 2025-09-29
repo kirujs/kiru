@@ -18,7 +18,6 @@ export default defineConfig({
     cssCodeSplit: false,
     assetsDir: "",
     rollupOptions: {
-      external: ["kiru"],
       output: {
         inlineDynamicImports: true,
       },

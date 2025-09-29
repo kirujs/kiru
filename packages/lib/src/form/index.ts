@@ -1,7 +1,10 @@
 import { __DEV__ } from "../env.js"
 import { Fragment } from "../element.js"
-import { generateRandomID } from "../generateId.js"
-import { safeStringify, shallowCompare } from "../utils.js"
+import {
+  safeStringify,
+  shallowCompare,
+  generateRandomID,
+} from "../utils/index.js"
 import { useEffect } from "../hooks/useEffect.js"
 import { useMemo } from "../hooks/useMemo.js"
 import { useRef } from "../hooks/useRef.js"

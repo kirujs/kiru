@@ -1,9 +1,13 @@
 import type { Prettify } from "./types.utils.js"
 import { __DEV__ } from "./env.js"
-import { sideEffectsEnabled, useHook } from "./hooks/utils.js"
-import { safeStringify, shallowCompare } from "./utils.js"
+import { useHook } from "./hooks/utils.js"
 import { $HMR_ACCEPT } from "./constants.js"
 import { HMRAccept } from "./hmr.js"
+import {
+  safeStringify,
+  shallowCompare,
+  sideEffectsEnabled,
+} from "./utils/index.js"
 
 export { createStore }
 export type { Store, MethodFactory }

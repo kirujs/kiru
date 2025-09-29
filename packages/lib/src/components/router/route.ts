@@ -1,4 +1,4 @@
-import { isVNode } from "../utils.js"
+import { isVNode } from "../../utils/index.js"
 
 interface RouteProps {
   /**

@@ -1,11 +1,10 @@
 import { __DEV__ } from "../env.js"
 import type { HMRAccept } from "../hmr.js"
 import { $HMR_ACCEPT } from "../constants.js"
-import { sideEffectsEnabled, useHook } from "../hooks/utils.js"
+import { useHook } from "../hooks/utils.js"
 import { effectQueue } from "./globals.js"
-import { generateRandomID } from "../generateId.js"
 import { executeWithTracking } from "./effect.js"
-import { latest } from "../utils.js"
+import { latest, sideEffectsEnabled, generateRandomID } from "../utils/index.js"
 import type { Signal } from "./base.js"
 import type { SignalValues } from "./types.js"
 

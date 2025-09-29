@@ -1,9 +1,5 @@
-import {
-  cleanupHook,
-  depsRequireChange,
-  sideEffectsEnabled,
-  useHook,
-} from "kiru"
+import { cleanupHook, depsRequireChange, useHook } from "kiru"
+import { sideEffectsEnabled } from "kiru/utils"
 
 const isSupported =
   "window" in globalThis && "MutationObserver" in globalThis.window

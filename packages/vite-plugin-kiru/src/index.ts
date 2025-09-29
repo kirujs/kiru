@@ -45,8 +45,6 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
     fileLinkFormatter = opts.devtools.formatFileLink ?? fileLinkFormatter
   }
   const dtHostScriptPath = "/__devtools_host__.js"
-  let transformedDtHostBuild = ""
-  let transformedDtClientBuild = ""
 
   const virtualModules: Record<string, string> = {}
   const fileToVirtualModules: Record<string, Set<string>> = {}
@@ -63,23 +61,6 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
     },
     load(id) {
       return virtualModules[id]
-    },
-    async buildStart() {
-      if (!devtoolsEnabled) return
-      log("Preparing devtools...")
-      const kiruPath = await this.resolve("kiru")
-      if (!kiruPath) {
-        throw new Error("[vite-plugin-kiru]: Unable to resolve kiru path.")
-      }
-      transformedDtHostBuild = devtoolsHostBuild.replaceAll(
-        'from "kiru"',
-        `from "/@fs/${kiruPath!.id}"`
-      )
-      transformedDtClientBuild = devtoolsClientBuild.replaceAll(
-        'from"kiru";',
-        `from"/@fs/${kiruPath!.id}";`
-      )
-      log("Devtools ready.")
     },
     config(config) {
       return {
@@ -126,11 +107,11 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
         log(`Serving devtools host at ${ANSI.magenta(dtHostScriptPath)}`)
         server.middlewares.use(dtHostScriptPath, (_, res) => {
           res.setHeader("Content-Type", "application/javascript")
-          res.end(transformedDtHostBuild, "utf-8")
+          res.end(devtoolsHostBuild, "utf-8")
         })
         log(`Serving devtools client at ${ANSI.magenta(dtClientPathname)}`)
         server.middlewares.use(dtClientPathname, (_, res) => {
-          res.end(transformedDtClientBuild)
+          res.end(devtoolsClientBuild, "utf-8")
         })
       }
       server.watcher.on("change", (file) => {

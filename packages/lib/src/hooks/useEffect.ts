@@ -1,10 +1,6 @@
+import { sideEffectsEnabled } from "../utils/index.js"
 import { __DEV__ } from "../env.js"
-import {
-  cleanupHook,
-  depsRequireChange,
-  sideEffectsEnabled,
-  useHook,
-} from "./utils.js"
+import { cleanupHook, depsRequireChange, useHook } from "./utils.js"
 
 /**
  * Runs a function after the component is rendered, or when a value provided in the optional [dependency

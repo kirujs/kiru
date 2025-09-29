@@ -1,6 +1,6 @@
 import { __DEV__ } from "../env.js"
-import { noop } from "../utils.js"
-import { sideEffectsEnabled, useHook } from "./utils.js"
+import { noop, sideEffectsEnabled } from "../utils/index.js"
+import { useHook } from "./utils.js"
 
 /**
  * Creates 'dispatcher-driven' state.

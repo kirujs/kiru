@@ -1,9 +1,13 @@
-import { latest, safeStringify, sideEffectsEnabled } from "../utils.js"
+import {
+  latest,
+  safeStringify,
+  sideEffectsEnabled,
+  generateRandomID,
+} from "../utils/index.js"
 import { $HMR_ACCEPT, $SIGNAL } from "../constants.js"
 import { __DEV__ } from "../env.js"
 import { node } from "../globals.js"
 import { useHook } from "../hooks/utils.js"
-import { generateRandomID } from "../generateId.js"
 import { requestUpdate } from "../scheduler.js"
 import { tracking, signalSubsMap } from "./globals.js"
 import type { SignalSubscriber, ReadonlySignal } from "./types.js"
