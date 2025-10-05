@@ -133,10 +133,12 @@ declare global {
       displayName?: string
     }
 
-    type FC<T = {}> = ((props: FCProps<T>) => JSX.Element) & {
+    interface FC<T = {}> {
+      (props: FCProps<T>): JSX.Element
       /** Used to display the name of the component in devtools  */
       displayName?: string
     }
+
     type FCProps<T = {}> = T & { children?: JSX.Children }
     type InferProps<T> = T extends Kiru.FC<infer P> ? P : never
 

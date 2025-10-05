@@ -60,6 +60,7 @@ type NumericStyleKeys =
   | "width"
 
   // Flexbox
+  | "flex"
   | "flexBasis"
   | "flexGrow"
   | "flexShrink"
