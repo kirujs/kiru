@@ -150,11 +150,7 @@ function reconcileChildrenArray(parent: VNode, children: unknown[]) {
 function updateSlot(parent: VNode, oldChild: VNode | null, child: unknown) {
   // Update the node if the keys match, otherwise return null.
   const key = oldChild?.props.key
-  if (
-    (typeof child === "string" && child !== "") ||
-    typeof child === "number" ||
-    typeof child === "bigint"
-  ) {
+  if (isValidTextNodeValue(child)) {
     if (key !== undefined) return null
     if (
       oldChild?.type === "#text" &&
@@ -272,11 +268,7 @@ function updateFragment(
 }
 
 function createChild(parent: VNode, child: unknown): VNode | null {
-  if (
-    (typeof child === "string" && child !== "") ||
-    typeof child === "number" ||
-    typeof child === "bigint"
-  ) {
+  if (isValidTextNodeValue(child)) {
     if (__DEV__) {
       dev_emitCreateNode()
     }
@@ -436,6 +428,16 @@ function updateFromMap(
   }
 
   return null
+}
+
+function isValidTextNodeValue(
+  value: unknown
+): value is string | number | bigint {
+  return (
+    (typeof value === "string" && value !== "") ||
+    typeof value === "number" ||
+    typeof value === "bigint"
+  )
 }
 
 function propsChanged(oldProps: VNode["props"], newProps: VNode["props"]) {
