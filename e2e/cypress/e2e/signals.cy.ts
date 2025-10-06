@@ -1,7 +1,14 @@
+/// <reference types="cypress" />
 describe("signals", () => {
   beforeEach(() => {
     const port = Cypress.env("port")
     cy.visit(`http://localhost:${port}/signals`)
+  })
+
+  describe("rendering", () => {
+    it("correctly renders a nullable string signal", () => {
+      cy.get("#nullable-string").should("not.have.text", "null")
+    })
   })
 
   describe("Basic Signal Functionality", () => {

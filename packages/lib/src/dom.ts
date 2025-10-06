@@ -100,15 +100,14 @@ function createDom(vNode: DomVNode): SomeDom {
   return dom
 }
 function createTextNode(vNode: VNode): Text {
-  const nodeValue = vNode.props.nodeValue
-  if (Signal.isSignal(nodeValue)) {
-    const value = nodeValue.peek()
-    const textNode = document.createTextNode(value)
-    subTextNode(vNode, textNode, nodeValue)
-    return textNode
+  const { nodeValue } = vNode.props
+  if (!Signal.isSignal(nodeValue)) {
+    return document.createTextNode(nodeValue)
   }
 
-  const textNode = document.createTextNode(nodeValue)
+  const value = nodeValue.peek() ?? ""
+  const textNode = document.createTextNode(value)
+  subTextNode(vNode, textNode, nodeValue)
   return textNode
 }
 

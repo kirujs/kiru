@@ -133,10 +133,12 @@ export function SignalsTest() {
     }
   })
 
+  const nullableStringSignal = useSignal<string | null>(null)
+
   return (
     <div id="signals">
       <h1>Signals Test</h1>
-
+      <span id="nullable-string">{nullableStringSignal}</span>
       {/* Basic Signal Tests */}
       <section id="signal-demo">
         <h2>Signal Demo</h2>
