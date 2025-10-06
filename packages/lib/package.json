@@ -53,7 +53,7 @@
   },
   "scripts": {
     "build": "rm -rf dist && pnpm i && tsc",
-    "test": "node --test",
+    "test": "node --test dist/**/*.test.js",
     "dev": "tsc --watch"
   },
   "types": "index.d.ts",
