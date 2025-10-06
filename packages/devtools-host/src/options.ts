@@ -36,9 +36,9 @@ export const options = {
   platform: "browser",
   target: "es2020",
   format: "esm",
-  minify: false,
+  minify: true,
   write: false,
-  keepNames: true,
+  keepNames: false,
   plugins: [
     esbuildPluginInlineImport({
       transform: esbuildPluginTransform,
