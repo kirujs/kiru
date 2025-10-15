@@ -8,7 +8,6 @@ export {
   $MEMO,
   $HYDRATION_BOUNDARY,
   CONSECUTIVE_DIRTY_LIMIT,
-  REGEX_UNIT,
   EVENT_PREFIX_REGEX,
   FLAG_UPDATE,
   FLAG_PLACEMENT,
@@ -39,17 +38,6 @@ const FLAG_STATIC_DOM = 1 << 4
 const FLAG_MEMO = 1 << 5
 const FLAG_NOOP = 1 << 6
 const FLAG_DIRTY = 1 << 7
-
-const REGEX_UNIT = {
-  AMP_G: /&/g,
-  LT_G: /</g,
-  GT_G: />/g,
-  SQT_G: /'/g,
-  DBLQT_G: /"/g,
-  SLASH_G: /\//g,
-  SLASHN_SLASHR_G: /[\n\r]+/g,
-  ALPHA_UPPER_G: /[A-Z]/g,
-} as const
 
 const EVENT_PREFIX_REGEX = /^on:?/
 

@@ -39,8 +39,7 @@ function renderToString_internal(
   el.parent = parent
   el.depth = (parent?.depth ?? -1) + 1
   el.index = idx
-  const props = el.props ?? {}
-  const type = el.type
+  const { type, props = {} } = el
   if (type === "#text") return encodeHtmlEntities(props.nodeValue ?? "")
 
   const children = props.children

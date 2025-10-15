@@ -1,9 +1,5 @@
 import { unwrap } from "../signals/index.js"
-import {
-  booleanAttributes,
-  REGEX_UNIT,
-  snakeCaseAttributes,
-} from "../constants.js"
+import { booleanAttributes, snakeCaseAttributes } from "../constants.js"
 
 export {
   className,
@@ -16,18 +12,26 @@ export {
   safeStringify,
 }
 
+const REGEX_AMP = /&/g
+const REGEX_LT = /</g
+const REGEX_GT = />/g
+const REGEX_SQT = /'/g
+const REGEX_DBLQT = /"/g
+const REGEX_SLASH = /\//g
+const REGEX_ALPHA_UPPER = /[A-Z]/g
+
 function className(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(" ")
 }
 
 function encodeHtmlEntities(text: string): string {
   return text
-    .replace(REGEX_UNIT.AMP_G, "&amp;")
-    .replace(REGEX_UNIT.LT_G, "&lt;")
-    .replace(REGEX_UNIT.GT_G, "&gt;")
-    .replace(REGEX_UNIT.DBLQT_G, "&quot;")
-    .replace(REGEX_UNIT.SQT_G, "&#039;")
-    .replace(REGEX_UNIT.SLASH_G, "&#47;")
+    .replace(REGEX_AMP, "&amp;")
+    .replace(REGEX_LT, "&lt;")
+    .replace(REGEX_GT, "&gt;")
+    .replace(REGEX_DBLQT, "&quot;")
+    .replace(REGEX_SQT, "&#039;")
+    .replace(REGEX_SLASH, "&#47;")
 }
 
 const propFilters = {
@@ -77,7 +81,7 @@ function propToHtmlAttr(key: string): string {
 function styleObjectToString(obj: Partial<CSSStyleDeclaration>): string {
   let cssString = ""
   for (const key in obj) {
-    const cssKey = key.replace(REGEX_UNIT.ALPHA_UPPER_G, "-$&").toLowerCase()
+    const cssKey = key.replace(REGEX_ALPHA_UPPER, "-$&").toLowerCase()
     cssString += `${cssKey}:${obj[key]};`
   }
   return cssString

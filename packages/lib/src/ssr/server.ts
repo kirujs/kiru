@@ -58,9 +58,8 @@ function renderToStream_internal(
   el.parent = parent
   el.depth = (parent?.depth ?? -1) + 1
   el.index = idx
-  const props = el.props ?? {}
+  const { type, props = {} } = el
   const children = props.children
-  const type = el.type
   if (type === "#text") {
     stream.push(encodeHtmlEntities(props.nodeValue ?? ""))
     return

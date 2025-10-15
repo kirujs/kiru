@@ -719,9 +719,7 @@ function placeAndCommitNoopChildren(
     const nextSiblingDom = getNextSiblingDom(parent, node)
     const parentDom = node.dom
     if (nextSiblingDom) {
-      const [first, ...rest] = domChildren
-      parentDom.insertBefore(first, nextSiblingDom)
-      first.after(...rest)
+      nextSiblingDom.before(...domChildren)
     } else {
       parentDom.append(...domChildren)
     }
