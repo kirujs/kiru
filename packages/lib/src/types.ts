@@ -167,6 +167,20 @@ declare global {
 
     type Ref<T> = RefCallback<T> | RefObject<T> | null | undefined
 
+    interface PromiseState<T> {
+      id: string
+      state: "pending" | "fulfilled" | "rejected"
+      value?: T
+      error?: unknown
+    }
+
+    interface StatefulPromise<T> extends Promise<T>, PromiseState<T> {}
+
+    interface RenderInteruptThrowValue {
+      fallback: JSX.Element
+      pendingData?: StatefulPromise<unknown>[]
+    }
+
     type RenderMode = "dom" | "hydrate" | "string" | "stream"
 
     type StateSetter<T> = T | ((prev: T) => T)

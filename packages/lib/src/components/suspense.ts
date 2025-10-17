@@ -1,72 +1,79 @@
 import { requestUpdate } from "../scheduler.js"
-import { node, renderMode } from "../globals.js"
+import { renderMode } from "../globals.js"
 import {
   cleanupHook,
   depsRequireChange,
   useHook,
   useId,
-  useMemo,
 } from "../hooks/index.js"
 import { __DEV__ } from "../env.js"
+import { getCurrentVNode } from "../utils/index.js"
+import { HYDRATION_DATA_EVENT } from "../constants.js"
 
 export type StatefulPromiseValues<
-  T extends readonly StatefulPromise<unknown>[]
+  T extends readonly Kiru.StatefulPromise<unknown>[]
 > = {
-  [I in keyof T]: T[I] extends StatefulPromise<infer V> ? V : never
+  [I in keyof T]: T[I] extends Kiru.StatefulPromise<infer V> ? V : never
 }
 
 type SuspenseChildrenArgs<
-  T extends StatefulPromise<any> | StatefulPromise<any>[]
-> = T extends StatefulPromise<any>[]
+  T extends Kiru.StatefulPromise<any> | Kiru.StatefulPromise<any>[]
+> = T extends Kiru.StatefulPromise<any>[]
   ? StatefulPromiseValues<T>
-  : [T extends StatefulPromise<infer V> ? V : never]
+  : [T extends Kiru.StatefulPromise<infer V> ? V : never]
 
 export type SuspenseProps<
-  T extends StatefulPromise<any> | StatefulPromise<any>[]
+  T extends Kiru.StatefulPromise<any> | Kiru.StatefulPromise<any>[]
 > = {
   data: T
   children: (...data: SuspenseChildrenArgs<T>) => JSX.Element
   fallback?: JSX.Element
 }
 
-export interface PromiseResolveEventDetail<T> {
+interface PromiseResolveEventDetail<T> {
   id: string
-  idx: number
   data?: T
   error?: unknown
 }
 
+const promiseCounter = new WeakMap<Kiru.VNode, number>()
+
 function resolveHydrationPromise<T>(
   id: string,
-  idx: number,
   signal: AbortSignal
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    // @ts-ignore
+    const promiseCache = window.__KIRU_PROMISE_CACHE as Map<
+      string,
+      PromiseResolveEventDetail<unknown>
+    >
+
+    if (promiseCache.has(id)) {
+      const { data, error } = promiseCache.get(id)!
+      promiseCache.delete(id)
+      if (error) return reject(error)
+      resolve(data as T)
+      return
+    }
+
     const onDataEvent = (event: Event) => {
       const { detail } = event as CustomEvent<PromiseResolveEventDetail<T>>
-      if (detail.id === id && detail.idx === idx) {
-        window.removeEventListener("kiru:hydrationdata", onDataEvent)
+      if (detail.id === id) {
+        window.removeEventListener(HYDRATION_DATA_EVENT, onDataEvent)
         const { data, error } = detail
         if (error) return reject(error)
         resolve(data!)
       }
     }
 
-    window.addEventListener("kiru:hydrationdata", onDataEvent)
+    window.addEventListener(HYDRATION_DATA_EVENT, onDataEvent)
     signal.addEventListener("abort", () => {
-      window.removeEventListener("kiru:hydrationdata", onDataEvent)
+      window.removeEventListener(HYDRATION_DATA_EVENT, onDataEvent)
       reject()
     })
   })
 }
-
-interface PromiseState<T> {
-  state: "pending" | "fulfilled" | "rejected"
-  value?: T
-  error?: unknown
-}
-
-interface StatefulPromise<T> extends Promise<T>, PromiseState<T> {}
 
 interface UsePromiseContext {
   signal: AbortSignal
@@ -75,7 +82,7 @@ interface UsePromiseContext {
 export function usePromise<T>(
   callback: (ctx: UsePromiseContext) => Promise<T>,
   deps: unknown[]
-): StatefulPromise<T> {
+): Kiru.StatefulPromise<T> {
   const id = useId()
 
   return useHook(
@@ -83,9 +90,9 @@ export function usePromise<T>(
     {
       deps,
       abortController: null as AbortController | null,
-      promise: null! as StatefulPromise<T>,
+      promise: null! as Kiru.StatefulPromise<T>,
     },
-    ({ hook, isInit, index }) => {
+    ({ hook, isInit, vNode }) => {
       if (isInit || depsRequireChange(deps, hook.deps)) {
         hook.deps = deps
         cleanupHook(hook)
@@ -93,10 +100,14 @@ export function usePromise<T>(
         const controller = (hook.abortController = new AbortController())
         hook.cleanup = () => controller.abort()
 
-        const state: PromiseState<T> = { state: "pending" }
+        const index = promiseCounter.get(vNode) ?? 0
+        promiseCounter.set(vNode, index + 1)
+
+        const promiseId = `${id}:data:${index}`
+        const state: Kiru.PromiseState<T> = { id: promiseId, state: "pending" }
         const promise =
           renderMode.current === "hydrate"
-            ? resolveHydrationPromise<T>(id, index, controller.signal)
+            ? resolveHydrationPromise<T>(promiseId, controller.signal)
             : callback({ signal: controller.signal })
 
         const p = (hook.promise = Object.assign(promise, state))
@@ -113,43 +124,35 @@ export function usePromise<T>(
   )
 }
 
-export interface RenderSuspensionState {
-  fallback?: JSX.Element
-  data: Promise<unknown>
-}
-
 export function Suspense<
-  const T extends StatefulPromise<unknown> | StatefulPromise<unknown>[]
+  const T extends
+    | Kiru.StatefulPromise<unknown>
+    | Kiru.StatefulPromise<unknown>[]
 >({ data, children, fallback }: SuspenseProps<T>) {
-  const promiseArray: StatefulPromise<unknown>[] = Array.isArray(data)
+  const promiseArray: Kiru.StatefulPromise<unknown>[] = Array.isArray(data)
     ? data
     : [data]
 
-  return useMemo(() => {
-    const n = node.current!
-    switch (renderMode.current) {
-      case "stream":
-      case "string":
-        throw {
-          fallback,
-          data: Promise.allSettled(promiseArray),
-        } satisfies RenderSuspensionState
+  switch (renderMode.current) {
+    case "stream":
+    case "string":
+      throw {
+        fallback,
+        pendingData: promiseArray,
+      } satisfies Kiru.RenderInteruptThrowValue
 
-      case "dom":
-      case "hydrate":
-        if (promiseArray.some((p) => p.state === "pending")) {
+    case "dom":
+    case "hydrate":
+      for (const p of promiseArray) {
+        if (p.state === "rejected") throw p.error
+        if (p.state === "pending") {
+          const n = getCurrentVNode()!
           Promise.allSettled(promiseArray).then(() => requestUpdate(n))
           return fallback
         }
+      }
+      const values = promiseArray.map((p) => p.value) as SuspenseChildrenArgs<T>
 
-        const rejections = promiseArray.filter((p) => p.state === "rejected")
-        if (rejections.length > 0) throw rejections[0].error
-
-        const values = promiseArray.map(
-          (p) => p.value
-        ) as SuspenseChildrenArgs<T>
-
-        return children(...values)
-    }
-  }, [...promiseArray, ...promiseArray.map((p) => p.state)])
+      return children(...values)
+  }
 }

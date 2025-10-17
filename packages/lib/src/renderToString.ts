@@ -6,6 +6,7 @@ import {
   propsToElementAttributes,
   isExoticType,
   assertValidElementProps,
+  isRenderInteruptThrowValue,
 } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import { $HYDRATION_BOUNDARY, voidElements } from "./constants.js"
@@ -56,10 +57,19 @@ function renderToString_internal(
   }
 
   if (typeof type !== "string") {
-    node.current = el
-    const res = type(props)
-    node.current = null
-    return renderToString_internal(res, el, idx)
+    try {
+      node.current = el
+      const res = type(props)
+      return renderToString_internal(res, el, idx)
+    } catch (error) {
+      if (isRenderInteruptThrowValue(error)) {
+        const { fallback } = error
+        return renderToString_internal(fallback, el, 0)
+      }
+      throw error
+    } finally {
+      node.current = null
+    }
   }
 
   if (__DEV__) {

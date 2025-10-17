@@ -31,12 +31,13 @@ async function startServer() {
     const { httpResponse } = pageContext
     if (httpResponse === null) return next()
 
-    const { body, statusCode, headers, earlyHints } = httpResponse
+    const { statusCode, headers, earlyHints } = httpResponse
     if (res.writeEarlyHints)
       res.writeEarlyHints({ link: earlyHints.map((e) => e.earlyHintLink) })
     res.status(statusCode)
     headers.forEach(([name, value]) => res.setHeader(name, value))
-    res.send(body)
+
+    httpResponse.pipe(res)
   })
 
   app.listen(process.env.PORT ? parseInt(process.env.PORT) : 3000, () => {

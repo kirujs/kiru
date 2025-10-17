@@ -16,6 +16,9 @@ export function Navbar() {
       <a className="text-sm underline" href="/form">
         Form
       </a>
+      <a className="text-sm underline" href="/suspense">
+        Suspense
+      </a>
     </nav>
   )
 }

@@ -18,6 +18,7 @@ async function loadProduct(id: number, signal: AbortSignal): Promise<Product> {
 
 function Home() {
   const [productId, setProductId] = useState(4)
+  const [text, setText] = useState("Hello")
   const productDataPromise = usePromise(
     ({ signal }) => loadProduct(productId, signal),
     [productId]
@@ -25,11 +26,15 @@ function Home() {
 
   return (
     <div>
-      <Suspense data={[productDataPromise]} fallback={<div>Loading...</div>}>
+      <Suspense
+        data={[productDataPromise]}
+        fallback={<div>Loading... {text}</div>}
+      >
         {(pdata) => (
           <div>
             <h1>{pdata.title}</h1>
             <img src={pdata.thumbnail} />
+            {text}
           </div>
         )}
       </Suspense>
@@ -40,6 +45,7 @@ function Home() {
         Prev
       </button>
       <button onclick={() => setProductId((prev) => prev + 1)}>Next</button>
+      <input value={text} oninput={(e) => setText(e.target.value)} />
     </div>
   )
 }
