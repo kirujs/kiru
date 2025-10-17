@@ -1,48 +1,45 @@
 import { Router, Route, Link } from "kiru/router"
 import { ROUTES } from "./routes"
-import { signal, useComputed, useEffect, watch } from "kiru"
+import { Suspense, usePromise, useState } from "kiru"
 
-import { onHMR } from "vite-plugin-kiru"
-
-let interval = setInterval(() => console.log("interval"), 1000)
-
-onHMR(() => {
-  console.log("onHMR")
-  clearInterval(interval)
-})
-
-const state = {
-  count: signal(0),
-  greeting: signal("Hello world!"),
-  foo: {
-    bar: signal(123),
-  },
+interface Product {
+  id: number
+  title: string
+  thumbnail: string
 }
-watch(() => {
-  console.log("~~~~~ count changed 123 45 asd", state.count.value)
-})
 
-const Home = () => {
-  const doubled = useComputed(() => {
-    console.log("doubled")
-    return state.count.value * 2
+async function loadProduct(id: number, signal: AbortSignal): Promise<Product> {
+  const request = await fetch(`https://dummyjson.com/products/${id}`, {
+    signal,
   })
-  useEffect(() => {
-    console.log("Home mounted")
-  }, [])
+  if (!request.ok) throw new Error(request.statusText)
+  return request.json()
+}
+
+function Home() {
+  const [productId, setProductId] = useState(4)
+  const productDataPromise = usePromise(
+    ({ signal }) => loadProduct(productId, signal),
+    [productId]
+  )
 
   return (
-    <div
-      style={{
-        display: undefined,
-        flexDirection: "column",
-        alignItems: "center",
-      }}
-    >
-      <h1>{state.greeting}</h1>
-      <p>Count: {state.count}</p>
-      <p>Doubled: {doubled}</p>
-      <button onclick={() => state.count.value++}>Increment</button>
+    <div>
+      <Suspense data={[productDataPromise]} fallback={<div>Loading...</div>}>
+        {(pdata) => (
+          <div>
+            <h1>{pdata.title}</h1>
+            <img src={pdata.thumbnail} />
+          </div>
+        )}
+      </Suspense>
+      <button
+        disabled={productId === 1}
+        onclick={() => setProductId((prev) => prev - 1)}
+      >
+        Prev
+      </button>
+      <button onclick={() => setProductId((prev) => prev + 1)}>Next</button>
     </div>
   )
 }
