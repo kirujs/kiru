@@ -6,6 +6,7 @@ export {
   $KIRU_ERROR,
   $HMR_ACCEPT,
   $MEMO,
+  $ERROR_BOUNDARY,
   $HYDRATION_BOUNDARY,
   CONSECUTIVE_DIRTY_LIMIT,
   HYDRATION_DATA_EVENT,
@@ -28,6 +29,7 @@ const $FRAGMENT = Symbol.for("kiru.fragment")
 const $KIRU_ERROR = Symbol.for("kiru.error")
 const $HMR_ACCEPT = Symbol.for("kiru.hmrAccept")
 const $MEMO = Symbol.for("kiru.memo")
+const $ERROR_BOUNDARY = Symbol.for("kiru.errorBoundary")
 const $HYDRATION_BOUNDARY = Symbol.for("kiru.hydrationBoundary")
 
 const CONSECUTIVE_DIRTY_LIMIT = 50

@@ -9,6 +9,7 @@ import {
 import { __DEV__ } from "../env.js"
 import { getCurrentVNode } from "../utils/index.js"
 import { HYDRATION_DATA_EVENT } from "../constants.js"
+import { Signal, useSignal } from "../signals/index.js"
 
 export type StatefulPromiseValues<
   T extends readonly Kiru.StatefulPromise<unknown>[]
@@ -65,21 +66,31 @@ interface UsePromiseContext {
   signal: AbortSignal
 }
 
+interface UsePromiseState<T> {
+  data: Kiru.StatefulPromise<T>
+  refresh: () => void
+  pending: Signal<boolean>
+}
+
+type UsePromiseHookState<T> = {
+  promise: Kiru.StatefulPromise<T>
+  abortController?: AbortController
+  deps?: unknown[]
+}
+
 export function usePromise<T>(
   callback: (ctx: UsePromiseContext) => Promise<T>,
   deps: unknown[]
-): Kiru.StatefulPromise<T> {
+): UsePromiseState<T> {
   const id = useId()
+  const pending = useSignal(true)
 
   return useHook(
     "usePromise",
-    {
-      deps,
-      abortController: null as AbortController | null,
-      promise: null! as Kiru.StatefulPromise<T>,
-    },
+    {} as UsePromiseHookState<T>,
     ({ hook, isInit, vNode }) => {
       if (isInit || depsRequireChange(deps, hook.deps)) {
+        pending.value = true
         hook.deps = deps
         cleanupHook(hook)
 
@@ -100,12 +111,23 @@ export function usePromise<T>(
         p.then((value) => {
           p.state = "fulfilled"
           p.value = value
-        }).catch((error) => {
-          p.state = "rejected"
-          p.error = error
         })
+          .catch((error) => {
+            p.state = "rejected"
+            p.error = error
+          })
+          .finally(() => {
+            pending.value = false
+          })
       }
-      return hook.promise
+      return {
+        data: hook.promise,
+        refresh: () => {
+          hook.deps = undefined
+          requestUpdate(vNode)
+        },
+        pending,
+      }
     }
   )
 }

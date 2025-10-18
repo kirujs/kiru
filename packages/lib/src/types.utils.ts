@@ -1,5 +1,6 @@
 import type {
   $CONTEXT_PROVIDER,
+  $ERROR_BOUNDARY,
   $FRAGMENT,
   $HYDRATION_BOUNDARY,
 } from "./constants"
@@ -31,6 +32,14 @@ export interface ContextProviderNode<T> extends Kiru.VNode {
     ctx: Kiru.Context<T>
     dependents: Set<Kiru.VNode>
   }
+}
+
+export interface ErrorBoundaryNode extends Kiru.VNode {
+  type: typeof $ERROR_BOUNDARY
+  props: Kiru.VNode["props"] & {
+    fallback: JSX.Element | ((error: Error, reset: () => void) => JSX.Element)
+  }
+  error?: Error
 }
 
 export interface HydrationBoundaryNode extends Kiru.VNode {

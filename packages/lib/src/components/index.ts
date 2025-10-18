@@ -1,3 +1,4 @@
+export { ErrorBoundary, type ErrorBoundaryProps } from "./errorBoundary.js"
 export * from "./lazy.js"
 export { memo } from "./memo.js"
 export * from "./portal.js"

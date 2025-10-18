@@ -2,6 +2,7 @@ import type { ReadonlySignal, Signal as SignalClass } from "./signals"
 import type {
   $CONTEXT,
   $CONTEXT_PROVIDER,
+  $ERROR_BOUNDARY,
   $FRAGMENT,
   $HYDRATION_BOUNDARY,
 } from "./constants"
@@ -190,6 +191,7 @@ declare global {
     type ExoticSymbol =
       | typeof $FRAGMENT
       | typeof $CONTEXT_PROVIDER
+      | typeof $ERROR_BOUNDARY
       | typeof $HYDRATION_BOUNDARY
 
     interface VNode {
