@@ -5,6 +5,7 @@ import type { ErrorBoundaryNode } from "../types.utils"
 export interface ErrorBoundaryProps {
   children?: JSX.Children
   fallback?: JSX.Element | ((error: Error) => JSX.Element)
+  onError?: (error: Error) => void
 }
 
 export function ErrorBoundary({ children, fallback }: ErrorBoundaryProps) {

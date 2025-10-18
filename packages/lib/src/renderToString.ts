@@ -7,7 +7,6 @@ import {
   isExoticType,
   assertValidElementProps,
   isRenderInteruptThrowValue,
-  noop,
 } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import {
@@ -88,7 +87,6 @@ function renderToString_internal(
     }
 
     if (type === $ERROR_BOUNDARY) {
-      const n = el as ErrorBoundaryNode
       const boundaryIdx = ctx.beginNewBoundary()
       try {
         renderToString_internal(ctx, children, el, idx)
@@ -96,10 +94,10 @@ function renderToString_internal(
         if (!isRenderInteruptThrowValue(error)) {
           ctx.resetBoundary(boundaryIdx)
           const e = error instanceof Error ? error : new Error(String(error))
-          n.error = e
-          const { fallback } = props as ErrorBoundaryNode["props"]
+          const { fallback, onError } = props as ErrorBoundaryNode["props"]
+          onError?.(e)
           const fallbackContent =
-            typeof fallback === "function" ? fallback(e, noop) : fallback
+            typeof fallback === "function" ? fallback(e) : fallback
           renderToString_internal(ctx, fallbackContent, el, 0)
         }
       }

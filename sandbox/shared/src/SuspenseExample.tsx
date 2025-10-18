@@ -89,6 +89,7 @@ export default function SuspenseExample() {
             <button onclick={() => products.refresh()}>Retry</button>
           </>
         )}
+        onError={(error) => console.error("Error loading products", error)}
       >
         <Suspense
           data={products.data}

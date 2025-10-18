@@ -150,9 +150,10 @@ function renderToStream_internal(
       } catch (error) {
         if (!isRenderInteruptThrowValue(error)) {
           const e = error instanceof Error ? error : new Error(String(error))
-          const { fallback } = props as ErrorBoundaryNode["props"]
+          const { fallback, onError } = props as ErrorBoundaryNode["props"]
+          onError?.(e)
           const fallbackContent =
-            typeof fallback === "function" ? fallback(e, () => {}) : fallback
+            typeof fallback === "function" ? fallback(e) : fallback
           renderToStream_internal(ctx, fallbackContent, el, 0)
         }
       }

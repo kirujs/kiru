@@ -223,7 +223,10 @@ function performUnitOfWork(vNode: VNode): VNode | void {
 
     const handler = findParentErrorBoundary(vNode)
     if (handler) {
-      handler.error = error instanceof Error ? error : new Error(String(error))
+      const e = (handler.error =
+        error instanceof Error ? error : new Error(String(error)))
+
+      handler.props.onError?.(e)
       if (handler.depth < currentWorkRoot!.depth) {
         currentWorkRoot = handler
       }
