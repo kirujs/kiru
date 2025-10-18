@@ -172,7 +172,7 @@ declare global {
       id: string
       state: "pending" | "fulfilled" | "rejected"
       value?: T
-      error?: unknown
+      error?: Error
     }
 
     interface StatefulPromise<T> extends Promise<T>, PromiseState<T> {}

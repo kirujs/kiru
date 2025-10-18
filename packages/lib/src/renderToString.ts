@@ -7,64 +7,118 @@ import {
   isExoticType,
   assertValidElementProps,
   isRenderInteruptThrowValue,
+  noop,
 } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
-import { $HYDRATION_BOUNDARY, voidElements } from "./constants.js"
+import {
+  $ERROR_BOUNDARY,
+  $HYDRATION_BOUNDARY,
+  voidElements,
+} from "./constants.js"
 import { HYDRATION_BOUNDARY_MARKER } from "./ssr/hydrationBoundary.js"
 import { __DEV__ } from "./env.js"
+import { ErrorBoundaryNode } from "./types.utils.js"
+
+interface StringRenderContext {
+  write(chunk: string): void
+  beginNewBoundary(): number
+  resetBoundary(idx: number): void
+}
 
 export function renderToString(element: JSX.Element) {
   const prev = renderMode.current
   renderMode.current = "string"
-  const rootNode = Fragment({ children: element })
-  const res = renderToString_internal(rootNode, null, 0)
+  const parts: string[] = [""]
+  const ctx: StringRenderContext = {
+    write(chunk) {
+      parts[parts.length - 1] += chunk
+    },
+    beginNewBoundary() {
+      parts.push("")
+      return parts.length - 1
+    },
+    resetBoundary(idx) {
+      parts[idx] = ""
+    },
+  }
+  renderToString_internal(ctx, Fragment({ children: element }), null, 0)
   renderMode.current = prev
-  return res
+  return parts.join("")
 }
 
 function renderToString_internal(
+  ctx: StringRenderContext,
   el: unknown,
   parent: Kiru.VNode | null,
   idx: number
-): string {
-  if (el === null) return ""
-  if (el === undefined) return ""
-  if (typeof el === "boolean") return ""
-  if (typeof el === "string") return encodeHtmlEntities(el)
-  if (typeof el === "number" || typeof el === "bigint") return el.toString()
-  if (el instanceof Array) {
-    return el.map((c, i) => renderToString_internal(c, parent, i)).join("")
+): void {
+  if (el === null) return
+  if (el === undefined) return
+  if (typeof el === "boolean") return
+  if (typeof el === "string") {
+    return ctx.write(encodeHtmlEntities(el))
   }
-  if (Signal.isSignal(el)) return String(el.peek())
-  if (!isVNode(el)) return String(el)
+  if (typeof el === "number" || typeof el === "bigint") {
+    return ctx.write(el.toString())
+  }
+  if (el instanceof Array) {
+    return el.forEach((c, i) => renderToString_internal(ctx, c, parent, i))
+  }
+  if (Signal.isSignal(el)) {
+    return ctx.write(String(el.peek()))
+  }
+  if (!isVNode(el)) {
+    return ctx.write(String(el))
+  }
   el.parent = parent
   el.depth = (parent?.depth ?? -1) + 1
   el.index = idx
   const { type, props = {} } = el
-  if (type === "#text") return encodeHtmlEntities(props.nodeValue ?? "")
+  if (type === "#text") {
+    return ctx.write(encodeHtmlEntities(props.nodeValue ?? ""))
+  }
 
   const children = props.children
   if (isExoticType(type)) {
     if (type === $HYDRATION_BOUNDARY) {
-      return `<!--${HYDRATION_BOUNDARY_MARKER}-->${renderToString_internal(
-        children,
-        el,
-        idx
-      )}<!--/${HYDRATION_BOUNDARY_MARKER}-->`
+      ctx.write(`<!--${HYDRATION_BOUNDARY_MARKER}-->`)
+      renderToString_internal(ctx, children, el, idx)
+      ctx.write(`<!--/${HYDRATION_BOUNDARY_MARKER}-->`)
+      return
     }
 
-    return renderToString_internal(children, el, idx)
+    if (type === $ERROR_BOUNDARY) {
+      const n = el as ErrorBoundaryNode
+      const boundaryIdx = ctx.beginNewBoundary()
+      try {
+        renderToString_internal(ctx, children, el, idx)
+      } catch (error) {
+        if (!isRenderInteruptThrowValue(error)) {
+          ctx.resetBoundary(boundaryIdx)
+          const e = error instanceof Error ? error : new Error(String(error))
+          n.error = e
+          const { fallback } = props as ErrorBoundaryNode["props"]
+          const fallbackContent =
+            typeof fallback === "function" ? fallback(e, noop) : fallback
+          renderToString_internal(ctx, fallbackContent, el, 0)
+        }
+      }
+      return
+    }
+
+    renderToString_internal(ctx, children, el, idx)
+    return
   }
 
   if (typeof type !== "string") {
     try {
       node.current = el
       const res = type(props)
-      return renderToString_internal(res, el, idx)
+      renderToString_internal(ctx, res, el, idx)
+      return
     } catch (error) {
       if (isRenderInteruptThrowValue(error)) {
-        const { fallback } = error
-        return renderToString_internal(fallback, el, 0)
+        return renderToString_internal(ctx, error.fallback, el, 0)
       }
       throw error
     } finally {
@@ -72,20 +126,24 @@ function renderToString_internal(
     }
   }
 
-  if (__DEV__) {
-    assertValidElementProps(el)
-  }
+  if (__DEV__) assertValidElementProps(el)
   const attrs = propsToElementAttributes(props)
-  const inner =
-    "innerHTML" in props
-      ? Signal.isSignal(props.innerHTML)
-        ? props.innerHTML.peek()
-        : props.innerHTML
-      : Array.isArray(children)
-      ? children.map((c, i) => renderToString_internal(c, el, i)).join("")
-      : renderToString_internal(children, el, 0)
+  ctx.write(`<${type}${attrs.length ? ` ${attrs}` : ""}>`)
 
-  return `<${type}${attrs.length ? ` ${attrs}` : ""}>${
-    voidElements.has(type) ? "" : `${inner}</${type}>`
-  }`
+  if (voidElements.has(type)) return
+
+  if ("innerHTML" in props) {
+    ctx.write(
+      String(
+        Signal.isSignal(props.innerHTML)
+          ? props.innerHTML.peek()
+          : props.innerHTML
+      )
+    )
+  } else if (Array.isArray(children)) {
+    children.forEach((c, i) => renderToString_internal(ctx, c, el, i))
+  } else {
+    renderToString_internal(ctx, children, el, 0)
+  }
+  ctx.write(`</${type}>`)
 }

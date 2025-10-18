@@ -34,7 +34,7 @@ export type SuspenseProps<
 interface PromiseResolveEventDetail<T> {
   id: string
   data?: T
-  error?: unknown
+  error?: string
 }
 
 const promiseCounter = new WeakMap<Kiru.VNode, number>()
@@ -114,7 +114,7 @@ export function usePromise<T>(
         })
           .catch((error) => {
             p.state = "rejected"
-            p.error = error
+            p.error = error instanceof Error ? error : new Error(error)
           })
           .finally(() => {
             pending.value = false

@@ -12,11 +12,13 @@ import {
 import { Signal } from "../signals/base.js"
 import {
   $HYDRATION_BOUNDARY,
+  $ERROR_BOUNDARY,
   HYDRATION_DATA_EVENT,
   voidElements,
 } from "../constants.js"
 import { HYDRATION_BOUNDARY_MARKER } from "./hydrationBoundary.js"
 import { __DEV__ } from "../env.js"
+import type { ErrorBoundaryNode } from "../types.utils"
 
 interface ServerRenderContext {
   write: (chunk: string) => void
@@ -36,6 +38,7 @@ dataScripts.forEach((p) => {
 document.currentScript.remove()
 </script>
 `
+
 export function renderToReadableStream(element: JSX.Element): {
   immediate: string
   stream: Readable
@@ -56,16 +59,21 @@ export function renderToReadableStream(element: JSX.Element): {
       unseen.forEach((p) => {
         seenPromises.add(p)
 
-        const writePromise = p.then(() => {
-          const contents = JSON.stringify({
-            data: p.value,
-            error: p.error,
-          })
+        const writePromise = p
+          .then(() => {
+            const contents = JSON.stringify({ data: p.value })
 
-          stream.push(
-            `<script id="${p.id}" x-data type="application/json" defer>${contents}</script>`
-          )
-        })
+            stream.push(
+              `<script id="${p.id}" x-data type="application/json" defer>${contents}</script>`
+            )
+          })
+          .catch(() => {
+            const contents = JSON.stringify({ error: p.error?.message })
+
+            stream.push(
+              `<script id="${p.id}" x-data type="application/json" defer>${contents}</script>`
+            )
+          })
         pendingWrites.push(writePromise)
       })
     },
@@ -94,38 +102,24 @@ function renderToStream_internal(
   parent: Kiru.VNode | null,
   idx: number
 ): void {
-  if (el === null) return
-  if (el === undefined) return
-  if (typeof el === "boolean") return
-  if (typeof el === "string") {
-    ctx.write(encodeHtmlEntities(el))
-    return
-  }
-  if (typeof el === "number" || typeof el === "bigint") {
-    ctx.write(el.toString())
-    return
-  }
-  if (el instanceof Array) {
-    el.forEach((c, i) => renderToStream_internal(ctx, c, parent, i))
-    return
-  }
-  if (Signal.isSignal(el)) {
-    ctx.write(String(el.peek()))
-    return
-  }
-  if (!isVNode(el)) {
-    ctx.write(String(el))
-    return
-  }
+  if (el === null || el === undefined || typeof el === "boolean") return
+  if (typeof el === "string") return ctx.write(encodeHtmlEntities(el))
+  if (typeof el === "number" || typeof el === "bigint")
+    return ctx.write(el.toString())
+  if (el instanceof Array)
+    return el.forEach((c, i) => renderToStream_internal(ctx, c, parent, i))
+  if (Signal.isSignal(el)) return ctx.write(String(el.peek()))
+  if (!isVNode(el)) return ctx.write(String(el))
+
   el.parent = parent
   el.depth = (parent?.depth ?? -1) + 1
   el.index = idx
   const { type, props = {} } = el
   const children = props.children
-  if (type === "#text") {
-    ctx.write(encodeHtmlEntities(props.nodeValue ?? ""))
-    return
-  }
+
+  if (type === "#text")
+    return ctx.write(encodeHtmlEntities(props.nodeValue ?? ""))
+
   if (isExoticType(type)) {
     if (type === $HYDRATION_BOUNDARY) {
       ctx.write(`<!--${HYDRATION_BOUNDARY_MARKER}-->`)
@@ -133,6 +127,39 @@ function renderToStream_internal(
       ctx.write(`<!--/${HYDRATION_BOUNDARY_MARKER}-->`)
       return
     }
+
+    if (type === $ERROR_BOUNDARY) {
+      let boundaryBuffer = ""
+      const localPromises = new Set<Kiru.StatefulPromise<unknown>>()
+
+      const boundaryCtx: ServerRenderContext = {
+        write(chunk) {
+          boundaryBuffer += chunk
+        },
+        queuePendingData(data) {
+          data.forEach((p) => localPromises.add(p))
+        },
+      }
+
+      try {
+        renderToStream_internal(boundaryCtx, children, el, idx)
+        // flush successful render
+        ctx.write(boundaryBuffer)
+        // merge local promises into global queue
+        ctx.queuePendingData([...localPromises])
+      } catch (error) {
+        if (!isRenderInteruptThrowValue(error)) {
+          const e = error instanceof Error ? error : new Error(String(error))
+          const { fallback } = props as ErrorBoundaryNode["props"]
+          const fallbackContent =
+            typeof fallback === "function" ? fallback(e, () => {}) : fallback
+          renderToStream_internal(ctx, fallbackContent, el, 0)
+        }
+      }
+      return
+    }
+
+    // other exotic types
     return renderToStream_internal(ctx, children, el, idx)
   }
 
@@ -145,9 +172,7 @@ function renderToStream_internal(
     } catch (error) {
       if (isRenderInteruptThrowValue(error)) {
         const { fallback, pendingData } = error
-        if (pendingData) {
-          ctx.queuePendingData(pendingData)
-        }
+        if (pendingData) ctx.queuePendingData(pendingData)
         renderToStream_internal(ctx, fallback, el, 0)
         return
       }
@@ -157,29 +182,24 @@ function renderToStream_internal(
     }
   }
 
-  if (__DEV__) {
-    assertValidElementProps(el)
-  }
+  if (__DEV__) assertValidElementProps(el)
   const attrs = propsToElementAttributes(props)
   ctx.write(`<${type}${attrs.length ? ` ${attrs}` : ""}>`)
 
-  if (!voidElements.has(type)) {
-    if ("innerHTML" in props) {
-      ctx.write(
-        String(
-          Signal.isSignal(props.innerHTML)
-            ? props.innerHTML.peek()
-            : props.innerHTML
-        )
-      )
-    } else {
-      if (Array.isArray(children)) {
-        children.forEach((c, i) => renderToStream_internal(ctx, c, el, i))
-      } else {
-        renderToStream_internal(ctx, children, el, 0)
-      }
-    }
+  if (voidElements.has(type)) return
 
-    ctx.write(`</${type}>`)
+  if ("innerHTML" in props) {
+    ctx.write(
+      String(
+        Signal.isSignal(props.innerHTML)
+          ? props.innerHTML.peek()
+          : props.innerHTML
+      )
+    )
+  } else if (Array.isArray(children)) {
+    children.forEach((c, i) => renderToStream_internal(ctx, c, el, i))
+  } else {
+    renderToStream_internal(ctx, children, el, 0)
   }
+  ctx.write(`</${type}>`)
 }
