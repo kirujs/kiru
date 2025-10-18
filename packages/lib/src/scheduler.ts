@@ -318,6 +318,20 @@ function updateFunctionComponent(vNode: FunctionVNode) {
 
       if (__DEV__) {
         newChild = latest(type)(props)
+
+        if (vNode.hmrUpdated && vNode.hooks && vNode.hookSig) {
+          const len = vNode.hooks.length
+          if (hookIndex.current < len) {
+            // clean up any hooks that were removed
+            for (let i = hookIndex.current; i < len; i++) {
+              const hook = vNode.hooks[i]
+              hook.cleanup?.()
+            }
+            vNode.hooks.length = hookIndex.current
+            vNode.hookSig.length = hookIndex.current
+          }
+        }
+
         delete vNode.hmrUpdated
         if (++renderTryCount > CONSECUTIVE_DIRTY_LIMIT) {
           throw new KiruError({

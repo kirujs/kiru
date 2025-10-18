@@ -157,6 +157,7 @@ function useHook<
         console.warn(
           `[kiru]: hooks must be called in the same order. Hook "${hookName}" was called in place of "${vNode.hookSig[index]}". Strange things may happen.`
         )
+        oldHook?.cleanup?.()
         vNode.hooks.length = index
         vNode.hookSig.length = index
         oldHook = undefined
