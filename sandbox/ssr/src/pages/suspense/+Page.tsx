@@ -7,7 +7,7 @@ interface Product {
 }
 
 async function loadProduct(id: number, signal: AbortSignal): Promise<Product> {
-  await new Promise((resolve) => setTimeout(resolve, 500))
+  await new Promise((resolve) => setTimeout(resolve, 1500))
   const request = await fetch(`https://dummyjson.com/products/${id}`, {
     signal,
   })

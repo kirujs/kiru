@@ -43,20 +43,6 @@ function resolveHydrationPromise<T>(
   signal: AbortSignal
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    // @ts-ignore
-    const promiseCache = window.__KIRU_PROMISE_CACHE as Map<
-      string,
-      PromiseResolveEventDetail<unknown>
-    >
-
-    if (promiseCache.has(id)) {
-      const { data, error } = promiseCache.get(id)!
-      promiseCache.delete(id)
-      if (error) return reject(error)
-      resolve(data as T)
-      return
-    }
-
     const onDataEvent = (event: Event) => {
       const { detail } = event as CustomEvent<PromiseResolveEventDetail<T>>
       if (detail.id === id) {

@@ -1,11 +1,15 @@
 // Environment: server
 import type { OnRenderHtmlAsync, PageContext } from "vike/types"
-import { escapeInject } from "vike/server"
+import { dangerouslySkipEscape, escapeInject } from "vike/server"
 import { getTitle } from "./utils"
 import { App } from "./App"
 import { renderToReadableStream } from "kiru/ssr/server"
 
 export const onRenderHtml = (pageContext: PageContext) => {
+  const { immediate, stream } = renderToReadableStream(
+    <App pageContext={pageContext} />
+  )
+  pageContext.stream = stream
   return escapeInject`<!DOCTYPE html>
     <html>
       <head>
@@ -16,7 +20,7 @@ export const onRenderHtml = (pageContext: PageContext) => {
         <title>${getTitle(pageContext)}</title>
       </head>
       <body>
-        <div id="page-root">${renderToReadableStream(<App pageContext={pageContext} />)}</div>
+        <div id="page-root">${dangerouslySkipEscape(immediate)}</div>
         <div id="portal-root"></div>
       </body>
     </html>`
