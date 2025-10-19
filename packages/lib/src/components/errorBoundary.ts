@@ -8,8 +8,12 @@ export interface ErrorBoundaryProps {
   onError?: (error: Error) => void
 }
 
-export function ErrorBoundary({ children, fallback }: ErrorBoundaryProps) {
-  return createElement($ERROR_BOUNDARY, { children, fallback })
+export function ErrorBoundary({
+  children,
+  fallback,
+  onError,
+}: ErrorBoundaryProps) {
+  return createElement($ERROR_BOUNDARY, { children, fallback, onError })
 }
 
 export function findParentErrorBoundary(
