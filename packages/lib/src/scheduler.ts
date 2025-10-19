@@ -1,10 +1,12 @@
 import type {
   ContextProviderNode,
   DomVNode,
+  ErrorBoundaryNode,
   FunctionVNode,
 } from "./types.utils"
 import {
   $CONTEXT_PROVIDER,
+  $ERROR_BOUNDARY,
   CONSECUTIVE_DIRTY_LIMIT,
   FLAG_DELETION,
   FLAG_DIRTY,
@@ -32,6 +34,7 @@ import {
   getVNodeAppContext,
 } from "./utils/index.js"
 import type { AppContext } from "./appContext"
+import { findParentErrorBoundary } from "./components/errorBoundary"
 
 type VNode = Kiru.VNode
 
@@ -202,21 +205,10 @@ function doWork(): void {
 function performUnitOfWork(vNode: VNode): VNode | void {
   let renderChild = true
   try {
-    const { props } = vNode
     if (typeof vNode.type === "string") {
       updateHostComponent(vNode as DomVNode)
     } else if (isExoticType(vNode.type)) {
-      if (vNode?.type === $CONTEXT_PROVIDER) {
-        const {
-          props: { dependents, value },
-          prev,
-        } = vNode as ContextProviderNode<unknown>
-
-        if (dependents.size && prev && prev.props.value !== value) {
-          dependents.forEach(queueUpdate)
-        }
-      }
-      vNode.child = reconcileChildren(vNode, props.children)
+      updateExoticComponent(vNode)
     } else {
       renderChild = updateFunctionComponent(vNode as FunctionVNode)
     }
@@ -227,6 +219,18 @@ function performUnitOfWork(vNode: VNode): VNode | void {
         appCtx!,
         error instanceof Error ? error : new Error(String(error))
       )
+    }
+
+    const handler = findParentErrorBoundary(vNode)
+    if (handler) {
+      const e = (handler.error =
+        error instanceof Error ? error : new Error(String(error)))
+
+      handler.props.onError?.(e)
+      if (handler.depth < currentWorkRoot!.depth) {
+        currentWorkRoot = handler
+      }
+      return handler
     }
 
     if (KiruError.isKiruError(error)) {
@@ -277,6 +281,35 @@ function performUnitOfWork(vNode: VNode): VNode | void {
       hydrationStack.pop()
     }
   }
+}
+
+function updateExoticComponent(vNode: VNode) {
+  const { props, type } = vNode
+  let children = props.children
+
+  if (type === $CONTEXT_PROVIDER) {
+    const {
+      props: { dependents, value },
+      prev,
+    } = vNode as ContextProviderNode<unknown>
+
+    if (dependents.size && prev && prev.props.value !== value) {
+      dependents.forEach(queueUpdate)
+    }
+  } else if (type === $ERROR_BOUNDARY) {
+    const n = vNode as ErrorBoundaryNode
+    const { error } = n
+    if (error) {
+      children =
+        typeof props.fallback === "function"
+          ? props.fallback(error)
+          : props.fallback
+
+      delete n.error
+    }
+  }
+
+  vNode.child = reconcileChildren(vNode, children)
 }
 
 function updateFunctionComponent(vNode: FunctionVNode) {

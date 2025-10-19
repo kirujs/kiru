@@ -1,3 +1,4 @@
+import { Readable } from "node:stream"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import express from "express"
@@ -28,7 +29,7 @@ async function startServer() {
   app.all("*", async (req, res, next) => {
     const pageContextInit = { urlOriginal: req.originalUrl }
     const pageContext = await renderPage(pageContextInit)
-    const { httpResponse } = pageContext
+    const { httpResponse, stream } = pageContext
     if (httpResponse === null) return next()
 
     const { body, statusCode, headers, earlyHints } = httpResponse
@@ -36,7 +37,13 @@ async function startServer() {
       res.writeEarlyHints({ link: earlyHints.map((e) => e.earlyHintLink) })
     res.status(statusCode)
     headers.forEach(([name, value]) => res.setHeader(name, value))
-    res.send(body)
+
+    if (stream) {
+      res.write(body)
+      stream.pipe(res)
+    } else {
+      res.send(body)
+    }
   })
 
   app.listen(process.env.PORT ? parseInt(process.env.PORT) : 3000, () => {

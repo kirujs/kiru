@@ -6,6 +6,7 @@ import {
   $HYDRATION_BOUNDARY,
   FLAG_PLACEMENT,
   FLAG_UPDATE,
+  $ERROR_BOUNDARY,
 } from "../constants.js"
 import { createElement } from "../index.js"
 import { KiruError } from "../error.js"
@@ -56,6 +57,7 @@ function isExoticType(type: Kiru.VNode["type"]): type is Kiru.ExoticSymbol {
   return (
     type === $FRAGMENT ||
     type === $CONTEXT_PROVIDER ||
+    type === $ERROR_BOUNDARY ||
     type === $HYDRATION_BOUNDARY
   )
 }

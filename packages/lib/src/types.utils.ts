@@ -1,10 +1,12 @@
 import type {
   $CONTEXT_PROVIDER,
+  $ERROR_BOUNDARY,
   $FRAGMENT,
   $HYDRATION_BOUNDARY,
 } from "./constants"
 import type { HydrationBoundaryMode } from "./ssr/hydrationBoundary"
 import type { Signal } from "./signals"
+import type { ErrorBoundaryProps } from "./components/errorBoundary"
 
 export type SomeElement = HTMLElement | SVGElement
 export type SomeDom = HTMLElement | SVGElement | Text
@@ -31,6 +33,12 @@ export interface ContextProviderNode<T> extends Kiru.VNode {
     ctx: Kiru.Context<T>
     dependents: Set<Kiru.VNode>
   }
+}
+
+export interface ErrorBoundaryNode extends Kiru.VNode {
+  type: typeof $ERROR_BOUNDARY
+  props: ErrorBoundaryProps
+  error?: Error
 }
 
 export interface HydrationBoundaryNode extends Kiru.VNode {

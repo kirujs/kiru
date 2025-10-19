@@ -1,48 +1,10 @@
 import { Router, Route, Link } from "kiru/router"
 import { ROUTES } from "./routes"
-import { signal, useComputed, useEffect, watch } from "kiru"
 
-import { onHMR } from "vite-plugin-kiru"
-
-let interval = setInterval(() => console.log("interval"), 1000)
-
-onHMR(() => {
-  console.log("onHMR")
-  clearInterval(interval)
-})
-
-const state = {
-  count: signal(0),
-  greeting: signal("Hello world!"),
-  foo: {
-    bar: signal(123),
-  },
-}
-watch(() => {
-  console.log("~~~~~ count changed 123 45 asd", state.count.value)
-})
-
-const Home = () => {
-  const doubled = useComputed(() => {
-    console.log("doubled")
-    return state.count.value * 2
-  })
-  useEffect(() => {
-    console.log("Home mounted")
-  }, [])
-
+function Home() {
   return (
-    <div
-      style={{
-        display: undefined,
-        flexDirection: "column",
-        alignItems: "center",
-      }}
-    >
-      <h1>{state.greeting}</h1>
-      <p>Count: {state.count}</p>
-      <p>Doubled: {doubled}</p>
-      <button onclick={() => state.count.value++}>Increment</button>
+    <div>
+      <h1 className="text-2xl">Kiru CSR Playground</h1>
     </div>
   )
 }

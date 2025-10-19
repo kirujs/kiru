@@ -24,7 +24,7 @@
     "kiru": "workspace:^",
     "shared": "workspace:^",
     "tsx": "^4.20.3",
-    "vike": "^0.4.236",
-    "vite": "^5.4.19"
+    "vike": "^0.4.242",
+    "vite": "^6.3.0"
   }
 }
