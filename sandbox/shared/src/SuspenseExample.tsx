@@ -1,4 +1,4 @@
-import { ErrorBoundary, Suspense, useMemo, usePromise, useState } from "kiru"
+import { ErrorBoundary, Suspense, usePromise, useState } from "kiru"
 
 interface Product {
   id: number
@@ -18,40 +18,24 @@ async function loadProduct(
   signal: AbortSignal,
   search: string,
   page: number,
-  pageSize: number,
-  setTotal: (total: number) => void
+  pageSize: number
 ): Promise<ProductsSearchResponse> {
-  await new Promise((resolve) => setTimeout(resolve, 1500))
-  if (Math.random() < 0.3) {
-    console.log("throwing error")
-    throw new Error("Test error")
-  }
-
   const skip = (page - 1) * pageSize
   const url = `https://dummyjson.com/products/search?q=${search}&skip=${skip}&limit=${pageSize}`
-  console.log("fetching", url)
 
   const request = await fetch(url, { signal })
   if (!request.ok) throw new Error(request.statusText)
-  const data = await request.json()
-  setTotal(data.total)
-  return data
+  return request.json()
 }
 
 export default function SuspenseExample() {
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [total, setTotal] = useState(0)
   const products = usePromise(
-    ({ signal }) =>
-      loadProduct(signal, search, page, pageSize, (n) => setTotal(n)),
+    ({ signal }) => loadProduct(signal, search, page, pageSize),
     [search, page, pageSize]
   )
-  const disableNext = useMemo(() => {
-    const skip = (page - 1) * pageSize
-    return skip + pageSize >= total
-  }, [page, pageSize, total])
 
   return (
     <div>
@@ -83,13 +67,13 @@ export default function SuspenseExample() {
         </select>
       </div>
       <ErrorBoundary
+        onError={(error) => console.error("Error loading products", error)}
         fallback={(error) => (
           <>
             <div>Error loading products: {error.message}</div>
             <button onclick={() => products.refresh()}>Retry</button>
           </>
         )}
-        onError={(error) => console.error("Error loading products", error)}
       >
         <Suspense
           data={products.data}
@@ -118,23 +102,38 @@ export default function SuspenseExample() {
           )}
         </Suspense>
       </ErrorBoundary>
-      <div className="flex justify-between">
-        <button
-          disabled={page === 1}
-          onclick={() => setPage((prev) => prev - 1)}
-          className="p-2 rounded-md border disabled:opacity-50"
-        >
-          Prev
-        </button>
-        <span>page:{page}</span>
-        <button
-          disabled={disableNext}
-          onclick={() => setPage((prev) => prev + 1)}
-          className="p-2 rounded-md border disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
+
+      <ErrorBoundary
+        onError={(e) => console.error("Error rendering pagination", e)}
+        fallback={(error) => <div>123 {error.message}</div>}
+      >
+        <Suspense data={products.data} fallback={<div>Loading...</div>}>
+          {({ total }) => {
+            const skip = (page - 1) * pageSize
+            const disableNext = skip + pageSize >= total
+
+            return (
+              <div className="flex justify-between">
+                <button
+                  disabled={page === 1}
+                  onclick={() => setPage((prev) => prev - 1)}
+                  className="p-2 rounded-md border disabled:opacity-50"
+                >
+                  Prev
+                </button>
+                <span>page: {page}</span>
+                <button
+                  disabled={disableNext}
+                  onclick={() => setPage((prev) => prev + 1)}
+                  className="p-2 rounded-md border disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            )
+          }}
+        </Suspense>
+      </ErrorBoundary>
     </div>
   )
 }

@@ -1,8 +1,7 @@
 import { __DEV__ } from "../env.js"
 import { renderMode } from "../globals.js"
-import { isVNode } from "./index.js"
 
-export { latest, sideEffectsEnabled, isRenderInteruptThrowValue }
+export { latest, sideEffectsEnabled }
 
 /**
  * This is a no-op in production. It is used to get the latest
@@ -23,18 +22,4 @@ function latest<T extends Exclude<object, null>>(thing: T): T {
  */
 function sideEffectsEnabled(): boolean {
   return renderMode.current === "dom" || renderMode.current === "hydrate"
-}
-
-/**
- * Returns true if the value is a value compatible with render interupts
- */
-function isRenderInteruptThrowValue(
-  value: unknown
-): value is Kiru.RenderInteruptThrowValue {
-  return (
-    typeof value === "object" &&
-    !!value &&
-    "fallback" in value &&
-    isVNode(value.fallback)
-  )
 }

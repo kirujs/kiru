@@ -7,35 +7,37 @@ import {
   propsToElementAttributes,
   isExoticType,
   assertValidElementProps,
-  isRenderInteruptThrowValue,
 } from "../utils/index.js"
 import { Signal } from "../signals/base.js"
 import {
   $HYDRATION_BOUNDARY,
   $ERROR_BOUNDARY,
-  HYDRATION_DATA_EVENT,
+  PREFETCHED_DATA_EVENT,
   voidElements,
 } from "../constants.js"
 import { HYDRATION_BOUNDARY_MARKER } from "./hydrationBoundary.js"
 import { __DEV__ } from "../env.js"
 import type { ErrorBoundaryNode } from "../types.utils"
+import { isSuspenseThrowValue } from "../components/suspense.js"
 
 interface ServerRenderContext {
   write: (chunk: string) => void
   queuePendingData: (data: Kiru.StatefulPromise<unknown>[]) => void
 }
 
-const PROMISE_HYDRATION_PREAMBLE = `
+const PREFETCH_EVENTS_SETUP = `
 <script type="text/javascript">
-const dataScripts = window.document.querySelectorAll("[x-data]");
-dataScripts.forEach((p) => {
+const d = document,
+  m = (window["${PREFETCHED_DATA_EVENT}"] ??= new Map());
+d.querySelectorAll("[x-data]").forEach((p) => {
   const id = p.getAttribute("id");
   const { data, error } = JSON.parse(p.innerHTML);
-  const event = new CustomEvent("${HYDRATION_DATA_EVENT}", { detail: { id, data, error } });
+  m.set(id, { data, error });
+  const event = new CustomEvent("${PREFETCHED_DATA_EVENT}", { detail: { id, data, error } });
   window.dispatchEvent(event);
   p.remove();
 });
-document.currentScript.remove()
+d.currentScript.remove()
 </script>
 `
 
@@ -45,37 +47,31 @@ export function renderToReadableStream(element: JSX.Element): {
 } {
   const stream = new Readable({ read() {} })
   const rootNode = Fragment({ children: element })
-  const seenPromises = new Set<Kiru.StatefulPromise<unknown>>()
-  const pendingWrites: Promise<unknown>[] = []
+  const prefetchPromises = new Set<Kiru.StatefulPromise<unknown>>()
+  const prefetchWritePromises: Promise<unknown>[] = []
 
   let immediate = ""
 
   const ctx: ServerRenderContext = {
     write: (chunk) => (immediate += chunk),
     queuePendingData(data) {
-      const unseen = data.filter((p) => !seenPromises.has(p))
-      if (unseen.length === 0) return
+      data
+        .filter((p) => !prefetchPromises.has(p))
+        .forEach((p) => {
+          prefetchPromises.add(p)
 
-      unseen.forEach((p) => {
-        seenPromises.add(p)
+          const writePromise = p
+            .then(() => ({ data: p.value }))
+            .catch(() => ({ error: p.error?.message }))
+            .then((value) => {
+              const content = JSON.stringify(value)
+              stream.push(
+                `<script id="${p.id}" x-data type="application/json">${content}</script>`
+              )
+            })
 
-        const writePromise = p
-          .then(() => {
-            const contents = JSON.stringify({ data: p.value })
-
-            stream.push(
-              `<script id="${p.id}" x-data type="application/json" defer>${contents}</script>`
-            )
-          })
-          .catch(() => {
-            const contents = JSON.stringify({ error: p.error?.message })
-
-            stream.push(
-              `<script id="${p.id}" x-data type="application/json" defer>${contents}</script>`
-            )
-          })
-        pendingWrites.push(writePromise)
-      })
+          prefetchWritePromises.push(writePromise)
+        })
     },
   }
 
@@ -84,9 +80,9 @@ export function renderToReadableStream(element: JSX.Element): {
   renderToStream_internal(ctx, rootNode, null, 0)
   renderMode.current = prev
 
-  if (pendingWrites.length > 0) {
-    Promise.all(pendingWrites).then(() => {
-      stream.push(PROMISE_HYDRATION_PREAMBLE)
+  if (prefetchWritePromises.length > 0) {
+    Promise.all(prefetchWritePromises).then(() => {
+      stream.push(PREFETCH_EVENTS_SETUP)
       stream.push(null)
     })
   } else {
@@ -148,14 +144,15 @@ function renderToStream_internal(
         // merge local promises into global queue
         ctx.queuePendingData([...localPromises])
       } catch (error) {
-        if (!isRenderInteruptThrowValue(error)) {
-          const e = error instanceof Error ? error : new Error(String(error))
-          const { fallback, onError } = props as ErrorBoundaryNode["props"]
-          onError?.(e)
-          const fallbackContent =
-            typeof fallback === "function" ? fallback(e) : fallback
-          renderToStream_internal(ctx, fallbackContent, el, 0)
+        if (isSuspenseThrowValue(error)) {
+          throw error
         }
+        const e = error instanceof Error ? error : new Error(String(error))
+        const { fallback, onError } = props as ErrorBoundaryNode["props"]
+        onError?.(e)
+        const fallbackContent =
+          typeof fallback === "function" ? fallback(e) : fallback
+        renderToStream_internal(ctx, fallbackContent, el, 0)
       }
       return
     }
@@ -171,7 +168,7 @@ function renderToStream_internal(
       const res = type(props)
       return renderToStream_internal(ctx, res, el, idx)
     } catch (error) {
-      if (isRenderInteruptThrowValue(error)) {
+      if (isSuspenseThrowValue(error)) {
         const { fallback, pendingData } = error
         if (pendingData) ctx.queuePendingData(pendingData)
         renderToStream_internal(ctx, fallback, el, 0)

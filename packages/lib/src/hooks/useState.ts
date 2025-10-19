@@ -36,7 +36,6 @@ export function useState<T>(
         if (isHMR) {
           const [v] = hook.dev!.initialArgs
           if (v !== initial) {
-            console.log("useState - initial args changed")
             isInit = true
             hook.dev!.initialArgs = [initial]
           }

@@ -8,8 +8,9 @@ export {
   $MEMO,
   $ERROR_BOUNDARY,
   $HYDRATION_BOUNDARY,
+  $SUSPENSE_THROW,
   CONSECUTIVE_DIRTY_LIMIT,
-  HYDRATION_DATA_EVENT,
+  PREFETCHED_DATA_EVENT,
   EVENT_PREFIX_REGEX,
   FLAG_UPDATE,
   FLAG_PLACEMENT,
@@ -31,9 +32,10 @@ const $HMR_ACCEPT = Symbol.for("kiru.hmrAccept")
 const $MEMO = Symbol.for("kiru.memo")
 const $ERROR_BOUNDARY = Symbol.for("kiru.errorBoundary")
 const $HYDRATION_BOUNDARY = Symbol.for("kiru.hydrationBoundary")
+const $SUSPENSE_THROW = Symbol.for("kiru.suspenseThrow")
 
 const CONSECUTIVE_DIRTY_LIMIT = 50
-const HYDRATION_DATA_EVENT = "kiru:hydrationdata"
+const PREFETCHED_DATA_EVENT = "kiru:prefetched"
 
 const FLAG_UPDATE = 1 << 1
 const FLAG_PLACEMENT = 1 << 2

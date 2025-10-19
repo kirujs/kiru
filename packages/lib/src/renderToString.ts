@@ -6,7 +6,6 @@ import {
   propsToElementAttributes,
   isExoticType,
   assertValidElementProps,
-  isRenderInteruptThrowValue,
 } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import {
@@ -17,6 +16,7 @@ import {
 import { HYDRATION_BOUNDARY_MARKER } from "./ssr/hydrationBoundary.js"
 import { __DEV__ } from "./env.js"
 import { ErrorBoundaryNode } from "./types.utils.js"
+import { isSuspenseThrowValue } from "./components/suspense.js"
 
 interface StringRenderContext {
   write(chunk: string): void
@@ -91,15 +91,16 @@ function renderToString_internal(
       try {
         renderToString_internal(ctx, children, el, idx)
       } catch (error) {
-        if (!isRenderInteruptThrowValue(error)) {
-          ctx.resetBoundary(boundaryIdx)
-          const e = error instanceof Error ? error : new Error(String(error))
-          const { fallback, onError } = props as ErrorBoundaryNode["props"]
-          onError?.(e)
-          const fallbackContent =
-            typeof fallback === "function" ? fallback(e) : fallback
-          renderToString_internal(ctx, fallbackContent, el, 0)
+        if (isSuspenseThrowValue(error)) {
+          throw error
         }
+        ctx.resetBoundary(boundaryIdx)
+        const e = error instanceof Error ? error : new Error(String(error))
+        const { fallback, onError } = props as ErrorBoundaryNode["props"]
+        onError?.(e)
+        const fallbackContent =
+          typeof fallback === "function" ? fallback(e) : fallback
+        renderToString_internal(ctx, fallbackContent, el, 0)
       }
       return
     }
@@ -115,7 +116,7 @@ function renderToString_internal(
       renderToString_internal(ctx, res, el, idx)
       return
     } catch (error) {
-      if (isRenderInteruptThrowValue(error)) {
+      if (isSuspenseThrowValue(error)) {
         return renderToString_internal(ctx, error.fallback, el, 0)
       }
       throw error
