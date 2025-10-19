@@ -12,6 +12,7 @@ import { createElement } from "../index.js"
 import { KiruError } from "../error.js"
 import { node } from "../globals.js"
 import type { AppContext } from "../appContext.js"
+import type { ErrorBoundaryNode } from "../types.utils.js"
 
 export {
   cloneVNode,
@@ -28,6 +29,7 @@ export {
   commitSnapshot,
   traverseApply,
   findParent,
+  findParentErrorBoundary,
   assertValidElementProps,
   isValidElementKeyProp,
   isValidElementRefProp,
@@ -153,6 +155,13 @@ function findParent(vNode: Kiru.VNode, predicate: (n: Kiru.VNode) => boolean) {
     n = n.parent
   }
   return null
+}
+
+function findParentErrorBoundary(vNode: Kiru.VNode): ErrorBoundaryNode | null {
+  return findParent(
+    vNode,
+    (n) => n.type === $ERROR_BOUNDARY
+  ) as ErrorBoundaryNode | null
 }
 
 function assertValidElementProps(vNode: Kiru.VNode) {

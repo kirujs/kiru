@@ -32,9 +32,9 @@ import {
   traverseApply,
   isExoticType,
   getVNodeAppContext,
+  findParentErrorBoundary,
 } from "./utils/index.js"
 import type { AppContext } from "./appContext"
-import { findParentErrorBoundary } from "./components/errorBoundary"
 
 type VNode = Kiru.VNode
 
