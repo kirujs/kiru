@@ -48,30 +48,29 @@ export function renderToReadableStream(element: JSX.Element): {
   const stream = new Readable({ read() {} })
   const rootNode = Fragment({ children: element })
   const prefetchPromises = new Set<Kiru.StatefulPromise<unknown>>()
-  const prefetchWritePromises: Promise<unknown>[] = []
+  const pendingWritePromises: Promise<unknown>[] = []
 
   let immediate = ""
 
   const ctx: ServerRenderContext = {
     write: (chunk) => (immediate += chunk),
     queuePendingData(data) {
-      data
-        .filter((p) => !prefetchPromises.has(p))
-        .forEach((p) => {
-          prefetchPromises.add(p)
+      for (const promise of data) {
+        if (prefetchPromises.has(promise)) continue
+        prefetchPromises.add(promise)
 
-          const writePromise = p
-            .then(() => ({ data: p.value }))
-            .catch(() => ({ error: p.error?.message }))
-            .then((value) => {
-              const content = JSON.stringify(value)
-              stream.push(
-                `<script id="${p.id}" x-data type="application/json">${content}</script>`
-              )
-            })
+        const writePromise = promise
+          .then(() => ({ data: promise.value }))
+          .catch(() => ({ error: promise.error?.message }))
+          .then((value) => {
+            const content = JSON.stringify(value)
+            stream.push(
+              `<script id="${promise.id}" x-data type="application/json">${content}</script>`
+            )
+          })
 
-          prefetchWritePromises.push(writePromise)
-        })
+        pendingWritePromises.push(writePromise)
+      }
     },
   }
 
@@ -80,8 +79,8 @@ export function renderToReadableStream(element: JSX.Element): {
   renderToStream_internal(ctx, rootNode, null, 0)
   renderMode.current = prev
 
-  if (prefetchWritePromises.length > 0) {
-    Promise.all(prefetchWritePromises).then(() => {
+  if (pendingWritePromises.length > 0) {
+    Promise.all(pendingWritePromises).then(() => {
       stream.push(PREFETCH_EVENTS_SETUP)
       stream.push(null)
     })
