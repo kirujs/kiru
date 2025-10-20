@@ -7,7 +7,6 @@ export {
   $HMR_ACCEPT,
   $MEMO,
   $ERROR_BOUNDARY,
-  $HYDRATION_BOUNDARY,
   $SUSPENSE_THROW,
   CONSECUTIVE_DIRTY_LIMIT,
   PREFETCHED_DATA_EVENT,
@@ -31,7 +30,6 @@ const $KIRU_ERROR = Symbol.for("kiru.error")
 const $HMR_ACCEPT = Symbol.for("kiru.hmrAccept")
 const $MEMO = Symbol.for("kiru.memo")
 const $ERROR_BOUNDARY = Symbol.for("kiru.errorBoundary")
-const $HYDRATION_BOUNDARY = Symbol.for("kiru.hydrationBoundary")
 const $SUSPENSE_THROW = Symbol.for("kiru.suspenseThrow")
 
 const CONSECUTIVE_DIRTY_LIMIT = 50

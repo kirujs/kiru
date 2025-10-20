@@ -22,7 +22,7 @@ if (import.meta.hot && "window" in globalThis) {
 }
 `
 export function prepareHMR(ctx: TransformCTX) {
-  const { code, ast, fileLinkFormatter, filePath, isVirtualModule } = ctx
+  const { code, ast, fileLinkFormatter, filePath } = ctx
 
   try {
     const hotVars = findHotVars(code, ast.body as AstNode[], filePath)
@@ -37,12 +37,7 @@ if (import.meta.hot && "window" in globalThis) {
     code.append(`
 if (import.meta.hot && "window" in globalThis) {
   import.meta.hot.accept();
-  ${createHMRRegistrationBlurb(
-    hotVars,
-    fileLinkFormatter,
-    filePath,
-    isVirtualModule
-  )}
+  ${createHMRRegistrationBlurb(hotVars, fileLinkFormatter, filePath)}
 }
 `)
   } catch (error) {
@@ -53,38 +48,18 @@ if (import.meta.hot && "window" in globalThis) {
 function createHMRRegistrationBlurb(
   hotVars: Set<HotVarDesc>,
   fileLinkFormatter: FileLinkFormatter,
-  filePath: string,
-  isVirtualModule: boolean
+  filePath: string
 ) {
-  let entries: string[] = []
-  if (isVirtualModule) {
-    entries = Array.from(hotVars).map(({ name, type }) => {
-      const key = JSON.stringify(name)
-      if (type !== "component") {
-        return `    ${key}: {
-      type: "${type}",
-      value: ${name}
-    }`
-      }
-
-      return `    ${key}: {
-        type: "component",
-        value: ${name},
-        hooks: [],
-      }`
-    })
-  } else {
-    const src = fs.readFileSync(filePath, "utf-8")
-    entries = Array.from(hotVars).map(({ name, type }) => {
-      const key = JSON.stringify(name)
-      const line = findHotVarLineInSrc(src, name)
-      return `    ${key}: {
+  const src = fs.readFileSync(filePath, "utf-8")
+  const entries = Array.from(hotVars).map(({ name, type }) => {
+    const key = JSON.stringify(name)
+    const line = findHotVarLineInSrc(src, name)
+    return `    ${key}: {
       type: "${type}",
       value: ${name},
       link: "${fileLinkFormatter(filePath, line)}"
     }`
-    })
-  }
+  })
 
   return `
   window.__kiru.HMRContext?.register({

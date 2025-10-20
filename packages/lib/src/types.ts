@@ -4,7 +4,6 @@ import type {
   $CONTEXT_PROVIDER,
   $ERROR_BOUNDARY,
   $FRAGMENT,
-  $HYDRATION_BOUNDARY,
 } from "./constants"
 import type { KiruGlobalContext } from "./globalContext"
 import type {
@@ -187,7 +186,6 @@ declare global {
       | typeof $FRAGMENT
       | typeof $CONTEXT_PROVIDER
       | typeof $ERROR_BOUNDARY
-      | typeof $HYDRATION_BOUNDARY
 
     interface VNode {
       app?: AppContext

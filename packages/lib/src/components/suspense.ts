@@ -46,9 +46,7 @@ function Suspense<
     case "stream":
     case "string":
       throw {
-        fallback,
-        pendingData: promiseArray,
-        [$SUSPENSE_THROW]: true,
+        [$SUSPENSE_THROW]: { fallback, pending: promiseArray },
       } satisfies SuspenseThrowValue
 
     case "dom":
@@ -68,9 +66,10 @@ function Suspense<
 }
 
 interface SuspenseThrowValue {
-  fallback?: JSX.Element
-  pendingData?: Kiru.StatefulPromise<unknown>[]
-  [$SUSPENSE_THROW]: true
+  [$SUSPENSE_THROW]: {
+    fallback?: JSX.Element
+    pending: Kiru.StatefulPromise<unknown>[]
+  }
 }
 
 /**

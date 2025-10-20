@@ -8,11 +8,7 @@ import devtoolsClientBuild from "kiru-devtools-client"
 import devtoolsHostBuild from "kiru-devtools-host"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
 import path from "node:path"
-import {
-  prepareDevOnlyHooks,
-  prepareHMR,
-  prepareHydrationBoundaries,
-} from "./codegen"
+import { prepareDevOnlyHooks, prepareHMR } from "./codegen"
 import { FileLinkFormatter, KiruPluginOptions } from "./types"
 import { ANSI } from "./ansi.js"
 
@@ -46,22 +42,11 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
   }
   const dtHostScriptPath = "/__devtools_host__.js"
 
-  const virtualModules: Record<string, string> = {}
-  const fileToVirtualModules: Record<string, Set<string>> = {}
   let projectRoot = process.cwd().replace(/\\/g, "/")
   let includedPaths: string[] = []
 
   return {
     name: "vite-plugin-kiru",
-    // @ts-ignore
-    resolveId(id) {
-      if (virtualModules[id]) {
-        return id
-      }
-    },
-    load(id) {
-      return virtualModules[id]
-    },
     config(config) {
       return {
         ...config,
@@ -114,63 +99,23 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
           res.end(devtoolsClientBuild, "utf-8")
         })
       }
-      server.watcher.on("change", (file) => {
-        const filePath = path.resolve(file).replace(/\\/g, "/")
-        const affectedVirtualModules = fileToVirtualModules[filePath]
-        if (affectedVirtualModules) {
-          for (const modId of affectedVirtualModules) {
-            const mod = server.moduleGraph.getModuleById(modId)
-            if (mod) {
-              server!.moduleGraph.invalidateModule(
-                mod,
-                undefined,
-                undefined,
-                true
-              )
-              // virtualModules[modId] = "" // optional: clear stale content
-            }
-          }
-        }
-
-        // find & invalidate virtual modules that import this
-        // to be investigated: do we also need to invalidate
-        // the file that the virtual is derived from?
-        const mod = server.moduleGraph.getModuleById(file)
-        if (mod) {
-          mod.importers.forEach((importer) => {
-            if (importer.id && virtualModules[importer.id]) {
-              server!.moduleGraph.invalidateModule(
-                importer,
-                undefined,
-                undefined,
-                true
-              )
-            }
-          })
-        }
-      })
     },
-    transform(src, id, options) {
-      const isVirtualModule = !!virtualModules[id]
-      if (!isVirtualModule) {
-        if (
-          id.startsWith("\0") ||
-          id.startsWith("vite:") ||
-          id.includes("/node_modules/")
-        )
-          return { code: src }
+    transform(src, id) {
+      if (
+        id.startsWith("\0") ||
+        id.startsWith("vite:") ||
+        id.includes("/node_modules/")
+      )
+        return { code: src }
 
-        if (!/\.[cm]?[jt]sx?$/.test(id)) return { code: src }
+      if (!/\.[cm]?[jt]sx?$/.test(id)) return { code: src }
 
-        const filePath = path.resolve(id).replace(/\\/g, "/")
-        const isIncludedByUser = includedPaths.some((p) =>
-          filePath.startsWith(p)
-        )
+      const filePath = path.resolve(id).replace(/\\/g, "/")
+      const isIncludedByUser = includedPaths.some((p) => filePath.startsWith(p))
 
-        if (!isIncludedByUser && !filePath.startsWith(projectRoot)) {
-          opts?.onFileExcluded?.(id)
-          return { code: src }
-        }
+      if (!isIncludedByUser && !filePath.startsWith(projectRoot)) {
+        opts?.onFileExcluded?.(id)
+        return { code: src }
       }
 
       log(`Processing ${ANSI.black(id)}`)
@@ -182,7 +127,6 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
         ast,
         isBuild,
         fileLinkFormatter,
-        isVirtualModule,
         filePath: id,
         log,
       }
@@ -191,14 +135,6 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
 
       if (!isProduction && !isBuild) {
         prepareHMR(ctx)
-      }
-
-      if (!options?.ssr) {
-        const { extraModules } = prepareHydrationBoundaries(ctx)
-        for (const key in extraModules) {
-          ;(fileToVirtualModules[id] ??= new Set()).add(key)
-          virtualModules[key] = extraModules[key]
-        }
       }
 
       if (!code.hasChanged()) {

@@ -3,7 +3,6 @@ import {
   FLAG_DELETION,
   $FRAGMENT,
   $CONTEXT_PROVIDER,
-  $HYDRATION_BOUNDARY,
   FLAG_PLACEMENT,
   FLAG_UPDATE,
   $ERROR_BOUNDARY,
@@ -57,10 +56,7 @@ function isVNode(thing: unknown): thing is Kiru.VNode {
 
 function isExoticType(type: Kiru.VNode["type"]): type is Kiru.ExoticSymbol {
   return (
-    type === $FRAGMENT ||
-    type === $CONTEXT_PROVIDER ||
-    type === $ERROR_BOUNDARY ||
-    type === $HYDRATION_BOUNDARY
+    type === $FRAGMENT || type === $CONTEXT_PROVIDER || type === $ERROR_BOUNDARY
   )
 }
 

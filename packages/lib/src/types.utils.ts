@@ -1,10 +1,4 @@
-import type {
-  $CONTEXT_PROVIDER,
-  $ERROR_BOUNDARY,
-  $FRAGMENT,
-  $HYDRATION_BOUNDARY,
-} from "./constants"
-import type { HydrationBoundaryMode } from "./ssr/hydrationBoundary"
+import type { $CONTEXT_PROVIDER, $ERROR_BOUNDARY, $FRAGMENT } from "./constants"
 import type { Signal } from "./signals"
 import type { ErrorBoundaryProps } from "./components/errorBoundary"
 
@@ -39,13 +33,6 @@ export interface ErrorBoundaryNode extends Kiru.VNode {
   type: typeof $ERROR_BOUNDARY
   props: ErrorBoundaryProps
   error?: Error
-}
-
-export interface HydrationBoundaryNode extends Kiru.VNode {
-  type: typeof $HYDRATION_BOUNDARY
-  props: Kiru.VNode["props"] & {
-    mode: HydrationBoundaryMode
-  }
 }
 
 export interface FragmentNode extends Kiru.VNode {

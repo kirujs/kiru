@@ -26,10 +26,6 @@
       "types": "./dist/utils/index.d.ts",
       "default": "./dist/utils/index.js"
     },
-    "./ssr": {
-      "types": "./dist/ssr/index.d.ts",
-      "default": "./dist/ssr/index.js"
-    },
     "./ssr/client": {
       "types": "./dist/ssr/client.d.ts",
       "default": "./dist/ssr/client.js"
