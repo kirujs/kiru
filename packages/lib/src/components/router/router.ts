@@ -67,6 +67,7 @@ export function Link({ to, onclick, replace, inherit, ...props }: LinkProps) {
 }
 
 type RouterCtx = {
+  transitionsEnabled: boolean
   viewTransition: Kiru.RefObject<ViewTransition>
   queueSyncNav: (callback: () => void) => void
   params: Record<string, string>
@@ -76,6 +77,7 @@ type RouterCtx = {
   isDefault: boolean
 }
 const RouterContext = createContext<RouterCtx>({
+  transitionsEnabled: false,
   viewTransition: { current: null },
   queueSyncNav: noop,
   params: {},
@@ -173,6 +175,8 @@ export function Router(props: RouterProps) {
   )
 
   useLayoutEffect(() => {
+    if (!parentRouterContext.isDefault) return
+
     const handler = () => {
       if (!document.startViewTransition || !props.transition) {
         return setLoc({
@@ -267,6 +271,7 @@ export function Router(props: RouterProps) {
         syncNavCallback.current = callback
       },
       viewTransition: viewTransition,
+      transitionsEnabled: !!props.transition,
     },
     children: route ?? fallbackRoute ?? null,
   })
