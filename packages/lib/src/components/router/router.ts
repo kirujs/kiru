@@ -175,10 +175,12 @@ export function Router(props: RouterProps) {
   )
 
   useLayoutEffect(() => {
-    if (!parentRouterContext.isDefault) return
-
     const handler = () => {
-      if (!document.startViewTransition || !props.transition) {
+      if (
+        !document.startViewTransition ||
+        !props.transition ||
+        !parentRouterContext.isDefault
+      ) {
         return setLoc({
           pathname: window.location.pathname,
           search: window.location.search,
