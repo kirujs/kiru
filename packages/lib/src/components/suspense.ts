@@ -113,7 +113,6 @@ function resolveHydrationPromise<T>(
       }
     }
 
-    console.log("listening for prefetch event")
     window.addEventListener(PREFETCHED_DATA_EVENT, onDataEvent)
     signal.addEventListener("abort", () => {
       window.removeEventListener(PREFETCHED_DATA_EVENT, onDataEvent)
