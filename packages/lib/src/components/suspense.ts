@@ -11,7 +11,7 @@ import { getCurrentVNode } from "../utils/index.js"
 import { $SUSPENSE_THROW, PREFETCHED_DATA_EVENT } from "../constants.js"
 import { Signal, useSignal } from "../signals/index.js"
 
-export type { SuspenseProps, UsePromiseState }
+export type { SuspenseProps, UsePromiseCallbackContext, UsePromiseState }
 export { Suspense, isSuspenseThrowValue, usePromise }
 
 type StatefulPromiseValues<T extends readonly Kiru.StatefulPromise<unknown>[]> =
@@ -123,7 +123,7 @@ function resolveHydrationPromise<T>(
 
 const nodeToPromiseIndex = new WeakMap<Kiru.VNode, number>()
 
-interface UsePromiseContext {
+interface UsePromiseCallbackContext {
   signal: AbortSignal
 }
 
@@ -134,7 +134,7 @@ interface UsePromiseState<T> {
 }
 
 function usePromise<T>(
-  callback: (ctx: UsePromiseContext) => Promise<T>,
+  callback: (ctx: UsePromiseCallbackContext) => Promise<T>,
   deps: unknown[]
 ): UsePromiseState<T> {
   const id = useId()
