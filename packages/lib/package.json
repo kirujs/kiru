@@ -14,10 +14,6 @@
       "types": "./dist/form/index.d.ts",
       "default": "./dist/form/index.js"
     },
-    "./router": {
-      "types": "./dist/components/router/index.d.ts",
-      "default": "./dist/components/router/index.js"
-    },
     "./swr": {
       "types": "./dist/swr.d.ts",
       "default": "./dist/swr.js"
