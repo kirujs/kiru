@@ -1,17 +1,13 @@
-import type { AppContext } from "./appContext"
-
-export { ctx, node, renderMode, nodeToCtxMap }
+export { node, hookIndex, renderMode }
 
 const node = {
-  current: undefined as Kaioken.VNode | undefined,
+  current: null as Kiru.VNode | null,
 }
 
-const ctx = {
-  current: undefined as unknown as AppContext<any>,
+const hookIndex = {
+  current: 0,
 }
 
 const renderMode = {
-  current: ("window" in globalThis ? "dom" : "string") as Kaioken.RenderMode,
+  current: ("window" in globalThis ? "dom" : "string") as Kiru.RenderMode,
 }
-
-const nodeToCtxMap = new WeakMap<Kaioken.VNode, AppContext<any>>()

@@ -1,14 +1,14 @@
 import { node } from "../globals.js"
-import { KaiokenError } from "../error.js"
-import { noop } from "../utils.js"
-import { sideEffectsEnabled, useHook } from "./utils.js"
+import { KiruError } from "../error.js"
+import { noop, sideEffectsEnabled } from "../utils/index.js"
+import { useHook } from "./utils.js"
 import { __DEV__ } from "../env.js"
 
 /**
  * Allows you to use a generic external store as long as it provides
  * a subscribe function and a way to get its current state.
  *
- * @see https://kaioken.dev/docs/hooks/useSyncExternalStore
+ * @see https://kirujs.dev/docs/hooks/useSyncExternalStore
  */
 export function useSyncExternalStore<T>(
   subscribe: (callback: () => void) => () => void,
@@ -17,10 +17,10 @@ export function useSyncExternalStore<T>(
 ): T {
   if (!sideEffectsEnabled()) {
     if (getServerState === undefined) {
-      throw new KaiokenError({
+      throw new KiruError({
         message:
           "useSyncExternalStore must receive a getServerSnapshot function if the component is rendered on the server.",
-        vNode: node.current,
+        vNode: node.current!,
       })
     }
     return getServerState()
@@ -29,8 +29,9 @@ export function useSyncExternalStore<T>(
   return useHook(
     "useSyncExternalStore",
     {
-      state: undefined as T,
+      state: null as T,
       unsubscribe: noop as () => void,
+      subscribe,
     },
     ({ hook, isInit, update }) => {
       if (__DEV__) {
@@ -38,8 +39,9 @@ export function useSyncExternalStore<T>(
           devtools: { get: () => ({ value: hook.state }) },
         }
       }
-      if (isInit) {
+      if (isInit || hook.subscribe !== subscribe) {
         hook.state = getState()
+        hook.subscribe = subscribe
         hook.unsubscribe = subscribe(() => {
           const newState = getState()
           if (Object.is(hook.state, newState)) return

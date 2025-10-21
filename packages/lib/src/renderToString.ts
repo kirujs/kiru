@@ -1,37 +1,29 @@
-import { ctx, node, nodeToCtxMap, renderMode } from "./globals.js"
-import { AppContext } from "./appContext.js"
-import { createElement, Fragment } from "./element.js"
+import { node, renderMode } from "./globals.js"
+import { Fragment } from "./element.js"
 import {
   isVNode,
   encodeHtmlEntities,
   propsToElementAttributes,
-  selfClosingTags,
-} from "./utils.js"
+  isExoticType,
+  assertValidElementProps,
+} from "./utils/index.js"
 import { Signal } from "./signals/base.js"
-import { $CONTEXT_PROVIDER, ELEMENT_TYPE, $FRAGMENT } from "./constants.js"
-import { assertValidElementProps } from "./props.js"
+import { $HYDRATION_BOUNDARY, voidElements } from "./constants.js"
+import { HYDRATION_BOUNDARY_MARKER } from "./ssr/hydrationBoundary.js"
+import { __DEV__ } from "./env.js"
 
-export function renderToString<T extends Record<string, unknown>>(
-  appFunc: (props: T) => JSX.Element,
-  appProps = {} as T
-) {
+export function renderToString(element: JSX.Element) {
   const prev = renderMode.current
   renderMode.current = "string"
-  const prevCtx = ctx.current
-  const c = (ctx.current = new AppContext(appFunc, appProps))
-  const appNode = createElement(appFunc, appProps)
-  c.rootNode = Fragment({ children: [appNode] })
-  c.rootNode.depth = 0
-  appNode.depth = 1
-  const res = renderToString_internal(appNode, c.rootNode, 0)
+  const rootNode = Fragment({ children: element })
+  const res = renderToString_internal(rootNode, null, 0)
   renderMode.current = prev
-  ctx.current = prevCtx
   return res
 }
 
 function renderToString_internal(
   el: unknown,
-  parent: Kaioken.VNode,
+  parent: Kiru.VNode | null,
   idx: number
 ): string {
   if (el === null) return ""
@@ -45,28 +37,34 @@ function renderToString_internal(
   if (Signal.isSignal(el)) return String(el.peek())
   if (!isVNode(el)) return String(el)
   el.parent = parent
-  el.depth = parent!.depth + 1
+  el.depth = (parent?.depth ?? -1) + 1
   el.index = idx
-  const props = el.props ?? {}
+  const { type, props = {} } = el
+  if (type === "#text") return encodeHtmlEntities(props.nodeValue ?? "")
+
   const children = props.children
-  const type = el.type
-  if (type === ELEMENT_TYPE.text)
-    return encodeHtmlEntities(props.nodeValue ?? "")
-  if (type === $FRAGMENT || type === $CONTEXT_PROVIDER) {
-    if (!Array.isArray(children))
-      return renderToString_internal(children, el, idx)
-    return children.map((c, i) => renderToString_internal(c, el, i)).join("")
+  if (isExoticType(type)) {
+    if (type === $HYDRATION_BOUNDARY) {
+      return `<!--${HYDRATION_BOUNDARY_MARKER}-->${renderToString_internal(
+        children,
+        el,
+        idx
+      )}<!--/${HYDRATION_BOUNDARY_MARKER}-->`
+    }
+
+    return renderToString_internal(children, el, idx)
   }
 
   if (typeof type !== "string") {
-    nodeToCtxMap.set(el, ctx.current)
     node.current = el
     const res = type(props)
-    node.current = undefined
+    node.current = null
     return renderToString_internal(res, el, idx)
   }
 
-  assertValidElementProps(el)
+  if (__DEV__) {
+    assertValidElementProps(el)
+  }
   const attrs = propsToElementAttributes(props)
   const inner =
     "innerHTML" in props
@@ -74,9 +72,10 @@ function renderToString_internal(
         ? props.innerHTML.peek()
         : props.innerHTML
       : Array.isArray(children)
-        ? children.map((c, i) => renderToString_internal(c, el, i)).join("")
-        : renderToString_internal(children, el, 0)
+      ? children.map((c, i) => renderToString_internal(c, el, i)).join("")
+      : renderToString_internal(children, el, 0)
 
-  const isSelfClosing = selfClosingTags.includes(type)
-  return `<${type}${attrs.length ? " " + attrs : ""}${isSelfClosing ? "/>" : `>${inner}</${type}>`}`
+  return `<${type}${attrs.length ? ` ${attrs}` : ""}>${
+    voidElements.has(type) ? "" : `${inner}</${type}>`
+  }`
 }

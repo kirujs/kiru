@@ -1,26 +1,34 @@
 import { __DEV__ } from "../env.js"
-import { type CleanupInstance } from "./types.js"
-import { type Signal } from "./base.js"
 import type { HMRAccept } from "../hmr.js"
 import { $HMR_ACCEPT } from "../constants.js"
-import { node } from "../globals.js"
-import { sideEffectsEnabled, useHook } from "../hooks/utils.js"
-import { effectQueue, tracking } from "./globals.js"
-import { generateRandomID } from "../generateId.js"
+import { useHook } from "../hooks/utils.js"
+import { effectQueue } from "./globals.js"
+import { executeWithTracking } from "./effect.js"
+import { latest, sideEffectsEnabled, generateRandomID } from "../utils/index.js"
+import type { Signal } from "./base.js"
+import type { SignalValues } from "./types.js"
 
-export class WatchEffect {
+type WatchCallbackReturn = (() => void) | void
+
+export class WatchEffect<const Deps extends readonly Signal<unknown>[] = []> {
   protected id: string
-  protected getter: () => (() => void) | void
-  protected unsubs: Map<Signal<any>, Function>
-  protected cleanup?: CleanupInstance
+  protected getter: (...values: SignalValues<Deps>) => WatchCallbackReturn
+  protected deps?: Deps
+  protected unsubs: Map<string, Function>
+  protected cleanup: (() => void) | null
   protected isRunning?: boolean
-  protected [$HMR_ACCEPT]?: HMRAccept<WatchEffect>
+  protected [$HMR_ACCEPT]?: HMRAccept<WatchEffect<Deps>>
 
-  constructor(getter: () => (() => void) | void) {
+  constructor(
+    getter: (...values: SignalValues<Deps>) => WatchCallbackReturn,
+    deps?: Deps
+  ) {
     this.id = generateRandomID()
     this.getter = getter
+    this.deps = deps
     this.unsubs = new Map()
     this.isRunning = false
+    this.cleanup = null
     if (__DEV__) {
       this[$HMR_ACCEPT] = {
         provide: () => this,
@@ -32,13 +40,14 @@ export class WatchEffect {
           this.stop()
         },
       }
-      if (
-        "window" in globalThis &&
-        window.__kaioken?.HMRContext?.signals.isWaitingForNextWatchCall
-      ) {
-        window.__kaioken?.HMRContext?.signals.pushWatch(this)
+      if ("window" in globalThis) {
+        const signals = window.__kiru!.HMRContext!.signals
+        if (signals.isWaitingForNextWatchCall()) {
+          signals.pushWatch(this as WatchEffect)
+        }
       }
     }
+    this.start()
   }
 
   start() {
@@ -49,115 +58,93 @@ export class WatchEffect {
     this.isRunning = true
 
     if (__DEV__) {
-      // postpone execution during hot module replacement
+      // postpone execution during HMR
       if (
         "window" in globalThis &&
-        window.__kaioken?.HMRContext?.isReplacement()
+        window.__kiru?.HMRContext?.isReplacement()
       ) {
-        queueMicrotask(() => {
+        return queueMicrotask(() => {
           if (this.isRunning) {
-            this.cleanup = appliedTrackedEffects(
-              this.getter,
-              this.unsubs,
-              this.id
-            )
+            WatchEffect.run(this as WatchEffect)
           }
         })
-        return
       }
     }
-    this.cleanup = appliedTrackedEffects(this.getter, this.unsubs, this.id)
-    return
+    WatchEffect.run(this as WatchEffect)
   }
 
   stop() {
     effectQueue.delete(this.id)
     this.unsubs.forEach((fn) => fn())
     this.unsubs.clear()
-    this.cleanup?.call?.()
-    this.cleanup = undefined
+    this.cleanup?.()
+    this.cleanup = null
     this.isRunning = false
+  }
+
+  private static run(watchEffect: WatchEffect) {
+    const effect = latest(watchEffect)
+    const { id, getter, unsubs: subs, deps } = effect
+
+    effect.cleanup =
+      executeWithTracking({
+        id,
+        subs,
+        fn: getter,
+        deps,
+        onDepChanged: () => {
+          effect.cleanup?.()
+          WatchEffect.run(effect)
+        },
+      }) ?? null
   }
 }
 
-export const watch = (getter: () => (() => void) | void) => {
-  const watcher = new WatchEffect(getter)
-  watcher.start()
-  return watcher
+export function watch(getter: () => WatchCallbackReturn): WatchEffect
+export function watch<const Deps extends readonly Signal<unknown>[]>(
+  dependencies: Deps,
+  getter: (...values: SignalValues<Deps>) => WatchCallbackReturn
+): WatchEffect<Deps>
+export function watch<const Deps extends readonly Signal<unknown>[]>(
+  depsOrGetter: Deps | (() => WatchCallbackReturn),
+  getter?: (...values: SignalValues<Deps>) => WatchCallbackReturn
+): WatchEffect<Deps> | WatchEffect {
+  if (typeof depsOrGetter === "function") {
+    return new WatchEffect<[]>(depsOrGetter)
+  }
+  const dependencies = depsOrGetter
+  const effectGetter = getter!
+  return new WatchEffect(effectGetter, dependencies)
 }
 
-export const useWatch = (getter: () => (() => void) | void) => {
+export function useWatch(getter: () => WatchCallbackReturn): WatchEffect
+export function useWatch<const Deps extends readonly Signal<unknown>[]>(
+  dependencies: Deps,
+  getter: (...values: SignalValues<Deps>) => WatchCallbackReturn
+): WatchEffect<Deps> | undefined
+
+export function useWatch<const Deps extends readonly Signal<unknown>[]>(
+  depsOrGetter: Deps | (() => WatchCallbackReturn),
+  getter?: (...values: SignalValues<Deps>) => WatchCallbackReturn
+): WatchEffect<Deps> | WatchEffect | undefined {
   if (!sideEffectsEnabled()) return
+
   return useHook(
     "useWatch",
-    { watcher: null as any as WatchEffect },
-    ({ hook, isInit, vNode }) => {
+    { watcher: null as any as WatchEffect<Deps> },
+    ({ hook, isInit, isHMR }) => {
       if (__DEV__) {
-        if (vNode.hmrUpdated) {
+        if (isHMR) {
           hook.cleanup?.()
           isInit = true
         }
       }
       if (isInit) {
-        hook.watcher = new WatchEffect(getter)
-        hook.watcher.start()
-        hook.cleanup = () => hook.watcher?.stop()
+        const watcher = (hook.watcher = watch(depsOrGetter as Deps, getter!))
+        hook.cleanup = () => watcher.stop()
       }
 
       return hook.watcher
     }
   )
-}
-
-const appliedTrackedEffects = (
-  getter: () => (() => void) | void,
-  subs: Map<Signal<any>, Function>,
-  effectId: string,
-  cleanupInstance?: CleanupInstance
-) => {
-  const cleanup = cleanupInstance ?? ({} as CleanupInstance)
-  if (effectQueue.has(effectId)) {
-    effectQueue.delete(effectId)
-  }
-  tracking.enabled = true
-  const func = getter()
-  if (func) cleanup.call = func
-  tracking.enabled = false
-
-  if (node.current && !sideEffectsEnabled()) {
-    tracking.signals.splice(0, tracking.signals.length)
-
-    return cleanup
-  }
-
-  for (const [sig, unsub] of subs) {
-    if (tracking.signals.includes(sig)) continue
-    unsub()
-    subs.delete(sig)
-  }
-
-  const cb = () => {
-    if (!effectQueue.has(effectId)) {
-      queueMicrotask(() => {
-        if (effectQueue.has(effectId)) {
-          const func = effectQueue.get(effectId)!
-          func()
-        }
-      })
-    }
-
-    effectQueue.set(effectId, () => {
-      cleanup.call?.()
-      appliedTrackedEffects(getter, subs, effectId, cleanup)
-    })
-  }
-
-  tracking.signals.forEach((dependencySignal) => {
-    if (subs.get(dependencySignal)) return
-    const unsub = dependencySignal.subscribe(cb)
-    subs.set(dependencySignal, unsub)
-  })
-
-  tracking.signals.splice(0, tracking.signals.length)
-  return cleanup
 }

@@ -3,7 +3,7 @@ import type { MaybeDom, SomeDom } from "./types.utils"
 export const hydrationStack = {
   parentStack: [] as Array<SomeDom>,
   childIdxStack: [] as Array<number>,
-  eventDeferrals: [] as Array<Function>,
+  eventDeferrals: new Map<Element, Array<() => void>>(),
   parent: function () {
     return this.parentStack[this.parentStack.length - 1]
   },
@@ -19,6 +19,11 @@ export const hydrationStack = {
     this.parentStack.push(el)
     this.childIdxStack.push(0)
   },
+  currentChild: function () {
+    return this.parentStack[this.parentStack.length - 1].childNodes[
+      this.childIdxStack[this.childIdxStack.length - 1]
+    ]
+  },
   nextChild: function () {
     return this.parentStack[this.parentStack.length - 1].childNodes[
       this.childIdxStack[this.childIdxStack.length - 1]++
@@ -29,17 +34,24 @@ export const hydrationStack = {
   },
   captureEvents: function (element: Element) {
     toggleEvtListeners(element, true)
+    this.eventDeferrals.set(element, [])
+  },
+  resetEvents: function (element: Element) {
+    this.eventDeferrals.delete(element)
   },
   releaseEvents: function (element: Element) {
     toggleEvtListeners(element, false)
-    while (this.eventDeferrals.length) this.eventDeferrals.shift()!()
+    const events = this.eventDeferrals.get(element)
+    while (events?.length) events.shift()!()
   },
 }
 
 const captureEvent = (e: Event) => {
   const t = e.target
   if (!e.isTrusted || !t) return
-  hydrationStack.eventDeferrals.push(() => t.dispatchEvent(e))
+  hydrationStack.eventDeferrals
+    .get(t as Element)
+    ?.push(() => t.dispatchEvent(e))
 }
 const toggleEvtListeners = (element: Element, value: boolean) => {
   for (const key in element) {

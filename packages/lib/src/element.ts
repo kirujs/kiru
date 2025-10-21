@@ -1,20 +1,30 @@
-import { $FRAGMENT } from "./constants.js"
-import { isValidElementKeyProp, isValidElementRefProp } from "./props.js"
+import { $FRAGMENT, $MEMO, FLAG_MEMO } from "./constants.js"
+import { isMemoFn } from "./components/memo.js"
+import { isValidElementKeyProp, isValidElementRefProp } from "./utils/index.js"
 
-export function createElement<T extends Kaioken.VNode["type"]>(
+export function createElement<T extends Kiru.VNode["type"]>(
   type: T,
   props: null | Record<string, unknown> = null,
   ...children: unknown[]
-): Kaioken.VNode {
+): Kiru.VNode {
   if ((type as any) === Fragment) {
     return Fragment({ children: children as any, ...props })
   }
-  const node: Kaioken.VNode = {
+  const node: Kiru.VNode = {
     type,
     flags: 0,
     index: 0,
     depth: 0,
     props: {},
+    parent: null,
+    sibling: null,
+    child: null,
+    prev: null,
+    deletions: null,
+  }
+  if (isMemoFn(type)) {
+    node.flags |= FLAG_MEMO
+    node.arePropsEqual = type[$MEMO].arePropsEqual
   }
 
   if (props !== null) {
@@ -39,6 +49,6 @@ export function Fragment({
 }: {
   children: JSX.Children
   key?: JSX.ElementKey
-}): Kaioken.VNode {
+}): Kiru.VNode {
   return createElement($FRAGMENT, key ? { key } : null, children)
 }

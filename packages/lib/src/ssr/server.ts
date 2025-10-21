@@ -1,109 +1,95 @@
 import { Readable } from "node:stream"
-import { createElement, Fragment } from "../index.js"
-import { AppContext } from "../appContext.js"
-import { renderMode, ctx, node, nodeToCtxMap } from "../globals.js"
+import { Fragment } from "../element.js"
+import { renderMode, node } from "../globals.js"
 import {
   isVNode,
   encodeHtmlEntities,
   propsToElementAttributes,
-  selfClosingTags,
-} from "../utils.js"
+  isExoticType,
+  assertValidElementProps,
+} from "../utils/index.js"
 import { Signal } from "../signals/base.js"
-import { $CONTEXT_PROVIDER, ELEMENT_TYPE, $FRAGMENT } from "../constants.js"
-import { assertValidElementProps } from "../props.js"
+import { $HYDRATION_BOUNDARY, voidElements } from "../constants.js"
+import { HYDRATION_BOUNDARY_MARKER } from "./hydrationBoundary.js"
+import { __DEV__ } from "../env.js"
 
-type RequestState = {
-  stream: Readable
-  ctx: AppContext
-}
-
-export function renderToReadableStream<T extends Record<string, unknown>>(
-  appFunc: (props: T) => JSX.Element,
-  appProps = {} as T
-): Readable {
+export function renderToReadableStream(element: JSX.Element): Readable {
   const prev = renderMode.current
   renderMode.current = "stream"
-  const state: RequestState = {
-    stream: new Readable(),
-    ctx: new AppContext<any>(appFunc, appProps),
-  }
-  const prevCtx = ctx.current
-  ctx.current = state.ctx
-  const appNode = createElement(appFunc, appProps)
-  state.ctx.rootNode = Fragment({ children: [appNode] })
-  state.ctx.rootNode.depth = 0
-  appNode.depth = 1
-  renderToStream_internal(state, appNode, state.ctx.rootNode, 0)
-  state.stream.push(null)
-  renderMode.current = prev
-  ctx.current = prevCtx
+  const stream = new Readable()
+  const rootNode = Fragment({ children: element })
 
-  return state.stream
+  renderToStream_internal(stream, rootNode, null, 0)
+  stream.push(null)
+  renderMode.current = prev
+
+  return stream
 }
 
 function renderToStream_internal(
-  state: RequestState,
+  stream: Readable,
   el: unknown,
-  parent: Kaioken.VNode,
+  parent: Kiru.VNode | null,
   idx: number
 ): void {
   if (el === null) return
   if (el === undefined) return
   if (typeof el === "boolean") return
   if (typeof el === "string") {
-    state.stream.push(encodeHtmlEntities(el))
+    stream.push(encodeHtmlEntities(el))
     return
   }
   if (typeof el === "number" || typeof el === "bigint") {
-    state.stream.push(el.toString())
+    stream.push(el.toString())
     return
   }
   if (el instanceof Array) {
-    el.forEach((c, i) => renderToStream_internal(state, c, parent, i))
+    el.forEach((c, i) => renderToStream_internal(stream, c, parent, i))
     return
   }
   if (Signal.isSignal(el)) {
-    state.stream.push(String(el.peek()))
+    stream.push(String(el.peek()))
     return
   }
   if (!isVNode(el)) {
-    state.stream.push(String(el))
+    stream.push(String(el))
     return
   }
   el.parent = parent
-  el.depth = parent.depth + 1
+  el.depth = (parent?.depth ?? -1) + 1
   el.index = idx
-  const props = el.props ?? {}
+  const { type, props = {} } = el
   const children = props.children
-  const type = el.type
-  if (type === ELEMENT_TYPE.text) {
-    state.stream.push(encodeHtmlEntities(props.nodeValue ?? ""))
+  if (type === "#text") {
+    stream.push(encodeHtmlEntities(props.nodeValue ?? ""))
     return
   }
-  if (type === $FRAGMENT || type === $CONTEXT_PROVIDER) {
-    if (!Array.isArray(children))
-      return renderToStream_internal(state, children, el, idx)
-    return children.forEach((c, i) => renderToStream_internal(state, c, el, i))
+  if (isExoticType(type)) {
+    if (type === $HYDRATION_BOUNDARY) {
+      stream.push(`<!--${HYDRATION_BOUNDARY_MARKER}-->`)
+      renderToStream_internal(stream, children, el, idx)
+      stream.push(`<!--/${HYDRATION_BOUNDARY_MARKER}-->`)
+      return
+    }
+    return renderToStream_internal(stream, children, el, idx)
   }
 
   if (typeof type !== "string") {
-    nodeToCtxMap.set(el, state.ctx)
     node.current = el
     const res = type(props)
-    node.current = undefined
-    return renderToStream_internal(state, res, parent, idx)
+    node.current = null
+    return renderToStream_internal(stream, res, parent, idx)
   }
 
-  assertValidElementProps(el)
+  if (__DEV__) {
+    assertValidElementProps(el)
+  }
   const attrs = propsToElementAttributes(props)
-  const isSelfClosing = selfClosingTags.includes(type)
-  state.stream.push(
-    `<${type}${attrs.length ? " " + attrs : ""}${isSelfClosing ? "/>" : ">"}`
-  )
+  stream.push(`<${type}${attrs.length ? ` ${attrs}` : ""}>`)
 
-  if (!isSelfClosing) {
+  if (!voidElements.has(type)) {
     if ("innerHTML" in props) {
-      state.stream.push(
+      stream.push(
         String(
           Signal.isSignal(props.innerHTML)
             ? props.innerHTML.peek()
@@ -112,12 +98,12 @@ function renderToStream_internal(
       )
     } else {
       if (Array.isArray(children)) {
-        children.forEach((c, i) => renderToStream_internal(state, c, el, i))
+        children.forEach((c, i) => renderToStream_internal(stream, c, el, i))
       } else {
-        renderToStream_internal(state, children, el, 0)
+        renderToStream_internal(stream, children, el, 0)
       }
     }
 
-    state.stream.push(`</${type}>`)
+    stream.push(`</${type}>`)
   }
 }

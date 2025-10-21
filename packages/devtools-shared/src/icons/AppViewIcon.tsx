@@ -1,4 +1,4 @@
-import { ElementProps } from "kaioken"
+import { ElementProps } from "kiru"
 
 export function AppViewIcon(props: ElementProps<"svg">) {
   return (

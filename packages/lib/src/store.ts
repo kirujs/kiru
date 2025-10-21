@@ -1,15 +1,19 @@
 import type { Prettify } from "./types.utils.js"
 import { __DEV__ } from "./env.js"
-import { sideEffectsEnabled, useHook } from "./hooks/utils.js"
-import { safeStringify, shallowCompare } from "./utils.js"
+import { useHook } from "./hooks/utils.js"
 import { $HMR_ACCEPT } from "./constants.js"
 import { HMRAccept } from "./hmr.js"
+import {
+  safeStringify,
+  shallowCompare,
+  sideEffectsEnabled,
+} from "./utils/index.js"
 
 export { createStore }
 export type { Store, MethodFactory }
 
 type MethodFactory<T> = (
-  setState: (setter: Kaioken.StateSetter<T>) => void,
+  setState: (setter: Kiru.StateSetter<T>) => void,
   getState: () => T
 ) => Record<string, Function>
 
@@ -25,11 +29,16 @@ type StoreHook<T, U extends Record<string, Function>> = {
   (): Prettify<{ value: T } & U>
 }
 
+type Subscribe<T> = {
+  (fn: (value: T) => void): () => void
+  <R>(sliceFn: (value: T) => R, fn: (value: R) => void): () => void
+}
+
 type Store<T, U extends Record<string, Function>> = StoreHook<T, U> & {
   getState: () => T
-  setState: (setter: Kaioken.StateSetter<T>) => void
+  setState: (setter: Kiru.StateSetter<T>) => void
   methods: U
-  subscribe: (fn: (value: T) => void) => () => void
+  subscribe: Subscribe<T>
 }
 
 type NodeState = {
@@ -46,8 +55,8 @@ type NodeState = {
 type InternalStoreState<T, U extends MethodFactory<T>> = {
   value: T
   epoch: number
-  subscribers: Set<Kaioken.VNode | Function>
-  nodeStateMap: WeakMap<Kaioken.VNode, NodeState>
+  subscribers: Set<Kiru.VNode | Function>
+  nodeStateMap: WeakMap<Kiru.VNode, NodeState>
   methods: ReturnType<U>
 }
 
@@ -60,8 +69,8 @@ function createStore<T, U extends MethodFactory<T>>(
     current: {
       value: initial,
       epoch: 0,
-      subscribers: new Set<Kaioken.VNode | Function>(),
-      nodeStateMap: new WeakMap<Kaioken.VNode, NodeState>(),
+      subscribers: new Set<Kiru.VNode | Function>(),
+      nodeStateMap: new WeakMap<Kiru.VNode, NodeState>(),
       methods: null as any as ReturnType<U>,
     } satisfies InternalStoreState<T, U>,
   }
@@ -71,7 +80,7 @@ function createStore<T, U extends MethodFactory<T>>(
 
   const getState = () => state.current.value
 
-  const setState = (setter: Kaioken.StateSetter<T>) => {
+  const setState = (setter: Kiru.StateSetter<T>) => {
     state.current.value =
       typeof setter === "function"
         ? (setter as Function)(state.current.value)
@@ -123,33 +132,40 @@ function createStore<T, U extends MethodFactory<T>>(
     return useHook(
       "useStore",
       { value: null as any as T | R, lastChangeSync: -1 },
-      ({ hook, isInit, vNode, index, update }) => {
+      ({ hook, isInit, isHMR, vNode, index, update }) => {
         if (__DEV__) {
-          hook.dev = {
-            devtools: {
-              get: () => ({ value: hook.value }),
-            },
+          if (isInit) {
+            hook.dev = {
+              devtools: {
+                get: () => ({ value: hook.value }),
+              },
+              initialArgs: [sliceFn, equality],
+            }
+          }
+          if (isHMR) {
+            const [fn, eq] = hook.dev!.initialArgs
+            if (fn !== sliceFn || eq !== equality) {
+              isInit = true
+              hook.dev!.initialArgs = [sliceFn, equality]
+            }
           }
         }
         const { subscribers, nodeStateMap, epoch, value, methods } =
           state.current
 
-        if (isInit) {
+        const nodeState = nodeStateMap.get(vNode) ?? {
+          slices: [],
+          update,
+        }
+        let slice: (typeof nodeState.slices)[number]
+        if (isInit || !nodeState.slices[index]) {
           subscribers.add(vNode)
-          const nodeState = nodeStateMap.get(vNode) ?? {
-            slices: [],
-            update,
-          }
-
           hook.lastChangeSync = epoch
           hook.value = sliceFn === null ? value : sliceFn(value)
-
-          if (sliceFn || equality) {
-            nodeState.slices[index] = {
-              sliceFn,
-              eq: equality,
-              value: hook.value,
-            }
+          slice = nodeState.slices[index] = {
+            sliceFn,
+            eq: equality,
+            value: hook.value,
           }
           nodeStateMap.set(vNode, nodeState)
 
@@ -157,12 +173,17 @@ function createStore<T, U extends MethodFactory<T>>(
             nodeStateMap.delete(vNode)
             subscribers.delete(vNode)
           }
+        } else {
+          slice = nodeState.slices[index]
+          if (slice.sliceFn !== sliceFn) {
+            slice.value = hook.value = sliceFn ? sliceFn(value) : value
+            slice.sliceFn = sliceFn
+          }
+          slice.eq = equality
         }
 
         if (hook.lastChangeSync !== epoch) {
-          const currentSlice = nodeStateMap.get(vNode)?.slices[index]
-
-          hook.value = currentSlice ? currentSlice.value : state.current.value
+          hook.value = slice ? slice.value : state.current.value
           hook.lastChangeSync = epoch
         }
 
@@ -181,12 +202,24 @@ function createStore<T, U extends MethodFactory<T>>(
     get methods() {
       return { ...state.current.methods }
     },
-    subscribe: (fn: (state: T) => void) => {
-      state.current.subscribers.add(fn)
-      return (() => (
-        state.current.subscribers.delete(fn), void 0
-      )) as () => void
-    },
+    subscribe: ((sliceOrCb, cb) => {
+      if (cb === undefined) {
+        state.current.subscribers.add(sliceOrCb)
+        return () => (state.current.subscribers.delete(sliceOrCb), void 0)
+      }
+
+      const selection = {
+        current: null as ReturnType<typeof sliceOrCb> | null,
+      }
+      const sliceWrapper = (newState: T) => {
+        const next = sliceOrCb(newState)
+        if (shallowCompare(next, selection.current)) return
+        selection.current = next
+        cb(next)
+      }
+      state.current.subscribers.add(sliceWrapper)
+      return () => (state.current.subscribers.delete(sliceWrapper), void 0)
+    }) as Subscribe<T>,
   })
 
   if (__DEV__) {

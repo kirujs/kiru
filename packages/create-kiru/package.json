@@ -1,0 +1,20 @@
+{
+  "name": "create-kiru",
+  "version": "0.0.8",
+  "type": "module",
+  "description": "A command-line tool for quickly creating kiru applications from a template.",
+  "scripts": {
+    "build": "echo \"No build script specified for cli.\"",
+    "test": "echo \"Error: no test specified\""
+  },
+  "bin": {
+    "create-kiru": "./index.js"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "execa": "^9.6.0",
+    "inquirer": "^11.1.0",
+    "simple-git": "^3.28.0"
+  },
+  "license": "ISC"
+}

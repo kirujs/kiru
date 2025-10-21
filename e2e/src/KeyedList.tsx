@@ -1,4 +1,4 @@
-import { useState } from "kaioken"
+import { useState } from "kiru"
 
 export function KeyedList() {
   const [counters, setCounters] = useState<string[]>(

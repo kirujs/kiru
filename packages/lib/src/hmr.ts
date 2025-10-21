@@ -1,11 +1,11 @@
-import type { Store } from "./store"
-import type { WatchEffect } from "./signals/watch"
 import { $HMR_ACCEPT } from "./constants.js"
 import { __DEV__ } from "./env.js"
+import { traverseApply } from "./utils/index.js"
+import { requestUpdate } from "./scheduler.js"
 import { Signal } from "./signals/base.js"
-import { traverseApply } from "./utils.js"
-import { HMR_INVALIDATE_HOOK_SENTINEL_INTERNAL_USE_ONLY } from "./hooks/utils.js"
-import type { AppContext } from "./appContext"
+import type { WatchEffect } from "./signals/watch.js"
+import type { Store } from "./store.js"
+import type { AppContext } from "./appContext.js"
 
 export type HMRAccept<T = {}> = {
   provide: () => T
@@ -16,7 +16,7 @@ export type HMRAccept<T = {}> = {
 export type GenericHMRAcceptor<T = {}> = {
   [$HMR_ACCEPT]: HMRAccept<T>
 }
-type HotVar = Kaioken.FC | Store<any, any> | Signal<any> | Kaioken.Context<any>
+type HotVar = Kiru.FC | Store<any, any> | Signal<any> | Kiru.Context<any>
 
 type HotVarDesc = {
   type: string
@@ -45,7 +45,6 @@ type ModuleMemory = {
 type HotVarRegistrationEntry = {
   type: string
   value: HotVar
-  hooks?: Array<{ name: string; args: string }>
   link: string
 }
 
@@ -58,6 +57,11 @@ export function createHMRContext() {
   let isWaitingForNextWatchCall = false
   let tmpUnnamedWatchers: WatchEffect[] = []
 
+  const onHmrCallbacks: Array<() => void> = []
+  const onHmr = (callback: () => void) => {
+    onHmrCallbacks.push(callback)
+  }
+
   const prepare = (filePath: string) => {
     let mod = moduleMap.get(filePath)
     isModuleReplacementExecution = !!mod
@@ -67,6 +71,8 @@ export function createHMRContext() {
         unnamedWatchers: [],
       }
       moduleMap.set(filePath, mod)
+    } else {
+      while (onHmrCallbacks.length) onHmrCallbacks.shift()!()
     }
     currentModuleMemory = mod!
   }
@@ -75,7 +81,7 @@ export function createHMRContext() {
     hotVarRegistrationEntries: Record<string, HotVarRegistrationEntry>
   ) => {
     if (currentModuleMemory === null)
-      throw new Error("[kaioken]: HMR could not register: No active module")
+      throw new Error("[kiru]: HMR could not register: No active module")
 
     let dirtiedApps: Set<AppContext> = new Set()
     for (const [name, newEntry] of Object.entries(hotVarRegistrationEntries)) {
@@ -96,7 +102,7 @@ export function createHMRContext() {
       }
 
       if (newEntry.type === "createStore") {
-        window.__kaioken!.stores.add(name, newEntry.value as Store<any, any>)
+        window.__kiru!.stores!.add(name, newEntry.value as Store<any, any>)
       }
 
       currentModuleMemory.hotVars.set(name, newEntry)
@@ -112,61 +118,18 @@ export function createHMRContext() {
         continue
       }
       if (oldEntry.type === "component" && newEntry.type === "component") {
-        const hooksToReset: number[] = []
-        if ("hooks" in oldEntry && "hooks" in newEntry) {
-          const hooks = newEntry.hooks!
-          const oldHooks = oldEntry.hooks ?? []
-
-          for (let i = 0; i < oldHooks.length; i++) {
-            const hook = hooks[i]
-            const oldHook = oldHooks[i]
-            if (hook.name !== oldHook.name) {
-              // new hook inserted before old hook, invalidate all remaining
-              for (let j = i; j < hooks.length; j++) {
-                hooksToReset.push(j)
-              }
-              break
-            }
-            if (hook.args !== oldHook.args) {
-              hooksToReset.push(i)
-            }
-          }
-        }
-
-        window.__kaioken!.apps.forEach((ctx) => {
-          if (!ctx.mounted || !ctx.rootNode) return
+        window.__kiru!.apps.forEach((ctx) => {
           traverseApply(ctx.rootNode, (vNode) => {
             if (vNode.type === oldEntry.value) {
               vNode.type = newEntry.value as any
               dirtiedApps.add(ctx)
               vNode.hmrUpdated = true
-              if (vNode.prev) {
-                vNode.prev.type = newEntry.value as any
-              }
-              if (vNode.subs) {
-                vNode.subs.forEach((id) => Signal.unsubscribe(vNode, id))
-                delete vNode.subs
-              }
-              if (!ctx.options?.useRuntimeHookInvalidation && vNode.hooks) {
-                for (let i = 0; i < hooksToReset.length; i++) {
-                  const hook = vNode.hooks[hooksToReset[i]]
-                  if (hook.dev?.reinitUponRawArgsChanged) {
-                    // @ts-ignore
-                    hook.dev.rawArgsChanged = true
-                  } else {
-                    hook.cleanup?.()
-                    // replace it with our 'invalidate' sentinel. This will cause `useHook` to recreate the hookState from scratch.
-                    vNode.hooks[hooksToReset[i]] =
-                      HMR_INVALIDATE_HOOK_SENTINEL_INTERNAL_USE_ONLY
-                  }
-                }
-              }
             }
           })
         })
       }
     }
-    dirtiedApps.forEach((ctx) => ctx.requestUpdate())
+    dirtiedApps.forEach((ctx) => ctx.rootNode && requestUpdate(ctx.rootNode))
     isModuleReplacementExecution = false
 
     if (tmpUnnamedWatchers.length) {
@@ -207,5 +170,6 @@ export function createHMRContext() {
     prepare,
     isReplacement,
     signals,
+    onHmr,
   }
 }

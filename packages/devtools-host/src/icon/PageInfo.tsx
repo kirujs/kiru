@@ -1,5 +1,5 @@
-import * as kaioken from "kaioken"
-import type { ElementProps } from "kaioken"
+import * as kiru from "kiru"
+import type { ElementProps } from "kiru"
 
 export function PageInfo(props: ElementProps<"svg">) {
   return (

@@ -1,14 +1,10 @@
-import {
-  cleanupHook,
-  depsRequireChange,
-  sideEffectsEnabled,
-  useHook,
-} from "kaioken"
+import { cleanupHook, depsRequireChange, useHook } from "kiru"
+import { sideEffectsEnabled } from "kiru/utils"
 
 const isSupported =
   "window" in globalThis && "MutationObserver" in globalThis.window
 export const useMutationObserver = (
-  ref: Kaioken.MutableRefObject<Element | null>,
+  ref: Kiru.MutableRefObject<Element | null>,
   callback: MutationCallback,
   options: MutationObserverInit | undefined = undefined
 ) => {

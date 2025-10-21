@@ -1,4 +1,4 @@
-import { useMemo } from "kaioken"
+import { useMemo } from "kiru"
 import { broadcastChannel } from "./broadcastChannel"
 import { ExternalLinkIcon } from "./icons"
 import { getFileLink } from "./utils"

@@ -1,4 +1,4 @@
-import type { ElementProps } from "kaioken"
+import type { ElementProps } from "kiru"
 
 export function ChevronIcon(props: ElementProps<"svg">) {
   return (

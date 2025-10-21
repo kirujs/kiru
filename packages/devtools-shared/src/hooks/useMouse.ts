@@ -1,4 +1,4 @@
-import { useSignal } from "kaioken"
+import { useSignal } from "kiru"
 import { useEventListener } from "./useEventListener"
 
 export const useMouse = () => {

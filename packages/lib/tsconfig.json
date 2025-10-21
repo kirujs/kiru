@@ -18,11 +18,11 @@
     "outDir": "dist",
     "baseUrl": ".",
     "removeComments": false,
-    // "sourceMap": true,
-    // "declarationMap": true,
+    "sourceMap": true,
+    "declarationMap": true,
     "jsx": "react",
-    "jsxFactory": "kaioken.createElement",
-    "jsxFragmentFactory": "kaioken.Fragment"
+    "jsxFactory": "kiru.createElement",
+    "jsxFragmentFactory": "kiru.Fragment"
   },
   "include": ["./src/**/*"],
   "exclude": ["dist"]

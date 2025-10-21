@@ -1,6 +1,6 @@
 import Counter from "$/components/Counter"
 import { PageTitle } from "$/components/PageTitle"
-import { computed, signal, useComputed, useEffect, useSignal } from "kaioken"
+import { computed, signal, useComputed, useEffect, useSignal } from "kiru"
 
 export { Page }
 

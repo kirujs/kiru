@@ -1,33 +1,161 @@
-import type { Prettify } from "./types.utils"
+import type { Signal } from "./signals"
+import type { Prettify, Signalable } from "./types.utils"
 
 export type {
+  HTMLTagToElement,
+  SVGTagToElement,
   HtmlElementAttributes,
+  HtmlElementBindableProps,
   SvgElementAttributes,
   SvgGlobalAttributes,
   GlobalAttributes,
-  GlobalEventAttributes,
-  EventAttributes,
   StyleObject,
-  ClassNameArray,
 }
 
-type ClassNameArray = Array<string | false | undefined>
+type HTMLTagToElement<T extends keyof HtmlElementAttributes> =
+  T extends keyof HTMLElementTagNameMap
+    ? HTMLElementTagNameMap[T]
+    : T extends keyof HTMLElementDeprecatedTagNameMap
+    ? HTMLElementDeprecatedTagNameMap[T]
+    : never
+
+type SVGTagToElement<T extends keyof SvgElementAttributes> =
+  T extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[T] : never
+
+type NumericStyleKeys =
+  // Layout: Margin, Padding, Position
+  | "bottom"
+  | "gap"
+  | "inset"
+  | "insetBlock"
+  | "insetBlockEnd"
+  | "insetBlockStart"
+  | "insetInline"
+  | "insetInlineEnd"
+  | "insetInlineStart"
+  | "left"
+  | "margin"
+  | "marginBlock"
+  | "marginBlockEnd"
+  | "marginBlockStart"
+  | "marginInline"
+  | "marginInlineEnd"
+  | "marginInlineStart"
+  | "padding"
+  | "paddingBlock"
+  | "paddingBlockEnd"
+  | "paddingBlockStart"
+  | "paddingInline"
+  | "paddingInlineEnd"
+  | "paddingInlineStart"
+  | "right"
+  | "top"
+
+  // Sizing
+  | "height"
+  | "maxHeight"
+  | "maxWidth"
+  | "minHeight"
+  | "minWidth"
+  | "width"
+
+  // Flexbox
+  | "flex"
+  | "flexBasis"
+  | "flexGrow"
+  | "flexShrink"
+  | "order"
+
+  // Grid
+  | "columnGap"
+  | "gridAutoColumns"
+  | "gridAutoRows"
+  | "gridColumnGap" // legacy, still used in some cases
+  | "gridRowGap" // legacy
+  | "rowGap"
+
+  // Border
+  | "borderBottomWidth"
+  | "borderImageOutset"
+  | "borderImageSlice"
+  | "borderImageWidth"
+  | "borderLeftWidth"
+  | "borderRadius"
+  | "borderRightWidth"
+  | "borderSpacing"
+  | "borderTopWidth"
+  | "borderWidth"
+
+  // Typography
+  | "fontSize"
+  | "letterSpacing"
+  | "lineHeight"
+  | "tabSize"
+  | "textIndent"
+  | "wordSpacing"
+
+  // Scroll Margin
+  | "scrollMargin"
+  | "scrollMarginBlock"
+  | "scrollMarginBlockEnd"
+  | "scrollMarginBlockStart"
+  | "scrollMarginBottom"
+  | "scrollMarginInline"
+  | "scrollMarginInlineEnd"
+  | "scrollMarginInlineStart"
+  | "scrollMarginLeft"
+  | "scrollMarginRight"
+  | "scrollMarginTop"
+
+  // Scroll Padding
+  | "scrollPadding"
+  | "scrollPaddingBlock"
+  | "scrollPaddingBlockEnd"
+  | "scrollPaddingBlockStart"
+  | "scrollPaddingBottom"
+  | "scrollPaddingInline"
+  | "scrollPaddingInlineEnd"
+  | "scrollPaddingInlineStart"
+  | "scrollPaddingLeft"
+  | "scrollPaddingRight"
+  | "scrollPaddingTop"
+
+  // Animation / Transition
+  | "animationDelay"
+  | "animationDuration"
+  | "transitionDelay"
+  | "transitionDuration"
+
+  // Transform (treated as numeric in APIs)
+  | "rotate"
+  | "scale"
+  | "translate"
+
+  // Effects
+  | "boxShadow"
+  | "zIndex"
+  | "opacity"
+
+type FunctionKeys<T> = {
+  [K in keyof T]: T[K] extends (...args: any) => any ? K : never
+}[keyof T]
+
+type AllStyleRules = Omit<
+  CSSStyleDeclaration,
+  | typeof Symbol.iterator
+  | FunctionKeys<CSSStyleDeclaration>
+  | "length"
+  | "parentRule"
+> & {
+  [Key in `--${string}`]: string | number
+}
 
 type StyleObject = Prettify<
-  Partial<
-    Omit<
-      CSSStyleDeclaration,
-      | number
-      | "length"
-      | "parentRule"
-      | "setProperty"
-      | "removeProperty"
-      | "item"
-      | "getPropertyValue"
-      | "getPropertyPriority"
-      | typeof Symbol.iterator
-    >
-  >
+  Partial<{
+    [Key in keyof AllStyleRules & string]: Key extends NumericStyleKeys
+      ? number | string
+      : AllStyleRules[Key]
+  }>
 >
 
 type ValidUrl = `http${"s" | ""}://${string}`
@@ -37,19 +165,16 @@ type ListOfUrlsOrPaths = string
 type FileName = string
 
 type MediaPreload = "none" | "metadata" | "auto" | ""
-type HTMLMediaElementAttrs = {
+interface HTMLMediaElementAttrs {
   autoplay?: boolean
   controls?: boolean
   crossOrigin?: string
-  currentTime?: number
   loop?: boolean
   muted?: boolean
-  playbackRate?: number
   preload?: MediaPreload
   preservesPitch?: boolean
   src?: string
   srcObject?: MediaProvider | null
-  volume?: number
 }
 
 type FormAction = ValidUrlOrPath
@@ -170,47 +295,14 @@ type IFrameSandbox = string | boolean
 
 type InputAccept = "audio/*" | "video/*" | "image/*" | MimeType
 type AutoComplete = "on" | "off"
-type FormMethod = "get" | "post"
+type FormMethod = "get" | "post" | "dialog"
 
 type Direction = "ltr" | "rtl" | "auto"
 
-type FocussableElementTags =
-  | "a"
-  | "area"
-  | "audio"
-  | "button"
-  | "details"
-  | "dialog"
-  | "embed"
-  | "iframe"
-  | "input"
-  | "label"
-  | "menu"
-  | "meter"
-  | "object"
-  | "optgroup"
-  | "option"
-  | "output"
-  | "progress"
-  | "select"
-  | "summary"
-  | "textarea"
-  | "video"
-
-type LoadableElementTags =
-  | "img"
-  | "iframe"
-  | "link"
-  | "script"
-  | "source"
-  | "track"
-
-type ErrorableElementTags = "img" | "iframe" | "link" | "script" | "source"
-
-type GlobalAttributes = {
+interface GlobalAttributes {
   accessKey?: string
   autocapitalize?: "on" | "off" | "none" | "sentences" | "words" | "characters"
-  className?: string | ClassNameArray
+  className?: string
   contentEditable?: boolean
   dir?: Direction
   draggable?: boolean | "auto"
@@ -228,73 +320,314 @@ type GlobalAttributes = {
   inert?: boolean
 }
 
-type GlobalEventAttributes = Omit<
-  Partial<GlobalEventHandlers>,
-  | keyof InputEventAttributes<any>
-  | keyof FocusEventAttributes
-  | keyof KeyboardEventAttributes
-  | "addEventListener"
-  | "removeEventListener"
->
+type NativeAnimationEvent = AnimationEvent
+type NativeClipboardEvent = ClipboardEvent
+type NativeCompositionEvent = CompositionEvent
+type NativeDragEvent = DragEvent
+type NativeFocusEvent = FocusEvent
+type NativeKeyboardEvent = KeyboardEvent
+type NativeMouseEvent = MouseEvent
+type NativeTouchEvent = TouchEvent
+type NativePointerEvent = PointerEvent
+type NativeSubmitEvent = SubmitEvent
+type NativeToggleEvent = ToggleEvent
+type NativeTransitionEvent = TransitionEvent
+type NativeUIEvent = UIEvent
+type NativeWheelEvent = WheelEvent
 
-type KeyboardEventAttributes = {
-  onkeyup?: (e: KeyboardEvent) => void
-  onkeydown?: (e: KeyboardEvent) => void
-  onkeypress?: (e: KeyboardEvent) => void
+type NoChildElementElement =
+  | HTMLAreaElement
+  | HTMLBaseElement
+  | HTMLBRElement
+  | HTMLEmbedElement
+  | HTMLHRElement
+  | HTMLImageElement
+  | HTMLInputElement
+  | HTMLLinkElement
+  | HTMLMetaElement
+  | HTMLSourceElement
+  | HTMLTrackElement
+  | HTMLTextAreaElement
+
+declare global {
+  namespace Kiru {
+    type DOMEvent<E = Event, C = unknown, T = unknown> = Omit<
+      E,
+      "target" | "currentTarget"
+    > & {
+      target: C extends NoChildElementElement
+        ? EventTarget & C
+        : EventTarget & T
+      currentTarget: EventTarget & C
+    }
+
+    type EventHandler<E extends DOMEvent> = {
+      bivarianceHack(event: E): void
+    }["bivarianceHack"]
+
+    interface BaseEventHandler<T extends Element = Element>
+      extends DOMEvent<Event, T> {}
+
+    interface AnimationEvent<T extends Element = Element>
+      extends DOMEvent<NativeAnimationEvent, T> {}
+
+    interface ClipboardEvent<T extends Element = Element>
+      extends DOMEvent<NativeClipboardEvent, T> {}
+
+    interface CompositionEvent<T extends Element = Element>
+      extends DOMEvent<NativeCompositionEvent, T> {}
+
+    interface DragEvent<T extends Element = Element>
+      extends DOMEvent<NativeDragEvent, T> {}
+
+    interface FocusEvent<T extends Element = Element>
+      extends DOMEvent<NativeFocusEvent, T> {}
+
+    interface FormEvent<T extends Element = Element>
+      extends DOMEvent<Event, T> {}
+
+    interface KeyboardEvent<T extends Element = Element>
+      extends DOMEvent<NativeKeyboardEvent, T> {}
+
+    interface MouseEvent<T extends Element = Element>
+      extends DOMEvent<NativeMouseEvent, T> {}
+
+    interface PointerEvent<T extends Element = Element>
+      extends DOMEvent<NativePointerEvent, T> {}
+
+    interface SubmitEvent<T extends Element = Element>
+      extends DOMEvent<NativeSubmitEvent, T> {}
+
+    interface TouchEvent<T extends Element = Element>
+      extends DOMEvent<NativeTouchEvent, T> {}
+
+    interface ToggleEvent<T extends Element = Element>
+      extends DOMEvent<NativeToggleEvent, T> {}
+
+    interface TransitionEvent<T extends Element = Element>
+      extends DOMEvent<NativeTransitionEvent, T> {}
+
+    interface UIEvent<T extends Element = Element>
+      extends DOMEvent<NativeUIEvent, T> {}
+
+    interface WheelEvent<T extends Element = Element>
+      extends DOMEvent<NativeWheelEvent, T> {}
+
+    type ClipboardEventHandler<T extends Element = Element> = EventHandler<
+      ClipboardEvent<T>
+    >
+    type CompositionEventHandler<T extends Element = Element> = EventHandler<
+      CompositionEvent<T>
+    >
+    type DragEventHandler<T extends Element = Element> = EventHandler<
+      DragEvent<T>
+    >
+    type FocusEventHandler<T extends Element = Element> = EventHandler<
+      FocusEvent<T>
+    >
+    type FormEventHandler<T extends Element = Element> = EventHandler<
+      FormEvent<T>
+    >
+    type KeyboardEventHandler<T extends Element = Element> = EventHandler<
+      KeyboardEvent<T>
+    >
+    type MouseEventHandler<T extends Element = Element> = EventHandler<
+      MouseEvent<T>
+    >
+    type TouchEventHandler<T extends Element = Element> = EventHandler<
+      TouchEvent<T>
+    >
+    type PointerEventHandler<T extends Element = Element> = EventHandler<
+      PointerEvent<T>
+    >
+    type UIEventHandler<T extends Element = Element> = EventHandler<UIEvent<T>>
+    type WheelEventHandler<T extends Element = Element> = EventHandler<
+      WheelEvent<T>
+    >
+    type AnimationEventHandler<T extends Element = Element> = EventHandler<
+      AnimationEvent<T>
+    >
+    type ToggleEventHandler<T extends Element = Element> = EventHandler<
+      ToggleEvent<T>
+    >
+    type TransitionEventHandler<T extends Element = Element> = EventHandler<
+      TransitionEvent<T>
+    >
+
+    type CustomEventAttributes = {
+      [Key in keyof Kiru.CustomEvents as `on:${Key}`]?: (
+        event: CustomEvent<Kiru.CustomEvents[Key]>
+      ) => void
+    }
+
+    interface EventAttributes<T extends Element = Element>
+      extends CustomEventAttributes {
+      // Clipboard Events
+      oncopy?: ClipboardEventHandler<T> | undefined
+      oncut?: ClipboardEventHandler<T> | undefined
+      onpaste?: ClipboardEventHandler<T> | undefined
+
+      // Composition Events
+      oncompositionend?: CompositionEventHandler<T> | undefined
+      oncompositionstart?: CompositionEventHandler<T> | undefined
+      oncompositionupdate?: CompositionEventHandler<T> | undefined
+
+      // Focus Events
+      onfocus?: FocusEventHandler<T> | undefined
+      onblur?: FocusEventHandler<T> | undefined
+
+      // Form Events
+      onchange?: FormEventHandler<T> | undefined
+      onbeforeinput?: FormEventHandler<T> | undefined
+      oninput?: FormEventHandler<T> | undefined
+      onreset?: FormEventHandler<T> | undefined
+      onsubmit?: FormEventHandler<T> | undefined
+      oninvalid?: FormEventHandler<T> | undefined
+
+      // Image Events
+      onload?: BaseEventHandler<T> | undefined
+      onerror?: BaseEventHandler<T> | undefined
+
+      // Keyboard Events
+      onkeydown?: KeyboardEventHandler<T> | undefined
+      onkeypress?: KeyboardEventHandler<T> | undefined
+      onkeyup?: KeyboardEventHandler<T> | undefined
+
+      // Media Events
+      onabort?: BaseEventHandler<T> | undefined
+      oncanplay?: BaseEventHandler<T> | undefined
+      oncanplaythrough?: BaseEventHandler<T> | undefined
+      ondurationchange?: BaseEventHandler<T> | undefined
+      onemptied?: BaseEventHandler<T> | undefined
+      onencrypted?: BaseEventHandler<T> | undefined
+      onended?: BaseEventHandler<T> | undefined
+      onloadeddata?: BaseEventHandler<T> | undefined
+      onloadedmetadata?: BaseEventHandler<T> | undefined
+      onloadstart?: BaseEventHandler<T> | undefined
+      onpause?: BaseEventHandler<T> | undefined
+      onplay?: BaseEventHandler<T> | undefined
+      onplaying?: BaseEventHandler<T> | undefined
+      onprogress?: BaseEventHandler<T> | undefined
+      onratechange?: BaseEventHandler<T> | undefined
+      onresize?: BaseEventHandler<T> | undefined
+      onseeked?: BaseEventHandler<T> | undefined
+      onseeking?: BaseEventHandler<T> | undefined
+      onstalled?: BaseEventHandler<T> | undefined
+      onsuspend?: BaseEventHandler<T> | undefined
+      ontimeupdate?: BaseEventHandler<T> | undefined
+      onvolumechange?: BaseEventHandler<T> | undefined
+      onwaiting?: BaseEventHandler<T> | undefined
+
+      // Mouse Events
+      onauxclick?: MouseEventHandler<T> | undefined
+      onclick?: MouseEventHandler<T> | undefined
+      oncontextmenu?: MouseEventHandler<T> | undefined
+      ondblclick?: MouseEventHandler<T> | undefined
+      ondrag?: DragEventHandler<T> | undefined
+      ondragend?: DragEventHandler<T> | undefined
+      ondragenter?: DragEventHandler<T> | undefined
+      ondragexit?: DragEventHandler<T> | undefined
+      ondragleave?: DragEventHandler<T> | undefined
+      ondragover?: DragEventHandler<T> | undefined
+      ondragstart?: DragEventHandler<T> | undefined
+      ondrop?: DragEventHandler<T> | undefined
+      onmousedown?: MouseEventHandler<T> | undefined
+      onmouseenter?: MouseEventHandler<T> | undefined
+      onmouseleave?: MouseEventHandler<T> | undefined
+      onmousemove?: MouseEventHandler<T> | undefined
+      onmouseout?: MouseEventHandler<T> | undefined
+      onmouseover?: MouseEventHandler<T> | undefined
+      onmouseup?: MouseEventHandler<T> | undefined
+
+      // Selection Events
+      onselect?: BaseEventHandler<T> | undefined
+
+      // Touch Events
+      ontouchcancel?: TouchEventHandler<T> | undefined
+      ontouchend?: TouchEventHandler<T> | undefined
+      ontouchmove?: TouchEventHandler<T> | undefined
+      ontouchstart?: TouchEventHandler<T> | undefined
+
+      // Pointer Events
+      onpointerdown?: PointerEventHandler<T> | undefined
+      onpointermove?: PointerEventHandler<T> | undefined
+      onpointerup?: PointerEventHandler<T> | undefined
+      onpointercancel?: PointerEventHandler<T> | undefined
+      onpointerenter?: PointerEventHandler<T> | undefined
+      onpointerleave?: PointerEventHandler<T> | undefined
+      onpointerover?: PointerEventHandler<T> | undefined
+      onpointerout?: PointerEventHandler<T> | undefined
+      ongotpointercapture?: PointerEventHandler<T> | undefined
+      onlostpointercapture?: PointerEventHandler<T> | undefined
+
+      // UI Events
+      onscroll?: UIEventHandler<T> | undefined
+      onscrollend?: UIEventHandler<T> | undefined
+
+      // Wheel Events
+      onwheel?: WheelEventHandler<T> | undefined
+
+      // Animation Events
+      onanimationstart?: AnimationEventHandler<T> | undefined
+      onanimationend?: AnimationEventHandler<T> | undefined
+      onanimationiteration?: AnimationEventHandler<T> | undefined
+
+      // Toggle Events
+      ontoggle?: ToggleEventHandler<T> | undefined
+      onbeforetoggle?: ToggleEventHandler<T> | undefined
+
+      // Transition Events
+      ontransitioncancel?: TransitionEventHandler<T> | undefined
+      ontransitionend?: TransitionEventHandler<T> | undefined
+      ontransitionrun?: TransitionEventHandler<T> | undefined
+      ontransitionstart?: TransitionEventHandler<T> | undefined
+    }
+  }
 }
-
-type FocusEventAttributes = {
-  onblur?: (e: FocusEvent) => void
-  onfocus?: (e: FocusEvent) => void
-}
-
-type InputEvent<T extends "input" | "select" | "textarea"> = Omit<
-  Event,
-  "target"
-> & {
-  target: T extends "input"
-    ? HTMLInputElement
-    : T extends "select"
-    ? HTMLSelectElement
-    : HTMLTextAreaElement
-}
-type InputEventAttributes<T extends "input" | "select" | "textarea"> = {
-  onblur?: (e: InputEvent<T>) => void
-  onfocus?: (e: InputEvent<T>) => void
-  onchange?: (e: InputEvent<T>) => void
-  oninput?: (e: InputEvent<T>) => void
-  onreset?: (e: InputEvent<T>) => void
-  onsubmit?: (e: InputEvent<T>) => void
-}
-
-// type MouseEventAttributes = {
-//   onclick?: (e: MouseEvent) => void
-//   ondblclick?: (e: MouseEvent) => void
-//   onmousedown?: (e: MouseEvent) => void
-//   onmouseenter?: (e: MouseEvent) => void
-//   onmouseleave?: (e: MouseEvent) => void
-//   onmousemove?: (e: MouseEvent) => void
-//   onmouseout?: (e: MouseEvent) => void
-//   onmouseover?: (e: MouseEvent) => void
-//   onmouseup?: (e: MouseEvent) => void
-// }
-
-type EventAttributes<T extends string> = KeyboardEventAttributes &
-  // MouseEventAttributes &
-  (T extends FocussableElementTags ? FocusEventAttributes : {}) &
-  (T extends "input" | "select" | "textarea" ? InputEventAttributes<T> : {}) &
-  (T extends LoadableElementTags ? { onload?: (e: Event) => void } : {}) &
-  (T extends ErrorableElementTags ? { onerror?: (e: Event) => void } : {})
 
 type ElementReference<T extends HTMLElement> = T | null | string
 
-type PopoverControlAttributes = {
+interface PopoverControlAttributes {
   popoverTarget?: string
   popoverTargetAction?: "show" | "hide" | "toggle"
 }
 
+declare class DoNotUseBindWithPlainError extends Error {
+  $brand: "DoNotUseBindWithPlainError"
+}
+
+type BindableProp<K extends string, V> =
+  | ({
+      [k in K]?: Signalable<V>
+    } & { [k in `bind:${K}`]?: DoNotUseBindWithPlainError })
+  | ({
+      [k in `bind:${K}`]?: Signal<V>
+    } & { [k in K]?: DoNotUseBindWithPlainError })
+
+type MediaElementBindableProps = BindableProp<"volume", number> &
+  BindableProp<"playbackRate", number> &
+  BindableProp<"currentTime", number>
+
+interface HtmlElementBindableProps {
+  input: BindableProp<"value", string | number> &
+    BindableProp<"checked", boolean>
+  textarea: BindableProp<"value", string>
+  select:
+    | ({
+        multiple: true
+      } & BindableProp<"value", string[]>)
+    | ({
+        multiple?: false
+      } & BindableProp<"value", string>)
+  details: BindableProp<"open", boolean>
+  dialog: BindableProp<"open", boolean>
+  audio: MediaElementBindableProps
+  video: MediaElementBindableProps
+}
+
 interface HtmlElementAttributes {
   a: {
+    autofocus?: boolean
     download?: FileName
     href?: ValidUrlOrPath
     hreflang?: LanguageCode
@@ -329,13 +662,15 @@ interface HtmlElementAttributes {
   body: {}
   br: {}
   button: {
-    autofocus?: "autofocus"
+    autofocus?: boolean
     disabled?: boolean
     form?: ElementReference<HTMLFormElement>
     formAction?: FormAction
     formEnctype?: EncType
     formMethod?: FormMethod
+    name?: string
     type?: "button" | "reset" | "submit"
+    value?: string
   } & PopoverControlAttributes
   canvas: {
     width?: string | number
@@ -359,13 +694,9 @@ interface HtmlElementAttributes {
     cite?: string
     dateTime?: string
   }
-  details: {
-    open?: boolean
-  }
+  details: {}
   dfn: {}
-  dialog: {
-    open?: boolean
-  }
+  dialog: {}
   div: {}
   dl: {}
   dt: {}
@@ -392,7 +723,6 @@ interface HtmlElementAttributes {
     name?: string
     novalidate?: boolean
     target?: string
-    onsubmit?: (e: Event) => void
     action?: FormAction
   }
   h1: {}
@@ -433,7 +763,6 @@ interface HtmlElementAttributes {
     alt?: string
     autocomplete?: AutoComplete
     autofocus?: boolean
-    checked?: boolean
     dirName?: Direction
     disabled?: boolean
     files?: FileList | null
@@ -459,7 +788,6 @@ interface HtmlElementAttributes {
     src?: ValidUrlOrPath
     step?: string | number
     type?: InputType
-    value?: string | number
     width?: string | number
   } & PopoverControlAttributes
   ins: {
@@ -496,7 +824,7 @@ interface HtmlElementAttributes {
   mark: {}
   menu: {}
   meta: {
-    charset?: "utf-8"
+    charset?: string
     content?: string
     httpEquiv?: string
     name?: string
@@ -572,11 +900,9 @@ interface HtmlElementAttributes {
     autofocus?: boolean
     disabled?: boolean
     form?: ElementReference<HTMLFormElement>
-    multiple?: boolean
     name?: string
     required?: boolean
     size?: string | number
-    value?: string | number
   }
   slot: {
     name?: string
@@ -665,6 +991,7 @@ interface HtmlElementAttributes {
     rows?: string | number
     wrap?: "hard" | "soft"
     value?: string
+    "bind:value"?: Signal<string | number>
   }
   tfoot: {}
   th: {
@@ -749,6 +1076,17 @@ interface SvgColorInterpolation {
   colorInterpolation?: "auto" | "sRGB" | "linearRGB"
 }
 
+/** [MDN Reference](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/feFuncR) */
+interface FeFuncAttributes {
+  type?: string
+  tableValues?: string
+  amplitude?: string | number
+  exponent?: string | number
+  offset?: string | number
+  slope?: string | number
+  intercept?: string | number
+}
+
 interface SvgElementAttributes {
   animateTransform: {
     begin?: string
@@ -793,6 +1131,15 @@ interface SvgElementAttributes {
     opacity?: string | number
     pathLength?: string | number
   }
+  feComponentTransfer: {
+    in?: string
+    in2?: string
+    result?: string
+  }
+  feFuncR: FeFuncAttributes
+  feFuncG: FeFuncAttributes
+  feFuncB: FeFuncAttributes
+  feFuncA: FeFuncAttributes
   feSpotLight: SvgColorInterpolationFilters & {
     result?: string
   }
@@ -807,10 +1154,33 @@ interface SvgElementAttributes {
     mode?: "normal" | "multiply" | "screen" | "overlay" | "darken" | "lighten"
     result?: string
   }
+  feDisplacementMap: SvgColorInterpolationFilters & {
+    in?: string
+    in2?: string
+    scale?: string | number
+    xChannelSelector?: "R" | "G" | "B" | "A"
+    yChannelSelector?: "R" | "G" | "B" | "A"
+    result?: string
+  }
+  feDropShadow: SvgColorInterpolationFilters & {
+    dx?: string | number
+    dy?: string | number
+    stdDeviation?: string | number
+    floodColor?: string
+    floodOpacity?: string
+  }
   feGaussianBlur: SvgColorInterpolationFilters & {
     in?: string
     stdDeviation?: string | number
     edgeMode?: "duplicate" | "wrap" | "none"
+    result?: string
+  }
+  feTurbulence: SvgColorInterpolationFilters & {
+    type: "fractalNoise" | "turbulence"
+    baseFrequency?: string
+    numOctaves?: string | number
+    seed?: string | number
+    stitchTiles?: "stitch" | "noStitch"
     result?: string
   }
   filter: SvgColorInterpolationFilters &
@@ -826,6 +1196,18 @@ interface SvgElementAttributes {
     clipPath?: string
     mask?: string
     opacity?: string | number
+  }
+  image: {
+    x?: string | number
+    y?: string | number
+    width?: string | number
+    height?: string | number
+    mask?: string
+    opacity?: string | number
+    pathLength?: string | number
+    preserveAspectRatio?: string
+    href?: string
+    filter?: string
   }
   line: SvgStrokeAttributes & {
     x1?: string | number

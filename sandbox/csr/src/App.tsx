@@ -1,66 +1,48 @@
-import {
-  useRef,
-  useCallback,
-  useComputed,
-  useSignal,
-  signal,
-  watch,
-  useWatch,
-  computed,
-} from "kaioken"
-import { Router, Route, Link } from "kaioken/router"
+import { Router, Route, Link } from "kiru/router"
 import { ROUTES } from "./routes"
+import { signal, useComputed, useEffect, watch } from "kiru"
 
-function Counter() {
-  const count = useSignal(1)
-  const countRef = useRef<HTMLDivElement>(null)
-  const animRef = useRef<Animation>()
+import { onHMR } from "vite-plugin-kiru"
 
-  const handleClick = useCallback(() => {
-    count.value++
+let interval = setInterval(() => console.log("interval"), 1000)
 
-    animRef.current?.finish()
-    animRef.current = countRef.current?.animate(
-      [{ transform: "scale(2.5)" }, { transform: "scale(1)" }],
-      {
-        duration: 300,
-        iterations: 1,
-      }
-    )
+onHMR(() => {
+  console.log("onHMR")
+  clearInterval(interval)
+})
+
+const state = {
+  count: signal(0),
+  greeting: signal("Hello world!"),
+  foo: {
+    bar: signal(123),
+  },
+}
+watch(() => {
+  console.log("~~~~~ count changed 123 45 asd", state.count.value)
+})
+
+const Home = () => {
+  const doubled = useComputed(() => {
+    console.log("doubled")
+    return state.count.value * 2
+  })
+  useEffect(() => {
+    console.log("Home mounted")
   }, [])
 
   return (
-    <div className="flex flex-col gap-8 justify-center items-center">
-      <button type="button" onclick={handleClick} className="cursor-pointer ">
-        Increment
-      </button>
-      <span ref={countRef} className="text-4xl font-medium select-none">
-        {count}
-      </span>
-    </div>
-  )
-}
-const count = signal(1)
-const triple = computed(() => count.value * 3)
-watch(() => console.log("count", count.value))
-watch(() => console.log("triple", triple.value))
-
-const Home: Kaioken.FC = () => {
-  const double = useComputed(() => count.value * 32)
-  useWatch(() => console.log("inner triple b", triple.value))
-
-  return (
-    <div>
-      <h1>Home </h1>
-      <button
-        className="bg-primary hover:bg-primary-light text-white font-bold text-sm py-2 px-4 rounded"
-        onclick={() => count.value++}
-      >
-        Count: {count}
-        <br />
-        Double: {double}
-      </button>
-      <Counter />
+    <div
+      style={{
+        display: undefined,
+        flexDirection: "column",
+        alignItems: "center",
+      }}
+    >
+      <h1>{state.greeting}</h1>
+      <p>Count: {state.count}</p>
+      <p>Doubled: {doubled}</p>
+      <button onclick={() => state.count.value++}>Increment</button>
     </div>
   )
 }

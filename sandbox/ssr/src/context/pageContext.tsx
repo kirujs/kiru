@@ -1,4 +1,4 @@
-import { createContext, useContext } from "kaioken"
+import { createContext, useContext } from "kiru"
 
 export { usePageContext, PageContextProvider }
 

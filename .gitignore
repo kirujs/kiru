@@ -7,3 +7,4 @@ sandbox/*
 !sandbox/csr
 !sandbox/ssr
 !sandbox/tauri
+!sandbox/shared

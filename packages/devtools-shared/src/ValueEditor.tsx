@@ -1,8 +1,19 @@
-import { ElementProps, useMemo, useState } from "kaioken"
+import { ElementProps, unwrap, useMemo, useState } from "kiru"
 import { useSettings } from "./Settings"
 import { ChevronIcon } from "./icons"
+import { className as cls } from "./utils"
 
 const noop = Object.freeze(() => {})
+
+type ValueEditorProps = {
+  data: Record<string, unknown>
+  onChange: (keys: string[], value: unknown) => void
+  mutable: boolean
+  objectRefAcc: unknown[]
+  keys?: string[]
+  className?: ElementProps<"div">["className"]
+  border?: boolean
+}
 
 export function ValueEditor({
   data,
@@ -10,13 +21,9 @@ export function ValueEditor({
   mutable,
   objectRefAcc,
   keys = [],
-}: {
-  data: Record<string, unknown>
-  onChange: (keys: string[], value: unknown) => void
-  mutable: boolean
-  objectRefAcc: unknown[]
-  keys?: string[]
-}) {
+  className,
+  border = true,
+}: ValueEditorProps) {
   const {
     userSettings: { objectKeysChunkSize },
   } = useSettings()
@@ -37,7 +44,13 @@ export function ValueEditor({
 
   return (
     <>
-      <div className="flex flex-col items-start w-full border border-neutral-700">
+      <div
+        className={cls(
+          "flex flex-col items-start w-full",
+          border && "border border-neutral-700",
+          unwrap(className)
+        )}
+      >
         {objectKeys.map((key) => {
           const _keys = keys.concat(key)
           const path = _keys.join(".")
@@ -45,7 +58,7 @@ export function ValueEditor({
             <div
               key={path}
               data-key={path}
-              className="flex flex-col items-start w-full gap-2 pl-2 py-1 pr-1 border-b border-neutral-700"
+              className="flex flex-col items-start w-full gap-2 pl-2 py-1 pr-1 border-b border-neutral-700 last:border-b-0"
             >
               <ValueFieldEditor
                 value={data[key]}
@@ -85,6 +98,19 @@ export function ValueEditor({
       )}
     </>
   )
+}
+
+function recurseApply(
+  value: Record<string, any> | Array<any>,
+  callback: (value: Record<string, any> | Array<any>) => void
+) {
+  if (Array.isArray(value)) {
+    callback(value)
+    value.forEach((v) => recurseApply(v, callback))
+  } else if (typeof value === "object" && value !== null) {
+    callback(value)
+    Object.values(value).forEach((v) => recurseApply(v, callback))
+  }
 }
 
 function ValueFieldEditor({
@@ -146,6 +172,25 @@ function ValueFieldEditor({
       </ObjectPropertyWrapper>
     )
   }
+
+  const errorCtor = window.opener
+    ? (window.opener.Error as typeof Error)
+    : Error
+  if (value instanceof errorCtor) {
+    return (
+      <ObjectPropertyWrapper>
+        {Label}
+        {"cause" in value && !!value.cause ? (
+          <TextValueDisplay>
+            {value.message} ({String(value.cause)})
+          </TextValueDisplay>
+        ) : (
+          <TextValueDisplay>{value.message}</TextValueDisplay>
+        )}
+      </ObjectPropertyWrapper>
+    )
+  }
+
   const handleChange = (newValue: unknown) => onChange(keys, newValue)
   switch (typeof value) {
     case "string":
@@ -219,7 +264,9 @@ function ValueFieldEditor({
               className="text-xs flex items-center gap-1 cursor-pointer w-full"
               title={path}
               onclick={() => {
-                objectRefAcc.splice(objectRefAcc.indexOf(value), 1)
+                recurseApply(value, (v) =>
+                  objectRefAcc.splice(objectRefAcc.indexOf(v), 1)
+                )
                 setCollapsed((c) => !c)
               }}
             >
@@ -239,11 +286,11 @@ function ValueFieldEditor({
                 {value.map((item, idx) => (
                   <ValueFieldEditor
                     value={item}
-                    onChange={noop}
-                    keys={[idx.toString()]}
-                    path={idx.toString()}
+                    onChange={onChange}
+                    keys={[...keys, idx.toString()]}
+                    path={path.concat(".", idx.toString())}
                     label={idx.toString()}
-                    mutable={false}
+                    mutable={mutable}
                     objectRefAcc={objectRefAcc}
                   />
                 ))}
@@ -267,7 +314,9 @@ function ValueFieldEditor({
             className="text-xs flex items-center gap-1 cursor-pointer w-full"
             title={path}
             onclick={() => {
-              objectRefAcc.splice(objectRefAcc.indexOf(value), 1)
+              recurseApply(value, (v) =>
+                objectRefAcc.splice(objectRefAcc.indexOf(v), 1)
+              )
               setCollapsed((c) => !c)
             }}
           >
@@ -364,7 +413,10 @@ function ArrayChunkDisplay({
     <div className="flex flex-col items-start gap-1 w-full">
       <button
         className="text-xs flex items-center gap-1 cursor-pointer w-full"
-        onclick={() => setCollapsed((c) => !c)}
+        onclick={() => {
+          objectRefAcc.splice(objectRefAcc.indexOf(array), 1)
+          setCollapsed((c) => !c)
+        }}
       >
         [{range.start}..
         {(range.end < array.length ? range.end : array.length) - 1}]

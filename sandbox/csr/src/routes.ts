@@ -1,35 +1,35 @@
-import { lazy } from "kaioken"
+import { lazy } from "kiru"
 
 type AppRoute = {
   title: string
-  component: Kaioken.FC<any>
+  component: Kiru.FC<any>
   fallthrough?: boolean
 }
 
-const KeyedListExample = lazy(() => import("./components/KeyedListExample"))
-const FilteredListExample = lazy(
-  () => import("./components/FilteredListExample")
+const FilteredListExample = lazy(() => import("shared/src/FilteredListExample"))
+const BigListExample = lazy(() => import("shared/src/BigListExample"))
+const ContextExample = lazy(() => import("shared/src/ContextExample"))
+const ElementBindingsExample = lazy(
+  () => import("shared/src/ElementBindingsExample")
 )
-const BigListExample = lazy(() => import("./components/BigListExample"))
-const ContextExample = lazy(() => import("./components/ContextExample"))
-const UseModelExample = lazy(() => import("./components/UseModelExample"))
-const MemoExample = lazy(() => import("./components/MemoExample"))
-const RouterExample = lazy(() => import("./components/RouterExample"))
-const SignalsExample = lazy(() => import("./components/SignalsExample"))
-const StoreExample = lazy(() => import("./components/StoreExample"))
-const TransitionsExample = lazy(() => import("./components/TransitionsExample"))
-const UseAsyncExample = lazy(() => import("./components/UseAsyncExample"))
+const MemoExample = lazy(() => import("shared/src/MemoExample"))
+const RouterExample = lazy(() => import("shared/src/RouterExample"))
+const SignalsExample = lazy(() => import("shared/src/SignalsExample"))
+const StoreExample = lazy(() => import("shared/src/StoreExample"))
+const TransitionsExample = lazy(() => import("shared/src/TransitionsExample"))
+const UseAsyncExample = lazy(() => import("shared/src/UseAsyncExample"))
 const UseSyncExternalStoreExample = lazy(
-  () => import("./components/UseSyncExternalStoreExample")
+  () => import("shared/src/UseSyncExternalStoreExample")
 )
-const UseFormExample = lazy(() => import("./components/UseFormExample"))
+const UseFormExample = lazy(() => import("shared/src/UseFormExample"))
 
-const SWRExample = lazy(() => import("./components/SWRExample"))
+const SWRExample = lazy(() => import("shared/src/SWRExample"))
+const WebComponentExample = lazy(() => import("shared/src/WebComponentExample"))
 
 export const ROUTES: Record<string, AppRoute> = {
   "/keyed-list-example": {
     title: "Keyed list",
-    component: KeyedListExample,
+    component: lazy(() => import("shared/src/KeyedListExample")),
   },
   "/filtered-list-example": {
     title: "Filtered list",
@@ -43,9 +43,9 @@ export const ROUTES: Record<string, AppRoute> = {
     title: "Context",
     component: ContextExample,
   },
-  "/use-model-example": {
-    title: "useModel",
-    component: UseModelExample,
+  "/element-bindings-example": {
+    title: "Element bindings",
+    component: ElementBindingsExample,
   },
   "/memo-example": {
     title: "Memo",
@@ -84,5 +84,9 @@ export const ROUTES: Record<string, AppRoute> = {
   "/use-form-example": {
     title: "useForm",
     component: UseFormExample,
+  },
+  "/web-component-example": {
+    title: "Web Components",
+    component: WebComponentExample,
   },
 }

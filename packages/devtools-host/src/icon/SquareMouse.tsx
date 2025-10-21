@@ -1,5 +1,5 @@
-import * as kaioken from "kaioken"
-import type { ElementProps } from "kaioken"
+import * as kiru from "kiru"
+import type { ElementProps } from "kiru"
 
 export function SquareMouse(props: ElementProps<"svg">) {
   return (

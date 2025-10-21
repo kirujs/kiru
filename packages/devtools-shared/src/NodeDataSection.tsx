@@ -1,4 +1,4 @@
-import { type ElementProps, useCallback, useEffect, useState } from "kaioken"
+import { type ElementProps, useCallback, useEffect, useState } from "kiru"
 import { ChevronIcon } from "./icons"
 
 type NodeDataSectionProps = {

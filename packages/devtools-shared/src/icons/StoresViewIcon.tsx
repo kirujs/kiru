@@ -1,4 +1,4 @@
-import { ElementProps } from "kaioken"
+import { ElementProps } from "kiru"
 
 export function StoresViewIcon(props: ElementProps<"svg">) {
   return (

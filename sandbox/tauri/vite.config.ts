@@ -1,5 +1,5 @@
 import { defineConfig } from "vite"
-import kaioken from "vite-plugin-kaioken"
+import kiru from "vite-plugin-kiru"
 
 export default defineConfig({
   clearScreen: false,
@@ -26,5 +26,5 @@ export default defineConfig({
   // esbuild: {
   //   sourcemap: false,
   // },
-  plugins: [kaioken()],
+  plugins: [kiru()],
 })

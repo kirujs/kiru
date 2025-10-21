@@ -1,8 +1,13 @@
+import { __DEV__ } from "../env.js"
 import { Fragment } from "../element.js"
-import { generateRandomID } from "../generateId.js"
-import { shallowCompare } from "../utils.js"
+import {
+  safeStringify,
+  shallowCompare,
+  generateRandomID,
+} from "../utils/index.js"
 import { useEffect } from "../hooks/useEffect.js"
 import { useMemo } from "../hooks/useMemo.js"
+import { useRef } from "../hooks/useRef.js"
 import { useHook, useRequestUpdate } from "../hooks/utils.js"
 import { objGet, objSet } from "./utils.js"
 import type {
@@ -20,7 +25,7 @@ import type {
   SelectorState,
   UseFormConfig,
   UseFormInternalState,
-  UseFormReturn,
+  UseFormState,
 } from "./types"
 
 export type * from "./types"
@@ -32,9 +37,8 @@ function createFormController<T extends Record<string, unknown>>(
   const subscribers = new Set<FormStateSubscriber<T>>()
   const state: T = structuredClone(config.initialValues ?? {}) as T
   const formFieldValidators = {} as {
-    [key in RecordKey<T>]: FormFieldValidators<
-      RecordKey<T>,
-      InferRecordKeyValue<T, key>
+    [fieldName in RecordKey<T>]: Partial<
+      FormFieldValidators<RecordKey<T>, InferRecordKeyValue<T, fieldName>>
     >
   }
   const formFieldDependencies = {} as {
@@ -269,11 +273,26 @@ function createFormController<T extends Record<string, unknown>>(
   }
 
   const removeFieldMeta = (name: RecordKey<T>) => {
-    delete formFieldErrors[name]
-    delete asyncFormFieldValidators[name]
-    delete formFieldsTouched[name]
-    delete formFieldValidators[name]
+    for (const metaMap of [
+      formFieldErrors,
+      asyncFormFieldValidators,
+      formFieldsTouched,
+      formFieldValidators,
+    ]) {
+      delete metaMap[name]
+      for (const key in metaMap) {
+        if (key.startsWith(`${name}.`)) {
+          delete metaMap[key as RecordKey<T>]
+        }
+      }
+    }
+
     formFieldUpdaters.delete(name)
+    for (const key in formFieldUpdaters) {
+      if (key.startsWith(`${name}.`)) {
+        formFieldUpdaters.delete(key as RecordKey<T>)
+      }
+    }
   }
 
   const arrayFieldReplace = (name: RecordKey<T>, index: number, value: any) => {
@@ -473,7 +492,9 @@ function createFormController<T extends Record<string, unknown>>(
 
   const setFieldValidators = <K extends RecordKey<T>>(
     name: K,
-    validators: FormFieldValidators<RecordKey<T>, InferRecordKeyValue<T, K>>
+    validators: Partial<
+      FormFieldValidators<RecordKey<T>, InferRecordKeyValue<T, K>>
+    >
   ) => {
     formFieldValidators[name] = validators
     if (validators.dependentOn && validators.dependentOn.length > 0) {
@@ -483,6 +504,13 @@ function createFormController<T extends Record<string, unknown>>(
         }
         formFieldDependencies[dependentOn].add(name)
       }
+    }
+  }
+
+  const setSubmitting = (submitting: boolean) => {
+    if (submitting !== isSubmitting) {
+      isSubmitting = submitting
+      updateSubscribers()
     }
   }
 
@@ -502,16 +530,32 @@ function createFormController<T extends Record<string, unknown>>(
     validateForm,
     reset,
     getFormContext,
+    setSubmitting,
   }
 }
 
 export function useForm<T extends Record<string, unknown> = {}>(
   config: UseFormConfig<T>
-): UseFormReturn<T> {
+): UseFormState<T> {
   return useHook(
     "useForm",
     {} as UseFormInternalState<T>,
-    ({ hook, isInit }) => {
+    ({ hook, isInit, isHMR }) => {
+      if (__DEV__) {
+        if (isInit) {
+          hook.dev = {
+            initialArgs: [config],
+          }
+        }
+        if (isHMR) {
+          const [c] = hook.dev!.initialArgs
+          if (safeStringify(c) !== safeStringify(config)) {
+            hook.cleanup?.()
+            isInit = true
+            hook.dev!.initialArgs = [config]
+          }
+        }
+      }
       if (isInit) {
         const $controller = (hook.formController = createFormController(config))
 
@@ -523,13 +567,15 @@ export function useForm<T extends Record<string, unknown> = {}>(
           >,
           IsArray extends boolean
         >(props: FormFieldProps<T, Name, Validators, IsArray>) {
+          const didMount = useRef(false)
           const update = useRequestUpdate()
           if (props.validators) {
             $controller.setFieldValidators(props.name, props.validators)
           }
           useEffect(() => {
             $controller.connectField(props.name, update)
-            if (props.validators?.onMount) {
+            if (props.validators?.onMount && !didMount.current) {
+              didMount.current = true
               $controller.validateField(props.name, "onMount")
             }
             return () => {
@@ -587,7 +633,13 @@ export function useForm<T extends Record<string, unknown> = {}>(
           const selection = useHook(
             "useFormSubscription",
             { sub: null! as FormStateSubscriber<T> },
-            ({ hook, isInit, update }) => {
+            ({ hook, isInit, isHMR, update }) => {
+              if (__DEV__) {
+                if (isHMR) {
+                  isInit = true
+                  hook.cleanup?.()
+                }
+              }
               if (isInit) {
                 hook.sub = {
                   selector: props.selector,
@@ -607,15 +659,21 @@ export function useForm<T extends Record<string, unknown> = {}>(
         Field: hook.Field,
         Subscribe: hook.Subscribe,
         handleSubmit: async () => {
-          const errors = await hook.formController.validateForm()
-          const formCtx = hook.formController.getFormContext()
+          const controller = hook.formController
+          const errors = await controller.validateForm()
+          const formCtx = controller.getFormContext()
           if (errors.length) return config.onSubmitInvalid?.(formCtx)
-          await config.onSubmit?.(formCtx)
+          controller.setSubmitting(true)
+          try {
+            await config.onSubmit?.(formCtx)
+          } finally {
+            controller.setSubmitting(false)
+          }
         },
         reset: (values?: T) => hook.formController.reset(values),
         getFieldState: <K extends RecordKey<T>>(name: K) =>
           hook.formController.getFieldState(name),
-      } satisfies UseFormReturn<T>
+      } satisfies UseFormState<T>
     }
   )
 }

@@ -1,5 +1,5 @@
-# **Kaioken**
+# **Kiru**
 
-#### A powerful, easy-to-use rendering library with a tiny footprint
+#### A batteries-included, easy-to-use rendering library with a tiny footprint
 
-### <a href="https://kaioken.dev">kaioken.dev</a>
+### <a href="https://kirujs.dev">kirujs.dev</a>

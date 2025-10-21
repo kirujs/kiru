@@ -1,5 +1,5 @@
 {
-  "name": "kaioken-vike-template",
+  "name": "kiru-vike-template",
   "version": "0.0.1",
   "description": "",
   "type": "module",
@@ -11,19 +11,20 @@
   "keywords": [],
   "author": "",
   "devDependencies": {
-    "@types/express": "^5.0.0",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.47",
-    "prettier": "^3.3.3",
-    "tailwindcss": "^3.4.13",
-    "typescript": "^5.6.2",
-    "vite-plugin-kaioken": "workspace:^"
+    "@types/express": "^5.0.3",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "prettier": "^3.6.2",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.9.2",
+    "vite-plugin-kiru": "workspace:^"
   },
   "dependencies": {
-    "express": "^4.21.0",
-    "kaioken": "workspace:^",
-    "tsx": "^4.19.1",
-    "vike": "^0.4.197",
-    "vite": "^5.4.8"
+    "express": "^4.21.2",
+    "kiru": "workspace:^",
+    "shared": "workspace:^",
+    "tsx": "^4.20.3",
+    "vike": "^0.4.236",
+    "vite": "^5.4.19"
   }
 }

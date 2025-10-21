@@ -1,10 +1,8 @@
 import { useKeyStroke } from "devtools-shared"
-import { inspectComponent, KeyboardMap } from "../signal"
-import { useDevtoolsStore } from "../store"
-import { useRef } from "kaioken"
+import { useRef } from "kiru"
+import { inspectComponent, keyboardMap, selectedNode } from "../state"
 
 export const useKeyboardControls = () => {
-  const { setSelectedNode } = useDevtoolsStore((state) => state.selectedNode)
   const searchRef = useRef<HTMLInputElement>(null)
 
   const getMetaDataFromNode = (domNode: Element | null) => {
@@ -12,7 +10,7 @@ export const useKeyboardControls = () => {
 
     const id = domNode.getAttribute("data-id")
     if (id == null) return
-    return KeyboardMap.value.get(id)
+    return keyboardMap.peek().get(id)
   }
 
   const setActiveFromDom = (domNode: Element | null) => {
@@ -24,7 +22,7 @@ export const useKeyboardControls = () => {
     domNode.scrollIntoView({
       behavior: "smooth",
     })
-    setSelectedNode(metaData.vNode as any)
+    selectedNode.value = metaData.vNode as any
   }
 
   const findNextSibling = (domNode: Element | null) => {

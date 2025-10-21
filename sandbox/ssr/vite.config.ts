@@ -1,16 +1,19 @@
 import path from "node:path"
 import { defineConfig } from "vite"
 import ssr from "vike/plugin"
-import kaioken from "vite-plugin-kaioken"
+import kiru from "vite-plugin-kiru"
 
 export default defineConfig({
   esbuild: {
-    sourcemap: false,
+    //sourcemap: false,
+    supported: {
+      "top-level-await": true, //browsers can handle top-level-await features
+    },
   },
   resolve: {
     alias: {
       $: path.join(__dirname, "src"),
     },
   },
-  plugins: [ssr(), kaioken({ devtools: true })],
+  plugins: [ssr(), kiru({ include: ["../shared/"] })],
 })

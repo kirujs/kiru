@@ -1,19 +1,16 @@
 import {
   useCallback,
+  useComputed,
   useLayoutEffect,
   useMemo,
   useRef,
   useSignal,
-} from "kaioken"
+  useWatch,
+} from "kiru"
 import { LOCAL_KEY, PADDING } from "../utils/constants"
 import { SnapSide, Storage } from "../utils/types"
 import { reinitializeAnchorPos } from "../utils"
-import {
-  useEffectDeep,
-  useElementBounding,
-  useEventListener,
-  useMouse,
-} from "devtools-shared"
+import { useElementBounding, useEventListener, useMouse } from "devtools-shared"
 
 export const useAnchorPos = () => {
   const { mouse } = useMouse()
@@ -50,14 +47,15 @@ export const useAnchorPos = () => {
     Math.round(elementBound.height.value),
   ])
 
-  const distanceCovered = useMemo(() => {
-    if (startMouse.value === null) return null
+  const distanceCovered = useComputed(() => {
     const { x, y } = mouse.value
+    if (startMouse.value === null) return null
+    const { x: startX, y: startY } = startMouse.value
     return {
-      x: x - startMouse.value.x,
-      y: y - startMouse.value.y,
+      x: x - startX,
+      y: y - startY,
     }
-  }, [startMouse.value, mouse.value])
+  })
 
   useEventListener(
     "dragstart",
@@ -76,7 +74,7 @@ export const useAnchorPos = () => {
       clearTimeout(timeoutRef.current)
       timeoutRef.current = null
     }
-    if (startMouse.value) {
+    if (startMouse.peek()) {
       startMouse.value = null
       localStorage.setItem(
         LOCAL_KEY,
@@ -135,11 +133,10 @@ export const useAnchorPos = () => {
     }
   }, [])
 
-  useEffectDeep(() => {
-    if (distanceCovered === null || !viewPortRef.current) return
+  useWatch([distanceCovered, mouse], (dist, mouse) => {
+    if (dist === null || !viewPortRef.current) return
 
-    const { x, y } = mouse.value
-
+    const { x, y } = mouse
     const viewportWidth = viewPortRef.current.offsetWidth
     const isInBottomSeg = y >= window.innerHeight - 100
     const isInTopSeg = y <= 100
@@ -151,12 +148,8 @@ export const useAnchorPos = () => {
     } else {
       snapSide.value = isInTopSeg ? "top" : "bottom"
     }
-
     if (snapSide.value === "right") {
-      const min = Math.min(
-        -PADDING,
-        lastDroppedCoord.value.y + distanceCovered.y
-      )
+      const min = Math.min(-PADDING, lastDroppedCoord.value.y + dist.y)
       anchorCoords.value = {
         x: -PADDING,
         y: Math.max(
@@ -166,7 +159,7 @@ export const useAnchorPos = () => {
       }
       return
     } else if (snapSide.value === "left") {
-      const min = Math.min(0, lastDroppedCoord.value.y + distanceCovered.y)
+      const min = Math.min(0, lastDroppedCoord.value.y + dist.y)
       anchorCoords.value = {
         x: (viewportWidth - elementBound.width.value) * -1 + PADDING,
         y: Math.max(
@@ -177,10 +170,7 @@ export const useAnchorPos = () => {
 
       return
     } else if (snapSide.value === "top") {
-      const min = Math.min(
-        -PADDING,
-        lastDroppedCoord.value.x + distanceCovered.x
-      )
+      const min = Math.min(-PADDING, lastDroppedCoord.value.x + dist.x)
       anchorCoords.value = {
         x: Math.max(
           min,
@@ -192,7 +182,7 @@ export const useAnchorPos = () => {
       return
     }
 
-    const min = Math.min(-PADDING, lastDroppedCoord.value.x + distanceCovered.x)
+    const min = Math.min(-PADDING, lastDroppedCoord.value.x + dist.x)
     anchorCoords.value = {
       y: -PADDING,
       x: Math.max(
@@ -200,7 +190,7 @@ export const useAnchorPos = () => {
         (viewportWidth - elementBound.width.value) * -1 + PADDING
       ),
     }
-  }, [distanceCovered])
+  })
 
   const onResize = useCallback(() => {
     if (viewPortRef.current === null) return

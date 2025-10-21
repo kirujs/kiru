@@ -1,33 +1,38 @@
-import { $HMR_ACCEPT, $SIGNAL } from "../constants.js"
-import { __DEV__ } from "../env.js"
-import type { HMRAccept } from "../hmr.js"
 import {
-  getVNodeAppContext,
   latest,
   safeStringify,
   sideEffectsEnabled,
-} from "../utils.js"
-import { tracking, signalSubsMap } from "./globals.js"
-import { type SignalSubscriber, ReadonlySignal } from "./types.js"
+  generateRandomID,
+} from "../utils/index.js"
+import { $HMR_ACCEPT, $SIGNAL } from "../constants.js"
+import { __DEV__ } from "../env.js"
 import { node } from "../globals.js"
 import { useHook } from "../hooks/utils.js"
-import { generateRandomID } from "../generateId.js"
+import { requestUpdate } from "../scheduler.js"
+import { tracking, signalSubsMap } from "./globals.js"
+import type { SignalSubscriber, ReadonlySignal } from "./types.js"
+import type { HMRAccept } from "../hmr.js"
 
 export class Signal<T> {
   [$SIGNAL] = true;
   [$HMR_ACCEPT]?: HMRAccept<Signal<any>>
   displayName?: string
+  private onBeforeRead?: () => void
+  protected $subs?: Set<SignalSubscriber<any>>
   protected $id: string
   protected $value: T
+  protected $prevValue?: T
   protected $initialValue?: string
   protected __next?: Signal<T>
+  protected $isDisposed?: boolean
+
   constructor(initial: T, displayName?: string) {
     this.$id = generateRandomID()
-    signalSubsMap.set(this.$id, new Set())
-
     this.$value = initial
     if (displayName) this.displayName = displayName
+
     if (__DEV__) {
+      signalSubsMap.set(this.$id, new Set())
       this.$initialValue = safeStringify(initial)
       this[$HMR_ACCEPT] = {
         provide: () => {
@@ -47,52 +52,88 @@ export class Signal<T> {
         },
         destroy: () => {},
       } satisfies HMRAccept<Signal<any>>
+    } else {
+      this.$subs = new Set()
     }
   }
 
   get value() {
-    const tgt = latest(this)
-    Signal.entangle(tgt)
-    return tgt.$value
+    this.onBeforeRead?.()
+    if (__DEV__) {
+      const tgt = latest(this)
+      Signal.entangle(tgt)
+      return tgt.$value
+    }
+    Signal.entangle(this)
+    return this.$value
   }
 
   set value(next: T) {
-    const tgt = latest(this)
-    if (Object.is(tgt.$value, next)) return
-    tgt.$value = next
-    tgt.notify()
+    if (__DEV__) {
+      const tgt = latest(this)
+      if (Object.is(tgt.$value, next)) return
+      tgt.$prevValue = tgt.$value
+      tgt.$value = next
+      tgt.notify()
+      return
+    }
+    if (Object.is(this.$value, next)) return
+    this.$prevValue = this.$value
+    this.$value = next
+    this.notify()
   }
 
   peek() {
-    const tgt = latest(this)
-    return tgt.$value
+    this.onBeforeRead?.()
+    if (__DEV__) {
+      return latest(this).$value
+    }
+    return this.$value
   }
 
   sneak(newValue: T) {
-    const tgt = latest(this)
-    tgt.$value = newValue
+    if (__DEV__) {
+      const tgt = latest(this)
+      tgt.$prevValue = tgt.$value
+      tgt.$value = newValue
+      return
+    }
+    this.$prevValue = this.$value
+    this.$value = newValue
   }
 
   toString() {
-    const tgt = latest(this)
-    Signal.entangle(tgt)
-    return `${tgt.$value}`
+    this.onBeforeRead?.()
+    if (__DEV__) {
+      const tgt = latest(this)
+      Signal.entangle(tgt)
+      return `${tgt.$value}`
+    }
+    Signal.entangle(this)
+    return `${this.$value}`
   }
 
-  subscribe(cb: (state: T) => void): () => void {
-    const subs = signalSubsMap.get(this.$id)!
-    subs!.add(cb)
-    return () => signalSubsMap.get(this.$id)?.delete(cb)
+  subscribe(cb: (state: T, prevState?: T) => void): () => void {
+    if (__DEV__) {
+      const subs = signalSubsMap.get(this.$id)!
+      subs!.add(cb)
+      return () => signalSubsMap.get(this.$id)?.delete(cb)
+    }
+    this.$subs!.add(cb)
+    return () => this.$subs!.delete(cb)
   }
 
-  notify(options?: { filter?: (sub: Function | Kaioken.VNode) => boolean }) {
-    const tgt = latest(this)
-    signalSubsMap.get(this.$id)?.forEach((sub) => {
+  notify(options?: { filter?: (sub: Function | Kiru.VNode) => boolean }) {
+    if (__DEV__) {
+      return signalSubsMap.get(this.$id)?.forEach((sub) => {
+        if (options?.filter && !options.filter(sub)) return
+        const { $value, $prevValue } = latest(this)
+        return sub($value, $prevValue)
+      })
+    }
+    this.$subs!.forEach((sub) => {
       if (options?.filter && !options.filter(sub)) return
-      if (typeof sub === "function") {
-        return sub(tgt.$value)
-      }
-      getVNodeAppContext(sub).requestUpdate(sub)
+      return sub(this.$value, this.$prevValue)
     })
   }
 
@@ -100,12 +141,11 @@ export class Signal<T> {
     return typeof x === "object" && !!x && $SIGNAL in x
   }
 
-  static unsubscribe(sub: SignalSubscriber, id: string) {
-    signalSubsMap.get(id)?.delete(sub)
-  }
-
   static subscribers(signal: Signal<any>) {
-    return signalSubsMap.get(signal.$id)!
+    if (__DEV__) {
+      return signalSubsMap.get(signal.$id)!
+    }
+    return signal.$subs
   }
 
   static makeReadonly<T>(signal: Signal<T>): ReadonlySignal<T> {
@@ -136,28 +176,31 @@ export class Signal<T> {
     })
   }
 
-  static getId<T>(signal: Signal<T>) {
-    return signal.$id
-  }
-
   static entangle<T>(signal: Signal<T>) {
-    if (tracking.enabled) {
-      if (!node.current || (node.current && sideEffectsEnabled())) {
-        tracking.signals.push(signal)
+    const vNode = node.current
+    const trackedSignalObservations = tracking.current()
+    if (trackedSignalObservations) {
+      if (!vNode || (vNode && sideEffectsEnabled())) {
+        trackedSignalObservations.set(signal.$id, signal)
       }
       return
     }
-    if (node.current) {
-      if (!sideEffectsEnabled()) return
-      if (!node.current.subs) node.current.subs = [signal.$id]
-      else if (node.current.subs.indexOf(signal.$id) === -1)
-        node.current.subs.push(signal.$id)
-      Signal.subscribers(signal).add(node.current)
-    }
+    if (!vNode || !sideEffectsEnabled()) return
+    const unsub = signal.subscribe(() => requestUpdate(vNode))
+    ;(vNode.subs ??= new Set()).add(unsub)
+  }
+
+  static configure(signal: Signal<any>, onBeforeRead?: () => void) {
+    signal.onBeforeRead = onBeforeRead
   }
 
   static dispose(signal: Signal<any>) {
-    signalSubsMap.delete(signal.$id)
+    signal.$isDisposed = true
+    if (__DEV__) {
+      signalSubsMap.delete(signal.$id)
+      return
+    }
+    signal.$subs!.clear()
   }
 }
 
@@ -168,26 +211,33 @@ export const signal = <T>(initial: T, displayName?: string) => {
 export const useSignal = <T>(initial: T, displayName?: string) => {
   return useHook(
     "useSignal",
-    { signal: undefined as any as Signal<T> },
-    ({ hook, isInit }) => {
+    { signal: null! as Signal<T> },
+    ({ hook, isInit, isHMR }) => {
       if (__DEV__) {
-        hook.dev = {
-          reinitUponRawArgsChanged: true,
-          devtools: {
-            get: () => ({
-              displayName: hook.signal.displayName,
-              value: hook.signal.peek(),
-            }),
-            set: ({ value }) => {
-              hook.signal.value = value
+        if (isInit) {
+          hook.dev = {
+            devtools: {
+              get: () => ({
+                displayName: hook.signal.displayName,
+                value: hook.signal.peek(),
+              }),
+              set: ({ value }) => {
+                hook.signal.value = value
+              },
             },
-          },
+            initialArgs: [initial, displayName],
+          }
         }
-        if (isInit && hook.dev.rawArgsChanged) {
-          hook.signal.value = initial
-          return hook.signal
+        if (isHMR) {
+          const [v, name] = hook.dev!.initialArgs
+          if (v !== initial || name !== displayName) {
+            hook.cleanup?.()
+            isInit = true
+            hook.dev!.initialArgs = [initial, displayName]
+          }
         }
       }
+
       if (isInit) {
         hook.cleanup = () => Signal.dispose(hook.signal)
         hook.signal = new Signal(initial, displayName)

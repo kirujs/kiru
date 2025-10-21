@@ -1,12 +1,11 @@
-import { isFragment } from "../../../lib/dist/utils.js"
+import { isFragment } from "kiru/utils"
 import { DEFAULT_ANCHOR_POS, PADDING } from "./constants"
 import { Storage } from "./types"
 import { useElementBounding } from "devtools-shared"
-import "../../../lib/src/types"
 
 export const reinitializeAnchorPos = (
   storage: Storage,
-  viewPortRef: Kaioken.RefObject<HTMLElement>,
+  viewPortRef: Kiru.RefObject<HTMLElement>,
   elementBound: ReturnType<typeof useElementBounding>
 ) => {
   if (!viewPortRef.current) return { ...DEFAULT_ANCHOR_POS }
@@ -37,8 +36,8 @@ export const reinitializeAnchorPos = (
 export const getComponentVnodeFromElement = (domNode: Element | null) => {
   if (domNode == null) return null
 
-  let parentComponent: Kaioken.VNode | null = null
-  let parent = domNode?.__kaiokenNode?.parent
+  let parentComponent: Kiru.VNode | null = null
+  let parent = domNode?.__kiruNode?.parent
   while (parent) {
     if (typeof parent.type === "function" && !isFragment(parent)) {
       parentComponent = parent
@@ -48,15 +47,15 @@ export const getComponentVnodeFromElement = (domNode: Element | null) => {
     parent = parent.parent
   }
 
-  return parentComponent as Kaioken.VNode & { type: Function }
+  return parentComponent as Kiru.VNode & { type: Function }
 }
 
 export const getNearestElm = (
-  vNode: Kaioken.VNode,
+  vNode: Kiru.VNode,
   element: HTMLElement
 ): Element | undefined => {
-  const elementvNodeTreeUptillComponetVnode: Kaioken.VNode[] = []
-  const stack = [element.__kaiokenNode!]
+  const elementvNodeTreeUptillComponetVnode: Kiru.VNode[] = []
+  const stack = [element.__kiruNode!]
   while (stack.length) {
     const node = stack.pop()
     if (node === vNode) {

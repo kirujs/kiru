@@ -1,305 +1,312 @@
-import type { AppContext } from "./appContext"
-import { ELEMENT_TYPE, FLAG, $FRAGMENT } from "./constants.js"
-import { isVNode, latest } from "./utils.js"
+import { $FRAGMENT, FLAG_PLACEMENT, FLAG_UPDATE } from "./constants.js"
+import { getVNodeAppContext, isVNode, latest } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import { __DEV__ } from "./env.js"
 import { createElement, Fragment } from "./element.js"
-import { flags } from "./flags.js"
+import type { AppContext } from "./appContext.js"
 
-type VNode = Kaioken.VNode
+type VNode = Kiru.VNode
+let appCtx: AppContext
 
-export function reconcileChildren(
-  appCtx: AppContext,
-  vNode: VNode,
-  currentFirstChild: VNode | null,
-  children: unknown
-) {
-  if (Array.isArray(children)) {
-    return reconcileChildrenArray(appCtx, vNode, currentFirstChild, children)
+export function reconcileChildren(parent: VNode, children: unknown) {
+  if (__DEV__) {
+    appCtx = getVNodeAppContext(parent)!
   }
-  return reconcileSingleChild(appCtx, vNode, currentFirstChild, children)
+  if (Array.isArray(children)) {
+    if (__DEV__) {
+      // array children are 'tagged' during parent reconciliation pass
+      if ($LIST_CHILD in children) {
+        checkForMissingKeys(parent, children)
+      }
+      checkForDuplicateKeys(parent, children)
+    }
+    return reconcileChildrenArray(parent, children)
+  }
+  return reconcileSingleChild(parent, children)
 }
 
-function reconcileSingleChild(
-  appCtx: AppContext,
-  vNode: VNode,
-  oldChild: VNode | null,
-  child: unknown
-) {
+function reconcileSingleChild(parent: VNode, child: unknown) {
+  const oldChild = parent.child
   if (oldChild === null) {
-    return createChild(vNode, child)
+    return createChild(parent, child)
   }
   const oldSibling = oldChild.sibling
-  const newNode = updateSlot(vNode, oldChild, child)
+  const newNode = updateSlot(parent, oldChild, child)
   if (newNode !== null) {
     if (oldChild && oldChild !== newNode && !newNode.prev) {
-      deleteRemainingChildren(appCtx, oldChild)
+      deleteRemainingChildren(parent, oldChild)
     } else if (oldSibling) {
-      deleteRemainingChildren(appCtx, oldSibling)
+      deleteRemainingChildren(parent, oldSibling)
     }
     return newNode
   }
   {
     // handle keyed children array -> keyed child
     const existingChildren = mapRemainingChildren(oldChild)
-    const newNode = updateFromMap(existingChildren, vNode, 0, child)
+    const newNode = updateFromMap(existingChildren, parent, 0, child)
     if (newNode !== null) {
-      if (newNode.prev !== undefined) {
+      const prev = newNode.prev
+      if (prev !== null) {
+        const key = prev.props.key
         // node persisted, remove it from the list so it doesn't get deleted
-        existingChildren.delete(
-          newNode.prev.props.key === undefined
-            ? newNode.prev.index
-            : newNode.prev.props.key
-        )
+        existingChildren.delete(key === undefined ? prev.index : key)
       }
       placeChild(newNode, 0, 0)
     }
-    existingChildren.forEach((child) => appCtx.requestDelete(child))
+    existingChildren.forEach((child) => deleteChild(parent, child))
     return newNode
   }
 }
 
-function reconcileChildrenArray(
-  appCtx: AppContext,
-  vNode: VNode,
-  currentFirstChild: VNode | null,
-  children: unknown[]
-) {
-  //let knownKeys: Set<string> | null = null
+function reconcileChildrenArray(parent: VNode, children: unknown[]) {
   let resultingChild: VNode | null = null
-  let prevNewNode: VNode | null = null
+  let prevNewChild: VNode | null = null
 
-  let oldNode = currentFirstChild
+  let oldChild = parent.child
+  let nextOldChild = null
   let lastPlacedIndex = 0
   let newIdx = 0
-  let nextOldNode = null
 
-  for (; !!oldNode && newIdx < children.length; newIdx++) {
-    if (oldNode.index > newIdx) {
-      nextOldNode = oldNode
-      oldNode = null
+  for (; oldChild !== null && newIdx < children.length; newIdx++) {
+    if (oldChild.index > newIdx) {
+      nextOldChild = oldChild
+      oldChild = null
     } else {
-      nextOldNode = oldNode.sibling || null
+      nextOldChild = oldChild.sibling
     }
-    const newNode = updateSlot(vNode, oldNode, children[newIdx])
-    if (newNode === null) {
-      if (oldNode === null) {
-        oldNode = nextOldNode
+    const newChild = updateSlot(parent, oldChild, children[newIdx])
+    if (newChild === null) {
+      if (oldChild === null) {
+        oldChild = nextOldChild
       }
       break
     }
-    // if (__DEV__) {
-    //   knownKeys = warnOnInvalidKey(vNode, children[newIdx], knownKeys)
-    // }
-    if (oldNode && !newNode.prev) {
-      appCtx.requestDelete(oldNode)
+    if (oldChild && !newChild.prev) {
+      deleteChild(parent, oldChild)
     }
-    lastPlacedIndex = placeChild(newNode, lastPlacedIndex, newIdx)
-    if (prevNewNode === null) {
-      resultingChild = newNode
+    lastPlacedIndex = placeChild(newChild, lastPlacedIndex, newIdx)
+    if (prevNewChild === null) {
+      resultingChild = newChild
     } else {
-      prevNewNode.sibling = newNode
+      prevNewChild.sibling = newChild
     }
-    prevNewNode = newNode
-    oldNode = nextOldNode
+    prevNewChild = newChild
+    oldChild = nextOldChild
   }
 
   // matched all children?
   if (newIdx === children.length) {
-    while (oldNode !== null) {
-      appCtx.requestDelete(oldNode)
-      oldNode = oldNode.sibling || null
-    }
+    deleteRemainingChildren(parent, oldChild)
     return resultingChild
   }
 
   // just some good ol' insertions, baby
-  if (oldNode === null) {
+  if (oldChild === null) {
     for (; newIdx < children.length; newIdx++) {
-      const newNode = createChild(vNode, children[newIdx])
+      const newNode = createChild(parent, children[newIdx])
       if (newNode === null) continue
-      // if (__DEV__) {
-      //   knownKeys = warnOnInvalidKey(vNode, children[newIdx], knownKeys)
-      // }
       lastPlacedIndex = placeChild(newNode, lastPlacedIndex, newIdx)
-      if (prevNewNode === null) {
+      if (prevNewChild === null) {
         resultingChild = newNode
       } else {
-        prevNewNode.sibling = newNode
+        prevNewChild.sibling = newNode
       }
-      prevNewNode = newNode
+      prevNewChild = newNode
     }
     return resultingChild
   }
 
   // deal with mismatched keys / unmatched children
-  const existingChildren = mapRemainingChildren(oldNode)
+  const existingChildren = mapRemainingChildren(oldChild)
 
   for (; newIdx < children.length; newIdx++) {
     const newNode = updateFromMap(
       existingChildren,
-      vNode,
+      parent,
       newIdx,
       children[newIdx]
     )
     if (newNode !== null) {
-      // if (__DEV__) {
-      //   knownKeys = warnOnInvalidKey(vNode, children[newIdx], knownKeys)
-      // }
-      if (newNode.prev !== undefined) {
+      const prev = newNode.prev
+      if (prev !== null) {
+        const key = prev.props.key
         // node persisted, remove it from the list so it doesn't get deleted
-        existingChildren.delete(
-          newNode.prev.props.key === undefined
-            ? newNode.prev.index
-            : newNode.prev.props.key
-        )
+        existingChildren.delete(key === undefined ? prev.index : key)
       }
       lastPlacedIndex = placeChild(newNode, lastPlacedIndex, newIdx)
-      if (prevNewNode === null) {
+      if (prevNewChild === null) {
         resultingChild = newNode
       } else {
-        prevNewNode.sibling = newNode
+        prevNewChild.sibling = newNode
       }
-      prevNewNode = newNode
+      prevNewChild = newNode
     }
   }
 
-  existingChildren.forEach((child) => appCtx.requestDelete(child))
+  existingChildren.forEach((child) => deleteChild(parent, child))
   return resultingChild
 }
 
-function updateSlot(parent: VNode, oldNode: VNode | null, child: unknown) {
+function updateSlot(parent: VNode, oldChild: VNode | null, child: unknown) {
   // Update the node if the keys match, otherwise return null.
-  const key = oldNode !== null ? oldNode.props.key : undefined
-  if (
-    (typeof child === "string" && child !== "") ||
-    typeof child === "number" ||
-    typeof child === "bigint"
-  ) {
+  const key = oldChild?.props.key
+  if (isValidTextNodeValue(child)) {
     if (key !== undefined) return null
     if (
-      oldNode?.type === ELEMENT_TYPE.text &&
-      Signal.isSignal(oldNode.props.nodeValue)
+      oldChild?.type === "#text" &&
+      Signal.isSignal(oldChild.props.nodeValue)
     ) {
       return null
     }
-    return updateTextNode(parent, oldNode, "" + child)
+    return updateTextNode(parent, oldChild, "" + child)
   }
   if (Signal.isSignal(child)) {
-    if (!!oldNode && oldNode.props.nodeValue !== child) return null
-    return updateTextNode(parent, oldNode, child)
+    if (!!oldChild && oldChild.props.nodeValue !== child) return null
+    return updateTextNode(parent, oldChild, child)
   }
   if (isVNode(child)) {
     if (child.props.key !== key) return null
-    return updateNode(parent, oldNode, child)
+    return updateNode(parent, oldChild, child)
   }
   if (Array.isArray(child)) {
     if (key !== undefined) return null
-    return updateFragment(parent, oldNode, child /*, { array: true }*/)
+    if (__DEV__) {
+      markListChild(child)
+    }
+    return updateFragment(parent, oldChild, child)
   }
   return null
 }
 
 function updateTextNode(
   parent: VNode,
-  oldNode: VNode | null,
+  oldChild: VNode | null,
   content: string | Signal<JSX.PrimitiveChild>
 ) {
-  if (oldNode === null || oldNode.type !== ELEMENT_TYPE.text) {
-    const newNode = createElement(ELEMENT_TYPE.text, { nodeValue: content })
-    newNode.parent = parent
-    newNode.depth = parent.depth! + 1
-    return newNode
-  } else {
-    const newNode = oldNode
-    newNode.props.nodeValue = content
-    newNode.flags = flags.set(newNode.flags, FLAG.UPDATE)
-    newNode.sibling = undefined
-    return oldNode
+  if (oldChild === null || oldChild.type !== "#text") {
+    if (__DEV__) {
+      dev_emitCreateNode()
+    }
+    const newChild = createElement("#text", { nodeValue: content })
+    setParent(newChild, parent)
+    return newChild
   }
+
+  if (__DEV__) {
+    dev_emitUpdateNode()
+  }
+  const prev = oldChild.props.nodeValue
+  if (prev !== content) {
+    oldChild.props.nodeValue = content
+    oldChild.flags |= FLAG_UPDATE
+  }
+  oldChild.sibling = null
+  return oldChild
 }
 
-function updateNode(parent: VNode, oldNode: VNode | null, newNode: VNode) {
-  let nodeType = newNode.type
-  if (typeof nodeType === "function") {
-    nodeType = latest(nodeType)
+function updateNode(parent: VNode, oldChild: VNode | null, newChild: VNode) {
+  let { type: nodeType, props: newProps } = newChild
+  if (__DEV__) {
+    if (typeof nodeType === "function") {
+      nodeType = latest(nodeType)
+    }
   }
   if (nodeType === $FRAGMENT) {
     return updateFragment(
       parent,
-      oldNode,
-      (newNode.props.children as VNode[]) || [],
-      newNode.props
+      oldChild,
+      (newProps.children as VNode[]) || [],
+      newProps
     )
   }
-  if (oldNode?.type === nodeType) {
-    oldNode.index = 0
-    oldNode.props = newNode.props
-    oldNode.sibling = undefined
-    oldNode.flags = flags.set(oldNode.flags, FLAG.UPDATE)
-    oldNode.memoizedProps = newNode.memoizedProps
-    return oldNode
+  if (oldChild?.type === nodeType) {
+    if (__DEV__) {
+      dev_emitUpdateNode()
+    }
+    oldChild.index = 0
+    oldChild.sibling = null
+    if (typeof nodeType === "string") {
+      if (propsChanged(oldChild.props, newProps)) {
+        oldChild.flags |= FLAG_UPDATE
+      }
+    } else {
+      oldChild.flags |= FLAG_UPDATE
+    }
+    oldChild.props = newProps
+    oldChild.memoizedProps = newChild.memoizedProps
+    return oldChild
   }
-  const created = createElement(nodeType, newNode.props)
-  created.parent = parent
-  created.depth = parent.depth + 1
+  if (__DEV__) {
+    dev_emitCreateNode()
+  }
+  const created = createElement(nodeType, newProps)
+  setParent(created, parent)
   return created
 }
 
 function updateFragment(
   parent: VNode,
-  oldNode: VNode | null,
+  oldChild: VNode | null,
   children: unknown[],
   newProps = {}
 ) {
-  if (oldNode === null || oldNode.type !== $FRAGMENT) {
+  if (oldChild === null || oldChild.type !== $FRAGMENT) {
+    if (__DEV__) {
+      dev_emitCreateNode()
+    }
     const el = createElement($FRAGMENT, { children, ...newProps })
-    el.parent = parent
-    el.depth = parent.depth + 1
+    setParent(el, parent)
     return el
   }
-  oldNode.props = { ...oldNode.props, ...newProps, children }
-  oldNode.flags = flags.set(oldNode.flags, FLAG.UPDATE)
-  oldNode.sibling = undefined
-  return oldNode
+  if (__DEV__) {
+    dev_emitUpdateNode()
+  }
+  oldChild.props = { ...oldChild.props, ...newProps, children }
+  oldChild.flags |= FLAG_UPDATE
+  oldChild.sibling = null
+  return oldChild
 }
 
 function createChild(parent: VNode, child: unknown): VNode | null {
-  if (
-    (typeof child === "string" && child !== "") ||
-    typeof child === "number" ||
-    typeof child === "bigint"
-  ) {
-    const el = createElement(ELEMENT_TYPE.text, {
+  if (isValidTextNodeValue(child)) {
+    if (__DEV__) {
+      dev_emitCreateNode()
+    }
+    const el = createElement("#text", {
       nodeValue: "" + child,
     })
-    el.parent = parent
-    el.depth = parent.depth + 1
+    setParent(el, parent)
     return el
   }
 
   if (Signal.isSignal(child)) {
-    const el = createElement(ELEMENT_TYPE.text, {
+    if (__DEV__) {
+      dev_emitCreateNode()
+    }
+    const el = createElement("#text", {
       nodeValue: child,
     })
-    el.parent = parent
-    el.depth = parent.depth + 1
+    setParent(el, parent)
     return el
   }
 
   if (isVNode(child)) {
+    if (__DEV__) {
+      dev_emitCreateNode()
+    }
     const newNode = createElement(child.type, child.props)
-    newNode.parent = parent
-    newNode.depth = parent.depth! + 1
-    newNode.flags = flags.set(newNode.flags, FLAG.PLACEMENT)
-    if ("memoizedProps" in child) newNode.memoizedProps = child.memoizedProps
+    setParent(newNode, parent)
+    newNode.flags |= FLAG_PLACEMENT
     return newNode
   }
 
   if (Array.isArray(child)) {
+    if (__DEV__) {
+      dev_emitCreateNode()
+      markListChild(child)
+    }
     const el = Fragment({ children: child })
-    el.parent = parent
-    el.depth = parent.depth + 1
+    setParent(el, parent)
     return el
   }
 
@@ -307,22 +314,22 @@ function createChild(parent: VNode, child: unknown): VNode | null {
 }
 
 function placeChild(
-  vNode: VNode | undefined,
+  child: VNode,
   lastPlacedIndex: number,
   newIndex: number
 ): number {
-  if (vNode === undefined) return lastPlacedIndex
-  vNode.index = newIndex
-  if (vNode.prev !== undefined) {
-    const oldIndex = vNode.prev.index
+  child.index = newIndex
+  const prev = child.prev
+  if (prev !== null) {
+    const oldIndex = prev.index
     if (oldIndex < lastPlacedIndex) {
-      vNode.flags = flags.set(vNode.flags, FLAG.PLACEMENT)
+      child.flags |= FLAG_PLACEMENT
       return lastPlacedIndex
     } else {
       return oldIndex
     }
   } else {
-    vNode.flags = flags.set(vNode.flags, FLAG.PLACEMENT)
+    child.flags |= FLAG_PLACEMENT
     return lastPlacedIndex
   }
 }
@@ -331,166 +338,220 @@ function updateFromMap(
   existingChildren: Map<JSX.ElementKey, VNode>,
   parent: VNode,
   index: number,
-  newChild: any
+  child: any
 ): VNode | null {
-  const isSig = Signal.isSignal(newChild)
+  const isSig = Signal.isSignal(child)
   if (
     isSig ||
-    (typeof newChild === "string" && newChild !== "") ||
-    typeof newChild === "number" ||
-    typeof newChild === "bigint"
+    (typeof child === "string" && child !== "") ||
+    typeof child === "number" ||
+    typeof child === "bigint"
   ) {
     const oldChild = existingChildren.get(index)
     if (oldChild) {
-      if (oldChild.props.nodeValue === newChild) {
-        oldChild.flags = flags.set(oldChild.flags, FLAG.UPDATE)
-        oldChild.props.nodeValue = newChild
+      if (oldChild.props.nodeValue === child) {
         return oldChild
       }
       if (
-        oldChild.type === ELEMENT_TYPE.text &&
+        oldChild.type === "#text" &&
         Signal.isSignal(oldChild.props.nodeValue)
       ) {
         oldChild.cleanups?.["nodeValue"]?.()
       }
     }
 
-    const n = createElement(ELEMENT_TYPE.text, {
-      nodeValue: newChild,
+    if (__DEV__) {
+      dev_emitCreateNode()
+    }
+    const newChild = createElement("#text", {
+      nodeValue: child,
     })
-    n.parent = parent
-    n.depth = parent.depth + 1
-    n.flags = flags.set(n.flags, FLAG.PLACEMENT)
-    n.index = index
-    return n
+    setParent(newChild, parent)
+    newChild.flags |= FLAG_PLACEMENT
+    newChild.index = index
+    return newChild
   }
 
-  if (isVNode(newChild)) {
-    const oldChild = existingChildren.get(
-      newChild.props.key === undefined ? index : newChild.props.key
-    )
-    if (oldChild) {
-      oldChild.flags = flags.set(oldChild.flags, FLAG.UPDATE)
-      oldChild.props = newChild.props
-      if ("memoizedProps" in newChild)
-        oldChild.memoizedProps = newChild.memoizedProps
-      oldChild.sibling = undefined
+  if (isVNode(child)) {
+    const { type, props: newProps } = child
+    const key = newProps.key
+    const oldChild = existingChildren.get(key === undefined ? index : key)
+    if (oldChild?.type === type) {
+      if (__DEV__) {
+        dev_emitUpdateNode()
+      }
+      if (typeof type === "string") {
+        if (propsChanged(oldChild.props, newProps)) {
+          oldChild.flags |= FLAG_UPDATE
+        }
+      } else {
+        oldChild.flags |= FLAG_UPDATE
+      }
+      oldChild.props = newProps
+      oldChild.sibling = null
       oldChild.index = index
       return oldChild
-    } else {
-      const n = createElement(newChild.type, newChild.props)
-      n.parent = parent
-      n.depth = parent.depth + 1
-      n.flags = flags.set(n.flags, FLAG.PLACEMENT)
-      n.index = index
-      return n
     }
+
+    if (__DEV__) {
+      dev_emitCreateNode()
+    }
+    const newChild = createElement(child.type, child.props)
+    setParent(newChild, parent)
+    newChild.flags |= FLAG_PLACEMENT
+    newChild.index = index
+    return newChild
   }
 
-  if (Array.isArray(newChild)) {
+  if (Array.isArray(child)) {
     const oldChild = existingChildren.get(index)
-    if (oldChild) {
-      oldChild.flags = flags.set(oldChild.flags, FLAG.UPDATE)
-      oldChild.props.children = newChild
-      return oldChild
-    } else {
-      const n = Fragment({ children: newChild })
-      n.parent = parent
-      n.depth = parent.depth + 1
-      n.flags = flags.set(n.flags, FLAG.PLACEMENT)
-      n.index = index
-      return n
+    if (__DEV__) {
+      markListChild(child)
     }
+    if (oldChild) {
+      if (__DEV__) {
+        dev_emitUpdateNode()
+      }
+      oldChild.flags |= FLAG_UPDATE
+      oldChild.props.children = child
+      return oldChild
+    }
+
+    if (__DEV__) {
+      dev_emitCreateNode()
+    }
+    const newChild = Fragment({ children: child })
+    setParent(newChild, parent)
+    newChild.flags |= FLAG_PLACEMENT
+    newChild.index = index
+    return newChild
   }
 
   return null
 }
 
-function mapRemainingChildren(vNode: VNode) {
+function isValidTextNodeValue(
+  value: unknown
+): value is string | number | bigint {
+  return (
+    (typeof value === "string" && value !== "") ||
+    typeof value === "number" ||
+    typeof value === "bigint"
+  )
+}
+
+function propsChanged(oldProps: VNode["props"], newProps: VNode["props"]) {
+  const aKeys = Object.keys(oldProps)
+  const bKeys = Object.keys(newProps)
+  if (aKeys.length !== bKeys.length) return true
+  for (let key of aKeys) {
+    if (key === "children" || key === "key") continue
+    if (oldProps[key] !== newProps[key]) return true
+  }
+  return false
+}
+
+function setParent(child: VNode, parent: VNode) {
+  child.parent = parent
+  child.depth = parent.depth + 1
+}
+
+function dev_emitUpdateNode() {
+  if (!("window" in globalThis)) return
+  window.__kiru?.profilingContext?.emit("updateNode", appCtx)
+}
+
+function dev_emitCreateNode() {
+  if (!("window" in globalThis)) return
+  window.__kiru?.profilingContext?.emit("createNode", appCtx)
+}
+
+const $LIST_CHILD = Symbol("kiru:marked-list-child")
+function markListChild(children: unknown[]) {
+  Object.assign(children, { [$LIST_CHILD]: true })
+}
+
+function mapRemainingChildren(child: VNode | null) {
   const map: Map<JSX.ElementKey, VNode> = new Map()
-  let n: VNode | undefined = vNode
-  while (n) {
-    map.set(n.props.key === undefined ? n.index : n.props.key, n)
-    n = n.sibling
+  while (child) {
+    const key = child.props.key
+    map.set(key === undefined ? child.index : key, child)
+    child = child.sibling
   }
   return map
 }
 
-function deleteRemainingChildren(appCtx: AppContext, vNode: VNode) {
-  let n: VNode | undefined = vNode
-  while (n) {
-    appCtx.requestDelete(n)
-    n = n.sibling
+function deleteChild(parent: VNode, child: VNode) {
+  if (parent.deletions === null) {
+    parent.deletions = [child]
+  } else {
+    parent.deletions.push(child)
   }
 }
 
-// const duplicateKeyWarnings = new Set()
-// function warnOnInvalidKey(
-//   parent: VNode,
-//   child: unknown,
-//   knownKeys: Set<string> | null
-// ): Set<string> | null {
-//   if (!__DEV__) return null
-//   if (!isVNode(child)) {
-//     return knownKeys
-//   }
-//   warnForMissingKey(parent, child)
-//   const key = child.props.key
-//   if (typeof key !== "string") {
-//     return knownKeys
-//   }
-//   if (knownKeys === null) {
-//     knownKeys = new Set()
-//     knownKeys.add(key)
-//     return knownKeys
-//   }
-//   if (!knownKeys.has(key)) {
-//     knownKeys.add(key)
-//     return knownKeys
-//   }
+function deleteRemainingChildren(parent: VNode, child: VNode | null) {
+  while (child) {
+    deleteChild(parent, child)
+    child = child.sibling
+  }
+}
 
-//   if (duplicateKeyWarnings.has(parent)) {
-//     return knownKeys
-//   }
-//   const fn = getNearestParentFcTag(parent)
-//   keyWarn(
-//     `${fn} component produced a child in a list with a duplicate key prop: "${key}"`
-//   )
-//   return knownKeys
-// }
+function checkForDuplicateKeys(parent: VNode, children: unknown[]) {
+  const keys = new Set<string>()
+  let warned = false
+  for (const child of children) {
+    if (!isVNode(child)) continue
+    const key = child.props.key
+    if (typeof key === "string") {
+      if (!warned && keys.has(key)) {
+        const fn = getNearestParentFcTag(parent)
+        keyWarning(
+          `${fn} component produced a child in a list with a duplicate key prop: "${key}". Keys should be unique so that components maintain their identity across updates`
+        )
+        warned = true
+      }
+      keys.add(key)
+    }
+  }
+}
 
-// const missingKeyWarnings = new Set()
-// function warnForMissingKey(parent: VNode, child: VNode) {
-//   if (!__DEV__) return
-//   if (missingKeyWarnings.has(parent)) return
-//   if (parent.type !== fragmentSymbol) return
-//   if (child.props.key === null || child.props.key === undefined) {
-//     const fn = getNearestParentFcTag(parent)
-//     keyWarn(
-//       `${fn} component produced a child in a list without a valid key prop`
-//     )
-//     missingKeyWarnings.add(parent)
-//   }
-// }
+function checkForMissingKeys(parent: VNode, children: unknown[]) {
+  let hasKey = false
+  let hasMissingKey = false
+  for (const child of children) {
+    if (!isVNode(child)) continue
+    const key = child.props.key
+    if (typeof key === "string") {
+      hasKey = true
+    } else {
+      hasMissingKey = true
+    }
+  }
+  if (hasMissingKey && hasKey) {
+    const fn = getNearestParentFcTag(parent)
+    keyWarning(
+      `${fn} component produced a child in a list without a valid key prop`
+    )
+  }
+}
 
-// function keyWarn(str: string) {
-//   console.error(
-//     `[kaioken]: ${str}. See https://kaioken.dev/keys-warning for more information.`
-//   )
-// }
-// const parentFcTagLookups = new WeakMap<VNode, string>()
-// function getNearestParentFcTag(vNode: VNode) {
-//   if (!parentFcTagLookups.has(vNode)) {
-//     let p: VNode | undefined = vNode.parent
-//     let fn: (Function & { displayName?: string }) | undefined
-//     while (!fn && p) {
-//       if (typeof p.type === "function") fn = p.type
-//       p = p.parent
-//     }
-//     parentFcTagLookups.set(
-//       vNode,
-//       `<${fn?.displayName || fn?.name || "Anonymous Function"} />`
-//     )
-//   }
-//   return parentFcTagLookups.get(vNode)
-// }
+function keyWarning(str: string) {
+  const formatted = `[kiru]: ${str}. See https://kirujs.dev/keys-warning for more information.`
+  console.error(formatted)
+}
+
+const parentFcTagLookups = new WeakMap<VNode, string>()
+function getNearestParentFcTag(vNode: VNode) {
+  if (parentFcTagLookups.has(vNode)) {
+    return parentFcTagLookups.get(vNode)
+  }
+  let p: VNode | null = vNode.parent
+  let fn: (Function & { displayName?: string }) | undefined
+  while (!fn && p) {
+    if (typeof p.type === "function") fn = p.type
+    p = p.parent
+  }
+  const tag = `<${fn?.displayName || fn?.name || "Anonymous Function"} />`
+  parentFcTagLookups.set(vNode, tag)
+  return tag
+}

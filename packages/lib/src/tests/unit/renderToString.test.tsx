@@ -1,7 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert"
 import { renderToString } from "../../renderToString.js"
-import * as kaioken from "../../index.js"
+import * as kiru from "../../index.js"
 
 describe("renderToString", () => {
   it("produces HTML with styles formatted correctly", () => {
@@ -13,12 +13,12 @@ describe("renderToString", () => {
       )
     }
     const expected = `<div style="display:flex;"><h1 style="color:red;">Hello world</h1></div>`
-    const res = renderToString(App)
+    const res = renderToString(<App />)
 
     assert.strictEqual(res, expected)
   })
   it("is able to derive Context correctly", () => {
-    const MyContext = kaioken.createContext("test")
+    const MyContext = kiru.createContext("test")
     const App = () => {
       return (
         <div>
@@ -29,15 +29,15 @@ describe("renderToString", () => {
       )
     }
     const ChildComponent = () => {
-      const ctx = kaioken.useContext(MyContext)
+      const ctx = kiru.useContext(MyContext)
       return <h1>{ctx}</h1>
     }
     const expected = `<div><h1>test123</h1></div>`
-    const res = renderToString(App)
+    const res = renderToString(<App />)
     assert.strictEqual(res, expected)
   })
   it("is able to use Signals for text content", () => {
-    const text = kaioken.signal("Hello world!")
+    const text = kiru.signal("Hello world!")
     const App = () => {
       return (
         <div>
@@ -46,12 +46,12 @@ describe("renderToString", () => {
       )
     }
     const expected = `<div><h1>Hello world!</h1></div>`
-    const res = renderToString(App)
+    const res = renderToString(<App />)
 
     assert.strictEqual(res, expected)
   })
   it("is able to use Signals for DOM attributes", () => {
-    const className = kaioken.signal("main-header")
+    const className = kiru.signal("main-header")
     const App = () => {
       return (
         <div>
@@ -60,7 +60,7 @@ describe("renderToString", () => {
       )
     }
     const expected = `<div><h1 class="main-header">Hello world!</h1></div>`
-    const res = renderToString(App)
+    const res = renderToString(<App />)
 
     assert.strictEqual(res, expected)
   })
@@ -79,12 +79,12 @@ describe("renderToString", () => {
     const UndefinedComponent = () => undefined
     const BooleanComponent = () => true
     const expected = `<div><h1>Hello world!</h1></div>`
-    const res = renderToString(App)
+    const res = renderToString(<App />)
 
     assert.strictEqual(res, expected)
   })
   it("correctly renders boolean attributes", () => {
-    const checked = kaioken.signal(true)
+    const checked = kiru.signal(true)
     const App = () => {
       return (
         <div>
@@ -92,8 +92,8 @@ describe("renderToString", () => {
         </div>
       )
     }
-    const expected = `<div><input type="checkbox" checked/></div>`
-    const res = renderToString(App)
+    const expected = `<div><input type="checkbox" checked></div>`
+    const res = renderToString(<App />)
 
     assert.strictEqual(res, expected)
   })

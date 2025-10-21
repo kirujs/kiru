@@ -1,4 +1,4 @@
-import { Router, Route, Link } from "kaioken"
+import { Router, Route, Link } from "kiru"
 import { Counter } from "./Counter"
 
 export function App() {

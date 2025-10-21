@@ -1,92 +1,141 @@
 import {
   AppContext,
   Store,
+  computed,
   signal,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRequestUpdate,
   useState,
-} from "kaioken"
-import { kaiokenGlobal, useDevtoolsStore } from "../store"
-import { ChevronIcon, FileLink, getNodeName } from "devtools-shared"
+} from "kiru"
+import { kiruGlobal, mountedApps } from "../state"
+import {
+  applyObjectChangeFromKeys,
+  ChevronIcon,
+  FileLink,
+  Filter,
+  getNodeName,
+  TriangleAlertIcon,
+} from "devtools-shared"
 import { HMRAccept } from "../../../lib/dist/hmr"
 import { cloneTree } from "../utils"
 import { ValueEditor } from "devtools-shared/src/ValueEditor"
 
-type StoreSelection = {
-  name: string
-  store: Store<any, any>
-}
 const stores = signal<Record<string, Store<any, any>>>({})
-kaiokenGlobal?.stores.subscribe((newStores) => {
+const expandedItems = signal<Store<any, any>[]>([])
+kiruGlobal?.stores?.subscribe((newStores) => {
   stores.value = newStores
+  expandedItems.value = expandedItems.value.filter((s) =>
+    Object.values(stores.value).includes(s)
+  )
 })
+
+const filterValue = signal("")
+const filterTerms = computed(() =>
+  filterValue.value
+    .toLowerCase()
+    .split(" ")
+    .filter((t) => t.length > 0)
+)
+function keyMatchesFilter(key: string) {
+  return filterTerms.value.every((term) => key.toLowerCase().includes(term))
+}
 
 export function StoresTabView() {
   const storeEntries = Object.entries(stores.value)
   if (storeEntries.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <h2 className="text-lg italic text-neutral-400">No stores detected</h2>
+      <div className="flex flex-col items-center justify-center h-full text-neutral-400">
+        <TriangleAlertIcon />
+        <h2 className="text-lg italic">No stores detected</h2>
       </div>
     )
   }
   return (
-    <div className="flex flex-col items-start">
+    <div className="flex flex-col gap-2 items-start">
+      <Filter value={filterValue} className="sticky top-0" />
       <div className="flex flex-col gap-2 w-full">
-        {storeEntries.map(([name, store]) => (
-          <StoreView key={name} selection={{ name, store }} />
-        ))}
+        {storeEntries
+          .filter(([name]) => keyMatchesFilter(name))
+          .map(([name, store]) => (
+            <StoreView key={name} name={name} store={store} />
+          ))}
       </div>
     </div>
   )
 }
 
-function StoreView({ selection }: { selection: StoreSelection }) {
-  const [expanded, setExpanded] = useState(false)
+type StoreViewProps = {
+  name: string
+  store: Store<any, any>
+}
+
+function StoreView({ name, store }: StoreViewProps) {
+  const expanded = expandedItems.value.includes(store)
   const requestUpdate = useRequestUpdate()
+  const { value } = getStoreInternals(store)
+
   useLayoutEffect(() => {
-    const unsubscribe = selection.store.subscribe(() => requestUpdate())
+    const unsubscribe = store.subscribe(() => requestUpdate())
     return () => unsubscribe()
   }, [])
 
+  const handleToggle = useCallback(() => {
+    if (expanded) {
+      expandedItems.value = expandedItems.value.filter((s) => s !== store)
+    } else {
+      expandedItems.value = [...expandedItems.value, store]
+    }
+  }, [expanded])
+
   return (
     <div className="flex flex-col">
-      <div
-        onclick={() => setExpanded(!expanded)}
+      <button
+        onclick={handleToggle}
         className={
-          "flex items-center gap-2 justify-between px-2 py-1 border border-white border-opacity-10 cursor-pointer" +
+          "flex items-center gap-2 justify-between p-2 border border-white border-opacity-10 cursor-pointer" +
           (expanded
             ? " bg-white bg-opacity-5 text-neutral-100 rounded-t"
             : " hover:bg-white hover:bg-opacity-10 text-neutral-400 rounded")
         }
       >
-        {selection.name}
+        {name}
         <div className="flex gap-2">
-          <FileLink fn={selection.store} onclick={(e) => e.stopPropagation()} />
+          <FileLink fn={store} onclick={(e) => e.stopPropagation()} />
           <ChevronIcon
             className={`transition-all` + (expanded ? " rotate-90" : "")}
           />
         </div>
-      </div>
-      {expanded && <StoreSubscribers store={selection.store} />}
+      </button>
+      {expanded && (
+        <div className="flex flex-col gap-2 p-2 border border-white border-opacity-10">
+          <ValueEditor
+            data={{ value }}
+            mutable={true}
+            objectRefAcc={[]}
+            onChange={(keys, changedValue) => {
+              const next = structuredClone({ value })
+              applyObjectChangeFromKeys(next, keys, changedValue)
+              store.setState(next.value)
+            }}
+          />
+          <StoreSubscribers store={store} />
+        </div>
+      )}
     </div>
   )
 }
 
 function StoreSubscribers({ store }: { store: Store<any, any> }) {
-  const {
-    value: { apps },
-  } = useDevtoolsStore()
-
+  const apps = mountedApps.value
   if (apps.length === 0) return null
 
   return (
     <>
-      {apps.map((app) => {
-        if (!app.mounted || !app.rootNode) return null
-        return <StoreSubscriberAppTree store={store} app={app} />
-      })}
+      {apps.map((app) => (
+        <StoreSubscriberAppTree store={store} app={app} />
+      ))}
     </>
   )
 }
@@ -100,15 +149,15 @@ type NodeState = {
   }[]
 }
 
-type NodeStateMap = WeakMap<Kaioken.VNode, NodeState>
+type NodeStateMap = WeakMap<Kiru.VNode, NodeState>
 
 type InternalStoreState = {
   value: any
-  subscribers: Set<Kaioken.VNode | Function>
+  subscribers: Set<Kiru.VNode | Function>
   nodeStateMap: NodeStateMap
 }
 
-const $HMR_ACCEPT = Symbol.for("kaioken.hmrAccept")
+const $HMR_ACCEPT = Symbol.for("kiru.hmrAccept")
 const getStoreInternals = (store: Store<any, any>) => {
   if ($HMR_ACCEPT in store) {
     return (
@@ -128,7 +177,7 @@ function StoreSubscriberAppTree({
   app: AppContext
 }) {
   const requestUpdate = useRequestUpdate()
-  const { subscribers, nodeStateMap, value } = getStoreInternals(store)
+  const { subscribers, nodeStateMap } = getStoreInternals(store)
   const root = app.rootNode!.child
 
   useEffect(() => {
@@ -136,25 +185,19 @@ function StoreSubscriberAppTree({
       if (appCtx !== app) return
       requestUpdate()
     }
-    kaiokenGlobal?.on("update", handleUpdate)
-    return () => kaiokenGlobal?.off("update", handleUpdate)
+    kiruGlobal?.on("update", handleUpdate)
+    return () => kiruGlobal?.off("update", handleUpdate)
   }, [])
 
   if (!root) return null
 
-  const clonedTree = cloneTree(root, (node) => subscribers.has(node as any)) as
-    | KNodeTreeNode
-    | undefined
+  const clonedTree = cloneTree(root, (node) =>
+    subscribers.has(node as any)
+  ) as KNodeTreeNode | null
 
   return (
     <div className="flex flex-col gap-2 p-2 rounded-b border border-white border-opacity-10">
       <b>{app.name}</b>
-      <ValueEditor
-        data={{ value }}
-        mutable={false}
-        objectRefAcc={[]}
-        onChange={() => {}}
-      />
       {clonedTree && (
         <ul className="pl-8">
           <TreeNodeView node={clonedTree} nodeStateMap={nodeStateMap} />
@@ -165,7 +208,7 @@ function StoreSubscriberAppTree({
 }
 
 type KNodeTreeNode = {
-  ref: Kaioken.VNode
+  ref: Kiru.VNode
   child?: KNodeTreeNode
   sibling?: KNodeTreeNode
 }
@@ -192,7 +235,7 @@ function TreeNodeView({
               : " hover:bg-white hover:bg-opacity-10 text-neutral-400")
           }
         >
-          <div
+          <button
             onclick={() => setExpanded(!expanded)}
             className="flex gap-2 p-2 justify-between cursor-pointer"
           >
@@ -206,9 +249,16 @@ function TreeNodeView({
                 className={`transition-all` + (expanded ? " rotate-90" : "")}
               />
             </div>
-          </div>
-          {expanded && sliceComputations && (
+          </button>
+          {expanded && (
             <div className="flex flex-col gap-2 p-2 bg-[#1a1a1a]">
+              {sliceComputations.length === 0 && (
+                <div className="p-2 bg-black bg-opacity-30 text-sm">
+                  <h5 className="border-b border-white border-opacity-10">
+                    No slices
+                  </h5>
+                </div>
+              )}
               {sliceComputations.map((sliceCompute) => (
                 <div className="flex flex-col gap-2">
                   <div className="p-2 bg-black bg-opacity-30 text-sm">
@@ -216,7 +266,12 @@ function TreeNodeView({
                       Slice:
                     </h5>
                     <pre className="text-neutral-400">
-                      {JSON.stringify(sliceCompute.value, null, 2)}
+                      <ValueEditor
+                        data={{ value: sliceCompute.value }}
+                        mutable={false}
+                        objectRefAcc={[]}
+                        onChange={() => {}}
+                      />
                     </pre>
                   </div>
                   <div className="p-2 bg-black bg-opacity-30 text-sm">

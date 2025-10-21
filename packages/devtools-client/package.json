@@ -1,27 +1,28 @@
 {
-  "name": "kaioken-devtools-client",
+  "name": "kiru-devtools-client",
   "private": true,
   "version": "0.0.0",
   "main": "dist/index.js",
   "types": "types.d.ts",
   "type": "module",
   "scripts": {
-    "dev": "vite",
     "build": "vite build",
+    "dev": "vite build -w",
+    "dev:standalone": "vite",
     "preview": "vite preview"
   },
   "devDependencies": {
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.16",
-    "typescript": "^5.7.2",
-    "vite": "^5.4.10",
-    "vite-plugin-singlefile": "^2.0.3"
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.9.2",
+    "vite": "^7.0.6",
+    "vite-plugin-singlefile": "^2.3.0"
   },
   "dependencies": {
-    "devtools-shared": "workspace:^"
-  },
-  "peerDependencies": {
-    "kaioken": "workspace:^"
+    "chart.js": "^4.5.0",
+    "chartjs-plugin-zoom": "^2.2.0",
+    "devtools-shared": "workspace:^",
+    "kiru": "workspace:^"
   }
 }

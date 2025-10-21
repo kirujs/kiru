@@ -1,23 +1,68 @@
-import type { $CONTEXT_PROVIDER } from "./constants"
+import type {
+  $CONTEXT_PROVIDER,
+  $FRAGMENT,
+  $HYDRATION_BOUNDARY,
+} from "./constants"
+import type { HydrationBoundaryMode } from "./ssr/hydrationBoundary"
+import type { Signal } from "./signals"
 
 export type SomeElement = HTMLElement | SVGElement
 export type SomeDom = HTMLElement | SVGElement | Text
+export type MaybeElement = SomeElement | undefined
 export type MaybeDom = SomeDom | undefined
 
-type VNode = Kaioken.VNode
-
-export type FunctionVNode = VNode & { type: (...args: any) => any }
-export type ExoticVNode = VNode & {
-  type: Kaioken.ExoticSymbol
+export interface FunctionVNode extends Kiru.VNode {
+  type: (...args: any) => JSX.Element
 }
-export type ElementVNode = VNode & { dom: SomeElement }
-export type DomVNode = VNode & { dom: SomeDom }
 
-export type ContextProviderNode<T> = Kaioken.VNode & {
+export interface ElementVNode extends Kiru.VNode {
+  dom: SomeElement
+  type: string
+}
+export interface DomVNode extends Kiru.VNode {
+  dom: SomeDom
+  type: "#text" | (string & {})
+}
+
+export interface ContextProviderNode<T> extends Kiru.VNode {
   type: typeof $CONTEXT_PROVIDER
-  props: { value: T; ctx: Kaioken.Context<T> }
+  props: Kiru.VNode["props"] & {
+    value: T
+    ctx: Kiru.Context<T>
+    dependents: Set<Kiru.VNode>
+  }
+}
+
+export interface HydrationBoundaryNode extends Kiru.VNode {
+  type: typeof $HYDRATION_BOUNDARY
+  props: Kiru.VNode["props"] & {
+    mode: HydrationBoundaryMode
+  }
+}
+
+export interface FragmentNode extends Kiru.VNode {
+  type: typeof $FRAGMENT
 }
 
 export type Prettify<T> = {
   [K in keyof T]: T[K]
 } & {}
+
+export type Signalable<T> = T | Signal<T>
+
+export type AsyncTaskState<T, E extends Error = Error> =
+  | {
+      data: null
+      error: null
+      loading: true
+    }
+  | {
+      data: T
+      error: null
+      loading: false
+    }
+  | {
+      data: null
+      error: E
+      loading: false
+    }

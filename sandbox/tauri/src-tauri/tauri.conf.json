@@ -7,7 +7,7 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "kaioken-tauri-template",
+    "productName": "kiru-tauri-template",
     "version": "0.1.0"
   },
   "tauri": {
@@ -29,7 +29,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "com.kaioken-tauri.dev",
+      "identifier": "com.kiru-tauri.dev",
       "longDescription": "",
       "macOS": {
         "entitlements": null,
@@ -58,7 +58,7 @@
         "fullscreen": false,
         "height": 600,
         "resizable": true,
-        "title": "kaioken-tauri-template",
+        "title": "kiru-tauri-template",
         "width": 800
       }
     ]

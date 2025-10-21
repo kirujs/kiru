@@ -1,4 +1,4 @@
-import { createStore } from "kaioken"
+import { createStore } from "kiru"
 
 export const countStore = createStore(0, (set, get) => ({
   increment: () => {

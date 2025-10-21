@@ -1,35 +1,53 @@
-import type { AppContext } from "./appContext"
 import { __DEV__ } from "./env.js"
 import { createHMRContext } from "./hmr.js"
-import { Store } from "./store"
+import { createProfilingContext } from "./profiling.js"
+import type { AppContext } from "./appContext"
+import type { Store } from "./store"
+import type { SWRCache } from "./swr"
 
-export { KaiokenGlobalContext, type GlobalKaiokenEvent }
+export { createKiruGlobalContext, type GlobalKiruEvent, type KiruGlobalContext }
 
-class ReactiveMap<V> {
-  #map = new Map<string, V>()
-  #listeners = new Set<(value: Record<string, V>) => void>()
-  add(key: string, value: V) {
-    if (this.#map.has(key)) return
-    this.#map.set(key, value)
-    this.notify()
-  }
-  delete(key: string) {
-    if (!this.#map.has(key)) return
-    this.#map.delete(key)
-    this.notify()
+interface ReactiveMap<V> {
+  add(key: string, value: V): void
+  delete(key: string): void
+  subscribe(cb: (value: Record<string, V>) => void): () => void
+  readonly size: number
+}
+
+function createReactiveMap<V>(): ReactiveMap<V> {
+  const map = new Map<string, V>()
+  const listeners = new Set<(value: Record<string, V>) => void>()
+
+  function add(key: string, value: V): void {
+    if (map.has(key)) return
+    map.set(key, value)
+    notify()
   }
 
-  private notify() {
-    const val = Object.fromEntries(this.#map)
-    this.#listeners.forEach((cb) => cb(val))
+  function deleteKey(key: string): void {
+    if (!map.has(key)) return
+    map.delete(key)
+    notify()
   }
-  subscribe(cb: (value: Record<string, V>) => void) {
-    this.#listeners.add(cb)
-    cb(Object.fromEntries(this.#map))
-    return () => this.#listeners.delete(cb)
+
+  function notify(): void {
+    const val = Object.fromEntries(map)
+    listeners.forEach((cb) => cb(val))
   }
-  get size() {
-    return this.#map.size
+
+  function subscribe(cb: (value: Record<string, V>) => void): () => void {
+    listeners.add(cb)
+    cb(Object.fromEntries(map))
+    return () => listeners.delete(cb)
+  }
+
+  return {
+    add,
+    delete: deleteKey,
+    subscribe,
+    get size() {
+      return map.size
+    },
   }
 }
 
@@ -51,49 +69,87 @@ type Evt =
       data: Error
     }
 
-type GlobalKaiokenEvent = Evt["name"]
+type GlobalKiruEvent = Evt["name"]
 
-class KaiokenGlobalContext {
-  #contexts: Set<AppContext> = new Set()
-  private listeners: Map<
-    GlobalKaiokenEvent,
-    Set<(ctx: AppContext, data?: Evt["data"]) => void>
-  > = new Map()
-  stores: ReactiveMap<Store<any, any>> = new ReactiveMap()
+interface KiruGlobalContext {
+  readonly apps: AppContext[]
+  stores?: ReactiveMap<Store<any, any>>
   HMRContext?: ReturnType<typeof createHMRContext>
-  globalState: Record<symbol, any> = {}
-
-  constructor() {
-    this.on("mount", (ctx) => this.#contexts.add(ctx))
-    this.on("unmount", (ctx) => this.#contexts.delete(ctx))
-    if (__DEV__) {
-      this.HMRContext = createHMRContext()
-    }
-  }
-
-  get apps() {
-    return Array.from(this.#contexts)
-  }
-
-  emit<T extends Evt>(event: T["name"], ctx: AppContext, data?: T["data"]) {
-    this.listeners.get(event)?.forEach((cb) => cb(ctx, data))
-  }
+  profilingContext?: ReturnType<typeof createProfilingContext>
+  SWRGlobalCache?: SWRCache
+  emit<T extends Evt>(event: T["name"], ctx: AppContext, data?: T["data"]): void
   on<T extends Evt>(
     event: T["name"],
     callback: (ctx: AppContext, data: T["data"]) => void
-  ) {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, new Set())
-    }
-    this.listeners.get(event)!.add(callback)
-  }
+  ): void
   off<T extends Evt>(
     event: T["name"],
     callback: (ctx: AppContext, data?: T["data"]) => void
-  ) {
-    if (!this.listeners.has(event)) {
-      return
-    }
-    this.listeners.get(event)!.delete(callback)
+  ): void
+}
+
+function createKiruGlobalContext(): KiruGlobalContext {
+  const contexts = new Set<AppContext>()
+  const listeners = new Map<
+    GlobalKiruEvent,
+    Set<(ctx: AppContext, data?: Evt["data"]) => void>
+  >()
+  let stores: ReactiveMap<Store<any, any>> | undefined
+  let HMRContext: ReturnType<typeof createHMRContext> | undefined
+  let profilingContext: ReturnType<typeof createProfilingContext> | undefined
+
+  function emit<T extends Evt>(
+    event: T["name"],
+    ctx: AppContext,
+    data?: T["data"]
+  ): void {
+    listeners.get(event)?.forEach((cb) => cb(ctx, data))
   }
+
+  function on<T extends Evt>(
+    event: T["name"],
+    callback: (ctx: AppContext, data: T["data"]) => void
+  ): void {
+    if (!listeners.has(event)) {
+      listeners.set(event, new Set())
+    }
+    listeners.get(event)!.add(callback)
+  }
+
+  function off<T extends Evt>(
+    event: T["name"],
+    callback: (ctx: AppContext, data?: T["data"]) => void
+  ): void {
+    listeners.get(event)?.delete(callback)
+  }
+
+  const globalContext: KiruGlobalContext = {
+    get apps() {
+      return Array.from(contexts)
+    },
+    get stores() {
+      return stores
+    },
+    get HMRContext() {
+      return HMRContext
+    },
+    get profilingContext() {
+      return profilingContext
+    },
+    emit,
+    on,
+    off,
+  }
+
+  // Initialize event listeners
+  on("mount", (ctx) => contexts.add(ctx))
+  on("unmount", (ctx) => contexts.delete(ctx))
+
+  if (__DEV__) {
+    HMRContext = createHMRContext()
+    profilingContext = createProfilingContext()
+    stores = createReactiveMap()
+  }
+
+  return globalContext
 }

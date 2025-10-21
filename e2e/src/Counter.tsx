@@ -1,4 +1,4 @@
-import { useState } from "kaioken"
+import { useState } from "kiru"
 
 export function Counter() {
   const [toggled, setToggled] = useState(false)

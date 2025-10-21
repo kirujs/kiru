@@ -1,30 +1,224 @@
-export const $SIGNAL = Symbol.for("kaioken.signal")
-export const $CONTEXT = Symbol.for("kaioken.context")
-export const $CONTEXT_PROVIDER = Symbol.for("kaioken.contextProvider")
-export const $FRAGMENT = Symbol.for("kaioken.fragment")
-export const $KAIOKEN_ERROR = Symbol.for("kaioken.error")
-export const $HMR_ACCEPT = Symbol.for("kaioken.hmrAccept")
-export const $MEMO = Symbol.for("kaioken.memo")
+export {
+  $SIGNAL,
+  $CONTEXT,
+  $CONTEXT_PROVIDER,
+  $FRAGMENT,
+  $KIRU_ERROR,
+  $HMR_ACCEPT,
+  $MEMO,
+  $HYDRATION_BOUNDARY,
+  CONSECUTIVE_DIRTY_LIMIT,
+  EVENT_PREFIX_REGEX,
+  FLAG_UPDATE,
+  FLAG_PLACEMENT,
+  FLAG_DELETION,
+  FLAG_STATIC_DOM,
+  FLAG_MEMO,
+  FLAG_NOOP,
+  FLAG_DIRTY,
+}
 
-export const CONSECUTIVE_DIRTY_LIMIT = 50
+export { voidElements, svgTags, booleanAttributes, snakeCaseAttributes }
 
-export const FLAG = {
-  UPDATE: 1,
-  PLACEMENT: 2,
-  DELETION: 3,
-} as const
+const $SIGNAL = Symbol.for("kiru.signal")
+const $CONTEXT = Symbol.for("kiru.context")
+const $CONTEXT_PROVIDER = Symbol.for("kiru.contextProvider")
+const $FRAGMENT = Symbol.for("kiru.fragment")
+const $KIRU_ERROR = Symbol.for("kiru.error")
+const $HMR_ACCEPT = Symbol.for("kiru.hmrAccept")
+const $MEMO = Symbol.for("kiru.memo")
+const $HYDRATION_BOUNDARY = Symbol.for("kiru.hydrationBoundary")
 
-export const ELEMENT_TYPE = {
-  text: "#text",
-} as const
+const CONSECUTIVE_DIRTY_LIMIT = 50
 
-export const REGEX_UNIT = {
-  AMP_G: /&/g,
-  LT_G: /</g,
-  GT_G: />/g,
-  SQT_G: /'/g,
-  DBLQT_G: /"/g,
-  SLASH_G: /\//g,
-  SLASHN_SLASHR_G: /[\n\r]+/g,
-  ALPHA_UPPER_G: /[A-Z]/g,
-} as const
+const FLAG_UPDATE = 1 << 1
+const FLAG_PLACEMENT = 1 << 2
+const FLAG_DELETION = 1 << 3
+const FLAG_STATIC_DOM = 1 << 4
+const FLAG_MEMO = 1 << 5
+const FLAG_NOOP = 1 << 6
+const FLAG_DIRTY = 1 << 7
+
+const EVENT_PREFIX_REGEX = /^on:?/
+
+const voidElements = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "source",
+  "track",
+  "wbr",
+])
+
+const svgTags = new Set([
+  "animateTransform",
+  "circle",
+  "clipPath",
+  "defs",
+  "desc",
+  "ellipse",
+  "feBlend",
+  "feColorMatrix",
+  "feComponentTransfer",
+  "feComposite",
+  "feConvolveMatrix",
+  "feDiffuseLighting",
+  "feDisplacementMap",
+  "feDropShadow",
+  "feFlood",
+  "feFuncA",
+  "feFuncB",
+  "feFuncG",
+  "feFuncR",
+  "feGaussianBlur",
+  "feMerge",
+  "feMergeNode",
+  "feMorphology",
+  "feOffset",
+  "feSpecularLighting",
+  "feTile",
+  "feTurbulence",
+  "filter",
+  "foreignObject",
+  "g",
+  "image",
+  "line",
+  "linearGradient",
+  "marker",
+  "path",
+  "polygon",
+  "polyline",
+  "radialGradient",
+  "rect",
+  "stop",
+  "svg",
+  "switch",
+  "symbol",
+  "text",
+  "textPath",
+  "title",
+  "tspan",
+  "use",
+])
+
+const booleanAttributes = new Set([
+  "allowfullscreen",
+  "autofocus",
+  "autoplay",
+  "async",
+  "checked",
+  "compact",
+  "controls",
+  "contenteditable",
+  "declare",
+  "default",
+  "defer",
+  "disabled",
+  "download",
+  "hidden",
+  "inert",
+  "ismap",
+  "multiple",
+  "nohref",
+  "noresize",
+  "noshade",
+  "novalidate",
+  "nowrap",
+  "open",
+  "popover",
+  "readonly",
+  "required",
+  "sandbox",
+  "scoped",
+  "selected",
+  "sortable",
+  "spellcheck",
+  "translate",
+  "wrap",
+])
+
+const snakeCaseAttributes = new Map([
+  ["acceptCharset", "accept-charset"],
+  ["accentHeight", "accent-height"],
+  ["alignmentBaseline", "alignment-baseline"],
+  ["arabicForm", "arabic-form"],
+  ["baselineShift", "baseline-shift"],
+  ["capHeight", "cap-height"],
+  ["clipPath", "clip-path"],
+  ["clipRule", "clip-rule"],
+  ["colorInterpolation", "color-interpolation"],
+  ["colorInterpolationFilters", "color-interpolation-filters"],
+  ["colorProfile", "color-profile"],
+  ["colorRendering", "color-rendering"],
+  ["dominantBaseline", "dominant-baseline"],
+  ["enableBackground", "enable-background"],
+  ["fillOpacity", "fill-opacity"],
+  ["fillRule", "fill-rule"],
+  ["floodColor", "flood-color"],
+  ["floodOpacity", "flood-opacity"],
+  ["fontFamily", "font-family"],
+  ["fontSize", "font-size"],
+  ["fontSizeAdjust", "font-size-adjust"],
+  ["fontStretch", "font-stretch"],
+  ["fontStyle", "font-style"],
+  ["fontVariant", "font-variant"],
+  ["fontWeight", "font-weight"],
+  ["glyphName", "glyph-name"],
+  ["glyphOrientationHorizontal", "glyph-orientation-horizontal"],
+  ["glyphOrientationVertical", "glyph-orientation-vertical"],
+  ["horizAdvX", "horiz-adv-x"],
+  ["horizOriginX", "horiz-origin-x"],
+  ["httpEquiv", "http-equiv"],
+  ["imageRendering", "image-rendering"],
+  ["letterSpacing", "letter-spacing"],
+  ["lightingColor", "lighting-color"],
+  ["markerEnd", "marker-end"],
+  ["markerMid", "marker-mid"],
+  ["markerStart", "marker-start"],
+  ["overlinePosition", "overline-position"],
+  ["overlineThickness", "overline-thickness"],
+  ["paintOrder", "paint-order"],
+  ["panose-1", "panose-1"],
+  ["pointerEvents", "pointer-events"],
+  ["renderingIntent", "rendering-intent"],
+  ["shapeRendering", "shape-rendering"],
+  ["stopColor", "stop-color"],
+  ["stopOpacity", "stop-opacity"],
+  ["strikethroughPosition", "strikethrough-position"],
+  ["strikethroughThickness", "strikethrough-thickness"],
+  ["strokeDasharray", "stroke-dasharray"],
+  ["strokeDashoffset", "stroke-dashoffset"],
+  ["strokeLinecap", "stroke-linecap"],
+  ["strokeLinejoin", "stroke-linejoin"],
+  ["strokeMiterlimit", "stroke-miterlimit"],
+  ["strokeOpacity", "stroke-opacity"],
+  ["strokeWidth", "stroke-width"],
+  ["textAnchor", "text-anchor"],
+  ["textDecoration", "text-decoration"],
+  ["textRendering", "text-rendering"],
+  ["transformOrigin", "transform-origin"],
+  ["underlinePosition", "underline-position"],
+  ["underlineThickness", "underline-thickness"],
+  ["unicodeBidi", "unicode-bidi"],
+  ["unicodeRange", "unicode-range"],
+  ["unitsPerEm", "units-per-em"],
+  ["vAlphabetic", "v-alphabetic"],
+  ["vHanging", "v-hanging"],
+  ["vIdeographic", "v-ideographic"],
+  ["vMathematical", "v-mathematical"],
+  ["vectorEffect", "vector-effect"],
+  ["vertAdvY", "vert-adv-y"],
+  ["vertOriginX", "vert-origin-x"],
+  ["vertOriginY", "vert-origin-y"],
+  ["wordSpacing", "word-spacing"],
+  ["writingMode", "writing-mode"],
+  ["xmlnsXlink", "xmlns:xlink"],
+  ["xHeight", "x-height"],
+])

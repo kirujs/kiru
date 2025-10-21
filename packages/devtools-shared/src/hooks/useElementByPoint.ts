@@ -1,4 +1,4 @@
-import { useSignal, Signal } from "kaioken"
+import { useSignal, Signal } from "kiru"
 import { useRafFn } from "./useRafFn"
 
 type useElementByPointOptions<M extends boolean = false> = {

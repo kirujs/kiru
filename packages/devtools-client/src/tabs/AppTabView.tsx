@@ -3,13 +3,18 @@ import {
   BroadcastChannelMessage,
   SelectedNodeView,
 } from "devtools-shared"
-import { useRequestUpdate, useEffect, AppContext } from "kaioken"
+import { useRequestUpdate, useEffect, AppContext } from "kiru"
 import { AppVDomView } from "../components/AppVDomView"
 import { FiftyFiftySplitter } from "../components/FiftyFiftySplitter"
-import { Select } from "../components/Select"
 import { SquareMouse } from "../icons/SquareMouse"
-import { inspectComponent } from "../signal"
-import { toggleElementToVnode, useDevtoolsStore, kaiokenGlobal } from "../store"
+import {
+  toggleElementToVnode,
+  kiruGlobal,
+  selectedApp,
+  selectedNode,
+  mountedApps,
+  inspectComponent,
+} from "../state"
 
 const handleToggleInspect = () => {
   toggleElementToVnode.value = !toggleElementToVnode.value
@@ -20,24 +25,17 @@ const handleToggleInspect = () => {
 }
 
 export function AppTabView() {
-  const {
-    value: { apps, selectedApp, selectedNode },
-    setSelectedApp,
-    setSelectedNode,
-  } = useDevtoolsStore(({ apps, selectedApp, selectedNode }) => ({
-    apps,
-    selectedApp,
-    selectedNode,
-  }))
-
+  const app = selectedApp.value
+  const node = selectedNode.value
   const requestUpdate = useRequestUpdate()
+
   useEffect(() => {
-    const handleUpdate = (appCtx: AppContext) => {
-      if (appCtx !== selectedApp) return
+    const handleUpdate = (_app: AppContext) => {
+      if (_app !== app) return
       requestUpdate()
     }
-    kaiokenGlobal?.on("update", handleUpdate)
-    return () => kaiokenGlobal?.off("update", handleUpdate)
+    kiruGlobal?.on("update", handleUpdate)
+    return () => kiruGlobal?.off("update", handleUpdate)
   }, [selectedApp])
 
   useEffect(() => {
@@ -49,8 +47,8 @@ export function AppTabView() {
       }
       const { app, node } = window.__devtoolsSelection
       window.__devtoolsSelection = null
-      setSelectedApp(app)
-      setSelectedNode(node as any)
+      selectedApp.value = app
+      selectedNode.value = node as any
       inspectComponent.value = node
       toggleElementToVnode.value = false
     }
@@ -60,19 +58,27 @@ export function AppTabView() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4 p-2 bg-neutral-400 bg-opacity-5 border border-neutral-400 border-opacity-5 rounded">
+      <div className="flex items-center justify-between gap-4 p-2 bg-neutral-400 bg-opacity-5 border border-white border-opacity-10 rounded">
         <div className="flex items-center gap-4">
-          <Select
+          <select
             className="px-2 py-1 bg-neutral-800 text-neutral-100 rounded border border-white border-opacity-10"
-            options={[
-              { text: "Select App", key: "", disabled: true },
-              ...apps.map((app) => app.name),
-            ]}
-            value={selectedApp?.name ?? ""}
-            onChange={(name) =>
-              setSelectedApp(apps.find((a) => a.name === name)!)
+            value={app?.name ?? ""}
+            onchange={(e) =>
+              (selectedApp.value =
+                mountedApps
+                  .peek()
+                  .find((a) => a.name === e.currentTarget.value) ?? null)
             }
-          />
+          >
+            <option value="" disabled>
+              Select App
+            </option>
+            {mountedApps.value.map((app) => (
+              <option key={app.id} value={app.name}>
+                {app.name}
+              </option>
+            ))}
+          </select>
           <button
             title="Toggle Component Inspection"
             onclick={handleToggleInspect}
@@ -85,13 +91,13 @@ export function AppTabView() {
         </div>
       </div>
       <FiftyFiftySplitter>
-        {selectedApp && <AppVDomView />}
-        {selectedNode && selectedApp && (
+        {app && <AppVDomView />}
+        {node && app && (
           <SelectedNodeView
-            selectedApp={selectedApp}
-            selectedNode={selectedNode}
-            setSelectedNode={setSelectedNode}
-            kaiokenGlobal={kaiokenGlobal}
+            selectedApp={app}
+            selectedNode={node}
+            setSelectedNode={(n) => (selectedNode.value = n)}
+            kiruGlobal={kiruGlobal}
           />
         )}
       </FiftyFiftySplitter>

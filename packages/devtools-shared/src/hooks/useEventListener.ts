@@ -1,4 +1,4 @@
-import { useEffect } from "kaioken"
+import { useEffect } from "kiru"
 
 export type Arrayable<T> = T[] | T
 

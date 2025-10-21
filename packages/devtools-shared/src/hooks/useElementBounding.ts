@@ -1,4 +1,4 @@
-import { useLayoutEffect, useSignal } from "kaioken"
+import { useLayoutEffect, useSignal } from "kiru"
 import { useEventListener } from "./useEventListener"
 import { useResizeObserver } from "./useResizeObserver"
 import { useMutationObserver } from "./useMutationObserver"
@@ -10,7 +10,7 @@ type UseElementBoundingOptions = {
 }
 
 export const useElementBounding = (
-  ref: Kaioken.MutableRefObject<Element | null>,
+  ref: Kiru.MutableRefObject<Element | null>,
   options: UseElementBoundingOptions = {
     windowScroll: true,
     windowResize: true,

@@ -1,5 +1,5 @@
 import { broadcastChannel } from "devtools-shared"
-import { signal } from "kaioken"
+import { signal } from "kiru"
 
 export const toggleElementToVnode = signal(false)
 if ("window" in globalThis) {

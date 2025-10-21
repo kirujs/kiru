@@ -1,11 +1,6 @@
-import type { AppContext } from "kaioken"
-import { isFragment, isLazy } from "../../lib/dist/utils.js"
+import { isFragment, isLazy, isMemo } from "kiru/utils"
 
-export function isDevtoolsApp(app: AppContext) {
-  return app.name === "kaioken.devtools"
-}
-
-export function getNodeName(node: Kaioken.VNode) {
+export function getNodeName(node: Kiru.VNode) {
   return (
     (node.type as any).displayName ??
     ((node.type as Function).name || "Anonymous Function")
@@ -18,12 +13,17 @@ export function searchMatchesItem(terms: string[], item: string) {
 }
 
 export function isComponent(
-  node: Kaioken.VNode
-): node is Kaioken.VNode & { type: Function } {
-  return typeof node.type === "function" && !isFragment(node) && !isLazy(node)
+  node: Kiru.VNode
+): node is Kiru.VNode & { type: Function } {
+  return (
+    typeof node.type === "function" &&
+    !isFragment(node) &&
+    !isLazy(node) &&
+    !isMemo(node)
+  )
 }
 
-export function nodeContainsComponent(node: Kaioken.VNode) {
+export function nodeContainsComponent(node: Kiru.VNode) {
   let stack = [node]
   while (stack.length) {
     const n = stack.pop()!
@@ -37,8 +37,8 @@ export function nodeContainsComponent(node: Kaioken.VNode) {
 }
 
 export const nodeContainsNode = (
-  currentNode: Kaioken.VNode,
-  componentNode: Kaioken.VNode
+  currentNode: Kiru.VNode,
+  componentNode: Kiru.VNode
 ) => {
   const stack = [componentNode.parent]
 
@@ -55,42 +55,26 @@ export const nodeContainsNode = (
   return false
 }
 
-export function applyObjectChangeFromKeys(
-  obj: Record<string, any>,
-  keys: string[],
-  value: unknown
-) {
-  let o = obj
-  for (let i = 0; i < keys.length; i++) {
-    const key = keys[i]
-    if (i === keys.length - 1) {
-      o[key] = value
-    } else {
-      o = o[key]
-    }
-  }
-}
-
 interface TreeNode {
-  sibling?: TreeNode
-  child?: TreeNode
+  sibling: TreeNode | null
+  child: TreeNode | null
 }
 
 export function cloneTree<T extends TreeNode>(
-  tree: T | undefined,
+  tree: T | null,
   predicate: (node: T) => boolean
-): (T & { ref: T }) | undefined {
+): (T & { ref: T }) | null {
   // Base case: if the node is undefined, return undefined
   if (!tree) {
-    return undefined
+    return null
   }
 
   // Clone the current node if its name starts with 'a'
   const shouldCloneCurrentNode = predicate(tree)
 
   // Recursively clone sibling and child nodes that start with 'a'
-  const clonedSibling = cloneTree<T>(tree.sibling as T | undefined, predicate)
-  const clonedChild = cloneTree<T>(tree.child as T | undefined, predicate)
+  const clonedSibling = cloneTree<T>(tree.sibling as T | null, predicate)
+  const clonedChild = cloneTree<T>(tree.child as T | null, predicate)
 
   // If the current node doesn't start with 'a' but has valid cloned descendants,
   // we need to return the first valid descendant
@@ -104,13 +88,13 @@ export function cloneTree<T extends TreeNode>(
       return clonedChild
     }
     // No valid nodes to clone in this branch
-    return undefined
+    return null
   }
 
   // Clone the current node and attach cloned descendants
   return {
     ref: tree,
-    sibling: clonedSibling,
-    child: clonedChild,
+    sibling: clonedSibling ?? null,
+    child: clonedChild ?? null,
   } as T & { ref: T }
 }

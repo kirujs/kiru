@@ -1,4 +1,4 @@
-import { signal, useSignal } from "kaioken"
+import { useSignal } from "kiru"
 
 export default function Counter() {
   console.log("Counter")

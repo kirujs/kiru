@@ -4,7 +4,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
-} from "kaioken"
+} from "kiru"
 
 const LogCtx = createContext<(msg: string) => void>(null as any)
 

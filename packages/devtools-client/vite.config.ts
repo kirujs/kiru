@@ -4,10 +4,10 @@ import { viteSingleFile } from "vite-plugin-singlefile"
 
 export default defineConfig({
   esbuild: {
-    jsxInject: `import * as kaioken from "kaioken"`,
+    jsxInject: `import * as kiru from "kiru"`,
     jsx: "transform",
-    jsxFactory: "kaioken.createElement",
-    jsxFragment: "kaioken.Fragment",
+    jsxFactory: "kiru.createElement",
+    jsxFragment: "kiru.Fragment",
     loader: "tsx",
     include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
   },
@@ -18,7 +18,6 @@ export default defineConfig({
     cssCodeSplit: false,
     assetsDir: "",
     rollupOptions: {
-      external: ["kaioken"],
       output: {
         inlineDynamicImports: true,
       },
@@ -29,23 +28,20 @@ export default defineConfig({
       useRecommendedBuildConfig: false,
     }),
     {
+      name: "dt-client:post-build",
       enforce: "post",
-      buildEnd: (err) => {
-        if (err) return
-        ;(async () => {
-          await new Promise((res) => setTimeout(res, 1000))
-          const html = await fs.promises.readFile("dist/index.html", "utf-8")
-          fs.rmSync("dist", { recursive: true, force: true })
-          fs.mkdirSync("dist")
-          fs.writeFileSync(
-            "dist/index.js",
-            `export default \`${html.replace(/[`\\$]/g, "\\$&")}\``,
-            {
-              encoding: "utf-8",
-            }
-          )
-        })()
+      closeBundle(error) {
+        console.log("[devtools-client]: Build complete!", error)
+        if (error) return
+        const html = fs.readFileSync("dist/index.html", "utf-8")
+        fs.rmSync("dist", { recursive: true, force: true })
+        fs.mkdirSync("dist")
+        fs.writeFileSync(
+          "dist/index.js",
+          `export default \`${html.replace(/[`\\$]/g, "\\$&")}\``,
+          { encoding: "utf-8" }
+        )
       },
-    } as PluginOption,
+    } satisfies PluginOption,
   ],
 })

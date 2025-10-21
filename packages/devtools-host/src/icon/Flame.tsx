@@ -1,4 +1,4 @@
-import * as kaioken from "kaioken"
+import * as kiru from "kiru"
 
 export const Flame = () => {
   return (

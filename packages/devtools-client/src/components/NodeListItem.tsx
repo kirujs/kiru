@@ -1,6 +1,11 @@
-import { useState, useMemo, useEffect, useContext } from "kaioken"
+import { useState, useMemo, useEffect } from "kiru"
 import { ChevronIcon } from "devtools-shared"
-import { useDevtoolsStore } from "../store"
+import {
+  appTreeSearch,
+  inspectComponent,
+  keyboardMap,
+  selectedNode,
+} from "../state"
 import {
   getNodeName,
   isComponent,
@@ -8,28 +13,19 @@ import {
   nodeContainsNode,
   searchMatchesItem,
 } from "../utils"
-import { inspectComponent, KeyboardMap } from "../signal"
-import { SearchContext } from "../context"
 
 export function NodeListItem({
   node,
   traverseSiblings = true,
 }: {
-  node: Kaioken.VNode
+  node: Kiru.VNode
   traverseSiblings?: boolean
 }) {
-  const { value: selectedNode, setSelectedNode } = useDevtoolsStore(
-    (state) => state.selectedNode,
-    (prev, next) => {
-      return prev === node || next === node
-    }
-  )
   const [collapsed, setCollapsed] = useState(true)
-  const isSelected = selectedNode === node
-  const id = useMemo(() => {
-    return crypto.randomUUID()
-  }, [])
-  const search = useContext(SearchContext)
+  const _selectedNode = selectedNode.value
+  const isSelected = _selectedNode === node
+
+  const id = useMemo(() => crypto.randomUUID(), [])
 
   const isParentOfInspectNode = useMemo(() => {
     if (inspectComponent.value == null) return null
@@ -45,16 +41,16 @@ export function NodeListItem({
   useEffect(() => {
     if (!node || !isComponent(node)) return
 
-    KeyboardMap.value.set(id, {
+    keyboardMap.peek().set(id, {
       vNode: node,
       setCollapsed,
     })
 
     return () => {
-      KeyboardMap.value.delete(id)
+      keyboardMap.peek().delete(id)
     }
   })
-
+  const search = appTreeSearch.value
   if (!node) return null
   if (
     !isComponent(node) ||
@@ -75,7 +71,7 @@ export function NodeListItem({
         <h2
           onclick={() => {
             inspectComponent.value = null
-            setSelectedNode(isSelected ? null : (node as any))
+            selectedNode.value = isSelected ? null : (node as any)
           }}
           className={`flex gap-2 items-center cursor-pointer mb-1 scroll-m-12 ${
             isSelected ? "font-medium bg-primary selected-vnode" : ""
@@ -114,10 +110,10 @@ export function NodeListItem({
     </>
   )
 }
-function NodeListItemSiblings({ node }: { node?: Kaioken.VNode }) {
+function NodeListItemSiblings({ node }: { node?: Kiru.VNode }) {
   if (!node) return null
   let nodes = []
-  let n: Kaioken.VNode | undefined = node.sibling
+  let n = node.sibling
   while (n) {
     nodes.push(n)
     n = n.sibling

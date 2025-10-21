@@ -1,13 +1,18 @@
 import {
   AppViewIcon,
   CogIcon,
+  GaugeIcon,
+  GlobeIcon,
   SettingsProvider,
   StoresViewIcon,
 } from "devtools-shared"
-import { signal } from "kaioken"
+import { signal } from "kiru"
 import { AppTabView } from "./tabs/AppTabView"
 import { StoresTabView } from "./tabs/StoresTabView"
 import { SettingsEditor } from "devtools-shared/src/Settings"
+import { ProfilingTabView } from "./tabs/ProfilingTabView"
+import { SWRTabView } from "./tabs/SWRTabView"
+import { selectedNode } from "./state"
 
 type TabViewProps = { active: boolean; children: JSX.Element }
 
@@ -25,42 +30,40 @@ const TabView = (props: TabViewProps) => {
 const APP_TABS = {
   Apps: {
     Icon: AppViewIcon,
-    View: (props: { active: boolean }) => {
-      return (
-        <TabView active={props.active}>
-          <AppTabView />
-        </TabView>
-      )
-    },
+    View: AppTabView,
   },
   Stores: {
     Icon: StoresViewIcon,
-    View: (props: { active: boolean }) => {
-      return (
-        <TabView active={props.active}>
-          <StoresTabView />
-        </TabView>
-      )
-    },
+    View: StoresTabView,
+  },
+  SWR: {
+    Icon: GlobeIcon,
+    View: SWRTabView,
+  },
+  Profiling: {
+    Icon: GaugeIcon,
+    View: ProfilingTabView,
   },
   Settings: {
     Icon: CogIcon,
-    View: (props: { active: boolean }) => {
-      return (
-        <TabView active={props.active}>
-          <SettingsEditor />
-        </TabView>
-      )
-    },
+    View: SettingsEditor,
   },
 }
 
 const selectedTab = signal<keyof typeof APP_TABS>("Apps")
 
+let prevSelectedNode = selectedNode.peek()
+selectedNode.subscribe((node) => {
+  if (node !== prevSelectedNode && node !== null) {
+    selectedTab.value = "Apps"
+  }
+  prevSelectedNode = node
+})
+
 export function App() {
   return (
     <SettingsProvider>
-      <nav className="flex flex-col gap-2 justify-between p-2 bg-neutral-400 bg-opacity-5 border border-neutral-400 border-opacity-5 rounded">
+      <nav className="flex flex-col gap-2 justify-between p-2 bg-neutral-400 bg-opacity-5 border border-white border-opacity-10 rounded">
         <div className="flex flex-col gap-2">
           {Object.keys(APP_TABS).map((key) => (
             <TabButton key={key} title={key as keyof typeof APP_TABS} />
@@ -68,7 +71,9 @@ export function App() {
         </div>
       </nav>
       {Object.entries(APP_TABS).map(([title, { View }]) => (
-        <View key={title} active={selectedTab.value === title} />
+        <TabView key={title} active={selectedTab.value === title}>
+          <View />
+        </TabView>
       ))}
     </SettingsProvider>
   )

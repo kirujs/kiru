@@ -1,68 +1,65 @@
-import type { ReadonlySignal, Signal, Signal as SignalClass } from "./signals"
-import type { $CONTEXT, $CONTEXT_PROVIDER, $FRAGMENT } from "./constants"
-import type { KaiokenGlobalContext } from "./globalContext"
+import type { ReadonlySignal, Signal as SignalClass } from "./signals"
 import type {
-  EventAttributes,
+  $CONTEXT,
+  $CONTEXT_PROVIDER,
+  $FRAGMENT,
+  $HYDRATION_BOUNDARY,
+} from "./constants"
+import type { KiruGlobalContext } from "./globalContext"
+import type {
   GlobalAttributes,
-  GlobalEventAttributes,
   HtmlElementAttributes,
   SvgElementAttributes,
   SvgGlobalAttributes,
   StyleObject,
+  HtmlElementBindableProps,
+  HTMLTagToElement,
+  SVGTagToElement,
 } from "./types.dom"
-import { SomeDom } from "./types.utils"
+import type {
+  AsyncTaskState,
+  Prettify,
+  Signalable,
+  SomeDom,
+} from "./types.utils"
+import type { AppContext } from "./appContext"
 
-export type { ElementProps, StyleObject }
-
-type HTMLTagToElement<T extends keyof HtmlElementAttributes> =
-  T extends keyof HTMLElementTagNameMap
-    ? HTMLElementTagNameMap[T]
-    : T extends keyof HTMLElementDeprecatedTagNameMap
-    ? HTMLElementDeprecatedTagNameMap[T]
-    : never
-
-type SVGTagToElement<T extends keyof SvgElementAttributes> =
-  T extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[T] : never
+export type { AsyncTaskState, ElementProps, Prettify, Signalable, StyleObject }
 
 type ElementProps<T extends keyof JSX.IntrinsicElements> =
   JSX.IntrinsicElements[T]
 
-type WebComponentTag = `${string}-${string}`
-
 type SignalableHtmlElementAttributes<Tag extends keyof HtmlElementAttributes> =
   {
-    [K in keyof HtmlElementAttributes[Tag]]:
-      | Signal<HtmlElementAttributes[Tag][K]>
-      | HtmlElementAttributes[Tag][K]
-  }
+    [K in keyof HtmlElementAttributes[Tag]]: Signalable<
+      HtmlElementAttributes[Tag][K]
+    >
+  } & (Tag extends keyof HtmlElementBindableProps
+    ? HtmlElementBindableProps[Tag]
+    : {})
 type SignalableSvgElementAttributes<Tag extends keyof SvgElementAttributes> = {
-  [K in keyof SvgElementAttributes[Tag]]:
-    | SvgElementAttributes[Tag][K]
-    | Signal<SvgElementAttributes[Tag][K]>
+  [K in keyof SvgElementAttributes[Tag]]: Signalable<
+    SvgElementAttributes[Tag][K]
+  >
 }
 type SignalableAriaProps = {
-  [K in keyof ARIAMixin]?: ARIAMixin[K] | Signal<ARIAMixin[K]>
+  [K in keyof ARIAMixin]?: Signalable<ARIAMixin[K]>
 }
 type SignalableGlobalAttributes = {
-  [K in keyof GlobalAttributes]:
-    | GlobalAttributes[K]
-    | Signal<GlobalAttributes[K]>
+  [K in keyof GlobalAttributes]: Signalable<GlobalAttributes[K]>
 }
 type SignalableSvgGlobalAttributes = {
-  [K in keyof SvgGlobalAttributes]:
-    | SvgGlobalAttributes[K]
-    | Signal<SvgGlobalAttributes[K]>
+  [K in keyof SvgGlobalAttributes]: Signalable<SvgGlobalAttributes[K]>
 }
 
 type ElementMap = {
   [Tag in keyof HtmlElementAttributes]: SignalableHtmlElementAttributes<Tag> &
     SignalableGlobalAttributes &
     SignalableAriaProps &
-    EventAttributes<Tag> &
-    GlobalEventAttributes &
+    Kiru.EventAttributes<HTMLTagToElement<Tag>> &
     JSX.ElementAttributes & {
       ref?:
-        | Kaioken.Ref<HTMLTagToElement<Tag>>
+        | Kiru.Ref<HTMLTagToElement<Tag>>
         | SignalClass<HTMLTagToElement<Tag> | null>
     }
 } & {
@@ -70,20 +67,19 @@ type ElementMap = {
     SignalableSvgGlobalAttributes &
     SignalableGlobalAttributes &
     SignalableAriaProps &
-    EventAttributes<Tag> &
-    GlobalEventAttributes &
+    Kiru.EventAttributes<SVGTagToElement<Tag>> &
     JSX.ElementAttributes & {
       ref?:
-        | Kaioken.Ref<SVGTagToElement<Tag>>
+        | Kiru.Ref<SVGTagToElement<Tag>>
         | SignalClass<SVGTagToElement<Tag> | null>
     }
 } & {
-  [Tag in WebComponentTag]: Record<string, any>
+  [Tag in `${string}-${string}`]: Record<string, any>
 }
 
 declare global {
   interface Window {
-    __kaioken: KaiokenGlobalContext | undefined
+    __kiru: KiruGlobalContext | undefined
   }
   namespace JSX {
     interface IntrinsicElements extends ElementMap {}
@@ -103,29 +99,31 @@ declare global {
 
     type PrimitiveChild = string | number | bigint | boolean | undefined | null
 
-    type ElementKey = string | number | null | undefined
+    type ElementKey = string | number
 
     type Element =
       | Element[]
-      | Kaioken.VNode
+      | Kiru.VNode
       | PrimitiveChild
-      | Kaioken.Signal<PrimitiveChild>
+      | Kiru.Signal<PrimitiveChild>
 
-    type ElementAttributes = {
+    interface ElementAttributes {
       key?: JSX.ElementKey
       children?: JSX.Children
       innerHTML?:
         | string
         | number
-        | Kaioken.Signal<string | number | null | undefined>
+        | Kiru.Signal<string | number | null | undefined>
     }
   }
-  export namespace Kaioken {
-    type ProviderProps<T> = {
+  namespace Kiru {
+    interface CustomEvents {}
+
+    interface ProviderProps<T> {
       value: T
       children?: JSX.Children | ((value: T) => JSX.Element)
     }
-    type Context<T> = {
+    interface Context<T> {
       [$CONTEXT]: true
       Provider: (({ value, children }: ProviderProps<T>) => JSX.Element) & {
         displayName?: string
@@ -135,36 +133,32 @@ declare global {
       displayName?: string
     }
 
-    type FC<T = {}> = ((props: FCProps<T>) => JSX.Element) & {
+    interface FC<T = {}> {
+      (props: FCProps<T>): JSX.Element
       /** Used to display the name of the component in devtools  */
       displayName?: string
     }
+
     type FCProps<T = {}> = T & { children?: JSX.Children }
-    type InferProps<T> = T extends Kaioken.FC<infer P> ? P : never
+    type InferProps<T> = T extends Kiru.FC<infer P> ? P : never
 
     interface HookDevtoolsProvisions<T extends Record<string, any>> {
       get: () => T
-      set?: (value: ReturnType<this["get"]>) => void
+      set?: (value: T) => void
     }
     type Hook<T> = T & {
       cleanup?: () => void
       name?: string
       dev?: {
+        /** Used to perform invalidation during HMR when the hook's arguments have changed */
+        initialArgs?: any
         devtools?: HookDevtoolsProvisions<any>
-        /**
-         * If true, during development, when the raw arguments of the hook change,
-         * the hook will persist instead of being recreated.
-         * During the next render, `isInit` will be set to `true`, indicating
-         * that the hook should be reinitialized.
-         */
-        reinitUponRawArgsChanged?: boolean
-        readonly rawArgsChanged?: boolean
       }
     }
-    type RefObject<T> = {
+    interface RefObject<T> {
       readonly current: T | null
     }
-    type MutableRefObject<T> = {
+    interface MutableRefObject<T> {
       current: T
     }
     type RefCallback<T> = {
@@ -179,37 +173,52 @@ declare global {
 
     type Signal<T> = SignalClass<T> | ReadonlySignal<T>
 
-    type ExoticSymbol = typeof $FRAGMENT | typeof $CONTEXT_PROVIDER
+    type ExoticSymbol =
+      | typeof $FRAGMENT
+      | typeof $CONTEXT_PROVIDER
+      | typeof $HYDRATION_BOUNDARY
 
-    type VNode = {
-      type: string | Function | ExoticSymbol
+    interface VNode {
+      app?: AppContext
       dom?: SomeDom
+      lastChildDom?: SomeDom
+      type: Function | ExoticSymbol | "#text" | (string & {})
       props: {
         [key: string]: any
         children?: unknown
         key?: JSX.ElementKey
-        ref?: Kaioken.Ref<unknown>
+        ref?: Kiru.Ref<unknown>
       }
       index: number
       depth: number
-      hooks?: Hook<unknown>[]
-      subs?: string[]
-      cleanups?: Record<string, Function>
-      parent?: VNode
-      child?: VNode
-      sibling?: VNode
-      prev?: VNode
+      parent: VNode | null
+      child: VNode | null
+      sibling: VNode | null
+      prev: VNodeSnapshot | null
+      deletions: VNode[] | null
       flags: number
+      hooks?: Hook<unknown>[]
+      subs?: Set<Function>
+      cleanups?: Record<string, Function>
       effects?: Array<Function>
       immediateEffects?: Array<Function>
-      prevStyleStr?: string
-      prevStyleObj?: StyleObject
-      hmrUpdated?: boolean
       memoizedProps?: Record<string, any>
+      arePropsEqual?: (
+        prev: Record<string, any>,
+        next: Record<string, any>
+      ) => boolean
+      // dev-mode only
+      hookSig?: string[]
+      hmrUpdated?: boolean
     }
+  }
+  interface VNodeSnapshot {
+    props: Kiru.VNode["props"]
+    memoizedProps: Kiru.VNode["memoizedProps"]
+    index: number
   }
 
   interface Element {
-    __kaiokenNode?: Kaioken.VNode
+    __kiruNode?: Kiru.VNode
   }
 }

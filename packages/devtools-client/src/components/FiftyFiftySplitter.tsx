@@ -1,11 +1,5 @@
 import { useEventListener, useMouse, useElementBounding } from "devtools-shared"
-import {
-  ElementProps,
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useSignal,
-} from "kaioken"
+import { useCallback, useLayoutEffect, useRef, useSignal } from "kiru"
 
 export const FiftyFiftySplitter = (props: {
   children: [JSX.Element, JSX.Element]
@@ -19,8 +13,9 @@ export const FiftyFiftySplitter = (props: {
   const firstViewContainerBounding = useElementBounding(firstViewContainer)
   const mainContainer = useRef<HTMLDivElement>(null)
 
-  const firstView = Array.isArray(props.children) ? props.children[0] : <></>
-  const secondView = Array.isArray(props.children) ? props.children[1] : <></>
+  const [firstView, secondView] = Array.isArray(props.children)
+    ? props.children
+    : []
 
   useLayoutEffect(() => {
     if (!mainContainer.current) return
@@ -34,7 +29,7 @@ export const FiftyFiftySplitter = (props: {
 
   useEventListener(
     "mousemove",
-    useCallback<NonNullable<ElementProps<"div">["onmousemove"]>>((e) => {
+    useCallback<Kiru.MouseEventHandler<any>>((e) => {
       if (startMouse.value == null || mainContainer.current == null) return
 
       const max = Math.max(
@@ -64,6 +59,9 @@ export const FiftyFiftySplitter = (props: {
 
   return (
     <div
+      onmousemove={(e) => {
+        e.x
+      }}
       ref={mainContainer}
       className="flex-grow grid gap-2 items-start w-full relative"
       style={{ gridTemplateColumns: `${firstContainerWidth}px 1fr` }}

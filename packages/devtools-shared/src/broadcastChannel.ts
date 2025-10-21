@@ -1,11 +1,11 @@
-import type { AppContext } from "kaioken"
+import type { AppContext } from "kiru"
 
-const BROADCAST_CHANNEL_NAME = "kaioken-devtools"
+const BROADCAST_CHANNEL_NAME = "kiru-devtools"
 
 declare global {
   interface Window {
     __devtoolsSelection: {
-      node: Kaioken.VNode
+      node: Kiru.VNode
       app: AppContext
     } | null
   }
