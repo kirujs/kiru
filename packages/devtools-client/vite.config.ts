@@ -21,6 +21,10 @@ export default defineConfig({
       output: {
         inlineDynamicImports: true,
       },
+      external: [
+        "virtual:kiru-file-router-manifest",
+        "virtual:kiru-file-router",
+      ],
     },
   },
   plugins: [

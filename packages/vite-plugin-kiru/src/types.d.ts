@@ -19,6 +19,26 @@ export interface DevtoolsOptions {
   formatFileLink?: FileLinkFormatter
 }
 
+export interface FileRouterOptions {
+  /**
+   * Directory where page files are located
+   * @default "pages"
+   */
+  pagesDir?: string
+
+  /**
+   * File extensions to consider as pages
+   * @default [".tsx", ".ts", ".jsx", ".js"]
+   */
+  pageExtensions?: string[]
+
+  /**
+   * Whether to enable file-based routing
+   * @default true
+   */
+  enabled?: boolean
+}
+
 export interface KiruPluginOptions {
   /**
    * Whether the devtools should be injected into the build during development
@@ -37,6 +57,11 @@ export interface KiruPluginOptions {
    * @default false
    */
   loggingEnabled?: boolean
+
+  /**
+   * File-based routing configuration
+   */
+  fileRouter?: FileRouterOptions
 
   /**
    * Callback for when a file is transformed

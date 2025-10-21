@@ -15,6 +15,7 @@ import {
 } from "./codegen"
 import { FileLinkFormatter, KiruPluginOptions } from "./types"
 import { ANSI } from "./ansi.js"
+import { FileRouterScanner } from "./fileRouter.js"
 
 export const defaultEsBuildOptions: ESBuildOptions = {
   jsxInject: `import { createElement as _jsx, Fragment as _jsxFragment } from "kiru"`,
@@ -50,6 +51,7 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
   const fileToVirtualModules: Record<string, Set<string>> = {}
   let projectRoot = process.cwd().replace(/\\/g, "/")
   let includedPaths: string[] = []
+  let fileRouterScanner: FileRouterScanner | null = null
 
   return {
     name: "vite-plugin-kiru",
@@ -81,6 +83,19 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
       includedPaths = (opts?.include ?? []).map((p) =>
         path.resolve(projectRoot, p).replace(/\\/g, "/")
       )
+
+      // Initialize file router scanner if enabled
+      if (opts?.fileRouter?.enabled !== false) {
+        fileRouterScanner = new FileRouterScanner(projectRoot, opts?.fileRouter)
+        const routes = fileRouterScanner.scanRoutes()
+        log(`Found ${ANSI.green(routes.size.toString())} file-based routes`)
+
+        // Generate virtual modules for file router
+        virtualModules["virtual:kiru-file-router"] =
+          fileRouterScanner.generateRouteLoader()
+        virtualModules["virtual:kiru-file-router-manifest"] =
+          fileRouterScanner.generateRouteManifest()
+      }
     },
     transformIndexHtml(html) {
       if (!devtoolsEnabled) return
@@ -116,6 +131,51 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
       }
       server.watcher.on("change", (file) => {
         const filePath = path.resolve(file).replace(/\\/g, "/")
+
+        // Check if this is a page file change that affects file router
+        if (
+          fileRouterScanner &&
+          filePath.includes(opts?.fileRouter?.pagesDir ?? "src/pages")
+        ) {
+          const routes = fileRouterScanner.scanRoutes()
+          log(
+            `Rescanned routes: ${ANSI.green(
+              routes.size.toString()
+            )} routes found`
+          )
+
+          // Update virtual modules
+          virtualModules["virtual:kiru-file-router"] =
+            fileRouterScanner.generateRouteLoader()
+          virtualModules["virtual:kiru-file-router-manifest"] =
+            fileRouterScanner.generateRouteManifest()
+
+          // Invalidate virtual modules
+          const routerMod = server.moduleGraph.getModuleById(
+            "virtual:kiru-file-router"
+          )
+          const manifestMod = server.moduleGraph.getModuleById(
+            "virtual:kiru-file-router-manifest"
+          )
+
+          if (routerMod) {
+            server.moduleGraph.invalidateModule(
+              routerMod,
+              undefined,
+              undefined,
+              true
+            )
+          }
+          if (manifestMod) {
+            server.moduleGraph.invalidateModule(
+              manifestMod,
+              undefined,
+              undefined,
+              true
+            )
+          }
+        }
+
         const affectedVirtualModules = fileToVirtualModules[filePath]
         if (affectedVirtualModules) {
           for (const modId of affectedVirtualModules) {

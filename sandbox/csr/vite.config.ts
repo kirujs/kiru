@@ -11,6 +11,11 @@ export default defineConfig({
     kiru({
       include: ["../shared/"],
       loggingEnabled: true,
+      fileRouter: {
+        enabled: true,
+        pagesDir: "src/pages",
+        pageExtensions: [".tsx", ".ts", ".jsx", ".js"],
+      },
     }),
   ],
 })
