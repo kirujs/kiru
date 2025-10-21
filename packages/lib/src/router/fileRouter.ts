@@ -1,11 +1,8 @@
 import { computed, Signal } from "../signals/index.js"
 import { createElement } from "../element.js"
 import { useState, useEffect } from "../hooks/index.js"
-import {
-  RouterContext,
-  type RouterContextValue,
-  type FileRouteInfo,
-} from "./index.js"
+import { FileRouteInfo, RouteQuery } from "./types.js"
+import { RouterContext, type FileRouterContextType } from "./context.js"
 
 class FileRouterController {
   private routes: FileRouteInfo[] = []
@@ -18,7 +15,7 @@ class FileRouterController {
     params: Record<string, string>
     query: Record<string, string | string[] | undefined>
   }>
-  private contextValue: Signal<RouterContextValue>
+  private contextValue: Signal<FileRouterContextType>
   private cleanups: (() => void)[] = []
 
   constructor(props: FileRouterProps) {
@@ -40,6 +37,7 @@ class FileRouterController {
     this.loadRoutes().then(() => this.loadCurrentRoute())
 
     const handlePopState = () => {
+      console.log("handlePopState")
       const path = window.location.pathname
       const query = parseQuery(window.location.search)
       this.state.value = { path, params: {}, query }
@@ -156,13 +154,16 @@ class FileRouterController {
     }
   }
 
-  private navigate(path: string) {
-    window.history.pushState(null, "", path)
+  private navigate(path: string, options?: { replace?: boolean }) {
+    const f = options?.replace ? "replaceState" : "pushState"
+    window.history[f]({}, "", path)
+    window.dispatchEvent(new PopStateEvent("popstate", { state: {} }))
+
     this.state.value = { ...this.state.value, path, params: {} }
     this.loadCurrentRoute()
   }
 
-  private setQuery(query: Record<string, string | string[] | undefined>) {
+  private setQuery(query: RouteQuery) {
     const queryString = buildQueryString(query)
     const newUrl = `${this.state.value.path}${
       queryString ? `?${queryString}` : ""
