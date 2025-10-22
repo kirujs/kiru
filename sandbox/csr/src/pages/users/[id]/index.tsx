@@ -50,7 +50,9 @@ export default function UserDetailPage({
         className="w-10 h-10 rounded-full"
       />
       <p>User Email: {data.user.email}</p>
-      <button onclick={() => router.navigate("/users")}>Back to Users</button>
+      <button onclick={() => router.navigate("/users", { transition: false })}>
+        Back to Users
+      </button>
     </div>
   )
 }

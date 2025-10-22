@@ -6,12 +6,14 @@ import { useCallback } from "../hooks/index.js"
 export interface LinkProps extends ElementProps<"a"> {
   to: string
   replace?: boolean
+  transition?: boolean
 }
 
 export const Link: Kiru.FC<LinkProps> = ({
   to,
   onclick,
   replace,
+  transition,
   ...props
 }) => {
   const { navigate } = useFileRouter()
@@ -21,7 +23,7 @@ export const Link: Kiru.FC<LinkProps> = ({
       onclick?.(e)
       if (e.defaultPrevented) return
       e.preventDefault()
-      navigate(to, { replace })
+      navigate(to, { replace, transition })
     },
     [to, navigate, onclick, replace]
   )

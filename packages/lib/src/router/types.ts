@@ -45,6 +45,7 @@ export type LayoutReducer = (
 
 export type PageDataLoaderConfig<T = unknown> = {
   load: (signal: AbortSignal, state: RouterState) => Promise<T>
+  transition?: boolean
 }
 
 export interface PageConfig {

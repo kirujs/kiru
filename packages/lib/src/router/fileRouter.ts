@@ -1,4 +1,4 @@
-import { Signal, computed } from "../index.js"
+import { Signal, computed, flushSync } from "../index.js"
 import { createElement } from "../element.js"
 import { useState, useEffect } from "../hooks/index.js"
 import { RouterContext, type FileRouterContextType } from "./context.js"
@@ -16,6 +16,7 @@ import { FileRouterDataLoadError } from "./errors.js"
 import { __DEV__ } from "../env.js"
 
 class FileRouterController {
+  private enableTransitions: boolean
   private pages: VitePagesImportMap
   private layouts: ViteLayoutsImportMap
   private abortController: AbortController
@@ -27,7 +28,8 @@ class FileRouterController {
   private contextValue: Signal<FileRouterContextType>
   private cleanups: (() => void)[] = []
 
-  constructor() {
+  constructor(props: FileRouterProps) {
+    this.enableTransitions = !!props.transition
     this.pages = {}
     this.layouts = {}
     this.abortController = new AbortController()
@@ -45,7 +47,8 @@ class FileRouterController {
       state: this.state.value,
       navigate: this.navigate.bind(this),
       setQuery: this.setQuery.bind(this),
-      reload: () => this.loadRoute(),
+      reload: (options?: { transition?: boolean }) =>
+        this.loadRoute(void 0, void 0, options?.transition),
     }))
     this.loadRoutes().then(() => this.loadRoute())
 
@@ -130,7 +133,8 @@ class FileRouterController {
 
   private async loadRoute(
     path: string = window.location.pathname,
-    props: PageProps<PageConfig> = {}
+    props: PageProps<PageConfig> = {},
+    enableTransition = this.enableTransitions
   ): Promise<void> {
     this.loading.value = true
     this.abortController?.abort()
@@ -192,10 +196,13 @@ class FileRouterController {
         signal,
       }
 
-      if (page.config?.loader) {
-        props = { ...props, loading: true, data: null, error: null }
+      const { config } = page
 
-        page.config.loader
+      if (config?.loader) {
+        props = { ...props, loading: true, data: null, error: null }
+        const { loader } = config
+
+        loader
           .load(controller.signal, routerState)
           .then(
             (data) => ({ data, error: null }),
@@ -206,21 +213,31 @@ class FileRouterController {
           )
           .then(({ data, error }) => {
             if (controller.signal.aborted) return
-            this.currentPageProps.value = {
-              ...props,
-              loading: false,
-              data,
-              error,
+
+            let transition = enableTransition
+            if (loader.transition !== undefined) {
+              transition = loader.transition
             }
+
+            handleStateTransition(signal, transition, () => {
+              this.currentPageProps.value = {
+                ...props,
+                loading: false,
+                data,
+                error,
+              }
+            })
           })
       }
 
-      this.currentPage.value = page.default
-      this.state.value = routerState
-      this.currentPageProps.value = props
-      this.currentLayouts.value = layouts
-        .filter((m) => typeof m.default === "function")
-        .map((m) => m.default)
+      handleStateTransition(signal, enableTransition, () => {
+        this.currentPage.value = page.default
+        this.state.value = routerState
+        this.currentPageProps.value = props
+        this.currentLayouts.value = layouts
+          .filter((m) => typeof m.default === "function")
+          .map((m) => m.default)
+      })
     } catch (error) {
       console.error("Failed to load route component:", error)
       this.currentPage.value = null
@@ -231,12 +248,16 @@ class FileRouterController {
 
   private async navigate(
     path: string,
-    options?: { replace?: boolean; props?: Record<string, unknown> }
+    options?: {
+      replace?: boolean
+      transition?: boolean
+      props?: Record<string, unknown>
+    }
   ) {
     const f = options?.replace ? "replaceState" : "pushState"
     window.history[f]({}, "", path)
     window.dispatchEvent(new PopStateEvent("popstate", { state: {} }))
-    return this.loadRoute(path, options?.props)
+    return this.loadRoute(path, options?.props, options?.transition)
   }
 
   private setQuery(query: RouteQuery) {
@@ -249,8 +270,12 @@ class FileRouterController {
   }
 }
 
-export function FileRouter(): JSX.Element {
-  const [controller] = useState(() => new FileRouterController())
+interface FileRouterProps {
+  transition?: boolean
+}
+
+export function FileRouter(props: FileRouterProps): JSX.Element {
+  const [controller] = useState(() => new FileRouterController(props))
   useEffect(() => () => controller.dispose(), [controller])
 
   return createElement(
@@ -317,4 +342,20 @@ function formatViteMap(map: VitePagesImportMap): VitePagesImportMap {
       [k || "/"]: map[key],
     }
   }, {})
+}
+
+function handleStateTransition(
+  signal: AbortSignal,
+  enableTransition: boolean,
+  callback: () => void
+) {
+  if (!enableTransition || typeof document.startViewTransition !== "function") {
+    return callback()
+  }
+  const vt = document.startViewTransition(() => {
+    callback()
+    flushSync()
+  })
+
+  signal.addEventListener("abort", () => vt.skipTransition())
 }
