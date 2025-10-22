@@ -34,7 +34,11 @@ export default function UserDetailPage({
 
   return (
     <div>
-      <button onclick={() => router.reload()}>Reload</button>
+      <button
+        onclick={() => router.reload().then(() => console.log("reloaded"))}
+      >
+        Reload
+      </button>
       <h1>User Detail</h1>
       <p>User ID: {data.user.id}</p>
       <p>

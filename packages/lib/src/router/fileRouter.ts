@@ -3,6 +3,7 @@ import { createElement } from "../element.js"
 import { useState, useEffect } from "../hooks/index.js"
 import { RouterContext, type FileRouterContextType } from "./context.js"
 import {
+  ErrorPageProps,
   LayoutModule,
   PageConfig,
   PageProps,
@@ -12,6 +13,7 @@ import {
   VitePagesImportMap,
 } from "./types.js"
 import { FileRouterDataLoadError } from "./errors.js"
+import { __DEV__ } from "../env.js"
 
 class FileRouterController {
   private pages: VitePagesImportMap
@@ -39,7 +41,7 @@ class FileRouterController {
       query: {},
       signal: this.abortController.signal,
     })
-    this.contextValue = computed(() => ({
+    this.contextValue = computed<FileRouterContextType>(() => ({
       state: this.state.value,
       navigate: this.navigate.bind(this),
       setQuery: this.setQuery.bind(this),
@@ -126,7 +128,10 @@ class FileRouterController {
     return null
   }
 
-  private async loadRoute(path: string = window.location.pathname) {
+  private async loadRoute(
+    path: string = window.location.pathname,
+    props: PageProps<PageConfig> = {}
+  ): Promise<void> {
     this.loading.value = true
     this.abortController?.abort()
 
@@ -135,22 +140,24 @@ class FileRouterController {
     const signal = controller.signal
 
     try {
-      const pathSegments = path
-        .split("/")
-        .filter((seg) => !seg.startsWith("(") && !seg.endsWith(")"))
-        .filter(Boolean)
+      const pathSegments = path.split("/").filter(Boolean)
       const routeMatch = this.matchRoute(pathSegments)
 
       if (!routeMatch) {
-        this.state.value = {
-          path,
-          params: {},
-          query,
-          signal,
+        const _404 = this.matchRoute(["404"])
+        if (!_404) {
+          if (__DEV__) {
+            console.error(
+              `No 404 route defined (path: ${path}). See https://kirujs.dev/404 for more information.`
+            )
+          }
+          return
         }
-        this.currentPage.value = null
-        this.currentLayouts.value = []
-        return
+        const errorProps = {
+          source: { path },
+        } satisfies ErrorPageProps
+
+        return this.navigate("/404", { replace: true, props: errorProps })
       }
 
       const { pageModuleLoader, params, routeSegments } = routeMatch
@@ -184,10 +191,9 @@ class FileRouterController {
         query,
         signal,
       }
-      let props: PageProps<PageConfig> = {}
 
       if (page.config?.loader) {
-        props = { loading: true, data: null, error: null }
+        props = { ...props, loading: true, data: null, error: null }
 
         page.config.loader
           .load(controller.signal, routerState)
@@ -201,6 +207,7 @@ class FileRouterController {
           .then(({ data, error }) => {
             if (controller.signal.aborted) return
             this.currentPageProps.value = {
+              ...props,
               loading: false,
               data,
               error,
@@ -222,11 +229,14 @@ class FileRouterController {
     }
   }
 
-  private navigate(path: string, options?: { replace?: boolean }) {
+  private async navigate(
+    path: string,
+    options?: { replace?: boolean; props?: Record<string, unknown> }
+  ) {
     const f = options?.replace ? "replaceState" : "pushState"
     window.history[f]({}, "", path)
     window.dispatchEvent(new PopStateEvent("popstate", { state: {} }))
-    this.loadRoute(path)
+    return this.loadRoute(path, options?.props)
   }
 
   private setQuery(query: RouteQuery) {

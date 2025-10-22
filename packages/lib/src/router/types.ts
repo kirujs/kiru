@@ -61,3 +61,9 @@ export type PageProps<T extends PageConfig> =
         FileRouterDataLoadError
       >
     : {}
+
+export interface ErrorPageProps {
+  source?: {
+    path: string
+  }
+}
