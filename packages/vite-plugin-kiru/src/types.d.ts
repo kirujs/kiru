@@ -1,5 +1,4 @@
-import type { Plugin } from "vite"
-import type { ImportGlobFunction } from "vite"
+import type { ESBuildOptions, Plugin } from "vite"
 
 export type FileLinkFormatter = (path: string, line: number) => string
 
@@ -62,7 +61,7 @@ export interface KiruPluginOptions {
    *    layout: "layout.{js,jsx,ts,tsx,mdx}",
    * }
    */
-  fileRouter?: boolean | FileRouterOptions
+  fileRouter?: FileRouterOptions
 
   /**
    * Callback for when a file is transformed
@@ -73,6 +72,14 @@ export interface KiruPluginOptions {
    * Callback for when a file is excluded from transforms due to not being in project root or `include`
    */
   onFileExcluded?: (id: string) => void
+}
+
+export const defaultEsBuildOptions: ESBuildOptions
+
+export const defaultFileRouterOptions: {
+  dir: "/src/pages"
+  page: "index.{js,jsx,ts,tsx,mdx}"
+  layout: "layout.{js,jsx,ts,tsx,mdx}"
 }
 
 /**

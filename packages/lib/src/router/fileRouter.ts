@@ -2,7 +2,7 @@ import { Signal, computed } from "../index.js"
 import { createElement } from "../element.js"
 import { useState, useEffect } from "../hooks/index.js"
 import { RouterContext, type FileRouterContextType } from "./context.js"
-import { RouteQuery, ViteImportMap } from "./types.js"
+import { DefaultComponentModule, RouteQuery, ViteImportMap } from "./types.js"
 
 class FileRouterController {
   private pages: ViteImportMap
@@ -84,23 +84,6 @@ class FileRouterController {
     }
     const { pages, layouts } = manifest
 
-    const formatViteMap = (map: ViteImportMap): ViteImportMap => {
-      return Object.keys(map).reduce((acc, key) => {
-        let k = key
-        if (k.startsWith(".")) {
-          k = k.slice(1)
-        }
-        k = k.split("/").slice(0, -1).join("/") // remove filename
-
-        k = k.replace(/\[([^\]]+)\]/g, ":$1") // replace [param] with :param
-
-        return {
-          ...acc,
-          [k || "/"]: map[key],
-        }
-      }, {})
-    }
-
     this.pages = formatViteMap(pages)
     this.layouts = formatViteMap(layouts)
   }
@@ -108,13 +91,18 @@ class FileRouterController {
   private matchRoute(pathSegments: string[]) {
     outer: for (const [route, load] of Object.entries(this.pages)) {
       const routeSegments = route.split("/").filter(Boolean)
-      if (routeSegments.length !== pathSegments.length) {
+
+      const pathMatchingSegments = routeSegments.filter(
+        (seg) => !seg.startsWith("(") && !seg.endsWith(")")
+      )
+
+      if (pathMatchingSegments.length !== pathSegments.length) {
         continue
       }
       const params: Record<string, string> = {}
 
-      for (let i = 0; i < routeSegments.length; i++) {
-        const routeSeg = routeSegments[i]
+      for (let i = 0; i < pathMatchingSegments.length; i++) {
+        const routeSeg = pathMatchingSegments[i]
         if (routeSeg.startsWith(":")) {
           const key = routeSeg.slice(1)
           params[key] = pathSegments[i]
@@ -135,7 +123,10 @@ class FileRouterController {
     this.loading.value = true
 
     try {
-      const pathSegments = this.state.value.path.split("/").filter(Boolean)
+      const pathSegments = this.state.value.path
+        .split("/")
+        .filter((seg) => !seg.startsWith("(") && !seg.endsWith(")"))
+        .filter(Boolean)
       const matchingRoute = this.matchRoute(pathSegments)
 
       if (!matchingRoute) {
@@ -147,27 +138,26 @@ class FileRouterController {
       const { load, params, routeSegments } = matchingRoute
 
       const pagePromise = load().then((m) => m.default)
-      const layoutPromises = Object.keys(this.layouts)
-        .sort((a, b) => a.split("/").length - b.split("/").length)
-        .reduce<Promise<Kiru.FC>[]>((acc, k) => {
-          const layoutSegments = k.split("/").filter(Boolean)
-          if (layoutSegments.length > routeSegments.length) {
-            return acc
-          }
-          const applies = layoutSegments.every((segment, i) => {
-            const routeSegment = routeSegments[i]
-            return routeSegment.startsWith(":") || segment === routeSegment
-          })
-          if (!applies) {
-            return acc
-          }
-          return [...acc, this.layouts[k]().then((m) => m.default)]
-        }, [])
+      const layoutPromises = ["/", ...routeSegments].reduce<
+        Promise<DefaultComponentModule>[]
+      >((acc, _, i) => {
+        const layoutPath = "/" + routeSegments.slice(0, i).join("/")
+        const layoutLoad = this.layouts[layoutPath]
 
-      const [Page, ...Layouts] = await Promise.all([
+        if (!layoutLoad) {
+          return acc
+        }
+
+        return [...acc, layoutLoad()]
+      }, [])
+
+      const [Page, ...layouts] = await Promise.all([
         pagePromise,
         ...layoutPromises,
       ])
+      if (typeof Page !== "function") {
+        throw new Error("Route component must be a default exported function")
+      }
 
       this.state.value = {
         ...this.state.value,
@@ -175,7 +165,9 @@ class FileRouterController {
         query: parseQuery(window.location.search),
       }
 
-      this.currentLayouts.value = Layouts
+      this.currentLayouts.value = layouts
+        .filter((m) => typeof m.default === "function")
+        .map((m) => m.default)
       this.currentComponent.value = Page
     } catch (error) {
       console.error("Failed to load route component:", error)
@@ -255,4 +247,21 @@ function buildQueryString(
   }
 
   return params.toString()
+}
+
+function formatViteMap(map: ViteImportMap): ViteImportMap {
+  return Object.keys(map).reduce((acc, key) => {
+    let k = key
+    if (k.startsWith(".")) {
+      k = k.slice(1)
+    }
+    k = k.split("/").slice(0, -1).join("/") // remove filename
+
+    k = k.replace(/\[([^\]]+)\]/g, ":$1") // replace [param] with :param
+
+    return {
+      ...acc,
+      [k || "/"]: map[key],
+    }
+  }, {})
 }

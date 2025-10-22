@@ -11,7 +11,6 @@ export default defineConfig({
     kiru({
       include: ["../shared/"],
       loggingEnabled: true,
-      fileRouter: true,
     }),
   ],
 })

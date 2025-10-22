@@ -29,16 +29,13 @@ export const defaultEsBuildOptions: ESBuildOptions = {
   include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
 }
 
-function createFileRouterManifest(options: FileRouterOptions) {
-  const { dir, page, layout } = options
-
-  return `const pages = import.meta.glob("/**/${page}", {base: "${dir}"});
-const layouts = import.meta.glob("/**/${layout}", {base: "${dir}"});
-
-export { pages, layouts };`
+export const defaultFileRouterOptions: FileRouterOptions = {
+  dir: "/src/pages",
+  page: "index.{js,jsx,ts,tsx,mdx}",
+  layout: "layout.{js,jsx,ts,tsx,mdx}",
 }
 
-export default function kiru(opts?: KiruPluginOptions): Plugin {
+export default function kiru(opts: KiruPluginOptions = {}): Plugin {
   let isProduction = false
   let isBuild = false
   let devtoolsEnabled = false
@@ -53,7 +50,7 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
     `vscode://file/${path}:${line}`
 
   let dtClientPathname = "/__devtools__"
-  if (typeof opts?.devtools === "object") {
+  if (typeof opts.devtools === "object") {
     dtClientPathname = opts.devtools.pathname ?? dtClientPathname
     fileLinkFormatter = opts.devtools.formatFileLink ?? fileLinkFormatter
   }
@@ -87,28 +84,24 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
     configResolved(config) {
       isProduction = config.isProduction
       isBuild = config.command === "build"
-      devtoolsEnabled = opts?.devtools !== false && !isBuild && !isProduction
-      loggingEnabled = opts?.loggingEnabled === true
+      devtoolsEnabled = opts.devtools !== false && !isBuild && !isProduction
+      loggingEnabled = opts.loggingEnabled === true
 
       projectRoot = config.root.replace(/\\/g, "/")
-      includedPaths = (opts?.include ?? []).map((p) =>
+      includedPaths = (opts.include ?? []).map((p) =>
         path.resolve(projectRoot, p).replace(/\\/g, "/")
       )
 
-      // Initialize file router scanner if enabled
-      if (opts?.fileRouter == true) {
-        const frOpts =
-          opts.fileRouter === true
-            ? ({
-                dir: "/src/pages",
-                page: "index.{js,jsx,ts,tsx,mdx}",
-                layout: "layout.{js,jsx,ts,tsx,mdx}",
-              } satisfies FileRouterOptions)
-            : opts.fileRouter
+      const fileRouterOptions =
+        typeof opts.fileRouter === "object"
+          ? opts.fileRouter
+          : defaultFileRouterOptions
 
-        virtualModules["virtual:kiru-file-router-manifest"] =
-          createFileRouterManifest(frOpts)
-      }
+      const { dir, page, layout } = fileRouterOptions
+
+      virtualModules["virtual:kiru-file-router-manifest"] = `
+export const pages = import.meta.glob("/**/${page}", {base: "${dir}"}), 
+  layouts = import.meta.glob("/**/${layout}", {base: "${dir}"});`
     },
     transformIndexHtml(html) {
       if (!devtoolsEnabled) return
@@ -227,7 +220,7 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
         )
 
         if (!isIncludedByUser && !filePath.startsWith(projectRoot)) {
-          opts?.onFileExcluded?.(id)
+          opts.onFileExcluded?.(id)
           return { code: src }
         }
       }
@@ -273,7 +266,7 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
       log(ANSI.green("✓"), "Transformed")
 
       const result = code.toString()
-      opts?.onFileTransformed?.(id, result)
+      opts.onFileTransformed?.(id, result)
 
       return {
         code: result,
