@@ -2,11 +2,16 @@ import { Signal, computed } from "../index.js"
 import { createElement } from "../element.js"
 import { useState, useEffect } from "../hooks/index.js"
 import { RouterContext, type FileRouterContextType } from "./context.js"
-import { DefaultComponentModule, RouteQuery, ViteImportMap } from "./types.js"
+import {
+  LayoutModule,
+  RouteQuery,
+  ViteLayoutsImportMap,
+  VitePagesImportMap,
+} from "./types.js"
 
 class FileRouterController {
-  private pages: ViteImportMap
-  private layouts: ViteImportMap
+  private pages: VitePagesImportMap
+  private layouts: ViteLayoutsImportMap
   private currentComponent: Signal<Kiru.FC | null>
   private currentLayouts: Signal<Kiru.FC[]>
   private loading: Signal<boolean>
@@ -139,7 +144,7 @@ class FileRouterController {
 
       const pagePromise = load().then((m) => m.default)
       const layoutPromises = ["/", ...routeSegments].reduce<
-        Promise<DefaultComponentModule>[]
+        Promise<LayoutModule>[]
       >((acc, _, i) => {
         const layoutPath = "/" + routeSegments.slice(0, i).join("/")
         const layoutLoad = this.layouts[layoutPath]
@@ -249,7 +254,7 @@ function buildQueryString(
   return params.toString()
 }
 
-function formatViteMap(map: ViteImportMap): ViteImportMap {
+function formatViteMap(map: VitePagesImportMap): VitePagesImportMap {
   return Object.keys(map).reduce((acc, key) => {
     let k = key
     if (k.startsWith(".")) {
