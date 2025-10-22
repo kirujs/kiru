@@ -1,4 +1,5 @@
-import { useAsync, useFileRouter } from "kiru"
+import { useAsync } from "kiru"
+import { useFileRouter } from "kiru/router"
 
 interface FetchUserResponse {
   id: number

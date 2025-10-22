@@ -1,6 +1,6 @@
-export default function AboutLayout({ children }: { children: any }) {
+export default function AboutLayout({ children }: { children: JSX.Children }) {
   return (
-    <div className="about-layout">
+    <div className="flex">
       <div className="about-sidebar">
         <h2>About Section</h2>
         <ul>

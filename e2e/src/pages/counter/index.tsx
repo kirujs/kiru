@@ -1,6 +1,6 @@
 import { useState } from "kiru"
 
-export function Counter() {
+export default function CounterPage() {
   const [toggled, setToggled] = useState(false)
   return (
     <div>

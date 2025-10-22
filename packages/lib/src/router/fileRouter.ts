@@ -1,15 +1,15 @@
-import { computed, Signal } from "../signals/index.js"
+import { Signal, computed } from "../index.js"
 import { createElement } from "../element.js"
 import { useState, useEffect } from "../hooks/index.js"
-import { FileRouteInfo, RouteQuery } from "./types.js"
 import { RouterContext, type FileRouterContextType } from "./context.js"
+import { RouteQuery, ViteImportMap } from "./types.js"
 
 class FileRouterController {
-  private routes: FileRouteInfo[] = []
+  private pages: ViteImportMap
+  private layouts: ViteImportMap
   private currentComponent: Signal<Kiru.FC | null>
   private currentLayouts: Signal<Kiru.FC[]>
   private loading: Signal<boolean>
-  private props: FileRouterProps
   private state: Signal<{
     path: string
     params: Record<string, string>
@@ -18,18 +18,18 @@ class FileRouterController {
   private contextValue: Signal<FileRouterContextType>
   private cleanups: (() => void)[] = []
 
-  constructor(props: FileRouterProps) {
+  constructor() {
+    this.pages = {}
+    this.layouts = {}
     this.currentComponent = new Signal(null)
     this.currentLayouts = new Signal([])
     this.loading = new Signal(true)
-    this.props = props
     this.state = new Signal({
       path: window.location.pathname,
       params: {},
       query: parseQuery(window.location.search),
     })
     this.contextValue = computed(() => ({
-      routes: this.routes,
       state: this.state.value,
       navigate: this.navigate.bind(this),
       setQuery: this.setQuery.bind(this),
@@ -37,7 +37,6 @@ class FileRouterController {
     this.loadRoutes().then(() => this.loadCurrentRoute())
 
     const handlePopState = () => {
-      console.log("handlePopState")
       const path = window.location.pathname
       const query = parseQuery(window.location.search)
       this.state.value = { path, params: {}, query }
@@ -49,32 +48,23 @@ class FileRouterController {
     )
   }
 
-  public updateProps(props: FileRouterProps) {
-    this.props = props
-  }
-
   public getContextValue() {
     return this.contextValue.value
   }
 
   public getChildren() {
-    const loading = this.loading.value,
-      fallback = this.props.fallback,
-      currentComponent = this.currentComponent.value,
+    const currentComponent = this.currentComponent.value,
       layouts = this.currentLayouts.value
 
     if (currentComponent) {
       // Wrap component with layouts (outermost first)
-      let content = createElement(currentComponent)
-
-      for (let i = layouts.length - 1; i >= 0; i--) {
-        content = createElement(layouts[i], { children: content })
-      }
-
-      return content
+      return layouts.reduceRight(
+        (children, Layout) => createElement(Layout, { children }),
+        createElement(currentComponent)
+      )
     }
 
-    return loading ? fallback : null
+    return null
   }
 
   public dispose() {
@@ -82,70 +72,111 @@ class FileRouterController {
   }
 
   private async loadRoutes() {
+    let manifest: typeof import("virtual:kiru-file-router-manifest")
     try {
-      const manifest = await import("virtual:kiru-file-router-manifest")
-      this.routes.push(...manifest.default.routes)
+      manifest = await import("virtual:kiru-file-router-manifest")
     } catch (error) {
-      console.warn("Failed to load routes:", error)
-      this.routes.length = 0
+      console.error(error)
+      manifest = {
+        pages: {},
+        layouts: {},
+      }
     }
+    const { pages, layouts } = manifest
+
+    const formatViteMap = (map: ViteImportMap): ViteImportMap => {
+      return Object.keys(map).reduce((acc, key) => {
+        let k = key
+        if (k.startsWith(".")) {
+          k = k.slice(1)
+        }
+        k = k.split("/").slice(0, -1).join("/") // remove filename
+
+        k = k.replace(/\[([^\]]+)\]/g, ":$1") // replace [param] with :param
+
+        return {
+          ...acc,
+          [k || "/"]: map[key],
+        }
+      }, {})
+    }
+
+    this.pages = formatViteMap(pages)
+    this.layouts = formatViteMap(layouts)
+  }
+
+  private matchRoute(pathSegments: string[]) {
+    outer: for (const [route, load] of Object.entries(this.pages)) {
+      const routeSegments = route.split("/").filter(Boolean)
+      if (routeSegments.length !== pathSegments.length) {
+        continue
+      }
+      const params: Record<string, string> = {}
+
+      for (let i = 0; i < routeSegments.length; i++) {
+        const routeSeg = routeSegments[i]
+        if (routeSeg.startsWith(":")) {
+          const key = routeSeg.slice(1)
+          params[key] = pathSegments[i]
+          continue
+        }
+        if (routeSeg !== pathSegments[i]) {
+          continue outer
+        }
+      }
+
+      return { load, params, routeSegments }
+    }
+
+    return null
   }
 
   private async loadCurrentRoute() {
-    if (this.routes.length === 0) return
-
     this.loading.value = true
 
     try {
-      const matchingRoute = findMatchingRoute(
-        this.state.value.path,
-        this.routes
-      )
+      const pathSegments = this.state.value.path.split("/").filter(Boolean)
+      const matchingRoute = this.matchRoute(pathSegments)
 
-      if (matchingRoute) {
-        const { routeMap, layoutMap } = await import("virtual:kiru-file-router")
-
-        // Extract parameters from the current path
-        const params = extractParamsFromPath(
-          this.state.value.path,
-          matchingRoute
-        )
-
-        // Update state with extracted parameters
-        this.state.value = { ...this.state.value, params }
-
-        // Load layouts
-        const layoutComponents: Kiru.FC[] = []
-        for (const layout of matchingRoute.layouts) {
-          const LayoutComponent = layoutMap[layout.filePath]
-          if (LayoutComponent) {
-            layoutComponents.push(LayoutComponent)
-          }
-        }
-        this.currentLayouts.value = layoutComponents
-
-        // Load page component
-        const Component = routeMap[matchingRoute.path]
-
-        if (Component) {
-          if (this.props.transition && "startViewTransition" in document) {
-            document.startViewTransition(() => {
-              this.currentComponent.value = Component
-            })
-          } else {
-            this.currentComponent.value = Component
-          }
-        } else {
-          console.warn(`No component found for route`, {
-            routeMap,
-            matchingRoute,
-          })
-          this.currentComponent.value = null
-        }
-      } else {
+      if (!matchingRoute) {
         this.currentComponent.value = null
         this.currentLayouts.value = []
+        return
       }
+
+      const { load, params, routeSegments } = matchingRoute
+
+      const pagePromise = load().then((m) => m.default)
+      const layoutPromises = Object.keys(this.layouts)
+        .sort((a, b) => a.split("/").length - b.split("/").length)
+        .reduce<Promise<Kiru.FC>[]>((acc, k) => {
+          const layoutSegments = k.split("/").filter(Boolean)
+          if (layoutSegments.length > routeSegments.length) {
+            return acc
+          }
+          const applies = layoutSegments.every((segment, i) => {
+            const routeSegment = routeSegments[i]
+            return routeSegment.startsWith(":") || segment === routeSegment
+          })
+          if (!applies) {
+            return acc
+          }
+          return [...acc, this.layouts[k]().then((m) => m.default)]
+        }, [])
+
+      const [Page, ...Layouts] = await Promise.all([
+        pagePromise,
+        ...layoutPromises,
+      ])
+
+      this.state.value = {
+        ...this.state.value,
+        params,
+        query: parseQuery(window.location.search),
+      }
+
+      this.currentLayouts.value = Layouts
+      this.currentComponent.value = Page
     } catch (error) {
       console.error("Failed to load route component:", error)
       this.currentComponent.value = null
@@ -173,14 +204,8 @@ class FileRouterController {
   }
 }
 
-interface FileRouterProps {
-  fallback?: JSX.Element
-  transition?: boolean
-}
-
-export function FileRouter(props: FileRouterProps): JSX.Element {
-  const [controller] = useState(() => new FileRouterController(props))
-  controller.updateProps(props)
+export function FileRouter(): JSX.Element {
+  const [controller] = useState(() => new FileRouterController())
   useEffect(() => () => controller.dispose(), [controller])
 
   return createElement(
@@ -230,58 +255,4 @@ function buildQueryString(
   }
 
   return params.toString()
-}
-
-// Utility function to find matching route
-function findMatchingRoute(
-  path: string,
-  routes: FileRouteInfo[]
-): FileRouteInfo | null {
-  // First try exact matches
-  const exactMatch = routes.find((route) => route.path === path)
-  if (exactMatch) return exactMatch
-
-  // Then try parameterized matches
-  for (const route of routes) {
-    if (route.params.length > 0) {
-      const pathSegments = path.split("/").filter(Boolean)
-      const routeSegments = route.path.split("/").filter(Boolean)
-
-      if (pathSegments.length === routeSegments.length) {
-        let matches = true
-        for (let i = 0; i < pathSegments.length; i++) {
-          const routeSegment = routeSegments[i]
-          if (
-            !routeSegment.startsWith(":") &&
-            pathSegments[i] !== routeSegment
-          ) {
-            matches = false
-            break
-          }
-        }
-        if (matches) return route
-      }
-    }
-  }
-
-  return null
-}
-
-function extractParamsFromPath(
-  path: string,
-  route: FileRouteInfo
-): Record<string, string> {
-  const params: Record<string, string> = {}
-  const pathSegments = path.split("/").filter(Boolean)
-  const routeSegments = route.path.split("/").filter(Boolean)
-
-  for (let i = 0; i < routeSegments.length; i++) {
-    const routeSegment = routeSegments[i]
-    if (routeSegment.startsWith(":")) {
-      const paramName = routeSegment.slice(1) // Remove the ':'
-      params[paramName] = pathSegments[i] || ""
-    }
-  }
-
-  return params
 }

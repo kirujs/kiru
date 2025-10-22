@@ -1,4 +1,5 @@
 import type { Plugin } from "vite"
+import type { ImportGlobFunction } from "vite"
 
 export type FileLinkFormatter = (path: string, line: number) => string
 
@@ -21,22 +22,17 @@ export interface DevtoolsOptions {
 
 export interface FileRouterOptions {
   /**
-   * Directory where page files are located
-   * @default "pages"
+   * @default "/src/pages"
    */
-  pagesDir?: string
-
+  dir: string
   /**
-   * File extensions to consider as pages
-   * @default [".tsx", ".ts", ".jsx", ".js"]
+   * @default "index.{js,jsx,ts,tsx,mdx}"
    */
-  pageExtensions?: string[]
-
+  page: string
   /**
-   * Whether to enable file-based routing
-   * @default true
+   * @default "layout.{js,jsx,ts,tsx,mdx}"
    */
-  enabled?: boolean
+  layout: string
 }
 
 export interface KiruPluginOptions {
@@ -60,8 +56,13 @@ export interface KiruPluginOptions {
 
   /**
    * File-based routing configuration
+   * @default {
+   *    dir: "/src/pages",
+   *    page: "index.{js,jsx,ts,tsx,mdx}",
+   *    layout: "layout.{js,jsx,ts,tsx,mdx}",
+   * }
    */
-  fileRouter?: FileRouterOptions
+  fileRouter?: boolean | FileRouterOptions
 
   /**
    * Callback for when a file is transformed

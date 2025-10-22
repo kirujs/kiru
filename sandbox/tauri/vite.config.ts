@@ -26,5 +26,5 @@ export default defineConfig({
   // esbuild: {
   //   sourcemap: false,
   // },
-  plugins: [kiru()],
+  plugins: [kiru({ fileRouter: true })],
 })

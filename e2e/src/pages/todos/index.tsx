@@ -1,6 +1,6 @@
 import { useSignal, useState } from "kiru"
 
-export function TodoList() {
+export default function TodosPage() {
   const inputText = useSignal("")
   const [items, setItems] = useState<{ text: string }[]>([
     { text: "buy coffee" },

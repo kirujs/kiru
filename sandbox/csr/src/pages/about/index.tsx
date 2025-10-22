@@ -1,4 +1,4 @@
-import { useFileRouter } from "kiru"
+import { useFileRouter } from "kiru/router"
 
 export default function AboutPage() {
   const router = useFileRouter()

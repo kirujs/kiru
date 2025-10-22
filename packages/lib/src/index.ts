@@ -13,8 +13,6 @@ export * from "./components/index.js"
 export * from "./renderToString.js"
 export { nextIdle, flushSync, requestUpdate } from "./scheduler.js"
 export * from "./store.js"
-export * from "./router/index.js"
-export { FileRouter } from "./router/fileRouter.js"
 
 if (__DEV__) {
   if ("window" in globalThis) {

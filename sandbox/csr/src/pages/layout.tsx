@@ -1,4 +1,4 @@
-import { Link } from "kiru"
+import { Link } from "kiru/router"
 
 export default function RootLayout({ children }: { children: JSX.Children }) {
   return (

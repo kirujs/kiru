@@ -10,7 +10,7 @@ const LogCtx = createContext<(msg: string) => void>(null as any)
 
 const useLog = () => useContext(LogCtx)
 
-export function EffectsTest() {
+export default function EffectsPage() {
   const logs = useRef<string[]>([])
 
   const addLog = (msg: string) => {

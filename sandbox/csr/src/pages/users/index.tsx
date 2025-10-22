@@ -1,4 +1,5 @@
-import { Link, useAsync } from "kiru"
+import { useAsync } from "kiru"
+import { Link } from "kiru/router"
 
 interface FetchUsersResponse {
   users: {

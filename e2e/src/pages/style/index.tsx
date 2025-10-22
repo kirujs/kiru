@@ -69,7 +69,7 @@ const compareStyles = (
   }
 }
 
-export function StyleTest() {
+export default function StylePage() {
   const divRef = useRef<HTMLButtonElement>(null)
   const [divStyle, setDivstyle] = useState<StyleObject | string | undefined>({
     display: "flex",

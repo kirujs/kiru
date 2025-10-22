@@ -12,15 +12,10 @@ export interface RouterState {
   query: RouteQuery
 }
 
-export interface FileRouteInfo {
-  path: string
-  filePath: string
-  params: string[]
-  layouts: LayoutInfo[]
+export interface DefaultComponentModule {
+  default: Kiru.FC
 }
 
-export interface LayoutInfo {
-  path: string
-  filePath: string
-  level: number
+export interface ViteImportMap {
+  [fp: string]: () => Promise<DefaultComponentModule>
 }

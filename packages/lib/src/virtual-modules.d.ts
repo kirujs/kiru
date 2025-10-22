@@ -1,30 +1,5 @@
 declare module "virtual:kiru-file-router-manifest" {
-  const manifest: {
-    routes: Array<{
-      path: string
-      filePath: string
-      params: string[]
-      layouts: Array<{
-        path: string
-        filePath: string
-        level: number
-      }>
-    }>
-  }
-  export default manifest
-}
-
-declare module "virtual:kiru-file-router" {
-  export const routeMap: Record<string, Kiru.FC>
-  export const layoutMap: Record<string, Kiru.FC>
-  export const routePaths: string[]
-  export const routeInfo: Array<{
-    path: string
-    params: string[]
-    layouts: Array<{
-      path: string
-      filePath: string
-      level: number
-    }>
-  }>
+  const pages: Record<string, () => Promise<{ default: Kiru.FC }>>
+  const layouts: Record<string, () => Promise<{ default: Kiru.FC }>>
+  export { pages, layouts }
 }
