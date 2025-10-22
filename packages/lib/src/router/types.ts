@@ -1,3 +1,6 @@
+import { AsyncTaskState } from "../types.utils"
+import { FileRouterDataLoadError } from "./errors"
+
 export interface RouteParams {
   [key: string]: string
 }
@@ -10,6 +13,7 @@ export interface RouterState {
   path: string
   params: RouteParams
   query: RouteQuery
+  signal: AbortSignal
 }
 
 export interface PageModule {
@@ -39,8 +43,21 @@ export type LayoutReducer = (
   layouts: LayoutInfo[]
 ) => LayoutInfo[]
 
+export type PageDataLoaderConfig<T = unknown> = {
+  load: (signal: AbortSignal, state: RouterState) => Promise<T>
+}
+
 export interface PageConfig {
+  loader?: PageDataLoaderConfig
   // title?: string
   // description?: string
   // meta?: Record<string, string>
 }
+
+export type PageProps<T extends PageConfig> =
+  T["loader"] extends PageDataLoaderConfig
+    ? AsyncTaskState<
+        Awaited<ReturnType<T["loader"]["load"]>>,
+        FileRouterDataLoadError
+      >
+    : {}

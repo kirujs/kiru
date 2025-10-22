@@ -1,5 +1,4 @@
-import { useAsync } from "kiru"
-import { Link } from "kiru/router"
+import { Link, PageConfig, PageProps } from "kiru/router"
 
 interface FetchUsersResponse {
   users: {
@@ -9,20 +8,35 @@ interface FetchUsersResponse {
     image: string
   }[]
 }
-export default function Page() {
-  const users = useAsync<FetchUsersResponse>(
-    () =>
-      fetch(
-        "https://dummyjson.com/users?limit=5&skip=10&select=firstName,lastName,image"
-      ).then((res) => res.json()),
-    []
-  )
+
+export const config = {
+  loader: {
+    load: async (signal) => {
+      const response = await fetch(
+        "https://dummyjson.com/users?limit=5&skip=10&select=firstName,lastName,image",
+        { signal }
+      )
+      if (!response.ok) throw new Error(response.statusText)
+      const { users } = (await response.json()) as FetchUsersResponse
+      return { users }
+    },
+  },
+} satisfies PageConfig
+
+export default function Page({
+  data,
+  loading,
+  error,
+}: PageProps<typeof config>) {
+  if (loading) return <p>Loading...</p>
+  if (error) return <p>{String(error.cause)}</p>
+
   return (
     <div>
       <h1>Users</h1>
       <p>This is the users page</p>
       <div className="flex flex-col gap-2">
-        {users.data?.users.map((user) => (
+        {data.users.map((user) => (
           <div key={user.id} className="flex gap-2">
             <Link to={`/users/${user.id}`}>
               {user.firstName} {user.lastName}

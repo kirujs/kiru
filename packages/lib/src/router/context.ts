@@ -6,6 +6,7 @@ import type { RouteQuery, RouterState } from "./types.js"
 export interface FileRouterContextType {
   state: RouterState
   navigate: (path: string, options?: { replace?: boolean }) => void
+  reload: () => void
   setQuery: (query: RouteQuery) => void
 }
 

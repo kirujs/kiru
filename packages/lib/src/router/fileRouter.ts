@@ -4,49 +4,50 @@ import { useState, useEffect } from "../hooks/index.js"
 import { RouterContext, type FileRouterContextType } from "./context.js"
 import {
   LayoutModule,
+  PageConfig,
+  PageProps,
   RouteQuery,
+  RouterState,
   ViteLayoutsImportMap,
   VitePagesImportMap,
 } from "./types.js"
+import { FileRouterDataLoadError } from "./errors.js"
 
 class FileRouterController {
   private pages: VitePagesImportMap
   private layouts: ViteLayoutsImportMap
-  private currentComponent: Signal<Kiru.FC | null>
+  private abortController: AbortController
+  private currentPage: Signal<Kiru.FC<any> | null>
+  private currentPageProps: Signal<PageProps<PageConfig>>
   private currentLayouts: Signal<Kiru.FC[]>
   private loading: Signal<boolean>
-  private state: Signal<{
-    path: string
-    params: Record<string, string>
-    query: Record<string, string | string[] | undefined>
-  }>
+  private state: Signal<RouterState>
   private contextValue: Signal<FileRouterContextType>
   private cleanups: (() => void)[] = []
 
   constructor() {
     this.pages = {}
     this.layouts = {}
-    this.currentComponent = new Signal(null)
+    this.abortController = new AbortController()
+    this.currentPage = new Signal(null)
+    this.currentPageProps = new Signal({})
     this.currentLayouts = new Signal([])
     this.loading = new Signal(true)
-    this.state = new Signal({
+    this.state = new Signal<RouterState>({
       path: window.location.pathname,
       params: {},
-      query: parseQuery(window.location.search),
+      query: {},
+      signal: this.abortController.signal,
     })
     this.contextValue = computed(() => ({
       state: this.state.value,
       navigate: this.navigate.bind(this),
       setQuery: this.setQuery.bind(this),
+      reload: () => this.loadRoute(),
     }))
-    this.loadRoutes().then(() => this.loadCurrentRoute())
+    this.loadRoutes().then(() => this.loadRoute())
 
-    const handlePopState = () => {
-      const path = window.location.pathname
-      const query = parseQuery(window.location.search)
-      this.state.value = { path, params: {}, query }
-      this.loadCurrentRoute()
-    }
+    const handlePopState = () => this.loadRoute()
     window.addEventListener("popstate", handlePopState)
     this.cleanups.push(() =>
       window.removeEventListener("popstate", handlePopState)
@@ -58,14 +59,15 @@ class FileRouterController {
   }
 
   public getChildren() {
-    const currentComponent = this.currentComponent.value,
+    const Page = this.currentPage.value,
+      props = this.currentPageProps.value,
       layouts = this.currentLayouts.value
 
-    if (currentComponent) {
+    if (Page) {
       // Wrap component with layouts (outermost first)
       return layouts.reduceRight(
         (children, Layout) => createElement(Layout, { children }),
-        createElement(currentComponent)
+        createElement(Page, props)
       )
     }
 
@@ -94,7 +96,7 @@ class FileRouterController {
   }
 
   private matchRoute(pathSegments: string[]) {
-    outer: for (const [route, load] of Object.entries(this.pages)) {
+    outer: for (const [route, pageModuleLoader] of Object.entries(this.pages)) {
       const routeSegments = route.split("/").filter(Boolean)
 
       const pathMatchingSegments = routeSegments.filter(
@@ -118,34 +120,43 @@ class FileRouterController {
         }
       }
 
-      return { load, params, routeSegments }
+      return { pageModuleLoader, params, routeSegments }
     }
 
     return null
   }
 
-  private async loadCurrentRoute() {
+  private async loadRoute(path: string = window.location.pathname) {
     this.loading.value = true
+    this.abortController?.abort()
+
+    const query = parseQuery(window.location.search)
+    const controller = (this.abortController = new AbortController())
+    const signal = controller.signal
 
     try {
-      const pathSegments = this.state.value.path
+      const pathSegments = path
         .split("/")
         .filter((seg) => !seg.startsWith("(") && !seg.endsWith(")"))
         .filter(Boolean)
-      const matchingRoute = this.matchRoute(pathSegments)
+      const routeMatch = this.matchRoute(pathSegments)
 
-      if (!matchingRoute) {
-        this.currentComponent.value = null
+      if (!routeMatch) {
+        this.state.value = {
+          path,
+          params: {},
+          query,
+          signal,
+        }
+        this.currentPage.value = null
         this.currentLayouts.value = []
         return
       }
 
-      const { load, params, routeSegments } = matchingRoute
+      const { pageModuleLoader, params, routeSegments } = routeMatch
 
-      const pagePromise = load().then((m) => m.default)
-      const layoutPromises = ["/", ...routeSegments].reduce<
-        Promise<LayoutModule>[]
-      >((acc, _, i) => {
+      const pagePromise = pageModuleLoader()
+      const layoutPromises = ["/", ...routeSegments].reduce((acc, _, i) => {
         const layoutPath = "/" + routeSegments.slice(0, i).join("/")
         const layoutLoad = this.layouts[layoutPath]
 
@@ -154,29 +165,58 @@ class FileRouterController {
         }
 
         return [...acc, layoutLoad()]
-      }, [])
+      }, [] as Promise<LayoutModule>[])
 
-      const [Page, ...layouts] = await Promise.all([
+      const [page, ...layouts] = await Promise.all([
         pagePromise,
         ...layoutPromises,
       ])
-      if (typeof Page !== "function") {
+
+      if (controller.signal.aborted) return
+
+      if (typeof page.default !== "function") {
         throw new Error("Route component must be a default exported function")
       }
 
-      this.state.value = {
-        ...this.state.value,
+      const routerState: RouterState = {
+        path,
         params,
-        query: parseQuery(window.location.search),
+        query,
+        signal,
+      }
+      let props: PageProps<PageConfig> = {}
+
+      if (page.config?.loader) {
+        props = { loading: true, data: null, error: null }
+
+        page.config.loader
+          .load(controller.signal, routerState)
+          .then(
+            (data) => ({ data, error: null }),
+            (error) => ({
+              data: null,
+              error: new FileRouterDataLoadError(error),
+            })
+          )
+          .then(({ data, error }) => {
+            if (controller.signal.aborted) return
+            this.currentPageProps.value = {
+              loading: false,
+              data,
+              error,
+            }
+          })
       }
 
+      this.currentPage.value = page.default
+      this.state.value = routerState
+      this.currentPageProps.value = props
       this.currentLayouts.value = layouts
         .filter((m) => typeof m.default === "function")
         .map((m) => m.default)
-      this.currentComponent.value = Page
     } catch (error) {
       console.error("Failed to load route component:", error)
-      this.currentComponent.value = null
+      this.currentPage.value = null
     } finally {
       this.loading.value = false
     }
@@ -186,9 +226,7 @@ class FileRouterController {
     const f = options?.replace ? "replaceState" : "pushState"
     window.history[f]({}, "", path)
     window.dispatchEvent(new PopStateEvent("popstate", { state: {} }))
-
-    this.state.value = { ...this.state.value, path, params: {} }
-    this.loadCurrentRoute()
+    this.loadRoute(path)
   }
 
   private setQuery(query: RouteQuery) {
