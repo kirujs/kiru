@@ -11,7 +11,7 @@ export interface FileRouterConfig {
    * The import map to use for loading pages
    * @example
    * ```tsx
-   * <FileRouter pages={import.meta.glob("...")} />
+   * <FileRouter config={{ pages: import.meta.glob("/∗∗/index.tsx"), ... }} />
    * ```
    */
   pages: Record<string, unknown>
@@ -19,7 +19,7 @@ export interface FileRouterConfig {
    * The import map to use for loading layouts
    * @example
    * ```tsx
-   * <FileRouter layouts={import.meta.glob("...")} />
+   * <FileRouter config={{ pages: import.meta.glob("/∗∗/layout.tsx"), ... }} />
    * ```
    */
   layouts: Record<string, unknown>
