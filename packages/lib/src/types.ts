@@ -2,8 +2,8 @@ import type { ReadonlySignal, Signal as SignalClass } from "./signals"
 import type {
   $CONTEXT,
   $CONTEXT_PROVIDER,
+  $ERROR_BOUNDARY,
   $FRAGMENT,
-  $HYDRATION_BOUNDARY,
 } from "./constants"
 import type { KiruGlobalContext } from "./globalContext"
 import type {
@@ -167,6 +167,15 @@ declare global {
 
     type Ref<T> = RefCallback<T> | RefObject<T> | null | undefined
 
+    interface PromiseState<T> {
+      id: string
+      state: "pending" | "fulfilled" | "rejected"
+      value?: T
+      error?: Error
+    }
+
+    interface StatefulPromise<T> extends Promise<T>, PromiseState<T> {}
+
     type RenderMode = "dom" | "hydrate" | "string" | "stream"
 
     type StateSetter<T> = T | ((prev: T) => T)
@@ -176,7 +185,7 @@ declare global {
     type ExoticSymbol =
       | typeof $FRAGMENT
       | typeof $CONTEXT_PROVIDER
-      | typeof $HYDRATION_BOUNDARY
+      | typeof $ERROR_BOUNDARY
 
     interface VNode {
       app?: AppContext

@@ -6,8 +6,10 @@ export {
   $KIRU_ERROR,
   $HMR_ACCEPT,
   $MEMO,
-  $HYDRATION_BOUNDARY,
+  $ERROR_BOUNDARY,
+  $SUSPENSE_THROW,
   CONSECUTIVE_DIRTY_LIMIT,
+  PREFETCHED_DATA_EVENT,
   EVENT_PREFIX_REGEX,
   FLAG_UPDATE,
   FLAG_PLACEMENT,
@@ -27,9 +29,11 @@ const $FRAGMENT = Symbol.for("kiru.fragment")
 const $KIRU_ERROR = Symbol.for("kiru.error")
 const $HMR_ACCEPT = Symbol.for("kiru.hmrAccept")
 const $MEMO = Symbol.for("kiru.memo")
-const $HYDRATION_BOUNDARY = Symbol.for("kiru.hydrationBoundary")
+const $ERROR_BOUNDARY = Symbol.for("kiru.errorBoundary")
+const $SUSPENSE_THROW = Symbol.for("kiru.suspenseThrow")
 
 const CONSECUTIVE_DIRTY_LIMIT = 50
+const PREFETCHED_DATA_EVENT = "kiru:prefetched"
 
 const FLAG_UPDATE = 1 << 1
 const FLAG_PLACEMENT = 1 << 2

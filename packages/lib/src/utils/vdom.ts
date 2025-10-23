@@ -3,14 +3,15 @@ import {
   FLAG_DELETION,
   $FRAGMENT,
   $CONTEXT_PROVIDER,
-  $HYDRATION_BOUNDARY,
   FLAG_PLACEMENT,
   FLAG_UPDATE,
+  $ERROR_BOUNDARY,
 } from "../constants.js"
 import { createElement } from "../index.js"
 import { KiruError } from "../error.js"
 import { node } from "../globals.js"
 import type { AppContext } from "../appContext.js"
+import type { ErrorBoundaryNode } from "../types.utils.js"
 
 export {
   cloneVNode,
@@ -27,6 +28,7 @@ export {
   commitSnapshot,
   traverseApply,
   findParent,
+  findParentErrorBoundary,
   assertValidElementProps,
   isValidElementKeyProp,
   isValidElementRefProp,
@@ -54,9 +56,7 @@ function isVNode(thing: unknown): thing is Kiru.VNode {
 
 function isExoticType(type: Kiru.VNode["type"]): type is Kiru.ExoticSymbol {
   return (
-    type === $FRAGMENT ||
-    type === $CONTEXT_PROVIDER ||
-    type === $HYDRATION_BOUNDARY
+    type === $FRAGMENT || type === $CONTEXT_PROVIDER || type === $ERROR_BOUNDARY
   )
 }
 
@@ -151,6 +151,13 @@ function findParent(vNode: Kiru.VNode, predicate: (n: Kiru.VNode) => boolean) {
     n = n.parent
   }
   return null
+}
+
+function findParentErrorBoundary(vNode: Kiru.VNode): ErrorBoundaryNode | null {
+  return findParent(
+    vNode,
+    (n) => n.type === $ERROR_BOUNDARY
+  ) as ErrorBoundaryNode | null
 }
 
 function assertValidElementProps(vNode: Kiru.VNode) {

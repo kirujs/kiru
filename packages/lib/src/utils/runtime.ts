@@ -7,7 +7,7 @@ export { latest, sideEffectsEnabled }
  * This is a no-op in production. It is used to get the latest
  * iteration of a component or signal after HMR has happened.
  */
-function latest<T>(thing: T): T {
+function latest<T extends Exclude<object, null>>(thing: T): T {
   let tgt: any = thing
   if (__DEV__) {
     while ("__next" in tgt) {

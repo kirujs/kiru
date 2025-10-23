@@ -18,7 +18,6 @@ export type TransformCTX = {
   ast: ProgramNode
   fileLinkFormatter: FileLinkFormatter
   isBuild: boolean
-  isVirtualModule: boolean
   filePath: string
 }
 
