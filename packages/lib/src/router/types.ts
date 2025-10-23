@@ -46,20 +46,44 @@ export interface RouteQuery {
 }
 
 export interface RouterState {
+  /**
+   * The current path
+   */
   path: string
+  /**
+   * The current route params
+   * @example
+   * "/foo/[id]/page.tsx" -> { id: "123" }
+   */
   params: RouteParams
+  /**
+   * The current route query
+   */
   query: RouteQuery
+  /**
+   * The abort signal for the current route, aborted and
+   * renewed each time the route changes or reloads
+   */
   signal: AbortSignal
 }
 
 type PageDataLoaderContext = RouterState & {}
 
 export interface PageDataLoaderConfig<T = unknown> {
+  /**
+   * The function to load the page data
+   */
   load: (context: PageDataLoaderContext) => Promise<T>
+  /**
+   * Enable transitions when swapping between "load", "error" and "data" states
+   */
   transition?: boolean
 }
 
 export interface PageConfig {
+  /**
+   * The loader configuration for this page
+   */
   loader?: PageDataLoaderConfig
   // title?: string
   // description?: string

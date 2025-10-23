@@ -4,8 +4,17 @@ import { useCallback } from "../hooks/index.js"
 import { useFileRouter } from "./context.js"
 
 export interface LinkProps extends ElementProps<"a"> {
+  /**
+   * The path to navigate to
+   */
   to: string
+  /**
+   * Whether to replace the current history entry
+   */
   replace?: boolean
+  /**
+   * Whether to trigger a view transition
+   */
   transition?: boolean
 }
 
