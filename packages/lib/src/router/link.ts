@@ -1,7 +1,7 @@
 import type { ElementProps } from "../types"
-import { useFileRouter } from "./context.js"
 import { createElement } from "../element.js"
 import { useCallback } from "../hooks/index.js"
+import { useFileRouter } from "./context.js"
 
 export interface LinkProps extends ElementProps<"a"> {
   to: string

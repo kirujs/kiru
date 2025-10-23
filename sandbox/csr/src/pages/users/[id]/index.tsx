@@ -1,4 +1,4 @@
-import { PageConfig, PageProps, useFileRouter } from "kiru/router"
+import { definePageConfig, PageProps, useFileRouter } from "kiru/router"
 
 interface FetchUserResponse {
   id: number
@@ -8,9 +8,9 @@ interface FetchUserResponse {
   email: string
 }
 
-export const config = {
+export const config = definePageConfig({
   loader: {
-    load: async (signal, { params }) => {
+    load: async ({ signal, params }) => {
       const response = await fetch(
         `https://dummyjson.com/users/${params.id}?select=firstName,lastName,image,email`,
         { signal }
@@ -20,7 +20,7 @@ export const config = {
       return { user }
     },
   },
-} satisfies PageConfig
+})
 
 export default function UserDetailPage({
   data,

@@ -1,4 +1,4 @@
-import { Link, PageConfig, PageProps } from "kiru/router"
+import { definePageConfig, Link, PageProps } from "kiru/router"
 
 interface FetchUsersResponse {
   users: {
@@ -9,19 +9,20 @@ interface FetchUsersResponse {
   }[]
 }
 
-export const config = {
+export const config = definePageConfig({
   loader: {
-    load: async (signal) => {
+    load: async ({ signal }) => {
       const response = await fetch(
         "https://dummyjson.com/users?limit=5&skip=10&select=firstName,lastName,image",
         { signal }
       )
       if (!response.ok) throw new Error(response.statusText)
       const { users } = (await response.json()) as FetchUsersResponse
-      return { users }
+      return { users: users.splice(0, 5) }
     },
+    transition: false,
   },
-} satisfies PageConfig
+})
 
 export default function Page({
   data,

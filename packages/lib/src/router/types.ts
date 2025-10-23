@@ -16,35 +16,10 @@ export interface RouterState {
   signal: AbortSignal
 }
 
-export interface PageModule {
-  default: Kiru.FC
-  config?: PageConfig
-}
+type PageDataLoaderContext = RouterState & {}
 
-export interface LayoutModule {
-  default: Kiru.FC
-}
-
-export interface VitePagesImportMap {
-  [fp: string]: () => Promise<PageModule>
-}
-
-export interface ViteLayoutsImportMap {
-  [fp: string]: () => Promise<LayoutModule>
-}
-
-export interface LayoutInfo {
-  path: string
-  module: () => Promise<LayoutModule>
-}
-
-export type LayoutReducer = (
-  state: RouterState,
-  layouts: LayoutInfo[]
-) => LayoutInfo[]
-
-export type PageDataLoaderConfig<T = unknown> = {
-  load: (signal: AbortSignal, state: RouterState) => Promise<T>
+export interface PageDataLoaderConfig<T = unknown> {
+  load: (context: PageDataLoaderContext) => Promise<T>
   transition?: boolean
 }
 
