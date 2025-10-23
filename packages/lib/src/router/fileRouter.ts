@@ -83,6 +83,7 @@ export class FileRouterController {
       normalizePrefixPath(dir),
       normalizePrefixPath(baseUrl),
     ]
+    debugger
     this.pages = formatViteImportMap(
       pages as ViteImportMap,
       normalizedDir,
@@ -447,11 +448,11 @@ function normalizePrefixPath(path: string) {
   while (path.startsWith(".")) {
     path = path.slice(1)
   }
-  if (!path.startsWith("/")) {
-    path = "/" + path
-  }
   while (path.endsWith("/")) {
     path = path.slice(0, -1)
+  }
+  if (!path.startsWith("/")) {
+    path = "/" + path
   }
   return path
 }
