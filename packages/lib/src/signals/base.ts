@@ -39,16 +39,18 @@ export class Signal<T> {
           return this as Signal<any>
         },
         inject: (prev) => {
-          if (this.$initialValue === prev.$initialValue) {
-            this.$value = prev.$value
-          }
-
           signalSubsMap.get(this.$id)?.clear?.()
           signalSubsMap.delete(this.$id)
           this.$id = prev.$id
           // @ts-ignore - this handles scenarios where a reference to the prev has been encapsulated
           // and we need to be able to refer to the latest version of the signal.
           prev.__next = this
+
+          if (this.$initialValue === prev.$initialValue) {
+            this.$value = prev.$value
+          } else {
+            this.notify()
+          }
         },
         destroy: () => {},
       } satisfies HMRAccept<Signal<any>>
