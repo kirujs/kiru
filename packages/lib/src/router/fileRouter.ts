@@ -83,7 +83,6 @@ export class FileRouterController {
       normalizePrefixPath(dir),
       normalizePrefixPath(baseUrl),
     ]
-    debugger
     this.pages = formatViteImportMap(
       pages as ViteImportMap,
       normalizedDir,
