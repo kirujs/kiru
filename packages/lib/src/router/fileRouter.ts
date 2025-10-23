@@ -7,21 +7,22 @@ import { FileRouterDataLoadError } from "./errors.js"
 import { fileRouterInstance } from "./globals.js"
 import type {
   ErrorPageProps,
+  FileRouterConfig,
   PageConfig,
   PageProps,
   RouteQuery,
   RouterState,
 } from "./types.js"
 import type {
-  VitePagesImportMap,
-  ViteLayoutsImportMap,
-  LayoutModule,
+  DefaultComponentModule,
+  PageModule,
+  ViteImportMap,
 } from "./types.internal.js"
 
 export class FileRouterController {
   private enableTransitions: boolean
-  private pages: VitePagesImportMap
-  private layouts: ViteLayoutsImportMap
+  private pages: ViteImportMap
+  private layouts: ViteImportMap
   private abortController: AbortController
   private currentPage: Signal<{
     component: Kiru.FC<any>
@@ -46,7 +47,6 @@ export class FileRouterController {
 
   constructor(props: FileRouterProps) {
     fileRouterInstance.current = this
-    this.enableTransitions = !!props.transition
     this.pages = {}
     this.layouts = {}
     this.abortController = new AbortController()
@@ -70,7 +70,31 @@ export class FileRouterController {
     this.filePathToPageRoute = new Map()
     this.pageRouteToConfig = new Map()
     this.currentRoute = null
-    this.loadRoutes().then(() => this.loadRoute())
+
+    const {
+      pages,
+      layouts,
+      dir = "/pages",
+      baseUrl = "/",
+      transition,
+    } = props.config
+    this.enableTransitions = !!transition
+    const [normalizedDir, normalizedBaseUrl] = [
+      normalizePrefixPath(dir),
+      normalizePrefixPath(baseUrl),
+    ]
+    this.pages = formatViteImportMap(
+      pages as ViteImportMap,
+      normalizedDir,
+      normalizedBaseUrl
+    )
+    this.layouts = formatViteImportMap(
+      layouts as ViteImportMap,
+      normalizedDir,
+      normalizedBaseUrl
+    )
+
+    this.loadRoute()
 
     const handlePopState = () => this.loadRoute()
     window.addEventListener("popstate", handlePopState)
@@ -132,23 +156,6 @@ export class FileRouterController {
 
   public dispose() {
     this.cleanups.forEach((cleanup) => cleanup())
-  }
-
-  private async loadRoutes() {
-    let manifest: typeof import("virtual:kiru-file-router-manifest")
-    try {
-      manifest = await import("virtual:kiru-file-router-manifest")
-    } catch (error) {
-      console.error(error)
-      manifest = {
-        pages: {},
-        layouts: {},
-      }
-    }
-    const { pages, layouts } = manifest
-
-    this.pages = formatViteMap(pages)
-    this.layouts = formatViteMap(layouts)
   }
 
   private matchRoute(pathSegments: string[]) {
@@ -229,7 +236,7 @@ export class FileRouterController {
         }
 
         return [...acc, layoutLoad()]
-      }, [] as Promise<LayoutModule>[])
+      }, [] as Promise<DefaultComponentModule>[])
 
       const [page, ...layouts] = await Promise.all([
         pagePromise,
@@ -250,7 +257,7 @@ export class FileRouterController {
         signal,
       }
 
-      let config = page.config
+      let config = (page as unknown as PageModule).config
       if (this.pageRouteToConfig.has(route)) {
         config = this.pageRouteToConfig.get(route)
       }
@@ -339,7 +346,22 @@ export class FileRouterController {
 }
 
 export interface FileRouterProps {
-  transition?: boolean
+  /**
+   * The router configuration
+   * @example
+   * ```ts
+   *<FileRouter
+       config={{
+         dir: "/fbr-app", // optional, defaults to "/pages"
+         baseUrl: "/app", // optional, defaults to "/"
+         pages: import.meta.glob("/∗∗/index.tsx"),
+         layouts: import.meta.glob("/∗∗/layout.tsx"),
+         transition: true
+       }}
+  />
+   * ```
+   */
+  config: FileRouterConfig
 }
 
 export function FileRouter(props: FileRouterProps): JSX.Element {
@@ -395,21 +417,43 @@ function buildQueryString(
   return params.toString()
 }
 
-function formatViteMap(map: VitePagesImportMap): VitePagesImportMap {
+function formatViteImportMap(
+  map: ViteImportMap,
+  dir: string,
+  baseUrl: string
+): ViteImportMap {
   return Object.keys(map).reduce((acc, key) => {
     let k = key
-    if (k.startsWith(".")) {
+    const dirIndex = k.indexOf(dir)
+    if (dirIndex === -1) {
+      return acc
+    }
+
+    k = k.slice(dirIndex + dir.length)
+    while (k.startsWith("/")) {
       k = k.slice(1)
     }
     k = k.split("/").slice(0, -1).join("/") // remove filename
-
     k = k.replace(/\[([^\]]+)\]/g, ":$1") // replace [param] with :param
 
     return {
       ...acc,
-      [k || "/"]: map[key],
+      [baseUrl + k]: map[key],
     }
   }, {})
+}
+
+function normalizePrefixPath(path: string) {
+  while (path.startsWith(".")) {
+    path = path.slice(1)
+  }
+  if (!path.startsWith("/")) {
+    path = "/" + path
+  }
+  while (path.endsWith("/")) {
+    path = path.slice(0, -1)
+  }
+  return path
 }
 
 function handleStateTransition(

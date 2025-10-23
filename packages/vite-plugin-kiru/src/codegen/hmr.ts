@@ -119,6 +119,7 @@ function findHotVars(
     "createContext",
     "lazy",
   ].map((name) => createAliasHandler(name))
+  aliasHandlers.push(createAliasHandler("definePageConfig", "kiru/router"))
 
   for (const node of bodyNodes) {
     if (node.type === "ImportDeclaration") {

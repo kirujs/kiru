@@ -1,5 +1,13 @@
 import "./style.css"
-import { App } from "./App"
 import { mount } from "kiru"
+import { FileRouter } from "kiru/router"
 
-mount(<App />, document.getElementById("app")!)
+mount(
+  <FileRouter
+    config={{
+      pages: import.meta.glob("/**/index.tsx"),
+      layouts: import.meta.glob("/**/layout.tsx"),
+    }}
+  />,
+  document.getElementById("app")!
+)

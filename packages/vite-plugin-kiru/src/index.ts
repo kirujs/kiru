@@ -8,11 +8,7 @@ import devtoolsClientBuild from "kiru-devtools-client"
 import devtoolsHostBuild from "kiru-devtools-host"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
 import path from "node:path"
-import {
-  FileLinkFormatter,
-  FileRouterOptions,
-  KiruPluginOptions,
-} from "./types"
+import { FileLinkFormatter, KiruPluginOptions } from "./types"
 import { prepareDevOnlyHooks, prepareHMR } from "./codegen"
 import { ANSI } from "./ansi.js"
 
@@ -23,12 +19,6 @@ export const defaultEsBuildOptions: ESBuildOptions = {
   jsxFragment: "_jsxFragment",
   loader: "tsx",
   include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
-}
-
-export const defaultFileRouterOptions: FileRouterOptions = {
-  dir: "/src/pages",
-  page: "index.{js,jsx,ts,tsx,mdx}",
-  layout: "layout.{js,jsx,ts,tsx,mdx}",
 }
 
 export default function kiru(opts: KiruPluginOptions = {}): Plugin {
@@ -55,20 +45,8 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
   let projectRoot = process.cwd().replace(/\\/g, "/")
   let includedPaths: string[] = []
 
-  let routerManifest = ""
-
   return {
     name: "vite-plugin-kiru",
-    // @ts-ignore
-    resolveId(id) {
-      if (id === "virtual:kiru-file-router-manifest") return id
-    },
-    // @ts-ignore
-    load(id) {
-      if (id === "virtual:kiru-file-router-manifest") {
-        return routerManifest
-      }
-    },
     config(config) {
       return {
         ...config,
@@ -88,17 +66,6 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
       includedPaths = (opts.include ?? []).map((p) =>
         path.resolve(projectRoot, p).replace(/\\/g, "/")
       )
-
-      const fileRouterOptions =
-        typeof opts.fileRouter === "object"
-          ? opts.fileRouter
-          : defaultFileRouterOptions
-
-      const { dir, page, layout } = fileRouterOptions
-
-      routerManifest = `
-export const pages = import.meta.glob("/**/${page}", {base: "${dir}"}), 
-  layouts = import.meta.glob("/**/${layout}", {base: "${dir}"});`
     },
     transformIndexHtml(html) {
       if (!devtoolsEnabled) return

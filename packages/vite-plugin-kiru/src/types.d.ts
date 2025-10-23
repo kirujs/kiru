@@ -19,21 +19,6 @@ export interface DevtoolsOptions {
   formatFileLink?: FileLinkFormatter
 }
 
-export interface FileRouterOptions {
-  /**
-   * @default "/src/pages"
-   */
-  dir: string
-  /**
-   * @default "index.{js,jsx,ts,tsx,mdx}"
-   */
-  page: string
-  /**
-   * @default "layout.{js,jsx,ts,tsx,mdx}"
-   */
-  layout: string
-}
-
 export interface KiruPluginOptions {
   /**
    * Whether the devtools should be injected into the build during development
@@ -54,16 +39,6 @@ export interface KiruPluginOptions {
   loggingEnabled?: boolean
 
   /**
-   * File-based routing configuration
-   * @default {
-   *    dir: "/src/pages",
-   *    page: "index.{js,jsx,ts,tsx,mdx}",
-   *    layout: "layout.{js,jsx,ts,tsx,mdx}",
-   * }
-   */
-  fileRouter?: FileRouterOptions
-
-  /**
    * Callback for when a file is transformed
    */
   onFileTransformed?: (id: string, content: string) => void
@@ -75,12 +50,6 @@ export interface KiruPluginOptions {
 }
 
 export const defaultEsBuildOptions: ESBuildOptions
-
-export const defaultFileRouterOptions: {
-  dir: "/src/pages"
-  page: "index.{js,jsx,ts,tsx,mdx}"
-  layout: "layout.{js,jsx,ts,tsx,mdx}"
-}
 
 /**
  * Registers a callback to be fired when the HMR is triggered
