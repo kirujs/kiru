@@ -27,7 +27,6 @@ export const esbuildPluginTransform: EsbuildInlineTransform = async (
 
 export const options = {
   entryPoints: ["src/index.ts", "src/style.css"],
-  //external: ["kiru"],
   jsx: "transform",
   outdir: "dist",
   jsxFactory: "kiru.createElement",

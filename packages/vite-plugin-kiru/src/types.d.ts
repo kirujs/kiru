@@ -1,4 +1,4 @@
-import type { Plugin } from "vite"
+import type { ESBuildOptions, Plugin } from "vite"
 
 export type FileLinkFormatter = (path: string, line: number) => string
 
@@ -17,6 +17,21 @@ export interface DevtoolsOptions {
    * @default (path, line) => `vscode://file/${path}:${line}`
    */
   formatFileLink?: FileLinkFormatter
+}
+
+export interface FileRouterOptions {
+  /**
+   * @default "/src/pages"
+   */
+  dir: string
+  /**
+   * @default "index.{js,jsx,ts,tsx,mdx}"
+   */
+  page: string
+  /**
+   * @default "layout.{js,jsx,ts,tsx,mdx}"
+   */
+  layout: string
 }
 
 export interface KiruPluginOptions {
@@ -39,6 +54,16 @@ export interface KiruPluginOptions {
   loggingEnabled?: boolean
 
   /**
+   * File-based routing configuration
+   * @default {
+   *    dir: "/src/pages",
+   *    page: "index.{js,jsx,ts,tsx,mdx}",
+   *    layout: "layout.{js,jsx,ts,tsx,mdx}",
+   * }
+   */
+  fileRouter?: FileRouterOptions
+
+  /**
    * Callback for when a file is transformed
    */
   onFileTransformed?: (id: string, content: string) => void
@@ -47,6 +72,14 @@ export interface KiruPluginOptions {
    * Callback for when a file is excluded from transforms due to not being in project root or `include`
    */
   onFileExcluded?: (id: string) => void
+}
+
+export const defaultEsBuildOptions: ESBuildOptions
+
+export const defaultFileRouterOptions: {
+  dir: "/src/pages"
+  page: "index.{js,jsx,ts,tsx,mdx}"
+  layout: "layout.{js,jsx,ts,tsx,mdx}"
 }
 
 /**

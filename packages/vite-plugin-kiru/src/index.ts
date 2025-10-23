@@ -8,8 +8,12 @@ import devtoolsClientBuild from "kiru-devtools-client"
 import devtoolsHostBuild from "kiru-devtools-host"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
 import path from "node:path"
+import {
+  FileLinkFormatter,
+  FileRouterOptions,
+  KiruPluginOptions,
+} from "./types"
 import { prepareDevOnlyHooks, prepareHMR } from "./codegen"
-import { FileLinkFormatter, KiruPluginOptions } from "./types"
 import { ANSI } from "./ansi.js"
 
 export const defaultEsBuildOptions: ESBuildOptions = {
@@ -21,7 +25,13 @@ export const defaultEsBuildOptions: ESBuildOptions = {
   include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
 }
 
-export default function kiru(opts?: KiruPluginOptions): Plugin {
+export const defaultFileRouterOptions: FileRouterOptions = {
+  dir: "/src/pages",
+  page: "index.{js,jsx,ts,tsx,mdx}",
+  layout: "layout.{js,jsx,ts,tsx,mdx}",
+}
+
+export default function kiru(opts: KiruPluginOptions = {}): Plugin {
   let isProduction = false
   let isBuild = false
   let devtoolsEnabled = false
@@ -36,7 +46,7 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
     `vscode://file/${path}:${line}`
 
   let dtClientPathname = "/__devtools__"
-  if (typeof opts?.devtools === "object") {
+  if (typeof opts.devtools === "object") {
     dtClientPathname = opts.devtools.pathname ?? dtClientPathname
     fileLinkFormatter = opts.devtools.formatFileLink ?? fileLinkFormatter
   }
@@ -45,8 +55,20 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
   let projectRoot = process.cwd().replace(/\\/g, "/")
   let includedPaths: string[] = []
 
+  let routerManifest = ""
+
   return {
     name: "vite-plugin-kiru",
+    // @ts-ignore
+    resolveId(id) {
+      if (id === "virtual:kiru-file-router-manifest") return id
+    },
+    // @ts-ignore
+    load(id) {
+      if (id === "virtual:kiru-file-router-manifest") {
+        return routerManifest
+      }
+    },
     config(config) {
       return {
         ...config,
@@ -59,13 +81,24 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
     configResolved(config) {
       isProduction = config.isProduction
       isBuild = config.command === "build"
-      devtoolsEnabled = opts?.devtools !== false && !isBuild && !isProduction
-      loggingEnabled = opts?.loggingEnabled === true
+      devtoolsEnabled = opts.devtools !== false && !isBuild && !isProduction
+      loggingEnabled = opts.loggingEnabled === true
 
       projectRoot = config.root.replace(/\\/g, "/")
-      includedPaths = (opts?.include ?? []).map((p) =>
+      includedPaths = (opts.include ?? []).map((p) =>
         path.resolve(projectRoot, p).replace(/\\/g, "/")
       )
+
+      const fileRouterOptions =
+        typeof opts.fileRouter === "object"
+          ? opts.fileRouter
+          : defaultFileRouterOptions
+
+      const { dir, page, layout } = fileRouterOptions
+
+      routerManifest = `
+export const pages = import.meta.glob("/**/${page}", {base: "${dir}"}), 
+  layouts = import.meta.glob("/**/${layout}", {base: "${dir}"});`
     },
     transformIndexHtml(html) {
       if (!devtoolsEnabled) return
@@ -150,7 +183,7 @@ export default function kiru(opts?: KiruPluginOptions): Plugin {
       log(ANSI.green("✓"), "Transformed")
 
       const result = code.toString()
-      opts?.onFileTransformed?.(id, result)
+      opts.onFileTransformed?.(id, result)
 
       return {
         code: result,

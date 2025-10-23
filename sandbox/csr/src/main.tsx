@@ -1,5 +1,5 @@
-import "./index.css"
-import { App } from "./App"
 import { mount } from "kiru"
+import { FileRouter } from "kiru/router"
+import "./index.css"
 
-mount(<App />, document.getElementById("app")!)
+mount(<FileRouter transition />, document.getElementById("app")!)

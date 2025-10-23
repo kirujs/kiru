@@ -51,6 +51,7 @@ type HotVarRegistrationEntry = {
 export function createHMRContext() {
   type FilePath = string
   const moduleMap = new Map<FilePath, ModuleMemory>()
+  let currentModuleFilePath: string | null = null
   let currentModuleMemory: ModuleMemory | null = null
   let isModuleReplacementExecution = false
   const isReplacement = () => isModuleReplacementExecution
@@ -75,6 +76,7 @@ export function createHMRContext() {
       while (onHmrCallbacks.length) onHmrCallbacks.shift()!()
     }
     currentModuleMemory = mod!
+    currentModuleFilePath = filePath
   }
 
   const register = (
@@ -150,6 +152,9 @@ export function createHMRContext() {
       currentModuleMemory.unnamedWatchers.length = tmpUnnamedWatchers.length
       tmpUnnamedWatchers.length = 0
     }
+
+    currentModuleMemory = null
+    currentModuleFilePath = null
   }
 
   const signals = {
@@ -171,5 +176,8 @@ export function createHMRContext() {
     isReplacement,
     signals,
     onHmr,
+    getCurrentFilePath() {
+      return currentModuleFilePath
+    },
   }
 }
