@@ -41,7 +41,7 @@ export class WatchEffect<const Deps extends readonly Signal<unknown>[] = []> {
         },
       }
       if ("window" in globalThis) {
-        const signals = window.__kiru!.HMRContext!.signals
+        const signals = window.__kiru.HMRContext!.signals
         if (signals.isWaitingForNextWatchCall()) {
           signals.pushWatch(this as WatchEffect)
         }
@@ -59,10 +59,7 @@ export class WatchEffect<const Deps extends readonly Signal<unknown>[] = []> {
 
     if (__DEV__) {
       // postpone execution during HMR
-      if (
-        "window" in globalThis &&
-        window.__kiru?.HMRContext?.isReplacement()
-      ) {
+      if ("window" in globalThis && window.__kiru.HMRContext?.isReplacement()) {
         return queueMicrotask(() => {
           if (this.isRunning) {
             WatchEffect.run(this as WatchEffect)

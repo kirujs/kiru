@@ -73,10 +73,6 @@ type GlobalKiruEvent = Evt["name"]
 
 interface KiruGlobalContext {
   readonly apps: AppContext[]
-  stores?: ReactiveMap<Store<any, any>>
-  HMRContext?: ReturnType<typeof createHMRContext>
-  profilingContext?: ReturnType<typeof createProfilingContext>
-  SWRGlobalCache?: SWRCache
   emit<T extends Evt>(event: T["name"], ctx: AppContext, data?: T["data"]): void
   on<T extends Evt>(
     event: T["name"],
@@ -86,6 +82,10 @@ interface KiruGlobalContext {
     event: T["name"],
     callback: (ctx: AppContext, data?: T["data"]) => void
   ): void
+  stores?: ReactiveMap<Store<any, any>>
+  HMRContext?: ReturnType<typeof createHMRContext>
+  profilingContext?: ReturnType<typeof createProfilingContext>
+  SWRGlobalCache?: SWRCache
 }
 
 function createKiruGlobalContext(): KiruGlobalContext {
@@ -94,10 +94,6 @@ function createKiruGlobalContext(): KiruGlobalContext {
     GlobalKiruEvent,
     Set<(ctx: AppContext, data?: Evt["data"]) => void>
   >()
-  let stores: ReactiveMap<Store<any, any>> | undefined
-  let HMRContext: ReturnType<typeof createHMRContext> | undefined
-  let profilingContext: ReturnType<typeof createProfilingContext> | undefined
-
   function emit<T extends Evt>(
     event: T["name"],
     ctx: AppContext,
@@ -127,15 +123,6 @@ function createKiruGlobalContext(): KiruGlobalContext {
     get apps() {
       return Array.from(contexts)
     },
-    get stores() {
-      return stores
-    },
-    get HMRContext() {
-      return HMRContext
-    },
-    get profilingContext() {
-      return profilingContext
-    },
     emit,
     on,
     off,
@@ -146,9 +133,9 @@ function createKiruGlobalContext(): KiruGlobalContext {
   on("unmount", (ctx) => contexts.delete(ctx))
 
   if (__DEV__) {
-    HMRContext = createHMRContext()
-    profilingContext = createProfilingContext()
-    stores = createReactiveMap()
+    globalContext.HMRContext = createHMRContext()
+    globalContext.profilingContext = createProfilingContext()
+    globalContext.stores = createReactiveMap()
   }
 
   return globalContext

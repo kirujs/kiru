@@ -15,8 +15,6 @@ export * from "./renderToString.js"
 export { nextIdle, flushSync, requestUpdate } from "./scheduler.js"
 export * from "./store.js"
 
-if (__DEV__) {
-  if ("window" in globalThis) {
-    globalThis.window.__kiru ??= createKiruGlobalContext()
-  }
+if ("window" in globalThis) {
+  globalThis.window.__kiru ??= createKiruGlobalContext()
 }

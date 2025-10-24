@@ -458,12 +458,12 @@ function setParent(child: VNode, parent: VNode) {
 
 function dev_emitUpdateNode() {
   if (!("window" in globalThis)) return
-  window.__kiru?.profilingContext?.emit("updateNode", appCtx)
+  window.__kiru.profilingContext?.emit("updateNode", appCtx)
 }
 
 function dev_emitCreateNode() {
   if (!("window" in globalThis)) return
-  window.__kiru?.profilingContext?.emit("createNode", appCtx)
+  window.__kiru.profilingContext?.emit("createNode", appCtx)
 }
 
 const $LIST_CHILD = Symbol("kiru:marked-list-child")

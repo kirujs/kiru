@@ -46,11 +46,6 @@ export function mount(
     unmount,
   }
 
-  if (__DEV__) {
-    rootNode.app = appContext
-    window.__kiru?.emit("mount", appContext)
-  }
-
   function render(children: JSX.Element) {
     rootNode.props.children = children
     renderRootSync(rootNode)
@@ -62,10 +57,16 @@ export function mount(
     if (__DEV__) {
       delete container.__kiruNode
       delete rootNode.app
-      window.__kiru?.emit("unmount", appContext)
     }
+    window.__kiru.emit("unmount", appContext)
+  }
+
+  if (__DEV__) {
+    rootNode.app = appContext
   }
 
   render(children)
+  window.__kiru.emit("mount", appContext)
+
   return appContext
 }

@@ -104,7 +104,7 @@ export function createHMRContext() {
       }
 
       if (newEntry.type === "createStore") {
-        window.__kiru!.stores!.add(name, newEntry.value as Store<any, any>)
+        window.__kiru.stores!.add(name, newEntry.value as Store<any, any>)
       }
 
       currentModuleMemory.hotVars.set(name, newEntry)
@@ -120,7 +120,7 @@ export function createHMRContext() {
         continue
       }
       if (oldEntry.type === "component" && newEntry.type === "component") {
-        window.__kiru!.apps.forEach((ctx) => {
+        window.__kiru.apps.forEach((ctx) => {
           traverseApply(ctx.rootNode, (vNode) => {
             if (vNode.type === oldEntry.value) {
               vNode.type = newEntry.value as any

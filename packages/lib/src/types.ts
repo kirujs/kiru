@@ -79,7 +79,7 @@ type ElementMap = {
 
 declare global {
   interface Window {
-    __kiru: KiruGlobalContext | undefined
+    __kiru: KiruGlobalContext
   }
   namespace JSX {
     interface IntrinsicElements extends ElementMap {}

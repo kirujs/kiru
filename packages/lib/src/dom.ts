@@ -250,7 +250,7 @@ function setSignalProp(
     cleanups[key] = signal.subscribe((value, prev) => {
       setProp(dom, key, value, prev)
       if (__DEV__) {
-        window.__kiru?.profilingContext?.emit(
+        window.__kiru.profilingContext?.emit(
           "signalAttrUpdate",
           getVNodeAppContext(vNode)!
         )
@@ -276,7 +276,7 @@ function setSignalProp(
   const signalUpdateCallback = (value: any) => {
     setAttr(value)
     if (__DEV__) {
-      window.__kiru?.profilingContext?.emit(
+      window.__kiru.profilingContext?.emit(
         "signalAttrUpdate",
         getVNodeAppContext(vNode)!
       )
@@ -331,7 +331,7 @@ function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
     if (value === prev) return
     textNode.nodeValue = value
     if (__DEV__) {
-      window.__kiru?.profilingContext?.emit(
+      window.__kiru.profilingContext?.emit(
         "signalTextUpdate",
         getVNodeAppContext(vNode)!
       )
@@ -684,7 +684,7 @@ function commitDeletion(vNode: VNode) {
     while (hooks?.length) hooks.pop()!.cleanup?.()
 
     if (__DEV__) {
-      window.__kiru?.profilingContext?.emit("removeNode", ctx)
+      window.__kiru.profilingContext?.emit("removeNode", ctx)
       if (dom instanceof Element) {
         delete dom.__kiruNode
       }
