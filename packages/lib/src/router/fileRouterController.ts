@@ -18,10 +18,19 @@ import type {
   ViteImportMap,
 } from "./types.internal.js"
 
+interface FormattedViteImportMap {
+  [key: string]: {
+    load: () => Promise<DefaultComponentModule>
+    specificity: number
+    segments: string[]
+    filePath?: string
+  }
+}
+
 export class FileRouterController {
   private enableTransitions: boolean
-  private pages: ViteImportMap
-  private layouts: ViteImportMap
+  private pages: FormattedViteImportMap
+  private layouts: FormattedViteImportMap
   private abortController: AbortController
   private currentPage: Signal<{
     component: Kiru.FC<any>
@@ -36,10 +45,7 @@ export class FileRouterController {
   private cleanups: (() => void)[] = []
   private filePathToPageRoute: Map<
     string,
-    {
-      route: string
-      config: PageConfig
-    }
+    { route: string; config: PageConfig }
   >
   private pageRouteToConfig: Map<string, PageConfig>
   private currentRoute: string | null
@@ -81,6 +87,9 @@ export class FileRouterController {
       normalizedDir,
       normalizedBaseUrl
     )
+    if (__DEV__) {
+      validateRoutes(this.pages)
+    }
     this.layouts = formatViteImportMap(
       layouts as ViteImportMap,
       normalizedDir,
@@ -152,34 +161,77 @@ export class FileRouterController {
   }
 
   private matchRoute(pathSegments: string[]) {
-    outer: for (const [route, pageModuleLoader] of Object.entries(this.pages)) {
-      const routeSegments = route.split("/").filter(Boolean)
+    const matches: Array<{
+      route: string
+      pageEntry: FormattedViteImportMap[string]
+      params: Record<string, string>
+      routeSegments: string[]
+    }> = []
 
+    // Find all matching routes
+    outer: for (const [route, pageEntry] of Object.entries(this.pages)) {
+      const routeSegments = pageEntry.segments
       const pathMatchingSegments = routeSegments.filter(
         (seg) => !seg.startsWith("(") && !seg.endsWith(")")
       )
 
-      if (pathMatchingSegments.length !== pathSegments.length) {
-        continue
-      }
       const params: Record<string, string> = {}
+      let hasCatchall = false
 
-      for (let i = 0; i < pathMatchingSegments.length; i++) {
+      // Check if route matches
+      for (
+        let i = 0;
+        i < pathMatchingSegments.length && i < pathSegments.length;
+        i++
+      ) {
         const routeSeg = pathMatchingSegments[i]
+
         if (routeSeg.startsWith(":")) {
           const key = routeSeg.slice(1)
-          params[key] = pathSegments[i]
-          continue
-        }
-        if (routeSeg !== pathSegments[i]) {
-          continue outer
+
+          if (routeSeg.endsWith("*")) {
+            // Catchall route - matches remaining segments
+            hasCatchall = true
+            const catchallKey = key.slice(0, -1) // Remove the *
+            params[catchallKey] = pathSegments.slice(i).join("/")
+            break
+          } else {
+            // Regular dynamic segment
+            if (i >= pathSegments.length) {
+              continue outer
+            }
+            params[key] = pathSegments[i]
+          }
+        } else {
+          // Static segment
+          if (routeSeg !== pathSegments[i]) {
+            continue outer
+          }
         }
       }
 
-      return { route, pageModuleLoader, params, routeSegments }
+      // For non-catchall routes, ensure exact length match
+      if (!hasCatchall && pathMatchingSegments.length !== pathSegments.length) {
+        continue
+      }
+
+      matches.push({
+        route,
+        pageEntry,
+        params,
+        routeSegments,
+      })
     }
 
-    return null
+    // Sort by specificity (highest first) and return the best match
+    if (matches.length === 0) {
+      return null
+    }
+
+    matches.sort((a, b) => b.pageEntry.specificity - a.pageEntry.specificity)
+    const bestMatch = matches[0]
+
+    return bestMatch
   }
 
   private async loadRoute(
@@ -215,20 +267,20 @@ export class FileRouterController {
         return this.navigate("/404", { replace: true, props: errorProps })
       }
 
-      const { route, pageModuleLoader, params, routeSegments } = routeMatch
+      const { route, pageEntry, params, routeSegments } = routeMatch
 
       this.currentRoute = route
-      const pagePromise = pageModuleLoader()
+      const pagePromise = pageEntry.load()
 
       const layoutPromises = ["/", ...routeSegments].reduce((acc, _, i) => {
         const layoutPath = "/" + routeSegments.slice(0, i).join("/")
-        const layoutLoad = this.layouts[layoutPath]
+        const layout = this.layouts[layoutPath]
 
-        if (!layoutLoad) {
+        if (!layout) {
           return acc
         }
 
-        return [...acc, layoutLoad()]
+        return [...acc, layout.load()]
       }, [] as Promise<DefaultComponentModule>[])
 
       const [page, ...layouts] = await Promise.all([
@@ -382,24 +434,55 @@ function formatViteImportMap(
   map: ViteImportMap,
   dir: string,
   baseUrl: string
-): ViteImportMap {
-  return Object.keys(map).reduce((acc, key) => {
-    let k = key
-    const dirIndex = k.indexOf(dir)
+): FormattedViteImportMap {
+  return Object.keys(map).reduce<FormattedViteImportMap>((acc, key) => {
+    const dirIndex = key.indexOf(dir)
     if (dirIndex === -1) {
       return acc
     }
 
-    k = k.slice(dirIndex + dir.length)
+    let specificity = 0
+    let k = key.slice(dirIndex + dir.length)
     while (k.startsWith("/")) {
       k = k.slice(1)
     }
-    k = k.split("/").slice(0, -1).join("/") // remove filename
-    k = k.replace(/\[([^\]]+)\]/g, ":$1") // replace [param] with :param
+    const segments: string[] = []
+    const parts = k.split("/").slice(0, -1)
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]
+      if (part.startsWith("[...") && part.endsWith("]")) {
+        if (i !== parts.length - 1) {
+          throw new Error(
+            `[kiru/router]: Catchall must be the folder name. Got "${key}"`
+          )
+        }
+        segments.push(`:${part.slice(4, -1)}*`)
+        specificity += 1
+        break
+      }
+      if (part.startsWith("[") && part.endsWith("]")) {
+        segments.push(`:${part.slice(1, -1)}`)
+        specificity += 10
+        continue
+      }
+      specificity += 100
+      segments.push(part)
+    }
+
+    const value: FormattedViteImportMap[string] = {
+      load: map[key],
+      specificity,
+      segments,
+    }
+
+    if (__DEV__) {
+      value.filePath = key
+    }
 
     return {
       ...acc,
-      [baseUrl + k]: map[key],
+      [baseUrl + segments.join("/")]: value,
     }
   }, {})
 }
@@ -432,4 +515,77 @@ function handleStateTransition(
   })
 
   signal.addEventListener("abort", () => vt.skipTransition())
+}
+
+function validateRoutes(pageMap: FormattedViteImportMap) {
+  type Entry = FormattedViteImportMap[string]
+  const routeConflicts: [Entry, Entry][] = []
+  const routes = Object.keys(pageMap)
+  for (let i = 0; i < routes.length; i++) {
+    for (let j = i + 1; j < routes.length; j++) {
+      const route1 = routes[i]
+      const route2 = routes[j]
+
+      if (routesConflict(route1, route2)) {
+        routeConflicts.push([pageMap[route1], pageMap[route2]])
+      }
+    }
+  }
+
+  if (routeConflicts.length > 0) {
+    let warning = "[kiru/router]: Route conflicts detected:\n"
+    warning += routeConflicts.map(([route1, route2]) => {
+      return `  - "${route1.filePath}" conflicts with "${route2.filePath}"\n`
+    })
+    warning += "Routes are ordered by specificity (higher specificity wins)"
+    console.warn(warning)
+  }
+}
+
+function routesConflict(route1: string, route2: string): boolean {
+  const segments1 = route1.split("/").filter(Boolean)
+  const segments2 = route2.split("/").filter(Boolean)
+
+  // Filter out route groups for comparison
+  const pathSegments1 = segments1.filter(
+    (seg) => !seg.startsWith("(") && !seg.endsWith(")")
+  )
+  const pathSegments2 = segments2.filter(
+    (seg) => !seg.startsWith("(") && !seg.endsWith(")")
+  )
+
+  // Routes conflict if they have the same path structure
+  if (pathSegments1.length !== pathSegments2.length) {
+    return false
+  }
+
+  for (let i = 0; i < pathSegments1.length; i++) {
+    const seg1 = pathSegments1[i]
+    const seg2 = pathSegments2[i]
+
+    // If both are static segments, they must match exactly
+    if (!seg1.startsWith(":") && !seg2.startsWith(":")) {
+      if (seg1 !== seg2) {
+        return false
+      }
+    }
+    // If one is static and one is dynamic, they conflict
+    else if (
+      (seg1.startsWith(":") && !seg2.startsWith(":")) ||
+      (!seg1.startsWith(":") && seg2.startsWith(":"))
+    ) {
+      return false
+    }
+    // If both are dynamic, they conflict
+    else if (seg1.startsWith(":") && seg2.startsWith(":")) {
+      // Both are dynamic, check if they're the same type
+      const isCatchall1 = seg1.endsWith("*")
+      const isCatchall2 = seg2.endsWith("*")
+      if (isCatchall1 !== isCatchall2) {
+        return false
+      }
+    }
+  }
+
+  return true
 }
