@@ -39,15 +39,14 @@ export class FileRouterController {
   } | null>
   private currentPageProps: Signal<PageProps<PageConfig>>
   private currentLayouts: Signal<Kiru.FC[]>
-  private loading: Signal<boolean>
   private state: Signal<RouterState>
   private contextValue: Signal<FileRouterContextType>
   private cleanups: (() => void)[] = []
-  private filePathToPageRoute: Map<
+  private filePathToPageRoute?: Map<
     string,
     { route: string; config: PageConfig }
   >
-  private pageRouteToConfig: Map<string, PageConfig>
+  private pageRouteToConfig?: Map<string, PageConfig>
   private currentRoute: string | null
 
   constructor(config: FileRouterConfig) {
@@ -58,7 +57,6 @@ export class FileRouterController {
     this.currentPage = new Signal(null)
     this.currentPageProps = new Signal({})
     this.currentLayouts = new Signal([])
-    this.loading = new Signal(true)
     this.state = new Signal<RouterState>({
       path: window.location.pathname,
       params: {},
@@ -72,8 +70,10 @@ export class FileRouterController {
       reload: (options?: { transition?: boolean }) =>
         this.loadRoute(void 0, void 0, options?.transition),
     }))
-    this.filePathToPageRoute = new Map()
-    this.pageRouteToConfig = new Map()
+    if (__DEV__) {
+      this.filePathToPageRoute = new Map()
+      this.pageRouteToConfig = new Map()
+    }
     this.currentRoute = null
 
     const { pages, layouts, dir = "/pages", baseUrl = "/", transition } = config
@@ -106,11 +106,11 @@ export class FileRouterController {
   }
 
   public onPageConfigDefined<T extends PageConfig>(fp: string, config: T) {
-    const existing = this.filePathToPageRoute.get(fp)
+    const existing = this.filePathToPageRoute?.get(fp)
     if (existing === undefined) {
       const route = this.currentRoute
       if (!route) return
-      this.filePathToPageRoute.set(fp, { route, config })
+      this.filePathToPageRoute?.set(fp, { route, config })
       return
     }
     const curPage = this.currentPage.value
@@ -133,7 +133,7 @@ export class FileRouterController {
       this.loadRouteData(config.loader, props, this.state.value, transition)
     }
 
-    this.pageRouteToConfig.set(existing.route, config)
+    this.pageRouteToConfig?.set(existing.route, config)
   }
 
   public getContextValue() {
@@ -239,12 +239,8 @@ export class FileRouterController {
     props: PageProps<PageConfig> = {},
     enableTransition = this.enableTransitions
   ): Promise<void> {
-    this.loading.value = true
     this.abortController?.abort()
-
-    const query = parseQuery(window.location.search)
-    const controller = (this.abortController = new AbortController())
-    const signal = controller.signal
+    const signal = (this.abortController = new AbortController()).signal
 
     try {
       const pathSegments = path.split("/").filter(Boolean)
@@ -255,7 +251,8 @@ export class FileRouterController {
         if (!_404) {
           if (__DEV__) {
             console.error(
-              `No 404 route defined (path: ${path}). See https://kirujs.dev/404 for more information.`
+              `[kiru/router]: No 404 route defined (path: ${path}). 
+See https://kirujs.dev/docs/api/file-router#404 for more information.`
             )
           }
           return
@@ -283,16 +280,19 @@ export class FileRouterController {
         return [...acc, layout.load()]
       }, [] as Promise<DefaultComponentModule>[])
 
+      const query = parseQuery(window.location.search)
       const [page, ...layouts] = await Promise.all([
         pagePromise,
         ...layoutPromises,
       ])
 
       this.currentRoute = null
-      if (controller.signal.aborted) return
+      if (signal.aborted) return
 
       if (typeof page.default !== "function") {
-        throw new Error("Route component must be a default exported function")
+        throw new Error(
+          "[kiru/router]: Route component must be a default exported function"
+        )
       }
 
       const routerState: RouterState = {
@@ -303,8 +303,10 @@ export class FileRouterController {
       }
 
       let config = (page as unknown as PageModule).config
-      if (this.pageRouteToConfig.has(route)) {
-        config = this.pageRouteToConfig.get(route)
+      if (__DEV__) {
+        if (this.pageRouteToConfig?.has(route)) {
+          config = this.pageRouteToConfig.get(route)
+        }
       }
 
       if (config?.loader) {
@@ -312,23 +314,21 @@ export class FileRouterController {
         this.loadRouteData(config.loader, props, routerState, enableTransition)
       }
 
+      this.state.value = routerState
       handleStateTransition(signal, enableTransition, () => {
         this.currentPage.value = {
           component: page.default,
           config,
           route: "/" + routeSegments.join("/"),
         }
-        this.state.value = routerState
         this.currentPageProps.value = props
         this.currentLayouts.value = layouts
           .filter((m) => typeof m.default === "function")
           .map((m) => m.default)
       })
     } catch (error) {
-      console.error("Failed to load route component:", error)
+      console.error("[kiru/router]: Failed to load route component:", error)
       this.currentPage.value = null
-    } finally {
-      this.loading.value = false
     }
   }
 
