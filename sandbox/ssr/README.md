@@ -1,4 +1,3 @@
-Get started by running
+Welcome to your new Kiru SSR project!
 
-- pnpm i
-- pnpm dev
+Visit [https://kirujs.dev](https://kirujs.dev) for more information.

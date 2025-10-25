@@ -1,25 +1,20 @@
+import type { PageContext } from "vike/types"
 import { createContext, useContext } from "kiru"
 
 export { usePageContext, PageContextProvider }
 
-const PageContext = createContext<Vike.PageContext & { isClient: boolean }>(
-  null as any
-)
+const PageContext = createContext<PageContext>(null as any)
+
+type PageContextProviderProps = {
+  pageContext: PageContext
+  children: JSX.Children
+}
 
 function PageContextProvider({
-  pageContext,
+  pageContext: value,
   children,
-}: {
-  pageContext: Vike.PageContext
-  children: JSX.Children
-}) {
-  return (
-    <PageContext.Provider
-      value={{ ...pageContext, isClient: !!globalThis.window?.location }}
-    >
-      {children}
-    </PageContext.Provider>
-  )
+}: PageContextProviderProps) {
+  return <PageContext.Provider {...{ value, children }} />
 }
 
 function usePageContext() {

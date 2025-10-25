@@ -11,5 +11,5 @@ function getTitle(pageContext: PageContext) {
   if (typeof val === "function") {
     return val(pageContext)
   }
-  return val || "My Site"
+  return val || "Vite + Vike + TS + Kiru"
 }

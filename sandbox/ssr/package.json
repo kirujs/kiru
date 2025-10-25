@@ -4,27 +4,25 @@
   "description": "",
   "type": "module",
   "scripts": {
-    "dev": "tsx ./src/server.ts",
-    "build": "vite build",
-    "preview": "set NODE_ENV=production&& tsx ./src/server.ts"
+    "dev": "vike dev",
+    "build": "vike build",
+    "preview": "vike preview"
   },
   "keywords": [],
   "author": "",
   "devDependencies": {
-    "@types/express": "^5.0.3",
-    "autoprefixer": "^10.4.21",
+    "@tailwindcss/postcss": "^4.1.16",
+    "@types/express": "^5.0.4",
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.9.2",
+    "tailwindcss": "^4.1.16",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12",
     "vite-plugin-kiru": "workspace:^"
   },
   "dependencies": {
-    "express": "^4.21.2",
+    "express": "^5.1.0",
     "kiru": "workspace:^",
-    "shared": "workspace:^",
-    "tsx": "^4.20.3",
-    "vike": "^0.4.242",
-    "vite": "^6.3.0"
+    "vike": "^0.4.244"
   }
 }

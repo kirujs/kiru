@@ -1,4 +1,3 @@
-import { Readable } from "node:stream"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import express from "express"
@@ -17,6 +16,9 @@ async function startServer() {
   if (isProduction) {
     app.use(express.static(`${root}/dist/client`))
   } else {
+    // Instantiate Vite's development server and integrate its middleware to our server.
+    // ⚠️ We should instantiate it *only* in development. (It isn't needed in production
+    // and would unnecessarily bloat our server in production.)
     const { devMiddleware } = await createDevMiddleware({ root })
     app.use(devMiddleware)
   }
@@ -29,7 +31,7 @@ async function startServer() {
   app.all("*", async (req, res, next) => {
     const pageContextInit = { urlOriginal: req.originalUrl }
     const pageContext = await renderPage(pageContextInit)
-    const { httpResponse, stream } = pageContext
+    const { httpResponse } = pageContext
     if (httpResponse === null) return next()
 
     const { body, statusCode, headers, earlyHints } = httpResponse
@@ -37,13 +39,7 @@ async function startServer() {
       res.writeEarlyHints({ link: earlyHints.map((e) => e.earlyHintLink) })
     res.status(statusCode)
     headers.forEach(([name, value]) => res.setHeader(name, value))
-
-    if (stream) {
-      res.write(body)
-      stream.pipe(res)
-    } else {
-      res.send(body)
-    }
+    res.send(body)
   })
 
   app.listen(process.env.PORT ? parseInt(process.env.PORT) : 3000, () => {
