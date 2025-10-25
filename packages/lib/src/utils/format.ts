@@ -1,4 +1,4 @@
-import { unwrap } from "../signals/index.js"
+import { unwrap } from "../signals/utils.js"
 import { booleanAttributes, snakeCaseAttributes } from "../constants.js"
 
 export {

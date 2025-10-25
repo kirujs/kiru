@@ -9,7 +9,7 @@ import {
 import { __DEV__ } from "../env.js"
 import { getCurrentVNode } from "../utils/index.js"
 import { $SUSPENSE_THROW, PREFETCHED_DATA_EVENT } from "../constants.js"
-import { Signal, useSignal } from "../signals/index.js"
+import { Signal, useSignal } from "../signals/base.js"
 
 export type { SuspenseProps, UsePromiseCallbackContext, UsePromiseState }
 export { Suspense, isSuspenseThrowValue, usePromise }

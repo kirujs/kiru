@@ -1,4 +1,4 @@
-import { Signal } from "../signals/index.js"
+import { Signal } from "../signals/base.js"
 import {
   FLAG_DELETION,
   $FRAGMENT,

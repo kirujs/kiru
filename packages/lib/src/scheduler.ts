@@ -25,9 +25,9 @@ import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
 import { hookIndex, node, renderMode } from "./globals.js"
 import { hydrationStack } from "./hydration.js"
-import { assertValidElementProps } from "./utils/index.js"
 import { reconcileChildren } from "./reconciler.js"
 import {
+  assertValidElementProps,
   latest,
   traverseApply,
   isExoticType,

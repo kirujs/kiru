@@ -1,4 +1,6 @@
-import { Signal, computed, flushSync } from "../index.js"
+import { Signal } from "../signals/base.js"
+import { ComputedSignal } from "../signals/computed.js"
+import { flushSync } from "../scheduler.js"
 import { __DEV__ } from "../env.js"
 import { createElement } from "../element.js"
 import { type FileRouterContextType } from "./context.js"
@@ -63,7 +65,7 @@ export class FileRouterController {
       query: {},
       signal: this.abortController.signal,
     })
-    this.contextValue = computed<FileRouterContextType>(() => ({
+    this.contextValue = new ComputedSignal<FileRouterContextType>(() => ({
       state: this.state.value,
       navigate: this.navigate.bind(this),
       setQuery: this.setQuery.bind(this),
