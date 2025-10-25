@@ -72,6 +72,11 @@ export function mount(
   globalThis.window.__kiru ??= createKiruGlobalContext()
   render(children)
   window.__kiru.emit("mount", appContext)
+  if (__DEV__) {
+    queueMicrotask(() => {
+      window.dispatchEvent(new Event("kiru:ready"))
+    })
+  }
 
   return appContext
 }

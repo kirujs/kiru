@@ -78,7 +78,6 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
           },
           {
             tag: "script",
-            injectTo: "body",
             attrs: {
               type: "module",
               src: dtHostScriptPath,
