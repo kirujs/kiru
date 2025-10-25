@@ -26,6 +26,9 @@ export const esbuildPluginTransform: EsbuildInlineTransform = async (
 }
 
 export const options = {
+  define: {
+    "globalThis.__KIRU_DEVTOOLS__": "true",
+  },
   entryPoints: ["src/index.ts", "src/style.css"],
   jsx: "transform",
   outdir: "dist",

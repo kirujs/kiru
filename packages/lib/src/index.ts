@@ -1,3 +1,5 @@
+import { createKiruGlobalContext } from "./globalContext"
+
 export type * from "./types"
 export * from "./signals/index.js"
 export * from "./action.js"
@@ -11,3 +13,8 @@ export * from "./components/index.js"
 export * from "./renderToString.js"
 export { nextIdle, flushSync, requestUpdate } from "./scheduler.js"
 export * from "./store.js"
+
+// @ts-ignore
+if ("window" in globalThis && !globalThis.__KIRU_DEVTOOLS__) {
+  globalThis.window.__kiru ??= createKiruGlobalContext()
+}

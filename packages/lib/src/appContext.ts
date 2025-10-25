@@ -1,7 +1,6 @@
 import { FLAG_STATIC_DOM } from "./constants.js"
 import { createElement } from "./element.js"
 import { __DEV__ } from "./env.js"
-import { createKiruGlobalContext } from "./globalContext.js"
 import { renderRootSync } from "./scheduler.js"
 
 type VNode = Kiru.VNode
@@ -69,7 +68,6 @@ export function mount(
     rootNode.app = appContext
   }
 
-  globalThis.window.__kiru ??= createKiruGlobalContext()
   render(children)
   window.__kiru.emit("mount", appContext)
   if (__DEV__) {
