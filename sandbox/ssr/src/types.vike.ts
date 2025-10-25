@@ -15,6 +15,7 @@ declare global {
 
       routeParams: Record<string, string>
       data: Record<string, unknown>
+      stream: import("node:stream").Readable
     }
   }
 }

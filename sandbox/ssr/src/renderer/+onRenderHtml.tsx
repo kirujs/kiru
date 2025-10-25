@@ -4,9 +4,13 @@ import { dangerouslySkipEscape, escapeInject } from "vike/server"
 import { renderToString } from "kiru"
 import { getTitle } from "./utils"
 import { App } from "./App"
+import { renderToReadableStream } from "kiru/ssr/server"
 
 export const onRenderHtml = (pageContext: PageContextServer) => {
-  const pageHtml = renderToString(<App pageContext={pageContext} />)
+  const { immediate, stream } = renderToReadableStream(
+    <App pageContext={pageContext} />
+  )
+  pageContext.stream = stream
   return escapeInject`<!DOCTYPE html>
     <html lang="en">
       <head>
@@ -17,7 +21,7 @@ export const onRenderHtml = (pageContext: PageContextServer) => {
         <title>${getTitle(pageContext)}</title>
       </head>
       <body>
-        <div id="page-root">${dangerouslySkipEscape(pageHtml)}</div>
+        <div id="page-root">${dangerouslySkipEscape(immediate)}</div>
       </body>
     </html>`
 }
