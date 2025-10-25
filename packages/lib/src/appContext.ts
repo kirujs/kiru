@@ -1,6 +1,7 @@
 import { FLAG_STATIC_DOM } from "./constants.js"
 import { createElement } from "./element.js"
 import { __DEV__ } from "./env.js"
+import { createKiruGlobalContext } from "./globalContext.js"
 import { renderRootSync } from "./scheduler.js"
 
 type VNode = Kiru.VNode
@@ -24,15 +25,18 @@ export function mount(
   container: HTMLElement,
   options?: AppContextOptions
 ): AppContext {
-  const rootNode = createElement(container.nodeName.toLowerCase(), {})
   if (__DEV__) {
     if (container.__kiruNode) {
       throw new Error(
         "[kiru]: container in use - call unmount on the previous app first."
       )
     }
+  }
+  const rootNode = createElement(container.nodeName.toLowerCase(), {})
+  if (__DEV__) {
     container.__kiruNode = rootNode
   }
+
   rootNode.dom = container
   rootNode.flags |= FLAG_STATIC_DOM
 
@@ -65,6 +69,7 @@ export function mount(
     rootNode.app = appContext
   }
 
+  globalThis.window.__kiru ??= createKiruGlobalContext()
   render(children)
   window.__kiru.emit("mount", appContext)
 
