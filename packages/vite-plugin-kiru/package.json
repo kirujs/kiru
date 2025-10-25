@@ -1,6 +1,6 @@
 {
   "name": "vite-plugin-kiru",
-  "version": "0.28.2",
+  "version": "0.28.3",
   "description": "",
   "main": "dist/index.js",
   "type": "module",
@@ -14,7 +14,7 @@
   "author": "",
   "license": "ISC",
   "peerDependencies": {
-    "kiru": ">=0.50.1"
+    "kiru": ">=0.50.3"
   },
   "devDependencies": {
     "@types/node": "^22.17.0",
