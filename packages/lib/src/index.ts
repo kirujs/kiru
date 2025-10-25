@@ -1,4 +1,4 @@
-import { createKiruGlobalContext } from "./globalContext"
+import { createKiruGlobalContext } from "./globalContext.js"
 
 export type * from "./types"
 export * from "./signals/index.js"
