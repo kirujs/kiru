@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  background-color: #fff;
+  color: #222;
+  color-scheme: light dark;
+}
+
+@media screen and (prefers-color-scheme: dark) {
+  :root {
+    background-color: #222;
+    color: #fff;
+  }
+}
+
+body {
+  display: flex;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  flex-grow: 1;
+}
+
+main {
+  flex-grow: 1;
+}
+
+nav {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+.backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  transition: opacity 150ms ease-in-out;
+}
+
+.modal-content,
+.drawer-content {
+  position: absolute;
+  z-index: 1000;
+  max-width: 100%;
+  padding: 20px;
+  background-color: #222;
+  transition: transform 150ms ease-in-out;
+}
+
+.modal-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transition: transform 150ms ease-in-out;
+  width: 500px;
+  background-color: #222;
+  border-radius: 5px;
+  padding: 20px;
+}
+
+.drawer-content {
+  bottom: 0;
+  left: 0;
+  width: 100%;
+}
+
+.modal-content>h2,
+.drawer-content>h2 {
+  margin-top: 0;
+}
