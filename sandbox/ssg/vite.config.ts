@@ -8,9 +8,16 @@ export default defineConfig({
     },
   },
   plugins: [
+    // @ts-ignore
     kiru({
       include: ["../shared/"],
       loggingEnabled: true,
+      app: {
+        dir: "./src/pages",
+        document: "document.tsx",
+        page: "index.{tsx,jsx}",
+        layout: "layout.{tsx,jsx}",
+      },
     }),
   ],
 })

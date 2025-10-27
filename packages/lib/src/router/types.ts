@@ -1,5 +1,6 @@
 import { AsyncTaskState } from "../types.utils"
 import { FileRouterDataLoadError } from "./errors"
+import { DefaultComponentModule } from "./types.internal"
 
 export interface FileRouterConfig {
   /**
@@ -35,6 +36,18 @@ export interface FileRouterConfig {
    * @default false
    */
   transition?: boolean
+
+  /**
+   * the element to use for hydration
+   */
+  preloaded?: {
+    page: DefaultComponentModule
+    layouts: DefaultComponentModule[]
+    config?: PageConfig
+    params: RouteParams
+    query: RouteQuery
+    route: string
+  }
 }
 
 export interface RouteParams {

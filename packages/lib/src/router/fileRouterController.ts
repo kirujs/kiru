@@ -78,7 +78,14 @@ export class FileRouterController {
     }
     this.currentRoute = null
 
-    const { pages, layouts, dir = "/pages", baseUrl = "/", transition } = config
+    const {
+      pages,
+      layouts,
+      dir = "/pages",
+      baseUrl = "/",
+      transition,
+      preloaded,
+    } = config
     this.enableTransitions = !!transition
     const [normalizedDir, normalizedBaseUrl] = [
       normalizePrefixPath(dir),
@@ -98,7 +105,14 @@ export class FileRouterController {
       normalizedBaseUrl
     )
 
-    this.loadRoute()
+    if (preloaded) {
+      const { page, layouts, config, route, params, query } = preloaded
+      this.currentPage.value = { component: page.default, config, route }
+      this.currentPageProps.value = { params, query }
+      this.currentLayouts.value = layouts.map((l) => l.default)
+    } else {
+      this.loadRoute()
+    }
 
     const handlePopState = () => this.loadRoute()
     window.addEventListener("popstate", handlePopState)

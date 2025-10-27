@@ -26,6 +26,10 @@
       "types": "./dist/router/index.d.ts",
       "default": "./dist/router/index.js"
     },
+    "./router/server": {
+      "types": "./dist/router/server/index.d.ts",
+      "default": "./dist/router/server/index.js"
+    },
     "./ssr/client": {
       "types": "./dist/ssr/client.d.ts",
       "default": "./dist/ssr/client.js"
