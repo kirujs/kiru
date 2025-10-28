@@ -1,4 +1,5 @@
 import {
+  ModuleNode,
   type ESBuildOptions,
   type IndexHtmlTransformResult,
   type Plugin,
@@ -10,9 +11,11 @@ import devtoolsHostBuild from "kiru-devtools-host"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
 import path from "node:path"
 import fs from "node:fs"
+import { pathToFileURL } from "node:url"
 import { FileLinkFormatter, KiruPluginOptions, AppOptions } from "./types"
 import { prepareDevOnlyHooks, prepareHMR } from "./codegen"
 import { ANSI } from "./ansi.js"
+// (avoid importing Vite programmatically here to prevent CSS binary resolution)
 
 export const defaultEsBuildOptions: ESBuildOptions = {
   jsxInject: `import { createElement as _jsx, Fragment as _jsxFragment } from "kiru"`,
@@ -43,9 +46,13 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
     fileLinkFormatter = opts.devtools.formatFileLink ?? fileLinkFormatter
   }
   const dtHostScriptPath = "/__devtools_host__.js"
+  const manifestPath = "vite-manifest.json"
 
   let projectRoot = process.cwd().replace(/\\/g, "/")
   let includedPaths: string[] = []
+  let isSSRBuild = false
+  let basePath = "/"
+  let outDir = "dist"
 
   const { app } = opts
   const appOptions: Required<AppOptions> = {
@@ -82,7 +89,7 @@ function toRouteFromPath(fp) {
   const idx = fp.lastIndexOf(dir)
   const rel = fp.slice(idx + dir.length).split("/").filter(Boolean).slice(0, -1)
   return "/" + rel.join("/")
-  }
+}
 
 function buildMap(mods) {
   const map = {}
@@ -90,7 +97,7 @@ function buildMap(mods) {
     const route = toRouteFromPath(key)
     const segments = toSegments(route)
     const specificity = segments.reduce((s, seg) => s + (seg.startsWith(":") ? 1 : 2), 0)
-    map[route] = { load: mods[key], segments, specificity }
+    map[route] = { load: mods[key], segments, specificity, key }
   }
   return map
 }
@@ -98,7 +105,6 @@ function buildMap(mods) {
 export function getRouteMatch(pathname) {
   const pSegments = toSegments(pathname)
   const pageMap = buildMap(pages)
-  console.log("[kiru]: pageMap", pageMap)
   const matches = []
   outer: for (const route in pageMap) {
     const entry = pageMap[route]
@@ -143,9 +149,13 @@ export async function loadRoute(pathname, search) {
   const match = getRouteMatch(pathname)
   if (!match) return null
 
-  const page = await match.entry.load()
-  const routeSegments = match.routeSegments
-  const ls = ["/", ...routeSegments].reduce((acc, _, i) => {
+  const { entry, params, routeSegments, route } = match
+
+  const moduleIds = [entry.key]
+  const page = await entry.load()
+  const config = page && typeof page === 'object' ? page.config : undefined
+
+   const ls = ["/", ...routeSegments].reduce((acc, _, i) => {
     const layoutKey = "/" + routeSegments.slice(0, i).join("/")
     return acc.concat(layoutKey)
   }, [])
@@ -154,14 +164,17 @@ export async function loadRoute(pathname, search) {
   const layoutImporters = ls.map((k) => {
     // find a matching layout by route key
     const layoutEntry = layoutsMap[k]
-    return layoutEntry ? layoutEntry.load() : null
+    if (layoutEntry) {
+      moduleIds.push(layoutEntry.key)
+      return layoutEntry.load()
+    }
+    return null
   }).filter(Boolean)
 
   const layoutMods = await Promise.all(layoutImporters)
-  const config = page && typeof page === 'object' ? page.config : undefined
-  const { params, route } = match
+  const query = parseQuery(search)
 
-  return { page, config, layouts: layoutMods.filter(Boolean), params, route, query: parseQuery(search) }
+  return { page, config, layouts: layoutMods.filter(Boolean), params, route, query, moduleIds }
 }
 `
   }
@@ -171,7 +184,7 @@ export async function loadRoute(pathname, search) {
 import { FileRouter } from "kiru/router/server"
 import { renderToReadableStream } from "kiru/ssr/server"
 import Document from "${VIRTUAL_DOCUMENT_ID}"
-import { loadRoute } from "${VIRTUAL_ROUTES_ID}"
+import { loadRoute, pages } from "${VIRTUAL_ROUTES_ID}"
 import { createElement } from "kiru"
 
 function wrapWithLayouts(pageEl, layouts) {
@@ -181,21 +194,66 @@ function wrapWithLayouts(pageEl, layouts) {
   }, pageEl)
 }
 
- export async function render(url) {
+ export async function render(url, ctx) {
   const u = new URL(url, "http://localhost")
   const routeInfo = await loadRoute(u.pathname, u.search)
   if (!routeInfo) {
     return { status: 404, immediate: "<!doctype html><html><head><title>Not Found</title></head><body><h1>404</h1></body></html>", stream: null }
   }
+  ctx.moduleIds.push(...routeInfo.moduleIds)
+
   const Page = routeInfo.page.default
   const pageEl = createElement(Page, {})
   const children = wrapWithLayouts(pageEl, routeInfo.layouts)
-  const doc = createElement(Document, { children })
+  const doc = createElement(Document, { children, config: routeInfo.config })
+
   const { params, query } = routeInfo
   const frProps = { children: doc, state: { params, query, path: u.pathname } }
   const app = createElement(FileRouter, frProps)
+
   const { immediate, stream } = renderToReadableStream(app)
   return { status: 200, immediate: "<!doctype html>" + immediate, stream }
+}
+
+export async function collectPaths() {
+  const dir = "${appOptions.dir}"
+  const dirIndex = (key) => key.indexOf(dir)
+  const toSegments = (key) => {
+    let k = key.slice(dirIndex(key) + dir.length)
+    if (k.startsWith("/")) k = k.slice(1)
+    const parts = k.split("/").slice(0, -1)
+    return parts
+  }
+  const toRoutePattern = (segments) => segments.map((part, i, arr) => {
+    if (part.startsWith("[...") && part.endsWith("]")) return ":" + part.slice(4, -1) + "*"
+    if (part.startsWith("[") && part.endsWith("]")) return ":" + part.slice(1, -1)
+    return part
+  })
+  const hasDynamic = (segs) => segs.some((s) => s.startsWith(":"))
+  const paths = new Set()
+  const keys = Object.keys(pages)
+  for (const key of keys) {
+    const segs = toSegments(key)
+    const pattern = toRoutePattern(segs)
+    if (!hasDynamic(pattern)) {
+      const route = "/" + pattern.filter(Boolean).join("/")
+      paths.add(route === "/" ? "/" : route)
+      continue
+    }
+    try {
+      const mod = await pages[key]()
+      const cfg = mod && typeof mod === 'object' ? mod.config : undefined
+      const gen = cfg && cfg.generateStaticParams
+      if (!gen) continue
+      const paramSets = await gen()
+      for (const params of paramSets || []) {
+        const concrete = pattern.map((p) => p.startsWith(":") ? (params[p.slice(1).replace(/\\*$/, '')] ?? "") : p)
+        const pathname = "/" + concrete.filter(Boolean).join("/")
+        paths.add(pathname === "/" ? "/" : pathname)
+      }
+    } catch {}
+  }
+  return Array.from(paths)
 }
 `
   }
@@ -224,11 +282,109 @@ main()
     return html + scriptTag
   }
 
-  async function handleSSR(server: ViteDevServer, url: string) {
-    const mod: any = await server.ssrLoadModule(VIRTUAL_ENTRY_SERVER_ID)
-    const result = await mod.render(url)
+  async function dev_handleSSR(server: ViteDevServer, url: string) {
+    const mod = await server.ssrLoadModule(VIRTUAL_ENTRY_SERVER_ID)
+    const ctx = { moduleIds: [] as string[] }
+    const result = await mod.render(url, ctx)
     let html = injectClientScript(result.immediate)
-    html = await server.transformIndexHtml(url, html)
+    const importedModules: Set<ModuleNode> = new Set()
+    const seen = new Set<ModuleNode>()
+
+    const scan = (mod: ModuleNode) => {
+      if (importedModules.has(mod)) return
+      importedModules.add(mod)
+      for (const dep of mod.importedModules) {
+        if (seen.has(dep)) continue
+        seen.add(dep)
+        scan(dep)
+      }
+    }
+
+    for (const id of ctx.moduleIds) {
+      const p = path.join(projectRoot, id).replace(/\\/g, "/")
+      const mod = server.moduleGraph.getModuleById(p)
+      if (!mod) continue
+      scan(mod)
+    }
+    const localModules = Array.from(importedModules).filter((m) =>
+      m.id?.startsWith(projectRoot)
+    )
+    const cssModules = localModules.filter((m) => m.id?.endsWith(".css"))
+
+    // const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"))
+
+    // find all relevant manifest entries that import non-js
+
+    // Use Vite's transformIndexHtml but with the entry client as context
+    // This helps Vite understand which modules are being used
+    html = await server.transformIndexHtml(
+      url,
+      html,
+      "\0" + VIRTUAL_ENTRY_CLIENT_ID
+    )
+
+    if (cssModules.length) {
+      const stylesheets = cssModules.map((mod) => {
+        const p = mod.id?.replace(projectRoot, "")
+        return `<link rel="stylesheet" type="text/css" href="${p}?temp">`
+      })
+
+      html = html.replace("<head>", "<head>" + stylesheets.join("\n"))
+      html = html.replace(
+        "</body>",
+        `<script type="module" id="kiru-css-cleanup">
+        const d = document;
+        
+        function clean() {
+          let isCleaned = true;
+          const VITE_ID = 'data-vite-dev-id';
+          const injectedByVite = [...document.querySelectorAll(\`style[\${VITE_ID}]\`)].map((style) => style.getAttribute(VITE_ID));
+
+          const suffix = "?temp";
+          const injectedByKiru = [...document.querySelectorAll(\`link[rel="stylesheet"][type="text/css"][href$="\${suffix}"]\`)];
+          
+          injectedByKiru.forEach((linkKiru) => {
+            const href = linkKiru.getAttribute("href");
+            let filePathAbsoluteUserRootDir = href.slice(0, -suffix.length);
+            const prefix = '/@fs/';
+            if (filePathAbsoluteUserRootDir.startsWith(prefix))
+                filePathAbsoluteUserRootDir = filePathAbsoluteUserRootDir.slice(prefix.length);
+            
+            if (injectedByVite.some((filePathAbsoluteFilesystem) => filePathAbsoluteFilesystem.endsWith(filePathAbsoluteUserRootDir))) {
+              linkKiru.remove();
+            }
+            else {
+              isCleaned = false;
+              console.log("Not cleaned: ", filePathAbsoluteUserRootDir);
+            }            
+          })
+          return isCleaned;
+        }
+
+        function removeInjectedStyles() {
+          let sleep = 2;
+
+          function runClean() {
+            if (clean()) {
+              console.log("Cleaned");
+              document.getElementById("kiru-css-cleanup").remove();
+              return;
+            }
+            if (sleep < 1000) {
+              sleep *= 2;
+            }
+            setTimeout(runClean, sleep);
+          }
+            
+          setTimeout(runClean, sleep);
+        }
+
+        removeInjectedStyles();
+
+      </script></body>`
+      )
+    }
+
     return { status: result.status ?? 200, html, stream: result.stream }
   }
 
@@ -237,9 +393,12 @@ main()
     config(config) {
       const isSsrBuild = config.build?.ssr
       const rollup = (config.build as any)?.rollupOptions ?? {}
-      const input = rollup.input ?? VIRTUAL_ENTRY_CLIENT_ID
-      const ssr =
-        isSsrBuild === true ? VIRTUAL_ENTRY_SERVER_ID : config.build?.ssr
+      let input = rollup.input
+      if (!input) {
+        input = isSsrBuild ? VIRTUAL_ENTRY_SERVER_ID : VIRTUAL_ENTRY_CLIENT_ID
+      }
+      // Keep build.ssr as boolean for SSR builds; we route entry via rollupOptions.input
+      const ssr = isSsrBuild === true ? true : config.build?.ssr
       return {
         ...config,
         appType: "custom",
@@ -250,6 +409,9 @@ main()
         build: {
           ...(config.build as any),
           ssr,
+          manifest: manifestPath,
+          ssrEmitAssets: true,
+          ssrEmitManifest: true,
           rollupOptions: {
             ...rollup,
             input,
@@ -260,6 +422,7 @@ main()
     configResolved(config) {
       isProduction = config.isProduction
       isBuild = config.command === "build"
+      isSSRBuild = !!config.build?.ssr
       devtoolsEnabled = opts.devtools !== false && !isBuild && !isProduction
       loggingEnabled = opts.loggingEnabled === true
 
@@ -267,6 +430,8 @@ main()
       includedPaths = (opts.include ?? []).map((p) =>
         path.resolve(projectRoot, p).replace(/\\/g, "/")
       )
+      basePath = (config.base ?? "/") as string
+      outDir = (config.build?.outDir ?? "dist") as string
     },
     transformIndexHtml(html) {
       if (!devtoolsEnabled) return
@@ -313,7 +478,7 @@ main()
             !url.startsWith(dtHostScriptPath) &&
             !url.startsWith(dtClientPathname)
           ) {
-            const { status, html, stream } = await handleSSR(server, url)
+            const { status, html, stream } = await dev_handleSSR(server, url)
             res.statusCode = status
             res.setHeader("Content-Type", "text/html")
             res.write(html)
@@ -359,6 +524,85 @@ main()
         return createEntryClientModule()
       }
       return null
+    },
+    async writeBundle(outputOptions, bundle) {
+      console.log("writeBundle: ~~~ HERE 0 ~~~", isBuild, isSSRBuild)
+      try {
+        if (!isBuild || !isSSRBuild) return
+
+        const outDirAbs = path.resolve(
+          projectRoot,
+          outputOptions?.dir ?? "dist"
+        )
+
+        // locate SSR entry emitted by this build
+        let ssrEntryFile: string | null = null
+        for (const [, output] of Object.entries(bundle)) {
+          const c = output
+          if (c.type === "chunk" && c.isEntry) {
+            ssrEntryFile = c.fileName
+            break
+          }
+        }
+        if (!ssrEntryFile) return
+
+        const ssrEntryAbs = path.resolve(outDirAbs, ssrEntryFile)
+        const mod: any = await import(pathToFileURL(ssrEntryAbs).href)
+        console.log("writeBundle: ~~~ HERE 1 ~~~", mod)
+
+        // collect concrete paths (static + generateStaticParams)
+        const paths: string[] = await (mod.collectPaths?.() ?? [])
+        if (paths.length === 0) paths.push("/")
+
+        // find a client entry in client dist
+        const clientOutDirAbs = path.resolve(
+          projectRoot,
+          process.env.KIRU_CLIENT_OUT_DIR || "dist"
+        )
+        function findClientEntry(dir: string): string | null {
+          if (!fs.existsSync(dir)) return null
+          const top = fs.readdirSync(dir)
+          const topJs = top.find((f) => f.endsWith(".js"))
+          if (topJs) return topJs
+          const assetsDir = path.join(dir, "assets")
+          if (fs.existsSync(assetsDir)) {
+            const assetJs = fs
+              .readdirSync(assetsDir)
+              .find((f) => f.endsWith(".js"))
+            return assetJs ? `assets/${assetJs}` : null
+          }
+          return null
+        }
+        const clientEntry = findClientEntry(clientOutDirAbs)
+
+        for (const route of paths) {
+          const result = await mod.render(route)
+          let html: string = result.immediate
+          if (result.stream) {
+            html += await new Promise<string>((resolve) => {
+              let acc = ""
+              result.stream.on("data", (c: any) => (acc += String(c)))
+              result.stream.on("end", () => resolve(acc))
+            })
+          }
+          if (clientEntry) {
+            const scriptTag = `<script type="module" src="/${clientEntry}"></script>`
+            html = html.includes("</body>")
+              ? html.replace("</body>", scriptTag + "</body>")
+              : html + scriptTag
+          }
+
+          const filePath =
+            route === "/"
+              ? path.resolve(clientOutDirAbs, "index.html")
+              : path.resolve(clientOutDirAbs, route.slice(1), "index.html")
+          fs.mkdirSync(path.dirname(filePath), { recursive: true })
+          fs.writeFileSync(filePath, html, "utf-8")
+        }
+      } catch (e) {
+        console.error(ANSI.red("[vite-plugin-kiru]: SSG prerender failed"))
+        console.error(e)
+      }
     },
     transform(src, id) {
       if (

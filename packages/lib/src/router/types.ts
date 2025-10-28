@@ -93,14 +93,15 @@ export interface PageDataLoaderConfig<T = unknown> {
   transition?: boolean
 }
 
-export interface PageConfig {
+export type PageConfig = {
   /**
    * The loader configuration for this page
    */
   loader?: PageDataLoaderConfig
-  // title?: string
-  // description?: string
-  // meta?: Record<string, string>
+  title?: string
+  description?: string
+  meta?: Record<string, string>
+  generateStaticParams?: () => RouteParams[] | Promise<RouteParams[]>
 }
 
 export type PageProps<T extends PageConfig> =
