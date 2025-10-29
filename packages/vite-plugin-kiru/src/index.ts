@@ -1,6 +1,5 @@
 import {
   ModuleNode,
-  send,
   type ESBuildOptions,
   type IndexHtmlTransformResult,
   type Plugin,
@@ -17,6 +16,7 @@ import { MagicString, TransformCTX } from "./codegen/shared.js"
 import { FileLinkFormatter, KiruPluginOptions, AppOptions } from "./types"
 import { prepareDevOnlyHooks, prepareHMR } from "./codegen"
 import { ANSI } from "./ansi.js"
+import type { Readable } from "node:stream"
 // (avoid importing Vite programmatically here to prevent CSS binary resolution)
 
 export const defaultEsBuildOptions: ESBuildOptions = {
@@ -26,6 +26,19 @@ export const defaultEsBuildOptions: ESBuildOptions = {
   jsxFragment: "_jsxFragment",
   loader: "tsx",
   include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
+}
+
+interface RenderContext {
+  registerModule: (moduleId: string) => void
+  registerPreloadedPageProps: (props: Record<string, unknown>) => void
+}
+
+interface ServerRenderModule {
+  render: (
+    url: string,
+    ctx: RenderContext
+  ) => Promise<{ status: number; immediate: string; stream: Readable | null }>
+  collectPaths: () => Promise<string[]> | string[]
 }
 
 export default function kiru(opts: KiruPluginOptions = {}): Plugin {
@@ -55,6 +68,7 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
   let isSSRBuild = false
   let basePath = "/"
   let outDir = "dist"
+  let baseOutDir = "dist"
 
   const { app } = opts
   const appOptions: Required<AppOptions> = {
@@ -107,7 +121,8 @@ import Document from "${userDoc}"
 import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
 
 export async function render(url, ctx) {
-  return kiruServerRender(url, { ...ctx, Document, pages, layouts })
+  const { registerModule, registerPreloadedPageProps } = ctx
+  return kiruServerRender(url, { registerModule, registerPreloadedPageProps, Document, pages, layouts })
 }
 
 /**
@@ -179,14 +194,27 @@ if (import.meta.env.DEV) {
 
   async function dev_handleSSR(server: ViteDevServer, url: string) {
     const mod = await server.ssrLoadModule(VIRTUAL_ENTRY_SERVER_ID)
-    const ctx = { moduleIds: [] as string[] }
+
+    const moduleIds: string[] = []
+    let preloadedPageProps: Record<string, unknown> = {}
+    const ctx = {
+      registerModule: (moduleId: string) => {
+        moduleIds.push(moduleId)
+      },
+      registerPreloadedPageProps: (props: Record<string, unknown>) => {
+        preloadedPageProps = props
+      },
+    }
+
     const result = await mod.render(url, ctx)
     let html = injectClientScript(result.immediate)
+    console.log("preloadedPageProps", preloadedPageProps)
+
     const importedModules: Set<ModuleNode> = new Set()
     const seen = new Set<ModuleNode>()
 
     const documentModule = resolveUserDocument().substring(projectRoot.length)
-    ctx.moduleIds.push(documentModule)
+    moduleIds.push(documentModule)
 
     const scan = (mod: ModuleNode) => {
       if (importedModules.has(mod)) return
@@ -198,7 +226,7 @@ if (import.meta.env.DEV) {
       }
     }
 
-    for (const id of ctx.moduleIds) {
+    for (const id of moduleIds) {
       const p = path.join(projectRoot, id).replace(/\\/g, "/")
       const mod = server.moduleGraph.getModuleById(p)
       if (!mod) {
@@ -247,9 +275,10 @@ if (import.meta.env.DEV) {
       }
       // Keep build.ssr as boolean for SSR builds; we route entry via rollupOptions.input
       const ssr = isSsrBuild === true ? true : config.build?.ssr
+      const baseOut = (config.build?.outDir ?? "dist") as string
       const desiredOutDir = isSsrBuild
-        ? opts.build?.serverOutDir ?? "dist/server"
-        : opts.build?.clientOutDir ?? "dist/client"
+        ? `${baseOut}/server`
+        : `${baseOut}/client`
 
       return {
         ...config,
@@ -265,10 +294,7 @@ if (import.meta.env.DEV) {
           manifest: manifestPath,
           ssrEmitAssets: true,
           ssrManifest: true,
-          outDir:
-            desiredOutDir !== undefined
-              ? desiredOutDir
-              : (config.build as any)?.outDir,
+          outDir: desiredOutDir,
           rollupOptions: {
             ...rollup,
             input,
@@ -289,6 +315,8 @@ if (import.meta.env.DEV) {
       )
       basePath = (config.base ?? "/") as string
       outDir = (config.build?.outDir ?? "dist") as string
+      const normalizedOut = outDir.replace(/\\/g, "/")
+      baseOutDir = normalizedOut.replace(/\/(server|client)$/i, "") || "dist"
     },
     transformIndexHtml(html) {
       if (!devtoolsEnabled) return
@@ -310,10 +338,7 @@ if (import.meta.env.DEV) {
       } satisfies IndexHtmlTransformResult
     },
     configurePreviewServer(server) {
-      const clientOutDir = resolve(
-        projectRoot,
-        opts.build?.clientOutDir ?? "dist/client"
-      )
+      const clientOutDir = resolve(projectRoot, `${baseOutDir}/client`)
       server.middlewares.use(async (req, res, next) => {
         try {
           let url = req.url || "/"
@@ -433,14 +458,16 @@ if (import.meta.env.DEV) {
         if (!ssrEntry) return
 
         const ssrEntryAbs = path.resolve(outDirAbs, ssrEntry.fileName)
-        const mod = await import(pathToFileURL(ssrEntryAbs).href)
+        const mod = (await import(
+          pathToFileURL(ssrEntryAbs).href
+        )) as ServerRenderModule
         console.log("writeBundle: ~~~ HERE 1 ~~~", mod)
 
         // collect concrete paths (static + generateStaticParams)
         // Prefer module export; fallback to deriving from SSR manifest (static only)
         let paths: string[] = []
         try {
-          paths = await (mod.collectPaths?.() ?? [])
+          paths = await mod.collectPaths()
         } catch {}
 
         if (paths.length === 0) {
@@ -450,8 +477,10 @@ if (import.meta.env.DEV) {
               const ssrManifest = JSON.parse(
                 fs.readFileSync(ssrManifestPath, "utf-8")
               ) as Record<string, any>
+
               const entry = ssrManifest["virtual:kiru:entry-server"]
               const imports: string[] = entry?.dynamicImports ?? []
+
               const normalize = (p: string) => {
                 // strip leading appOptions.dir and terminal file
                 const dirPrefix = appOptions.dir + "/"
@@ -468,6 +497,7 @@ if (import.meta.env.DEV) {
                 if (urlParts.some((seg) => seg.startsWith("["))) return null
                 return "/" + urlParts.join("/")
               }
+
               const derived = imports
                 .map((i) => normalize(i))
                 .filter((v): v is string => !!v)
@@ -480,7 +510,7 @@ if (import.meta.env.DEV) {
         // find a client entry in client dist
         const clientOutDirAbs = path.resolve(
           projectRoot,
-          opts.build?.clientOutDir ?? "dist/client"
+          `${baseOutDir}/client`
         )
         function findClientEntry(dir: string): string | null {
           if (!fs.existsSync(dir)) return null
@@ -547,15 +577,23 @@ if (import.meta.env.DEV) {
 
         let wroteCount = 0
         for (const route of paths) {
-          const result = await mod.render(route)
-          let html: string = result.immediate
+          let pageProps: Record<string, unknown> | undefined
+          const result = await mod.render(route, {
+            registerModule: () => {},
+            registerPreloadedPageProps: (props: Record<string, unknown>) => {
+              pageProps = props
+            },
+          })
+          let html = result.immediate
+
           if (result.stream) {
             html += await new Promise<string>((resolve) => {
               let acc = ""
-              result.stream.on("data", (c: any) => (acc += String(c)))
-              result.stream.on("end", () => resolve(acc))
+              result.stream?.on("data", (c: any) => (acc += String(c)))
+              result.stream?.on("end", () => resolve(acc))
             })
           }
+
           if (clientEntry) {
             const scriptTag = `<script type="module" src="/${clientEntry}"></script>`
             const headInjected = cssLinks
@@ -564,6 +602,15 @@ if (import.meta.env.DEV) {
             html = headInjected.includes("</body>")
               ? headInjected.replace("</body>", scriptTag + "</body>")
               : headInjected + scriptTag
+          }
+
+          if (pageProps) {
+            html = html.replace(
+              "</body>",
+              `<script type="application/json" x-page-props>${JSON.stringify(
+                pageProps
+              )}</script></body>`
+            )
           }
 
           let filePath: string
@@ -591,14 +638,28 @@ if (import.meta.env.DEV) {
         }
         if (wroteCount === 0) {
           try {
-            const result = await mod.render("/")
-            let html: string = result.immediate
+            let pageProps: Record<string, unknown> | undefined
+            const result = await mod.render("/", {
+              registerModule: () => {},
+              registerPreloadedPageProps: (props: Record<string, unknown>) => {
+                pageProps = props
+              },
+            })
+            let html = result.immediate
             if (result.stream) {
               html += await new Promise<string>((resolve) => {
                 let acc = ""
-                result.stream.on("data", (c: any) => (acc += String(c)))
-                result.stream.on("end", () => resolve(acc))
+                result.stream?.on("data", (c: any) => (acc += String(c)))
+                result.stream?.on("end", () => resolve(acc))
               })
+            }
+            if (pageProps) {
+              html = html.replace(
+                "</body>",
+                `<script type="application/json" x-page-props>${JSON.stringify(
+                  pageProps
+                )}</script></body>`
+              )
             }
             if (clientEntry) {
               const scriptTag = `<script type="module" src="/${clientEntry}"></script>`

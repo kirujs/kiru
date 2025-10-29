@@ -9,6 +9,7 @@ export interface FileRouterPreloadConfig {
   pages: FormattedViteImportMap
   layouts: FormattedViteImportMap
   page: DefaultComponentModule
+  pageProps: Record<string, unknown>
   pageLayouts: DefaultComponentModule[]
   config?: PageConfig
   params: RouteParams
@@ -89,7 +90,7 @@ export interface RouterState {
 
 type PageDataLoaderContext = RouterState & {}
 
-export interface PageDataLoaderConfig<T = unknown> {
+export type PageDataLoaderConfig<T = unknown> = {
   /**
    * The function to load the page data
    */
@@ -98,7 +99,23 @@ export interface PageDataLoaderConfig<T = unknown> {
    * Enable transitions when swapping between "load", "error" and "data" states
    */
   transition?: boolean
-}
+} & (
+  | {
+      mode: "client"
+      /**
+       * The cache time for the page data loader
+       */
+      cache?: number
+    }
+  | {
+      mode?: "build"
+      cache?: never
+    }
+  | {
+      mode?: never
+      cache?: never
+    }
+)
 
 export type PageConfig = {
   /**

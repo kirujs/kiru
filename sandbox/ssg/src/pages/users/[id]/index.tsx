@@ -1,16 +1,49 @@
-const data = {
-  user: {
-    id: 1,
-    firstName: "John",
-    lastName: "Doe",
-    image: "https://via.placeholder.com/150",
-    email: "john.doe@example.com",
-  },
+import { definePageConfig, PageProps, useFileRouter } from "kiru/router"
+
+interface FetchUserResponse {
+  id: number
+  firstName: string
+  lastName: string
+  image: string
+  email: string
 }
 
-export default function UserDetailPage() {
+export const config = definePageConfig({
+  loader: {
+    load: async ({ signal, params }) => {
+      const response = await fetch(
+        `https://dummyjson.com/users/${params.id}?select=firstName,lastName,image,email`,
+        { signal }
+      )
+      if (!response.ok) throw new Error(response.statusText)
+      const user = (await response.json()) as FetchUserResponse
+      return { user }
+    },
+    mode: "build",
+    // mode: "client",
+    // cache: 1000 * 60 * 60 * 24, // 24 hours
+  },
+  generateStaticParams: async () => {
+    const response = await fetch("https://dummyjson.com/users?select=id")
+    if (!response.ok) throw new Error(response.statusText)
+    const users = await response.json()
+    return users.users.map((user: any) => ({ id: user.id.toString() }))
+  },
+})
+
+export default function UserDetailPage({
+  data,
+  loading,
+  error,
+}: PageProps<typeof config>) {
+  const router = useFileRouter()
+
+  if (loading) return <p>Loading...</p>
+  if (error) return <p>{String(error.cause)}</p>
+
   return (
     <div>
+      <button onclick={() => router.reload()}>Reload</button>
       <h1>User Detail</h1>
       <p>User ID: {data.user.id}</p>
       <p>
@@ -22,6 +55,7 @@ export default function UserDetailPage() {
         className="w-10 h-10 rounded-full"
       />
       <p>User Email: {data.user.email}</p>
+      <button onclick={() => router.navigate("/users")}>Back to Users</button>
     </div>
   )
 }

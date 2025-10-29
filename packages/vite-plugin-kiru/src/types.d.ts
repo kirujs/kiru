@@ -47,19 +47,6 @@ export interface DevtoolsOptions {
   formatFileLink?: FileLinkFormatter
 }
 
-export interface BuildOutputOptions {
-  /**
-   * Directory for client build output (relative to project root)
-   * @default "dist/client"
-   */
-  clientOutDir?: string
-  /**
-   * Directory for server (SSR) build output (relative to project root)
-   * @default "dist/server"
-   */
-  serverOutDir?: string
-}
-
 export interface KiruPluginOptions {
   /**
    * Whether the devtools should be injected into the build during development
@@ -102,11 +89,6 @@ export interface KiruPluginOptions {
    * ```
    */
   app?: AppOptions
-
-  /**
-   * Output directories for build artifacts (client/server)
-   */
-  build?: BuildOutputOptions
 }
 
 export const defaultEsBuildOptions: ESBuildOptions

@@ -40,10 +40,20 @@ async function preparePreloadConfig(
     ...layoutEntries.map((e) => e.load()),
   ])
 
+  let pageProps = {}
+  try {
+    const script = document.querySelector("script[x-page-props]")!
+    pageProps = JSON.parse(script.textContent)
+    script.remove()
+  } catch (error) {
+    pageProps = {}
+  }
+
   return {
     pages: options.pages,
     layouts: options.layouts,
     page: page,
+    pageProps: pageProps,
     pageLayouts: layouts,
     params: routeMatch.params,
     query: {},

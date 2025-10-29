@@ -95,14 +95,21 @@ export class FileRouterController {
         pages,
         layouts,
         page,
+        pageProps,
         pageLayouts,
         config,
         route,
         params,
         query,
       } = preloaded
+      this.state.value = {
+        params,
+        query,
+        path: route,
+        signal: this.abortController.signal,
+      }
       this.currentPage.value = { component: page.default, config, route }
-      this.currentPageProps.value = { params, query }
+      this.currentPageProps.value = pageProps
       this.currentLayouts.value = pageLayouts.map((l) => l.default)
       this.pages = pages
       this.layouts = layouts

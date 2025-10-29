@@ -1,21 +1,43 @@
-import { Link } from "kiru/router"
+import { definePageConfig, Link, PageProps } from "kiru/router"
 
-const users = [
-  {
-    id: 1,
-    firstName: "John",
-    lastName: "Doe",
-    image: "https://via.placeholder.com/150",
+interface FetchUsersResponse {
+  users: {
+    id: number
+    firstName: string
+    lastName: string
+    image: string
+  }[]
+}
+
+export const config = definePageConfig({
+  loader: {
+    load: async ({ signal }) => {
+      const response = await fetch(
+        "https://dummyjson.com/users?select=firstName,lastName,image",
+        { signal }
+      )
+      if (!response.ok) throw new Error(response.statusText)
+      return (await response.json()) as FetchUsersResponse
+    },
+    mode: "client",
+    cache: 1000 * 60 * 60 * 24, // 24 hours
   },
-]
+})
 
-export default function Page() {
+export default function Page({
+  data,
+  loading,
+  error,
+}: PageProps<typeof config>) {
+  if (loading) return <p>Loading...</p>
+  if (error) return <p>{String(error.cause)}</p>
+
   return (
     <div>
       <h1>Users</h1>
       <p>This is the users page</p>
       <div className="flex flex-col gap-2">
-        {users.map((user) => (
+        {data.users.map((user) => (
           <div key={user.id} className="flex gap-2">
             <Link to={`/users/${user.id}`}>
               {user.firstName} {user.lastName}

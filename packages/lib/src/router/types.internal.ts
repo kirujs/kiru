@@ -5,7 +5,7 @@ export interface DefaultComponentModule {
 }
 
 export interface PageModule {
-  default: DefaultComponentModule
+  default: Kiru.FC
   config?: PageConfig
 }
 
