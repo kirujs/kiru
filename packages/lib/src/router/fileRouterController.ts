@@ -318,7 +318,6 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
   ) {
     const f = options?.replace ? "replaceState" : "pushState"
     window.history[f]({}, "", path)
-    window.dispatchEvent(new PopStateEvent("popstate", { state: {} }))
     return this.loadRoute(path, options?.props, options?.transition)
   }
 
