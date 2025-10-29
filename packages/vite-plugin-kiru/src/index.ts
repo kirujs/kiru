@@ -75,144 +75,30 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
   }
 
   function createRoutesModule(): string {
-    // Note: Matching mirrors FileRouterController logic without window usage
     return `
-export const dir = "${appOptions.dir}"
-export const baseUrl = "${appOptions.baseUrl}"
-export const pages = import.meta.glob(["/**/${appOptions.page}"])
-export const layouts = import.meta.glob(["/**/${appOptions.layout}"])
+import { formatViteImportMap, normalizePrefixPath } from "kiru/router/utils"
 
-function normalizePrefixPath(p) { return p === "/" ? "/" : ("/" + p.replace(/^\\/+|\\/+$/g, "")) }
-function toSegments(route) { return route.split("/").filter(Boolean) }
-function toRouteFromPath(fp) {
-  // convert /.../pages/a/b/index.tsx -> /a/b
-  const idx = fp.lastIndexOf(dir)
-  const rel = fp.slice(idx + dir.length).split("/").filter(Boolean).slice(0, -1)
-  return "/" + rel.join("/")
-}
+const pageMap = import.meta.glob(["/**/${appOptions.page}"])
+const layoutMap = import.meta.glob(["/**/${appOptions.layout}"])
 
-function buildMap(mods) {
-  const map = {}
-  for (const key in mods) {
-    const route = toRouteFromPath(key)
-    const segments = toSegments(route)
-    const specificity = segments.reduce((s, seg) => s + (seg.startsWith(":") ? 1 : 2), 0)
-    map[route] = { load: mods[key], segments, specificity, key }
-  }
-  return map
-}
+export const dir = normalizePrefixPath("${appOptions.dir}")
+export const baseUrl = normalizePrefixPath("${appOptions.baseUrl}")
 
-export function getRouteMatch(pathname) {
-  const pSegments = toSegments(pathname)
-  const pageMap = buildMap(pages)
-  const matches = []
-  outer: for (const route in pageMap) {
-    const entry = pageMap[route]
-    const routeSegments = entry.segments
-    const pathMatchingSegments = routeSegments.filter(seg => !(seg.startsWith("(") && seg.endsWith(")")))
-    const params = {}
-    let hasCatchall = false
-    for (let i = 0; i < pathMatchingSegments.length && i < pSegments.length; i++) {
-      const routeSeg = pathMatchingSegments[i]
-      if (routeSeg.startsWith(":")) {
-        const key = routeSeg.slice(1)
-        if (routeSeg.endsWith("*")) { hasCatchall = true; const k = key.slice(0, -1); params[k] = pSegments.slice(i).join("/"); break }
-        if (i >= pSegments.length) continue outer
-        params[key] = pSegments[i]
-      } else {
-        if (routeSeg !== pSegments[i]) continue outer
-      }
-    }
-    if (!hasCatchall && pathMatchingSegments.length !== pSegments.length) continue
-    matches.push({ route, entry, params, routeSegments })
-  }
-  if (matches.length === 0) return null
-  matches.sort((a, b) => b.entry.specificity - a.entry.specificity)
-  return matches[0]
-}
-
-function parseQuery(search) {
-  const params = new URLSearchParams(search || "")
-  const query = {}
-  for (const [k, v] of params.entries()) {
-    if (k in query) {
-      const cur = query[k]
-      query[k] = Array.isArray(cur) ? cur.concat(v) : [cur, v]
-    } else {
-      query[k] = v
-    }
-  }
-  return query
-}
-
-export async function loadRoute(pathname, search) {
-  const match = getRouteMatch(pathname)
-  if (!match) return null
-
-  const { entry, params, routeSegments, route } = match
-
-  const moduleIds = [entry.key]
-  const page = await entry.load()
-  const config = page && typeof page === 'object' ? page.config : undefined
-
-   const ls = ["/", ...routeSegments].reduce((acc, _, i) => {
-    const layoutKey = "/" + routeSegments.slice(0, i).join("/")
-    return acc.concat(layoutKey)
-  }, [])
-
-  const layoutsMap = buildMap(layouts)
-  const layoutImporters = ls.map((k) => {
-    // find a matching layout by route key
-    const layoutEntry = layoutsMap[k]
-    if (layoutEntry) {
-      moduleIds.push(layoutEntry.key)
-      return layoutEntry.load()
-    }
-    return null
-  }).filter(Boolean)
-
-  const layoutMods = await Promise.all(layoutImporters)
-  const query = parseQuery(search)
-
-  return { page, config, layouts: layoutMods.filter(Boolean), params, route, query, moduleIds }
-}
+export const pages = formatViteImportMap(pageMap, dir, baseUrl)
+export const layouts = formatViteImportMap(layoutMap, dir, baseUrl)
 `
   }
 
   function createEntryServerModule(): string {
     return `
 import { FileRouter } from "kiru/router/server"
+import { render as kiruServerRender } from "kiru/router/server"
 import { renderToReadableStream } from "kiru/ssr/server"
 import Document from "${VIRTUAL_DOCUMENT_ID}"
-import { loadRoute, pages } from "${VIRTUAL_ROUTES_ID}"
-import { createElement } from "kiru"
+import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
 
-function wrapWithLayouts(pageEl, layouts) {
-  return layouts.reduceRight((children, m) => {
-    const L = m.default
-    return typeof L === "function" ? createElement(L, { children }) : children
-  }, pageEl)
-}
-
- export async function render(url, ctx) {
-  const u = new URL(url, "http://localhost")
-  const routeInfo = await loadRoute(u.pathname, u.search)
-  if (!routeInfo) {
-    return { status: 404, immediate: "<!doctype html><html><head><title>Not Found</title></head><body><h1>404</h1></body></html>", stream: null }
-  }
-  ctx.moduleIds.push(...routeInfo.moduleIds)
-
-  const Page = routeInfo.page.default
-  const pageEl = createElement(Page, {})
-  const children = wrapWithLayouts(pageEl, routeInfo.layouts)
-  const doc = createElement(Document, { children, config: routeInfo.config })
-
-  const { params, query } = routeInfo
-  const frProps = { children: doc, state: { params, query, path: u.pathname } }
-  const app = createElement(FileRouter, frProps)
-
-  const { immediate, stream } = renderToReadableStream(app)
-  return { status: 200, immediate: "<!doctype html>" + immediate, stream }
+export async function render(url, ctx) {
+  return kiruServerRender(url, { ...ctx, Document, pages, layouts })
 }
 
 export async function collectPaths() {
@@ -261,8 +147,10 @@ export async function collectPaths() {
   function createEntryClientModule(): string {
     return `
 import { FileRouter } from "kiru/router"
+import { onLoadedDev } from "kiru/router/dev"
+import { matchRoute, loadRoute } from "kiru/router/utils"
+import { dir, baseUrl, pages, layouts } from "${VIRTUAL_ROUTES_ID}"
 import { hydrate } from "kiru/ssr/client"
-import { pages, layouts, loadRoute } from "${VIRTUAL_ROUTES_ID}"
 import { createElement } from "kiru"
 
 async function main() {
@@ -271,6 +159,10 @@ async function main() {
   hydrate(createElement(FileRouter, { config: { pages, layouts, preloaded } }), document.body)
 }
 main()
+
+if (import.meta.env.DEV) {
+  onLoadedDev()
+}
 `
   }
 
@@ -330,59 +222,6 @@ main()
       })
 
       html = html.replace("<head>", "<head>" + stylesheets.join("\n"))
-      html = html.replace(
-        "</body>",
-        `<script type="module" id="kiru-css-cleanup">
-        const d = document;
-        
-        function clean() {
-          let isCleaned = true;
-          const VITE_ID = 'data-vite-dev-id';
-          const injectedByVite = [...document.querySelectorAll(\`style[\${VITE_ID}]\`)].map((style) => style.getAttribute(VITE_ID));
-
-          const suffix = "?temp";
-          const injectedByKiru = [...document.querySelectorAll(\`link[rel="stylesheet"][type="text/css"][href$="\${suffix}"]\`)];
-          
-          injectedByKiru.forEach((linkKiru) => {
-            const href = linkKiru.getAttribute("href");
-            let filePathAbsoluteUserRootDir = href.slice(0, -suffix.length);
-            const prefix = '/@fs/';
-            if (filePathAbsoluteUserRootDir.startsWith(prefix))
-                filePathAbsoluteUserRootDir = filePathAbsoluteUserRootDir.slice(prefix.length);
-            
-            if (injectedByVite.some((filePathAbsoluteFilesystem) => filePathAbsoluteFilesystem.endsWith(filePathAbsoluteUserRootDir))) {
-              linkKiru.remove();
-            }
-            else {
-              isCleaned = false;
-              console.log("Not cleaned: ", filePathAbsoluteUserRootDir);
-            }            
-          })
-          return isCleaned;
-        }
-
-        function removeInjectedStyles() {
-          let sleep = 2;
-
-          function runClean() {
-            if (clean()) {
-              console.log("Cleaned");
-              document.getElementById("kiru-css-cleanup").remove();
-              return;
-            }
-            if (sleep < 1000) {
-              sleep *= 2;
-            }
-            setTimeout(runClean, sleep);
-          }
-            
-          setTimeout(runClean, sleep);
-        }
-
-        removeInjectedStyles();
-
-      </script></body>`
-      )
     }
 
     return { status: result.status ?? 200, html, stream: result.stream }
