@@ -42,7 +42,7 @@ async function preparePreloadConfig(
 
   return {
     pages: options.pages,
-    layouts: options.pages,
+    layouts: options.layouts,
     page: page,
     pageLayouts: layouts,
     params: routeMatch.params,
