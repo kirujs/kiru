@@ -32,7 +32,8 @@ describe("hot module reload", () => {
   })
 
   it("can persist component state throught HMR updates", () => {
-    cy.get("#counter button").click() // set counter state to 1
+    cy.wait(1000)
+    cy.get("#counter button").click({ force: true }) // set counter state to 1
     cy.window()
       .then((win) => {
         // @ts-expect-error

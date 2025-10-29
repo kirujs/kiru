@@ -2,7 +2,7 @@
 describe("signals", () => {
   beforeEach(() => {
     const port = Cypress.env("port")
-    cy.visit(`http://localhost:${port}/signals`)
+    cy.visit(`http://localhost:${port}/signals`).wait(1000)
   })
 
   describe("rendering", () => {

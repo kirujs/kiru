@@ -106,7 +106,7 @@ export class FileRouterController {
         params,
         query,
       } = preloaded
-      this.state.value = {
+      this.state = {
         params,
         query,
         path: route,
