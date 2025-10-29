@@ -89,26 +89,41 @@ export class FileRouterController {
       normalizePrefixPath(dir),
       normalizePrefixPath(baseUrl),
     ]
-    this.pages = formatViteImportMap(
-      pages as ViteImportMap,
-      normalizedDir,
-      normalizedBaseUrl
-    )
-    if (__DEV__) {
-      validateRoutes(this.pages)
-    }
-    this.layouts = formatViteImportMap(
-      layouts as ViteImportMap,
-      normalizedDir,
-      normalizedBaseUrl
-    )
 
     if (preloaded) {
-      const { page, layouts, config, route, params, query } = preloaded
+      const {
+        pages,
+        layouts,
+        page,
+        pageLayouts,
+        config,
+        route,
+        params,
+        query,
+      } = preloaded
       this.currentPage.value = { component: page.default, config, route }
       this.currentPageProps.value = { params, query }
-      this.currentLayouts.value = layouts.map((l) => l.default)
+      this.currentLayouts.value = pageLayouts.map((l) => l.default)
+      this.pages = pages
+      this.layouts = layouts
+      if (__DEV__) {
+        validateRoutes(this.pages)
+      }
     } else {
+      this.pages = formatViteImportMap(
+        pages as ViteImportMap,
+        normalizedDir,
+        normalizedBaseUrl
+      )
+
+      this.layouts = formatViteImportMap(
+        layouts as ViteImportMap,
+        normalizedDir,
+        normalizedBaseUrl
+      )
+      if (__DEV__) {
+        validateRoutes(this.pages)
+      }
       this.loadRoute()
     }
 

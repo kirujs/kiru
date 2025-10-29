@@ -1,5 +1,4 @@
 import { Link } from "kiru/router"
-import "../index.css"
 
 export default function RootLayout({ children }: { children: JSX.Children }) {
   return (

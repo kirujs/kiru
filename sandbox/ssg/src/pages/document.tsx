@@ -1,3 +1,5 @@
+import "../index.css"
+
 export default function Document({ children }: { children?: JSX.Element }) {
   return (
     <html lang="en">

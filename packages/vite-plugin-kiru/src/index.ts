@@ -64,102 +64,61 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
   }
 
   const VIRTUAL_ROUTES_ID = "virtual:kiru:routes"
-  const VIRTUAL_DOCUMENT_ID = "virtual:kiru:document"
   const VIRTUAL_ENTRY_SERVER_ID = "virtual:kiru:entry-server"
   const VIRTUAL_ENTRY_CLIENT_ID = "virtual:kiru:entry-client"
 
+  const virtualModules: Record<string, () => string> = {
+    [VIRTUAL_ROUTES_ID]: createRoutesModule,
+    [VIRTUAL_ENTRY_SERVER_ID]: createEntryServerModule,
+    [VIRTUAL_ENTRY_CLIENT_ID]: createEntryClientModule,
+  }
+
   function resolveUserDocument(): string {
-    const fp = path.resolve(projectRoot, appOptions.dir, appOptions.document)
+    const { dir, document } = appOptions
+    const fp = path.resolve(projectRoot, dir, document)
     if (fs.existsSync(fp)) return fp.replace(/\\/g, "/")
     throw new Error(`Document not found at ${fp}`)
   }
 
   function createRoutesModule(): string {
+    const { dir, baseUrl, page, layout } = appOptions
     return `
 import { formatViteImportMap, normalizePrefixPath } from "kiru/router/utils"
 
-const pageMap = import.meta.glob(["/**/${appOptions.page}"])
-const layoutMap = import.meta.glob(["/**/${appOptions.layout}"])
+const dir = normalizePrefixPath("${dir}")
+const baseUrl = normalizePrefixPath("${baseUrl}")
+const pagesMap = import.meta.glob(["/**/${page}"])
+const layoutsMap = import.meta.glob(["/**/${layout}"])
+const pages = formatViteImportMap(pagesMap, dir, baseUrl)
+const layouts = formatViteImportMap(layoutsMap, dir, baseUrl)
 
-export const dir = normalizePrefixPath("${appOptions.dir}")
-export const baseUrl = normalizePrefixPath("${appOptions.baseUrl}")
-
-export const pages = formatViteImportMap(pageMap, dir, baseUrl)
-export const layouts = formatViteImportMap(layoutMap, dir, baseUrl)
+export { dir, baseUrl, pages, layouts }
 `
   }
 
   function createEntryServerModule(): string {
+    const userDoc = resolveUserDocument()
     return `
 import { FileRouter } from "kiru/router/server"
 import { render as kiruServerRender } from "kiru/router/server"
 import { renderToReadableStream } from "kiru/ssr/server"
-import Document from "${VIRTUAL_DOCUMENT_ID}"
+import Document from "${userDoc}"
 import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
 
 export async function render(url, ctx) {
   return kiruServerRender(url, { ...ctx, Document, pages, layouts })
-}
-
-export async function collectPaths() {
-  const dir = "${appOptions.dir}"
-  const dirIndex = (key) => key.indexOf(dir)
-  const toSegments = (key) => {
-    let k = key.slice(dirIndex(key) + dir.length)
-    if (k.startsWith("/")) k = k.slice(1)
-    const parts = k.split("/").slice(0, -1)
-    return parts
-  }
-  const toRoutePattern = (segments) => segments.map((part, i, arr) => {
-    if (part.startsWith("[...") && part.endsWith("]")) return ":" + part.slice(4, -1) + "*"
-    if (part.startsWith("[") && part.endsWith("]")) return ":" + part.slice(1, -1)
-    return part
-  })
-  const hasDynamic = (segs) => segs.some((s) => s.startsWith(":"))
-  const paths = new Set()
-  const keys = Object.keys(pages)
-  for (const key of keys) {
-    const segs = toSegments(key)
-    const pattern = toRoutePattern(segs)
-    if (!hasDynamic(pattern)) {
-      const route = "/" + pattern.filter(Boolean).join("/")
-      paths.add(route === "/" ? "/" : route)
-      continue
-    }
-    try {
-      const mod = await pages[key]()
-      const cfg = mod && typeof mod === 'object' ? mod.config : undefined
-      const gen = cfg && cfg.generateStaticParams
-      if (!gen) continue
-      const paramSets = await gen()
-      for (const params of paramSets || []) {
-        const concrete = pattern.map((p) => p.startsWith(":") ? (params[p.slice(1).replace(/\\*$/, '')] ?? "") : p)
-        const pathname = "/" + concrete.filter(Boolean).join("/")
-        paths.add(pathname === "/" ? "/" : pathname)
-      }
-    } catch {}
-  }
-  return Array.from(paths)
 }
 `
   }
 
   function createEntryClientModule(): string {
     return `
-import { FileRouter } from "kiru/router"
 import { onLoadedDev } from "kiru/router/dev"
-import { matchRoute, loadRoute } from "kiru/router/utils"
+import { initClient } from "kiru/router/client"
 import { dir, baseUrl, pages, layouts } from "${VIRTUAL_ROUTES_ID}"
-import { hydrate } from "kiru/ssr/client"
-import { createElement } from "kiru"
+import "${resolveUserDocument()}" // todo: only include this in dev mode
 
-async function main() {
-  const preloaded = await loadRoute(window.location.pathname, window.location.search)
-  if (!preloaded) return
-  hydrate(createElement(FileRouter, { config: { pages, layouts, preloaded } }), document.body)
-}
-main()
-
+initClient({ dir, baseUrl, pages, layouts })
 if (import.meta.env.DEV) {
   onLoadedDev()
 }
@@ -182,6 +141,9 @@ if (import.meta.env.DEV) {
     const importedModules: Set<ModuleNode> = new Set()
     const seen = new Set<ModuleNode>()
 
+    const documentModule = resolveUserDocument().substring(projectRoot.length)
+    ctx.moduleIds.push(documentModule)
+
     const scan = (mod: ModuleNode) => {
       if (importedModules.has(mod)) return
       importedModules.add(mod)
@@ -195,7 +157,10 @@ if (import.meta.env.DEV) {
     for (const id of ctx.moduleIds) {
       const p = path.join(projectRoot, id).replace(/\\/g, "/")
       const mod = server.moduleGraph.getModuleById(p)
-      if (!mod) continue
+      if (!mod) {
+        console.error(`Module not found: ${p}`)
+        continue
+      }
       scan(mod)
     }
     const localModules = Array.from(importedModules).filter((m) =>
@@ -336,12 +301,7 @@ if (import.meta.env.DEV) {
       })
     },
     resolveId(id) {
-      if (
-        id === VIRTUAL_ROUTES_ID ||
-        id === VIRTUAL_DOCUMENT_ID ||
-        id === VIRTUAL_ENTRY_SERVER_ID ||
-        id === VIRTUAL_ENTRY_CLIENT_ID
-      ) {
+      if (id in virtualModules) {
         return "\0" + id
       }
       return null
@@ -349,20 +309,8 @@ if (import.meta.env.DEV) {
     load(id) {
       if (!id.startsWith("\0")) return null
       const raw = id.slice(1)
-      if (raw === VIRTUAL_ROUTES_ID) {
-        return createRoutesModule()
-      }
-      if (raw === VIRTUAL_DOCUMENT_ID) {
-        const userDoc = resolveUserDocument()
-        return `export { default } from ${JSON.stringify(userDoc)}`
-      }
-      if (raw === VIRTUAL_ENTRY_SERVER_ID) {
-        return createEntryServerModule()
-      }
-      if (raw === VIRTUAL_ENTRY_CLIENT_ID) {
-        return createEntryClientModule()
-      }
-      return null
+      if (!(raw in virtualModules)) return null
+      return virtualModules[raw]()
     },
     async writeBundle(outputOptions, bundle) {
       console.log("writeBundle: ~~~ HERE 0 ~~~", isBuild, isSSRBuild)
@@ -374,22 +322,17 @@ if (import.meta.env.DEV) {
           outputOptions?.dir ?? "dist"
         )
 
-        // locate SSR entry emitted by this build
-        let ssrEntryFile: string | null = null
-        for (const [, output] of Object.entries(bundle)) {
-          const c = output
-          if (c.type === "chunk" && c.isEntry) {
-            ssrEntryFile = c.fileName
-            break
-          }
-        }
-        if (!ssrEntryFile) return
+        const ssrEntry = Object.values(bundle).find(
+          (c) => c.type === "chunk" && c.isEntry
+        )
+        if (!ssrEntry) return
 
-        const ssrEntryAbs = path.resolve(outDirAbs, ssrEntryFile)
-        const mod: any = await import(pathToFileURL(ssrEntryAbs).href)
+        const ssrEntryAbs = path.resolve(outDirAbs, ssrEntry.fileName)
+        const mod = await import(pathToFileURL(ssrEntryAbs).href)
         console.log("writeBundle: ~~~ HERE 1 ~~~", mod)
 
         // collect concrete paths (static + generateStaticParams)
+        // TODO: generate all valid routes, support generateStaticParams
         const paths: string[] = await (mod.collectPaths?.() ?? [])
         if (paths.length === 0) paths.push("/")
 

@@ -30,6 +30,10 @@
       "types": "./dist/router/dev/index.d.ts",
       "default": "./dist/router/dev/index.js"
     },
+    "./router/client": {
+      "types": "./dist/router/client/index.d.ts",
+      "default": "./dist/router/client/index.js"
+    },
     "./router/server": {
       "types": "./dist/router/server/index.d.ts",
       "default": "./dist/router/server/index.js"

@@ -1,6 +1,20 @@
 import { AsyncTaskState } from "../types.utils"
 import { FileRouterDataLoadError } from "./errors"
-import { DefaultComponentModule } from "./types.internal"
+import {
+  DefaultComponentModule,
+  FormattedViteImportMap,
+} from "./types.internal"
+
+export interface FileRouterPreloadConfig {
+  pages: FormattedViteImportMap
+  layouts: FormattedViteImportMap
+  page: DefaultComponentModule
+  pageLayouts: DefaultComponentModule[]
+  config?: PageConfig
+  params: RouteParams
+  query: RouteQuery
+  route: string
+}
 
 export interface FileRouterConfig {
   /**
@@ -40,14 +54,7 @@ export interface FileRouterConfig {
   /**
    * the element to use for hydration
    */
-  preloaded?: {
-    page: DefaultComponentModule
-    layouts: DefaultComponentModule[]
-    config?: PageConfig
-    params: RouteParams
-    query: RouteQuery
-    route: string
-  }
+  preloaded?: FileRouterPreloadConfig
 }
 
 export interface RouteParams {
