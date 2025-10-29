@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "magic-string": "^0.30.17",
+    "mime": "^4.1.0",
     "vite": "^7.0.6"
   }
 }

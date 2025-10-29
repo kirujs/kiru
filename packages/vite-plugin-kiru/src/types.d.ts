@@ -10,7 +10,7 @@ export interface AppOptions {
   baseUrl?: string
   /**
    * The directory of the app
-   * @default "./src/pages"
+   * @default "src/pages"
    */
   dir?: string
   /**
@@ -45,6 +45,19 @@ export interface DevtoolsOptions {
    * @default (path, line) => `vscode://file/${path}:${line}`
    */
   formatFileLink?: FileLinkFormatter
+}
+
+export interface BuildOutputOptions {
+  /**
+   * Directory for client build output (relative to project root)
+   * @default "dist/client"
+   */
+  clientOutDir?: string
+  /**
+   * Directory for server (SSR) build output (relative to project root)
+   * @default "dist/server"
+   */
+  serverOutDir?: string
 }
 
 export interface KiruPluginOptions {
@@ -89,6 +102,11 @@ export interface KiruPluginOptions {
    * ```
    */
   app?: AppOptions
+
+  /**
+   * Output directories for build artifacts (client/server)
+   */
+  build?: BuildOutputOptions
 }
 
 export const defaultEsBuildOptions: ESBuildOptions
