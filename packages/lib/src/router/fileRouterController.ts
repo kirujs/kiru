@@ -1,5 +1,4 @@
 import { Signal } from "../signals/base.js"
-import { ComputedSignal } from "../signals/computed.js"
 import { flushSync } from "../scheduler.js"
 import { __DEV__ } from "../env.js"
 import { type FileRouterContextType } from "./context.js"
@@ -39,8 +38,8 @@ export class FileRouterController {
   } | null>
   private currentPageProps: Signal<PageProps<PageConfig>>
   private currentLayouts: Signal<Kiru.FC[]>
-  private state: Signal<RouterState>
-  private contextValue: Signal<FileRouterContextType>
+  private state: RouterState
+  private contextValue: FileRouterContextType
   private cleanups: (() => void)[] = []
   private filePathToPageRoute?: Map<
     string,
@@ -57,19 +56,24 @@ export class FileRouterController {
     this.currentPage = new Signal(null)
     this.currentPageProps = new Signal({})
     this.currentLayouts = new Signal([])
-    this.state = new Signal<RouterState>({
+    this.state = {
       path: window.location.pathname,
       params: {},
       query: {},
       signal: this.abortController.signal,
-    })
-    this.contextValue = new ComputedSignal<FileRouterContextType>(() => ({
-      state: this.state.value,
+    }
+
+    const __this = this
+    this.contextValue = {
+      get state() {
+        return __this.state
+      },
       navigate: this.navigate.bind(this),
       setQuery: this.setQuery.bind(this),
       reload: (options?: { transition?: boolean }) =>
         this.loadRoute(void 0, void 0, options?.transition),
-    }))
+    }
+
     if (__DEV__) {
       this.filePathToPageRoute = new Map()
       this.pageRouteToConfig = new Map()
@@ -162,18 +166,18 @@ export class FileRouterController {
         data: null,
         error: null,
       }
-      handleStateTransition(this.state.value.signal, transition, () => {
+      handleStateTransition(this.state.signal, transition, () => {
         this.currentPageProps.value = props
       })
 
-      this.loadRouteData(config.loader, props, this.state.value, transition)
+      this.loadRouteData(config.loader, props, this.state, transition)
     }
 
     this.pageRouteToConfig?.set(existing.route, config)
   }
 
   public getContextValue() {
-    return this.contextValue.value
+    return this.contextValue
   }
 
   public getChildren() {
@@ -263,7 +267,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         this.loadRouteData(config.loader, props, routerState, enableTransition)
       }
 
-      this.state.value = routerState
+      this.state = routerState
       handleStateTransition(signal, enableTransition, () => {
         this.currentPage.value = {
           component: page.default,
@@ -330,11 +334,10 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
 
   private setQuery(query: RouteQuery) {
     const queryString = buildQueryString(query)
-    const newUrl = `${this.state.value.path}${
-      queryString ? `?${queryString}` : ""
-    }`
+    const newUrl = `${this.state.path}${queryString ? `?${queryString}` : ""}`
     window.history.pushState(null, "", newUrl)
-    this.state.value = { ...this.state.value, query }
+    this.state = { ...this.state, query }
+    return this.loadRoute()
   }
 }
 
