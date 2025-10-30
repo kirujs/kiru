@@ -5,6 +5,7 @@ import {
   propsToElementAttributes,
   isExoticType,
   assertValidElementProps,
+  isPrimitiveChild,
 } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import { $ERROR_BOUNDARY, voidElements, $SUSPENSE_THROW } from "./constants.js"
@@ -36,10 +37,21 @@ export function recursiveRender(
     return el.forEach((c, i) => recursiveRender(ctx, c, parent, i))
   }
   if (Signal.isSignal(el)) {
-    return ctx.write(String(el.peek()))
+    const value = el.peek()
+    if (__DEV__) {
+      if (!isPrimitiveChild(value)) {
+        if (__DEV__) {
+          console.error(
+            `[kiru]: expected primitive child but received ${value}`
+          )
+        }
+        return
+      }
+    }
+    return ctx.write(encodeHtmlEntities(String(value)))
   }
   if (!isVNode(el)) {
-    return ctx.write(String(el))
+    return
   }
   el.parent = parent
   el.depth = (parent?.depth ?? -1) + 1

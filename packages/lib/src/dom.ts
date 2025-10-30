@@ -4,6 +4,7 @@ import {
   propFilters,
   propToHtmlAttr,
   getVNodeAppContext,
+  isPrimitiveChild,
 } from "./utils/index.js"
 import {
   booleanAttributes,
@@ -339,13 +340,36 @@ function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
   })
 }
 
+function tryHydrateNullableSignalChild(vNode: VNode): MaybeDom {
+  if (vNode.type !== "#text" || !Signal.isSignal(vNode.props.nodeValue)) {
+    return
+  }
+  const value = unwrap(vNode.props.nodeValue)
+  if (!isPrimitiveChild(value)) {
+    if (__DEV__) {
+      console.error(
+        `[kiru]: Hydration mismatch - expected primitive child but received ${value}`
+      )
+    }
+    return
+  }
+  const dom = createTextNode(vNode)
+  const parent = hydrationStack.parent()
+  if (parent) {
+    parent.appendChild(dom)
+  }
+  return dom
+}
+
 function hydrateDom(vNode: VNode) {
-  const dom = hydrationStack.nextChild()
-  if (!dom)
+  const dom = hydrationStack.nextChild() ?? tryHydrateNullableSignalChild(vNode)
+
+  if (!dom) {
     throw new KiruError({
       message: `Hydration mismatch - no node found`,
       vNode,
     })
+  }
   let nodeName = dom.nodeName
   if (!svgTags.has(nodeName)) {
     nodeName = nodeName.toLowerCase()
