@@ -30,7 +30,7 @@ export function FileRouter(props: FileRouterProps): JSX.Element {
 
   return createElement(
     RouterContext.Provider,
-    { value: controller.getContextValue() },
+    { value: controller.contextValue },
     controller.getChildren()
   )
 }
