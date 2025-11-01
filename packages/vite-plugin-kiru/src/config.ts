@@ -1,8 +1,8 @@
 import path from "node:path"
-import type { UserConfig, ESBuildOptions } from "vite"
+import type { UserConfig, ESBuildOptions, ResolvedConfig } from "vite"
 import type {
   KiruPluginOptions,
-  AppOptions,
+  SSGOptions,
   FileLinkFormatter,
 } from "./types.js"
 import {
@@ -33,7 +33,7 @@ export interface PluginState {
   dtClientPathname: string
   dtHostScriptPath: string
   manifestPath: string
-  appOptions: Required<AppOptions>
+  ssgOptions: Required<SSGOptions> | null
 }
 
 export function createPluginState(
@@ -44,34 +44,49 @@ export function createPluginState(
 
   let dtClientPathname = "/__devtools__"
   if (typeof opts.devtools === "object") {
-    dtClientPathname = opts.devtools.pathname ?? dtClientPathname
+    dtClientPathname = opts.devtools.dtClientPathname ?? dtClientPathname
     fileLinkFormatter = opts.devtools.formatFileLink ?? fileLinkFormatter
   }
 
-  const { app } = opts
-
-  const appOptions: Required<AppOptions> = {
-    baseUrl: app?.baseUrl ?? "/",
-    dir: app?.dir ?? "src/pages",
-    document: app?.document ?? "document.tsx",
-    page: app?.page ?? "index.{tsx,jsx}",
-    layout: app?.layout ?? "layout.{tsx,jsx}",
-    transition: app?.transition ?? false,
-  }
-
-  return {
+  const state: Partial<PluginState> = {
     projectRoot: process.cwd().replace(/\\/g, "/"),
     includedPaths: [],
     fileLinkFormatter,
     dtClientPathname,
     dtHostScriptPath: "/__devtools_host__.js",
     manifestPath: "vite-manifest.json",
-    appOptions,
     loggingEnabled: opts.loggingEnabled === true,
+    ssgOptions: null,
   }
+
+  const { ssg } = opts
+  if (ssg) {
+    state.ssgOptions = {
+      baseUrl: ssg?.baseUrl ?? "/",
+      dir: ssg?.dir ?? "src/pages",
+      document: ssg?.document ?? "document.tsx",
+      page: ssg?.page ?? "index.{tsx,jsx}",
+      layout: ssg?.layout ?? "layout.{tsx,jsx}",
+      transition: ssg?.transition ?? false,
+    }
+  }
+
+  return state
 }
 
-export function createViteConfig(config: UserConfig): UserConfig {
+export function createViteConfig(
+  config: UserConfig,
+  opts: KiruPluginOptions
+): UserConfig {
+  if (!opts.ssg) {
+    return {
+      ...config,
+      esbuild: {
+        ...defaultEsBuildOptions,
+        ...config.esbuild,
+      },
+    }
+  }
   const isSsrBuild = config.build?.ssr
   const rollup = (config.build as any)?.rollupOptions ?? {}
   let input = rollup.input
@@ -81,7 +96,7 @@ export function createViteConfig(config: UserConfig): UserConfig {
   }
 
   const ssr = isSsrBuild === true ? true : config.build?.ssr
-  const baseOut = (config.build?.outDir ?? "dist") as string
+  const baseOut = config.build?.outDir ?? "dist"
   const desiredOutDir = isSsrBuild ? `${baseOut}/server` : `${baseOut}/client`
 
   return {
@@ -93,7 +108,7 @@ export function createViteConfig(config: UserConfig): UserConfig {
     },
     server: {},
     build: {
-      ...(config.build as any),
+      ...config.build,
       ssr,
       manifest: "vite-manifest.json",
       ssrEmitAssets: true,
@@ -109,7 +124,7 @@ export function createViteConfig(config: UserConfig): UserConfig {
 
 export function updatePluginState(
   state: Partial<PluginState>,
-  config: any, // ResolvedConfig from Vite
+  config: ResolvedConfig,
   opts: KiruPluginOptions
 ): PluginState {
   const isProduction = config.isProduction ?? false
@@ -118,12 +133,12 @@ export function updatePluginState(
   const devtoolsEnabled = opts.devtools !== false && !isBuild && !isProduction
 
   const projectRoot =
-    config.root?.replace(/\\/g, "/") ?? process.cwd().replace(/\\/g, "/")
+    config.root.replace(/\\/g, "/") ?? process.cwd().replace(/\\/g, "/")
   const includedPaths = (opts.include ?? []).map((p) =>
     path.resolve(projectRoot, p).replace(/\\/g, "/")
   )
 
-  const outDir = (config.build?.outDir ?? "dist") as string
+  const outDir = (config.build.outDir ?? "dist") as string
   const normalizedOut = outDir.replace(/\\/g, "/")
   const baseOutDir = normalizedOut.replace(/\/(server|client)$/i, "") || "dist"
 
@@ -143,6 +158,6 @@ export function updatePluginState(
     dtClientPathname: state.dtClientPathname!,
     dtHostScriptPath: state.dtHostScriptPath!,
     manifestPath: state.manifestPath!,
-    appOptions: state.appOptions!,
-  } as PluginState
+    ssgOptions: state.ssgOptions!,
+  } satisfies PluginState
 }

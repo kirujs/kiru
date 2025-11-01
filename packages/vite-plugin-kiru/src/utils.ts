@@ -2,6 +2,7 @@ import path from "node:path"
 import fs from "node:fs"
 import type { PluginState } from "./config.js"
 import { ANSI } from "./ansi.js"
+import { SSGOptions } from "./types.js"
 
 export function createLogger(state: PluginState) {
   return (...data: any[]) => {
@@ -10,9 +11,12 @@ export function createLogger(state: PluginState) {
   }
 }
 
-export function resolveUserDocument(state: PluginState): string {
-  const { dir, document } = state.appOptions
-  const fp = path.resolve(state.projectRoot, dir, document)
+export function resolveUserDocument(
+  projectRoot: string,
+  ssgOptions: Required<SSGOptions>
+): string {
+  const { dir, document } = ssgOptions
+  const fp = path.resolve(projectRoot, dir, document)
   if (fs.existsSync(fp)) return fp.replace(/\\/g, "/")
   throw new Error(`Document not found at ${fp}`)
 }

@@ -23,18 +23,23 @@ import {
 export default function kiru(opts: KiruPluginOptions = {}): Plugin {
   let state: PluginState
   let log: (...data: any[]) => void
-  let virtualModules: Record<string, () => string>
+  let virtualModules: Record<string, () => string> = {}
 
   return {
     name: "vite-plugin-kiru",
     config(config) {
-      return createViteConfig(config)
+      return createViteConfig(config, opts)
     },
     configResolved(config) {
       const initialState = createPluginState(opts)
       state = updatePluginState(initialState, config, opts)
       log = createLogger(state)
-      virtualModules = createVirtualModules(state.projectRoot, state.appOptions)
+      if (state.ssgOptions) {
+        virtualModules = createVirtualModules(
+          state.projectRoot,
+          state.ssgOptions
+        )
+      }
     },
     transformIndexHtml() {
       if (!state.devtoolsEnabled) return
@@ -44,61 +49,68 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
       )
     },
     configurePreviewServer(server) {
+      if (!state.ssgOptions) return
       server.middlewares.use(
         createPreviewMiddleware(state.projectRoot, state.baseOutDir)
       )
     },
     configureServer(server) {
       if (state.isProduction || state.isBuild) return
-      log("Configuring server...")
+      const {
+        ssgOptions,
+        devtoolsEnabled,
+        dtClientPathname,
+        dtHostScriptPath,
+        fileLinkFormatter,
+        projectRoot,
+      } = state
 
-      if (state.devtoolsEnabled) {
+      if (devtoolsEnabled) {
         setupDevtools(
           server,
-          {
-            pathname: state.dtClientPathname,
-            formatFileLink: state.fileLinkFormatter,
-          },
-          state.dtHostScriptPath,
+          { dtClientPathname, formatFileLink: fileLinkFormatter },
+          dtHostScriptPath,
           log
         )
       }
 
-      // SSR HTML middleware using document.tsx
-      server.middlewares.use(async (req, res, next) => {
-        try {
-          const url = req.originalUrl || req.url || "/"
-          const accept = req.headers["accept"] || ""
-          if (
-            typeof accept === "string" &&
-            accept.includes("text/html") &&
-            !url.startsWith("/node_modules/") &&
-            !url.startsWith("/@") &&
-            !url.startsWith(state.dtHostScriptPath) &&
-            !url.startsWith(state.dtClientPathname)
-          ) {
-            const { status, html, stream } = await handleSSR(
-              server,
-              url,
-              state.projectRoot,
-              () => resolveUserDocument(state)
-            )
-            res.statusCode = status
-            res.setHeader("Content-Type", "text/html")
-            res.write(html)
-            if (stream) {
-              // @ts-ignore - Node stream
-              stream.pipe(res)
-            } else {
-              res.end()
+      if (ssgOptions) {
+        // SSR HTML middleware using document.tsx
+        server.middlewares.use(async (req, res, next) => {
+          try {
+            const url = req.originalUrl || req.url || "/"
+            const accept = req.headers["accept"] || ""
+            if (
+              typeof accept === "string" &&
+              accept.includes("text/html") &&
+              !url.startsWith("/node_modules/") &&
+              !url.startsWith("/@") &&
+              !url.startsWith(dtHostScriptPath) &&
+              !url.startsWith(dtClientPathname)
+            ) {
+              const { status, html, stream } = await handleSSR(
+                server,
+                url,
+                state.projectRoot,
+                () => resolveUserDocument(projectRoot, ssgOptions)
+              )
+              res.statusCode = status
+              res.setHeader("Content-Type", "text/html")
+              res.write(html)
+              if (stream) {
+                // @ts-ignore - Node stream
+                stream.pipe(res)
+              } else {
+                res.end()
+              }
+              return
             }
-            return
+          } catch (e) {
+            console.error(e)
           }
-        } catch (e) {
-          console.error(e)
-        }
-        next()
-      })
+          next()
+        })
+      }
     },
     resolveId(id) {
       if (id in virtualModules) {
@@ -113,14 +125,16 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
       return virtualModules[raw]()
     },
     async writeBundle(outputOptions, bundle) {
+      if (!state.ssgOptions) return
+      if (!state.isBuild || !state.isSSRBuild) return
+
       try {
-        if (!state.isBuild || !state.isSSRBuild) return
         await generateStaticSite(
           outputOptions,
           bundle,
           state.projectRoot,
           state.baseOutDir,
-          state.appOptions,
+          state.ssgOptions,
           state.manifestPath,
           log
         )

@@ -10,7 +10,7 @@ export function setupDevtools(
   dtHostScriptPath: string,
   log: (...data: any[]) => void
 ) {
-  const { pathname: dtClientPathname } = options
+  const { dtClientPathname } = options
 
   log(`Serving devtools host at ${ANSI.magenta(dtHostScriptPath)}`)
   server.middlewares.use(dtHostScriptPath, (_, res) => {

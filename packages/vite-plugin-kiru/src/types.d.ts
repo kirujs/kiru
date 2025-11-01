@@ -2,7 +2,7 @@ import type { ESBuildOptions, Plugin } from "vite"
 
 export type FileLinkFormatter = (path: string, line: number) => string
 
-export interface AppOptions {
+export interface SSGOptions {
   /**
    * The base URL of the app
    * @default "/"
@@ -40,7 +40,7 @@ export interface DevtoolsOptions {
    * Specifies the path to the devtools app displayed via popup
    * @default "/__devtools__"
    */
-  pathname?: string
+  dtClientPathname?: string
 
   /**
    * Formats the link displayed in devtools to the component's source code
@@ -90,10 +90,11 @@ export interface KiruPluginOptions {
    *   document: "document.tsx",
    *   page: "index.{tsx,jsx}",
    *   layout: "layout.{tsx,jsx}",
+   *   transition: true
    * }
    * ```
    */
-  app?: AppOptions
+  ssg?: SSGOptions
 }
 
 export { defaultEsBuildOptions } from "./config"

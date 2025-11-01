@@ -53,7 +53,6 @@ export class FileRouterController {
   private pageRouteToConfig?: Map<string, PageConfig>
 
   constructor() {
-    console.log("FileRouterController constructor")
     this.enableTransitions = false
     this.pages = {}
     this.layouts = {}

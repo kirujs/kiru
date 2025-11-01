@@ -1,6 +1,6 @@
 import path from "node:path"
 import fs from "node:fs"
-import type { AppOptions } from "./types.js"
+import type { SSGOptions } from "./types.js"
 
 export const VIRTUAL_ROUTES_ID = "virtual:kiru:routes"
 export const VIRTUAL_ENTRY_SERVER_ID = "virtual:kiru:entry-server"
@@ -8,17 +8,17 @@ export const VIRTUAL_ENTRY_CLIENT_ID = "virtual:kiru:entry-client"
 
 export function createVirtualModules(
   projectRoot: string,
-  appOptions: Required<AppOptions>
+  ssgOptions: Required<SSGOptions>
 ) {
   function resolveUserDocument(): string {
-    const { dir, document } = appOptions
+    const { dir, document } = ssgOptions
     const fp = path.resolve(projectRoot, dir, document)
     if (fs.existsSync(fp)) return fp.replace(/\\/g, "/")
     throw new Error(`Document not found at ${fp}`)
   }
 
   function createRoutesModule(): string {
-    const { dir, baseUrl, page, layout } = appOptions
+    const { dir, baseUrl, page, layout } = ssgOptions
     return `
 import { formatViteImportMap, normalizePrefixPath } from "kiru/router/utils"
 

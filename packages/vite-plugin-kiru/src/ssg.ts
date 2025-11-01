@@ -2,7 +2,7 @@ import type { OutputBundle, OutputOptions } from "rollup"
 import path from "node:path"
 import fs from "node:fs"
 import { pathToFileURL } from "node:url"
-import type { AppOptions } from "./types.js"
+import type { SSGOptions } from "./types.js"
 import { ANSI } from "./ansi.js"
 
 interface VirtualServerModule {
@@ -22,7 +22,7 @@ export async function generateStaticSite(
   bundle: OutputBundle,
   projectRoot: string,
   baseOutDir: string,
-  appOptions: Required<AppOptions>,
+  appOptions: Required<SSGOptions>,
   manifestPath: string,
   log: (...data: any[]) => void
 ) {
@@ -77,7 +77,7 @@ export async function generateStaticSite(
 async function derivePathsFromManifest(
   outDirAbs: string,
   manifestPath: string,
-  appOptions: Required<AppOptions>
+  appOptions: Required<SSGOptions>
 ): Promise<string[]> {
   try {
     const ssrManifestPath = path.resolve(outDirAbs, manifestPath)
