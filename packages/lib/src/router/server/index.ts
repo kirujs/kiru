@@ -93,3 +93,38 @@ export async function render(
   const { immediate, stream } = renderToReadableStream(app)
   return { status: 200, immediate: "<!doctype html>" + immediate, stream }
 }
+
+export async function generateStaticPaths(pages: FormattedViteImportMap) {
+  const results = new Set()
+  const entries = Object.values(pages)
+  for (const entry of entries) {
+    // Build a clean URL path excluding group segments like (articles)
+    const urlSegments = entry.segments.filter(
+      (s) => !(s.startsWith("(") && s.endsWith(")"))
+    )
+    const basePath = "/" + urlSegments.join("/")
+    if (basePath.endsWith("/404")) continue
+    const hasDynamic = urlSegments.some((s) => s.startsWith(":"))
+    if (!hasDynamic) {
+      results.add(basePath === "" ? "/" : basePath)
+      continue
+    }
+    try {
+      const mod: PageModule = await entry.load()
+      const gen = mod?.config?.generateStaticParams
+      if (!gen) continue
+      const paramsList = await gen()
+      if (!Array.isArray(paramsList)) continue
+
+      for (const params of paramsList) {
+        let p = basePath
+        for (const key in params) {
+          const value = params[key]
+          p = p.replace(`:${key}*`, value).replace(`:${key}`, value)
+        }
+        results.add(p)
+      }
+    } catch {}
+  }
+  return Array.from(results)
+}

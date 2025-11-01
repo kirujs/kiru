@@ -40,7 +40,7 @@ interface RenderResult {
 
 interface VirtualServerModule {
   render: (url: string, ctx: RenderContext) => Promise<RenderResult>
-  collectPaths: () => Promise<string[]> | string[]
+  generateStaticPaths: () => Promise<string[]> | string[]
 }
 
 export default function kiru(opts: KiruPluginOptions = {}): Plugin {
@@ -117,8 +117,11 @@ export { dir, baseUrl, pages, layouts }
   function createEntryServerModule(): string {
     const userDoc = resolveUserDocument()
     return `
-import { render as kiruServerRender } from "kiru/router/server"
-import { renderToReadableStream } from "kiru/ssr/server"
+import {
+  render as kiruServerRender,
+  generateStaticPaths as kiruServerGenerateStaticPaths
+} from "kiru/router/server"
+import { renderToString } from "kiru"
 import Document from "${userDoc}"
 import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
 
@@ -127,47 +130,8 @@ export async function render(url, ctx) {
   return kiruServerRender(url, { registerModule, Document, pages, layouts })
 }
 
-/**
- * Collect concrete paths for SSG.
- * - Includes all static routes (no dynamic ":param" or catch-all segments)
- * - For dynamic routes, calls optional page.config.generateStaticParams()
- */
-export async function collectPaths() {
-  const results = new Set()
-  const entries = Object.values(pages)
-  for (const entry of entries) {
-    // Build a clean URL path excluding group segments like (articles)
-    const urlSegments = entry.segments.filter(
-      (s) => !(s.startsWith('(') && s.endsWith(')'))
-    )
-    const basePath = '/' + urlSegments.join('/')
-    if (basePath.endsWith('/404')) continue
-    const hasDynamic = urlSegments.some((s) => s.startsWith(':'))
-    if (!hasDynamic) {
-      results.add(basePath === '' ? '/' : basePath)
-      continue
-    }
-    try {
-      const mod = await entry.load()
-      const gen = mod?.config?.generateStaticParams
-      if (!gen) continue
-      const paramsList = await gen()
-      if (!Array.isArray(paramsList)) continue
-      for (const params of paramsList) {
-        let p = basePath
-        for (const key of Object.keys(params ?? {})) {
-          const value = params[key]
-          if (Array.isArray(value)) {
-            p = p.replace(':'+key+'*', value.join('/'))
-          } else {
-            p = p.replace(':'+key, String(value))
-          }
-        }
-        results.add(p)
-      }
-    } catch {}
-  }
-  return Array.from(results)
+export async function generateStaticPaths() {
+  return kiruServerGenerateStaticPaths(pages)
 }
 `
   }
@@ -438,7 +402,6 @@ if (import.meta.env.DEV) {
       return virtualModules[raw]()
     },
     async writeBundle(outputOptions, bundle) {
-      console.log("writeBundle: ~~~ HERE 0 ~~~", isBuild, isSSRBuild)
       try {
         if (!isBuild) return
         if (!isSSRBuild) return
@@ -457,13 +420,12 @@ if (import.meta.env.DEV) {
         const mod = (await import(
           pathToFileURL(ssrEntryAbs).href
         )) as VirtualServerModule
-        console.log("writeBundle: ~~~ HERE 1 ~~~", mod)
 
         // collect concrete paths (static + generateStaticParams)
         // Prefer module export; fallback to deriving from SSR manifest (static only)
         let paths: string[] = []
         try {
-          paths = await mod.collectPaths()
+          paths = await mod.generateStaticPaths()
         } catch {}
 
         if (paths.length === 0) {
@@ -568,8 +530,7 @@ if (import.meta.env.DEV) {
           clientEntry = findClientEntry(clientOutDirAbs)
         }
 
-        log(ANSI.cyan("[SSG]"), "clientOutDir:", clientOutDirAbs)
-        log(ANSI.cyan("[SSG]"), "routes:", JSON.stringify(paths))
+        log(ANSI.cyan("[SSG]"), "discovered routes:", paths)
 
         let wroteCount = 0
         for (const route of paths) {
@@ -608,13 +569,14 @@ if (import.meta.env.DEV) {
                 clientOutDirAbs,
                 parts.slice(0, -1).join("/")
               )
-              filePath = path.resolve(
-                dirPath,
-                `${parts[parts.length - 1]}.html`
-              )
+              let last = parts[parts.length - 1]
+              if (last.endsWith("*")) {
+                last = last.slice(0, -1)
+              }
+              filePath = path.resolve(dirPath, `${last}.html`)
             }
           }
-          console.log("[SSG] write:", filePath)
+          log(ANSI.cyan("[SSG]"), "write:", ANSI.black(filePath))
           fs.mkdirSync(path.dirname(filePath), { recursive: true })
           fs.writeFileSync(filePath, html, "utf-8")
           wroteCount++
@@ -643,14 +605,13 @@ if (import.meta.env.DEV) {
                 : headInjected + scriptTag
             }
             const filePath = path.resolve(clientOutDirAbs, "index.html")
-            console.log("[SSG] write:", filePath)
+            log("[SSG] write:", filePath)
             fs.mkdirSync(path.dirname(filePath), { recursive: true })
             fs.writeFileSync(filePath, html, "utf-8")
           } catch {}
         }
       } catch (e) {
-        console.error(ANSI.red("[vite-plugin-kiru]: SSG prerender failed"))
-        console.error(e)
+        log(ANSI.red("[SSG]: prerender failed"), e)
       }
     },
     transform(src, id) {
