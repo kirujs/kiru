@@ -3,15 +3,15 @@ import { FileRouterDataLoadError } from "./errors"
 import {
   DefaultComponentModule,
   FormattedViteImportMap,
+  PageModule,
 } from "./types.internal"
 
 export interface FileRouterPreloadConfig {
   pages: FormattedViteImportMap
   layouts: FormattedViteImportMap
-  page: DefaultComponentModule
+  page: PageModule
   pageProps: Record<string, unknown>
   pageLayouts: DefaultComponentModule[]
-  config?: PageConfig
   params: RouteParams
   query: RouteQuery
   route: string
@@ -99,42 +99,35 @@ export type PageDataLoaderConfig<T = unknown> = {
    * Enable transitions when swapping between "load", "error" and "data" states
    */
   transition?: boolean
-} & (
-  | {
-      mode: "client"
-      /**
-       * The cache time for the page data loader
-       */
-      cache?: number
-    }
-  | {
-      mode?: "build"
-      cache?: never
-    }
-  | {
-      mode?: never
-      cache?: never
-    }
-)
+}
 
-export type PageConfig = {
+export interface PageConfig<T = unknown> {
   /**
    * The loader configuration for this page
    */
-  loader?: PageDataLoaderConfig
-  title?: string
+  loader?: PageDataLoaderConfig<T>
+  /**
+   * The title for this page
+   */
+  title?: string | ((context: PageDataLoaderContext, data: T | null) => string)
+  /**
+   * The description for this page
+   */
   description?: string
+  /**
+   * The meta tags for this page
+   */
   meta?: Record<string, string>
+  /**
+   * Generate static params for this page. For each params
+   * returned, a page will be generated
+   */
   generateStaticParams?: () => RouteParams[] | Promise<RouteParams[]>
 }
 
-export type PageProps<T extends PageConfig> =
-  T["loader"] extends PageDataLoaderConfig
-    ? AsyncTaskState<
-        Awaited<ReturnType<T["loader"]["load"]>>,
-        FileRouterDataLoadError
-      >
-    : {}
+export type PageProps<T extends PageConfig<any>> = T extends PageConfig<infer U>
+  ? AsyncTaskState<U, FileRouterDataLoadError>
+  : {}
 
 export interface ErrorPageProps {
   source?: {

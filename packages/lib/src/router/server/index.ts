@@ -7,18 +7,16 @@ import {
   wrapWithLayouts,
 } from "../utils/index.js"
 import { RouterContext } from "../context.js"
-import type { PageConfig, PageProps, RouterState } from "../types.js"
+import type { RouterState } from "../types.js"
 import type { Readable } from "node:stream"
 import { FormattedViteImportMap, PageModule } from "../types.internal.js"
 import { __DEV__ } from "../../env.js"
-import { FileRouterDataLoadError } from "../errors.js"
 
 export interface RenderContext {
   pages: FormattedViteImportMap
   layouts: FormattedViteImportMap
   Document: Kiru.FC
   registerModule: (moduleId: string) => void
-  registerPreloadedPageProps: (props: PageProps<PageConfig>) => void
 }
 
 export interface RenderResult {
@@ -71,52 +69,9 @@ export async function render(
 
   const query = parseQuery(u.search)
 
-  let props: PageProps<PageConfig> = {}
-  if (page.config) {
-    const config = page.config
-    const { loader } = config
-    if (loader?.mode === "client") {
-      props = {
-        loading: true,
-        data: null,
-        error: null,
-      }
-      ctx.registerPreloadedPageProps(props)
-    } else if (loader?.mode === "build") {
-      const abortController = new AbortController()
-      let timeout: NodeJS.Timeout
-      try {
-        timeout = setTimeout(
-          () =>
-            abortController.abort(
-              "[kiru/router]: Page data loading timed out after 10 seconds"
-            ),
-          10000
-        )
-        const data = await loader.load({
-          path: u.pathname,
-          params,
-          query,
-          signal: abortController.signal,
-        })
-        clearTimeout(timeout)
-
-        props = {
-          data,
-          error: null,
-          loading: false,
-        }
-      } catch (error) {
-        console.error("[kiru/router]: Failed to load page data:", error)
-        props = {
-          error: new FileRouterDataLoadError(error),
-          loading: false,
-          data: null,
-        }
-      } finally {
-        ctx.registerPreloadedPageProps(props)
-      }
-    }
+  let props: Record<string, unknown> = {}
+  if (typeof page.config?.loader?.load === "function") {
+    props = { loading: true, data: null, error: null }
   }
 
   const children = wrapWithLayouts(

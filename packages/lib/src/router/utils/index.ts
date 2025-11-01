@@ -5,7 +5,6 @@ import type {
   RouteMatch,
   ViteImportMap,
 } from "../types.internal"
-import { PageConfig, PageProps } from "../types.js"
 
 export {
   formatViteImportMap,
@@ -197,7 +196,7 @@ function parseQuery(
 function wrapWithLayouts(
   layouts: Kiru.FC[],
   page: Kiru.FC,
-  props: PageProps<PageConfig>
+  props: Record<string, unknown>
 ) {
   return layouts.reduceRight(
     (children, Layout) => createElement(Layout, { children }),

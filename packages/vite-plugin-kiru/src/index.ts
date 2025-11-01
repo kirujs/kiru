@@ -30,14 +30,16 @@ export const defaultEsBuildOptions: ESBuildOptions = {
 
 interface RenderContext {
   registerModule: (moduleId: string) => void
-  registerPreloadedPageProps: (props: Record<string, unknown>) => void
 }
 
-interface ServerRenderModule {
-  render: (
-    url: string,
-    ctx: RenderContext
-  ) => Promise<{ status: number; immediate: string; stream: Readable | null }>
+interface RenderResult {
+  status: number
+  immediate: string
+  stream: Readable | null
+}
+
+interface VirtualServerModule {
+  render: (url: string, ctx: RenderContext) => Promise<RenderResult>
   collectPaths: () => Promise<string[]> | string[]
 }
 
@@ -121,8 +123,8 @@ import Document from "${userDoc}"
 import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
 
 export async function render(url, ctx) {
-  const { registerModule, registerPreloadedPageProps } = ctx
-  return kiruServerRender(url, { registerModule, registerPreloadedPageProps, Document, pages, layouts })
+  const { registerModule } = ctx
+  return kiruServerRender(url, { registerModule, Document, pages, layouts })
 }
 
 /**
@@ -193,22 +195,19 @@ if (import.meta.env.DEV) {
   }
 
   async function dev_handleSSR(server: ViteDevServer, url: string) {
-    const mod = await server.ssrLoadModule(VIRTUAL_ENTRY_SERVER_ID)
+    const mod = (await server.ssrLoadModule(
+      VIRTUAL_ENTRY_SERVER_ID
+    )) as VirtualServerModule
 
     const moduleIds: string[] = []
-    let preloadedPageProps: Record<string, unknown> = {}
     const ctx = {
       registerModule: (moduleId: string) => {
         moduleIds.push(moduleId)
       },
-      registerPreloadedPageProps: (props: Record<string, unknown>) => {
-        preloadedPageProps = props
-      },
     }
 
-    const result = await mod.render(url, ctx)
-    let html = injectClientScript(result.immediate)
-    console.log("preloadedPageProps", preloadedPageProps)
+    const { status, immediate, stream } = await mod.render(url, ctx)
+    let html = injectClientScript(immediate)
 
     const importedModules: Set<ModuleNode> = new Set()
     const seen = new Set<ModuleNode>()
@@ -261,7 +260,7 @@ if (import.meta.env.DEV) {
       html = html.replace("<head>", "<head>" + stylesheets.join("\n"))
     }
 
-    return { status: result.status ?? 200, html, stream: result.stream }
+    return { status, html, stream }
   }
 
   return {
@@ -382,11 +381,8 @@ if (import.meta.env.DEV) {
       })
     },
     configureServer(server) {
-      console.log("[vite-plugin-kiru]: Configuring server...", {
-        isProduction,
-        isBuild,
-      })
       if (isProduction || isBuild) return
+      log("Configuring server...")
       if (devtoolsEnabled) {
         log(`Serving devtools host at ${ANSI.magenta(dtHostScriptPath)}`)
         server.middlewares.use(dtHostScriptPath, (_, res) => {
@@ -460,7 +456,7 @@ if (import.meta.env.DEV) {
         const ssrEntryAbs = path.resolve(outDirAbs, ssrEntry.fileName)
         const mod = (await import(
           pathToFileURL(ssrEntryAbs).href
-        )) as ServerRenderModule
+        )) as VirtualServerModule
         console.log("writeBundle: ~~~ HERE 1 ~~~", mod)
 
         // collect concrete paths (static + generateStaticParams)
@@ -577,12 +573,8 @@ if (import.meta.env.DEV) {
 
         let wroteCount = 0
         for (const route of paths) {
-          let pageProps: Record<string, unknown> | undefined
           const result = await mod.render(route, {
             registerModule: () => {},
-            registerPreloadedPageProps: (props: Record<string, unknown>) => {
-              pageProps = props
-            },
           })
           let html = result.immediate
 
@@ -602,15 +594,6 @@ if (import.meta.env.DEV) {
             html = headInjected.includes("</body>")
               ? headInjected.replace("</body>", scriptTag + "</body>")
               : headInjected + scriptTag
-          }
-
-          if (pageProps) {
-            html = html.replace(
-              "</body>",
-              `<script type="application/json" x-page-props>${JSON.stringify(
-                pageProps
-              )}</script></body>`
-            )
           }
 
           let filePath: string
@@ -638,12 +621,8 @@ if (import.meta.env.DEV) {
         }
         if (wroteCount === 0) {
           try {
-            let pageProps: Record<string, unknown> | undefined
             const result = await mod.render("/", {
               registerModule: () => {},
-              registerPreloadedPageProps: (props: Record<string, unknown>) => {
-                pageProps = props
-              },
             })
             let html = result.immediate
             if (result.stream) {
@@ -653,14 +632,7 @@ if (import.meta.env.DEV) {
                 result.stream?.on("end", () => resolve(acc))
               })
             }
-            if (pageProps) {
-              html = html.replace(
-                "</body>",
-                `<script type="application/json" x-page-props>${JSON.stringify(
-                  pageProps
-                )}</script></body>`
-              )
-            }
+
             if (clientEntry) {
               const scriptTag = `<script type="module" src="/${clientEntry}"></script>`
               const headInjected = cssLinks

@@ -3,8 +3,8 @@
 import { createElement } from "../../element.js"
 import { hydrate } from "../../ssr/client.js"
 import { FileRouter } from "../fileRouter.js"
-import { matchLayouts, matchRoute } from "../utils/index.js"
-import type { FormattedViteImportMap } from "../types.internal"
+import { matchLayouts, matchRoute, parseQuery } from "../utils/index.js"
+import type { FormattedViteImportMap, PageModule } from "../types.internal"
 import type { FileRouterConfig, FileRouterPreloadConfig } from "../types"
 
 interface InitClientOptions {
@@ -15,9 +15,15 @@ interface InitClientOptions {
 }
 
 export async function initClient(options: InitClientOptions) {
-  const preloaded = await preparePreloadConfig(options)
   const { dir, baseUrl, pages, layouts } = options
-  const config: FileRouterConfig = { dir, baseUrl, pages, layouts, preloaded }
+  const config: FileRouterConfig = {
+    dir,
+    baseUrl,
+    pages,
+    layouts,
+    preloaded: await preparePreloadConfig(options),
+    transition: true,
+  }
   hydrate(createElement(FileRouter, { config }), document.body)
 }
 
@@ -36,17 +42,13 @@ async function preparePreloadConfig(
   const layoutEntries = matchLayouts(options.layouts, routeMatch.routeSegments)
 
   const [page, ...layouts] = await Promise.all([
-    routeMatch.pageEntry.load(),
+    routeMatch.pageEntry.load() as Promise<PageModule>,
     ...layoutEntries.map((e) => e.load()),
   ])
 
   let pageProps = {}
-  try {
-    const script = document.querySelector("script[x-page-props]")!
-    pageProps = JSON.parse(script.textContent)
-    script.remove()
-  } catch (error) {
-    pageProps = {}
+  if (typeof page.config?.loader?.load === "function") {
+    pageProps = { loading: true, data: null, error: null }
   }
 
   return {
@@ -56,7 +58,7 @@ async function preparePreloadConfig(
     pageProps: pageProps,
     pageLayouts: layouts,
     params: routeMatch.params,
-    query: {},
+    query: parseQuery(u.search),
     route: routeMatch.route,
   }
 }

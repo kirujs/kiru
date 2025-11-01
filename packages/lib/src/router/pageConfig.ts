@@ -1,11 +1,8 @@
 import { __DEV__ } from "../env.js"
 import { fileRouterInstance } from "./globals.js"
 import type { PageConfig } from "./types"
-import type { Guard } from "../types.utils.js"
 
-export function definePageConfig<const T extends PageConfig>(
-  config: Guard<T, keyof T>
-): T {
+export function definePageConfig<T>(config: PageConfig<T>): PageConfig<T> {
   if (__DEV__ && "window" in globalThis) {
     const filePath = window.__kiru?.HMRContext?.getCurrentFilePath()
     const fileRouter = fileRouterInstance.current
@@ -14,5 +11,5 @@ export function definePageConfig<const T extends PageConfig>(
     }
   }
 
-  return config as T
+  return config
 }

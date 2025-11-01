@@ -19,9 +19,12 @@ export const config = definePageConfig({
       const user = (await response.json()) as FetchUserResponse
       return { user }
     },
-    mode: "build",
-    // mode: "client",
-    // cache: 1000 * 60 * 60 * 24, // 24 hours
+  },
+  title: (_, data) => {
+    if (!data) {
+      return "Failed to load user"
+    }
+    return `${data.user.firstName} ${data.user.lastName}`
   },
   generateStaticParams: async () => {
     const response = await fetch("https://dummyjson.com/users?select=id")

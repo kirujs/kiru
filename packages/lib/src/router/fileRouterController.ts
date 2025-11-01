@@ -8,6 +8,7 @@ import type {
   ErrorPageProps,
   FileRouterConfig,
   PageConfig,
+  PageDataLoaderConfig,
   PageProps,
   RouteQuery,
   RouterState,
@@ -26,6 +27,10 @@ import {
   wrapWithLayouts,
 } from "./utils/index.js"
 
+interface PageConfigWithLoader<T = unknown> extends PageConfig {
+  loader: PageDataLoaderConfig<T>
+}
+
 export class FileRouterController {
   private enableTransitions: boolean
   private pages: FormattedViteImportMap
@@ -36,7 +41,7 @@ export class FileRouterController {
     config?: PageConfig
     route: string
   } | null>
-  private currentPageProps: Signal<PageProps<PageConfig>>
+  private currentPageProps: Signal<Record<string, unknown>>
   private currentLayouts: Signal<Kiru.FC[]>
   private state: RouterState
   private contextValue: FileRouterContextType
@@ -101,7 +106,6 @@ export class FileRouterController {
         page,
         pageProps,
         pageLayouts,
-        config,
         route,
         params,
         query,
@@ -112,13 +116,29 @@ export class FileRouterController {
         path: route,
         signal: this.abortController.signal,
       }
-      this.currentPage.value = { component: page.default, config, route }
+      this.currentPage.value = {
+        component: page.default,
+        config: page.config,
+        route,
+      }
       this.currentPageProps.value = pageProps
       this.currentLayouts.value = pageLayouts.map((l) => l.default)
       this.pages = pages
       this.layouts = layouts
       if (__DEV__) {
+        if (page.config) {
+          this.onPageConfigDefined(route, page.config)
+        }
+      }
+      if (__DEV__) {
         validateRoutes(this.pages)
+      }
+      if (page.config?.loader) {
+        this.loadRouteData(
+          page.config as PageConfigWithLoader,
+          pageProps,
+          this.state
+        )
       }
     } else {
       this.pages = formatViteImportMap(
@@ -145,7 +165,7 @@ export class FileRouterController {
     )
   }
 
-  public onPageConfigDefined<T extends PageConfig>(fp: string, config: T) {
+  public onPageConfigDefined<T extends PageConfig<any>>(fp: string, config: T) {
     const existing = this.filePathToPageRoute?.get(fp)
     if (existing === undefined) {
       const route = this.currentRoute
@@ -170,7 +190,12 @@ export class FileRouterController {
         this.currentPageProps.value = props
       })
 
-      this.loadRouteData(config.loader, props, this.state, transition)
+      this.loadRouteData(
+        config as PageConfigWithLoader,
+        props,
+        this.state,
+        transition
+      )
     }
 
     this.pageRouteToConfig?.set(existing.route, config)
@@ -196,7 +221,7 @@ export class FileRouterController {
 
   private async loadRoute(
     path: string = window.location.pathname,
-    props: PageProps<PageConfig> = {},
+    props: Record<string, unknown> = {},
     enableTransition = this.enableTransitions
   ): Promise<void> {
     this.abortController?.abort()
@@ -255,16 +280,30 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         signal,
       }
 
-      let config = (page as unknown as PageModule).config
+      let config = (page as unknown as PageModule).config ?? ({} as PageConfig)
       if (__DEV__) {
         if (this.pageRouteToConfig?.has(route)) {
-          config = this.pageRouteToConfig.get(route)
+          config = this.pageRouteToConfig.get(route)!
         }
       }
 
-      if (config?.loader) {
-        props = { ...props, loading: true, data: null, error: null }
-        this.loadRouteData(config.loader, props, routerState, enableTransition)
+      if (config.loader) {
+        props = {
+          ...props,
+          loading: true,
+          data: null,
+          error: null,
+        } satisfies PageProps<PageConfig<unknown>>
+        this.loadRouteData(
+          config as PageConfigWithLoader,
+          props,
+          routerState,
+          enableTransition
+        )
+      } else if (config.title) {
+        const { title } = config
+        document.title =
+          typeof title === "function" ? title(routerState, null) : title
       }
 
       this.state = routerState
@@ -286,35 +325,47 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
   }
 
   private async loadRouteData(
-    loader: NonNullable<PageConfig["loader"]>,
-    props: PageProps<PageConfig>,
+    config: PageConfigWithLoader,
+    props: Record<string, unknown>,
     routerState: RouterState,
     enableTransition = this.enableTransitions
   ) {
-    loader
+    config.loader
       .load(routerState)
       .then(
-        (data) => ({ data, error: null }),
-        (error) => ({
-          data: null,
-          error: new FileRouterDataLoadError(error),
-        })
+        (data) =>
+          ({
+            data,
+            error: null,
+            loading: false,
+          } satisfies PageProps<PageConfig<unknown>>),
+        (error) =>
+          ({
+            data: null,
+            error: new FileRouterDataLoadError(error),
+            loading: false,
+          } satisfies PageProps<PageConfig<unknown>>)
       )
-      .then(({ data, error }) => {
+      .then((state) => {
         if (routerState.signal.aborted) return
 
         let transition = enableTransition
-        if (loader.transition !== undefined) {
-          transition = loader.transition
+        if (config.loader.transition !== undefined) {
+          transition = config.loader.transition
+        }
+
+        if (typeof config.title === "function") {
+          window.document.title = config.title(
+            routerState,
+            state.error ? null : state.data
+          )
         }
 
         handleStateTransition(routerState.signal, transition, () => {
           this.currentPageProps.value = {
             ...props,
-            loading: false,
-            data,
-            error,
-          }
+            ...state,
+          } satisfies PageProps<PageConfig<unknown>>
         })
       })
   }
