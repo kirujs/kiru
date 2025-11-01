@@ -32,6 +32,7 @@ interface PageConfigWithLoader<T = unknown> extends PageConfig {
 }
 
 export class FileRouterController {
+  public contextValue: FileRouterContextType
   private enableTransitions: boolean
   private pages: FormattedViteImportMap
   private layouts: FormattedViteImportMap
@@ -44,7 +45,6 @@ export class FileRouterController {
   private currentPageProps: Signal<Record<string, unknown>>
   private currentLayouts: Signal<Kiru.FC[]>
   private state: RouterState
-  private contextValue: FileRouterContextType
   private cleanups: (() => void)[] = []
   private filePathToPageRoute?: Map<
     string,
@@ -67,18 +67,17 @@ export class FileRouterController {
       query: {},
       signal: this.abortController.signal,
     }
-
     const __this = this
     this.contextValue = {
       get state() {
         return __this.state
       },
       navigate: this.navigate.bind(this),
-      setQuery: this.setQuery.bind(this),
+      prefetchRouteModules: this.prefetchRouteModules.bind(this),
       reload: (options?: { transition?: boolean }) =>
         this.loadRoute(void 0, void 0, options?.transition),
+      setQuery: this.setQuery.bind(this),
     }
-
     if (__DEV__) {
       this.filePathToPageRoute = new Map()
       this.pageRouteToConfig = new Map()
@@ -200,10 +199,6 @@ export class FileRouterController {
     }
 
     this.pageRouteToConfig?.set(existing.route, config)
-  }
-
-  public getContextValue() {
-    return this.contextValue
   }
 
   public getChildren() {
@@ -382,6 +377,25 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
     const f = options?.replace ? "replaceState" : "pushState"
     window.history[f]({}, "", path)
     return this.loadRoute(path, options?.props, options?.transition)
+  }
+
+  private async prefetchRouteModules(path: string) {
+    try {
+      const routeMatch = matchRoute(this.pages, path.split("/").filter(Boolean))
+      if (!routeMatch) {
+        throw new Error(`No route defined (path: ${path}).`)
+      }
+      const { pageEntry, route } = routeMatch
+      fileRouterRoute.current = route
+      const pagePromise = pageEntry.load()
+      const layoutPromises = matchLayouts(this.layouts, route.split("/")).map(
+        (layoutEntry) => layoutEntry.load()
+      )
+      await Promise.all([pagePromise, ...layoutPromises])
+      fileRouterRoute.current = null
+    } catch (error) {
+      console.error("[kiru/router]: Failed to prefetch route:", error)
+    }
   }
 
   private setQuery(query: RouteQuery) {

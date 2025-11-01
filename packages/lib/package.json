@@ -1,6 +1,6 @@
 {
   "name": "kiru",
-  "version": "0.50.6",
+  "version": "0.50.7",
   "description": "A batteries-included, easy-to-use rendering library with a tiny footprint",
   "main": "dist/index.js",
   "type": "module",

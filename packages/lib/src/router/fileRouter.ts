@@ -39,7 +39,7 @@ export function FileRouter({ config }: FileRouterProps): JSX.Element {
 
   return createElement(
     RouterContext.Provider,
-    { value: controller.getContextValue() },
+    { value: controller.contextValue },
     controller.getChildren()
   )
 }
