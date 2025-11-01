@@ -3,7 +3,7 @@ import { flushSync } from "../scheduler.js"
 import { __DEV__ } from "../env.js"
 import { type FileRouterContextType } from "./context.js"
 import { FileRouterDataLoadError } from "./errors.js"
-import { fileRouterInstance } from "./globals.js"
+import { fileRouterInstance, fileRouterRoute } from "./globals.js"
 import type {
   ErrorPageProps,
   FileRouterConfig,
@@ -51,7 +51,6 @@ export class FileRouterController {
     { route: string; config: PageConfig }
   >
   private pageRouteToConfig?: Map<string, PageConfig>
-  private currentRoute: string | null
 
   constructor(config: FileRouterConfig) {
     fileRouterInstance.current = this
@@ -83,7 +82,7 @@ export class FileRouterController {
       this.filePathToPageRoute = new Map()
       this.pageRouteToConfig = new Map()
     }
-    this.currentRoute = null
+    fileRouterRoute.current = null
 
     const {
       pages,
@@ -168,7 +167,7 @@ export class FileRouterController {
   public onPageConfigDefined<T extends PageConfig<any>>(fp: string, config: T) {
     const existing = this.filePathToPageRoute?.get(fp)
     if (existing === undefined) {
-      const route = this.currentRoute
+      const route = fileRouterRoute.current
       if (!route) return
       this.filePathToPageRoute?.set(fp, { route, config })
       return
@@ -251,7 +250,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
 
       const { route, pageEntry, params, routeSegments } = routeMatch
 
-      this.currentRoute = route
+      fileRouterRoute.current = route
       const pagePromise = pageEntry.load()
 
       const layoutPromises = matchLayouts(this.layouts, routeSegments).map(
@@ -264,7 +263,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       ])
 
       const query = parseQuery(window.location.search)
-      this.currentRoute = null
+      fileRouterRoute.current = null
       if (signal.aborted) return
 
       if (typeof page.default !== "function") {
