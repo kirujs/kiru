@@ -53,7 +53,8 @@ export interface FileRouterConfig {
   transition?: boolean
 
   /**
-   * the element to use for hydration
+   * Used for generated entry point files
+   * @internal
    */
   preloaded?: FileRouterPreloadConfig
 }

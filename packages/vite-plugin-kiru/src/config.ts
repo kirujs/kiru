@@ -1,0 +1,148 @@
+import path from "node:path"
+import type { UserConfig, ESBuildOptions } from "vite"
+import type {
+  KiruPluginOptions,
+  AppOptions,
+  FileLinkFormatter,
+} from "./types.js"
+import {
+  VIRTUAL_ENTRY_SERVER_ID,
+  VIRTUAL_ENTRY_CLIENT_ID,
+} from "./virtual-modules.js"
+
+export const defaultEsBuildOptions: ESBuildOptions = {
+  jsxInject: `import { createElement as _jsx, Fragment as _jsxFragment } from "kiru"`,
+  jsx: "transform",
+  jsxFactory: "_jsx",
+  jsxFragment: "_jsxFragment",
+  loader: "tsx",
+  include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
+}
+
+export interface PluginState {
+  isProduction: boolean
+  isBuild: boolean
+  isSSRBuild: boolean
+  devtoolsEnabled: boolean
+  loggingEnabled: boolean
+  projectRoot: string
+  includedPaths: string[]
+  outDir: string
+  baseOutDir: string
+  fileLinkFormatter: FileLinkFormatter
+  dtClientPathname: string
+  dtHostScriptPath: string
+  manifestPath: string
+  appOptions: Required<AppOptions>
+}
+
+export function createPluginState(
+  opts: KiruPluginOptions = {}
+): Partial<PluginState> {
+  let fileLinkFormatter: FileLinkFormatter = (path: string, line: number) =>
+    `vscode://file/${path}:${line}`
+
+  let dtClientPathname = "/__devtools__"
+  if (typeof opts.devtools === "object") {
+    dtClientPathname = opts.devtools.pathname ?? dtClientPathname
+    fileLinkFormatter = opts.devtools.formatFileLink ?? fileLinkFormatter
+  }
+
+  const { app } = opts
+
+  const appOptions: Required<AppOptions> = {
+    baseUrl: app?.baseUrl ?? "/",
+    dir: app?.dir ?? "src/pages",
+    document: app?.document ?? "document.tsx",
+    page: app?.page ?? "index.{tsx,jsx}",
+    layout: app?.layout ?? "layout.{tsx,jsx}",
+    transition: app?.transition ?? false,
+  }
+
+  return {
+    projectRoot: process.cwd().replace(/\\/g, "/"),
+    includedPaths: [],
+    fileLinkFormatter,
+    dtClientPathname,
+    dtHostScriptPath: "/__devtools_host__.js",
+    manifestPath: "vite-manifest.json",
+    appOptions,
+    loggingEnabled: opts.loggingEnabled === true,
+  }
+}
+
+export function createViteConfig(config: UserConfig): UserConfig {
+  const isSsrBuild = config.build?.ssr
+  const rollup = (config.build as any)?.rollupOptions ?? {}
+  let input = rollup.input
+
+  if (!input) {
+    input = isSsrBuild ? VIRTUAL_ENTRY_SERVER_ID : VIRTUAL_ENTRY_CLIENT_ID
+  }
+
+  const ssr = isSsrBuild === true ? true : config.build?.ssr
+  const baseOut = (config.build?.outDir ?? "dist") as string
+  const desiredOutDir = isSsrBuild ? `${baseOut}/server` : `${baseOut}/client`
+
+  return {
+    ...config,
+    appType: "custom",
+    esbuild: {
+      ...defaultEsBuildOptions,
+      ...config.esbuild,
+    },
+    server: {},
+    build: {
+      ...(config.build as any),
+      ssr,
+      manifest: "vite-manifest.json",
+      ssrEmitAssets: true,
+      ssrManifest: true,
+      outDir: desiredOutDir,
+      rollupOptions: {
+        ...rollup,
+        input,
+      },
+    },
+  }
+}
+
+export function updatePluginState(
+  state: Partial<PluginState>,
+  config: any, // ResolvedConfig from Vite
+  opts: KiruPluginOptions
+): PluginState {
+  const isProduction = config.isProduction ?? false
+  const isBuild = config.command === "build"
+  const isSSRBuild = !!config.build?.ssr
+  const devtoolsEnabled = opts.devtools !== false && !isBuild && !isProduction
+
+  const projectRoot =
+    config.root?.replace(/\\/g, "/") ?? process.cwd().replace(/\\/g, "/")
+  const includedPaths = (opts.include ?? []).map((p) =>
+    path.resolve(projectRoot, p).replace(/\\/g, "/")
+  )
+
+  const outDir = (config.build?.outDir ?? "dist") as string
+  const normalizedOut = outDir.replace(/\\/g, "/")
+  const baseOutDir = normalizedOut.replace(/\/(server|client)$/i, "") || "dist"
+
+  return {
+    ...state,
+    isProduction,
+    isBuild,
+    isSSRBuild,
+    devtoolsEnabled,
+    projectRoot,
+    includedPaths,
+    outDir,
+    baseOutDir,
+    // Ensure all required fields are present
+    loggingEnabled: state.loggingEnabled ?? false,
+    fileLinkFormatter: state.fileLinkFormatter!,
+    dtClientPathname: state.dtClientPathname!,
+    dtHostScriptPath: state.dtHostScriptPath!,
+    manifestPath: state.manifestPath!,
+    appOptions: state.appOptions!,
+  } as PluginState
+}

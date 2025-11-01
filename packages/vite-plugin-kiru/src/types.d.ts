@@ -19,15 +19,20 @@ export interface AppOptions {
    */
   document?: string
   /**
-   * the filename of page components to search for
+   * The filename of page components to search for
    * @default "index.{tsx,jsx}"
    */
   page?: string
   /**
-   * the filename of layout components to search for
+   * The filename of layout components to search for
    * @default "layout.{tsx,jsx}"
    */
   layout?: string
+  /**
+   * Enable transitions for all routes and loading states
+   * @default false
+   */
+  transition?: boolean
 }
 
 export interface DevtoolsOptions {
@@ -91,7 +96,7 @@ export interface KiruPluginOptions {
   app?: AppOptions
 }
 
-export const defaultEsBuildOptions: ESBuildOptions
+export { defaultEsBuildOptions } from "./config"
 
 /**
  * Registers a callback to be fired when the HMR is triggered

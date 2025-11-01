@@ -1,6 +1,6 @@
 # vite-plugin-kiru
 
-Vite plugin for <a href="https://kirujs.dev">Kiru</a> apps that enables HMR, devtools, and more.
+Vite plugin for <a href="https://kirujs.dev">Kiru</a> apps that enables HMR, devtools, file-based routing, and SSG/SSR.
 
 ## Installation
 
@@ -10,7 +10,7 @@ npm i -D vite-plugin-kiru
 pnpm add -D vite-plugin-kiru
 ```
 
-### Basic Usage
+## Basic Usage
 
 ```ts
 // vite.config.ts
@@ -22,7 +22,7 @@ export default defineConfig({
 })
 ```
 
-### Configuration
+## Configuration
 
 ```ts
 kiru({
@@ -40,5 +40,45 @@ kiru({
 
   // Additional directories (relative to root) to include in transforms.
   include: ["../shared/"],
+
+  // Enable logging for debugging
+  loggingEnabled: true,
+
+  // App configuration for file-based routing
+  app: {
+    baseUrl: "/", // Base URL for the app
+    dir: "src/pages", // Directory containing pages
+    document: "document.tsx", // Document component file
+    page: "index.{tsx,jsx}", // Page component pattern
+    layout: "layout.{tsx,jsx}", // Layout component pattern
+  },
+
+  // Callbacks
+  onFileTransformed: (id, content) => {
+    console.log(`Transformed: ${id}`)
+  },
+  onFileExcluded: (id) => {
+    console.log(`Excluded: ${id}`)
+  },
 })
 ```
+
+## Features
+
+- **File-based routing**: Automatic route generation from your pages directory
+- **SSR/SSG**: Server-side rendering and static site generation
+- **HMR**: Hot module replacement for fast development
+- **Devtools**: Built-in development tools for debugging
+- **TypeScript**: Full TypeScript support with proper type definitions
+
+## Architecture
+
+The plugin is organized into focused modules:
+
+- `virtual-modules.ts` - Virtual module generation for routing
+- `dev-server.ts` - Development server SSR handling
+- `preview-server.ts` - Preview server middleware
+- `devtools.ts` - Development tools integration
+- `ssg.ts` - Static site generation
+- `config.ts` - Configuration management
+- `utils.ts` - Shared utilities
