@@ -3,7 +3,7 @@ import { flushSync } from "../scheduler.js"
 import { __DEV__ } from "../env.js"
 import { type FileRouterContextType } from "./context.js"
 import { FileRouterDataLoadError } from "./errors.js"
-import { fileRouterInstance, fileRouterRoute } from "./globals.js"
+import { fileRouterRoute } from "./globals.js"
 import type {
   ErrorPageProps,
   FileRouterConfig,
@@ -52,8 +52,9 @@ export class FileRouterController {
   >
   private pageRouteToConfig?: Map<string, PageConfig>
 
-  constructor(config: FileRouterConfig) {
-    fileRouterInstance.current = this
+  constructor() {
+    console.log("FileRouterController constructor")
+    this.enableTransitions = false
     this.pages = {}
     this.layouts = {}
     this.abortController = new AbortController()
@@ -82,8 +83,15 @@ export class FileRouterController {
       this.filePathToPageRoute = new Map()
       this.pageRouteToConfig = new Map()
     }
-    fileRouterRoute.current = null
 
+    const handlePopState = () => this.loadRoute()
+    window.addEventListener("popstate", handlePopState)
+    this.cleanups.push(() =>
+      window.removeEventListener("popstate", handlePopState)
+    )
+  }
+
+  public init(config: FileRouterConfig) {
     const {
       pages,
       layouts,
@@ -156,12 +164,6 @@ export class FileRouterController {
       }
       this.loadRoute()
     }
-
-    const handlePopState = () => this.loadRoute()
-    window.addEventListener("popstate", handlePopState)
-    this.cleanups.push(() =>
-      window.removeEventListener("popstate", handlePopState)
-    )
   }
 
   public onPageConfigDefined<T extends PageConfig<any>>(fp: string, config: T) {

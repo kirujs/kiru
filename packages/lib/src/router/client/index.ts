@@ -6,6 +6,8 @@ import { FileRouter } from "../fileRouter.js"
 import { matchLayouts, matchRoute, parseQuery } from "../utils/index.js"
 import type { FormattedViteImportMap, PageModule } from "../types.internal"
 import type { FileRouterConfig, FileRouterPreloadConfig } from "../types"
+import { fileRouterInstance, fileRouterRoute } from "../globals.js"
+import { FileRouterController } from "../fileRouterController.js"
 
 interface InitClientOptions {
   dir: string
@@ -40,11 +42,13 @@ async function preparePreloadConfig(
   }
 
   const layoutEntries = matchLayouts(options.layouts, routeMatch.routeSegments)
-
+  fileRouterInstance.current = new FileRouterController()
+  fileRouterRoute.current = routeMatch.route
   const [page, ...layouts] = await Promise.all([
     routeMatch.pageEntry.load() as Promise<PageModule>,
     ...layoutEntries.map((e) => e.load()),
   ])
+  fileRouterRoute.current = null
 
   let pageProps = {}
   if (typeof page.config?.loader?.load === "function") {
