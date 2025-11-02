@@ -40,6 +40,20 @@ export interface PluginState {
   staticProps: Record<string, Record<string, Record<string, any>>>
 }
 
+const defaultSSGOptions: Required<SSGOptions> & {
+  build: Required<SSGBuildOptions>
+} = {
+  baseUrl: "/",
+  dir: "src/pages",
+  document: "document.tsx",
+  page: "index.{tsx,jsx}",
+  layout: "layout.{tsx,jsx}",
+  transition: false,
+  build: {
+    maxConcurrentRenders: 100,
+  },
+}
+
 export function createPluginState(
   opts: KiruPluginOptions = {}
 ): Partial<PluginState> {
@@ -71,26 +85,44 @@ export function createPluginState(
   }
 
   const { ssg } = opts
-  if (ssg) {
-    // Validate SSG options
-    if (ssg.baseUrl && !ssg.baseUrl.startsWith("/")) {
-      throw new Error("[vite-plugin-kiru]: ssg.baseUrl must start with '/'")
-    }
+  if (!ssg) return state
 
-    state.ssgOptions = {
-      baseUrl: ssg?.baseUrl ?? "/",
-      dir: ssg?.dir ?? "src/pages",
-      document: ssg?.document ?? "document.tsx",
-      page: ssg?.page ?? "index.{tsx,jsx}",
-      layout: ssg?.layout ?? "layout.{tsx,jsx}",
-      transition: ssg?.transition ?? false,
-      build: {
-        maxConcurrentRenders: ssg?.build?.maxConcurrentRenders ?? 100,
-      },
+  if (ssg === true) {
+    return {
+      ...state,
+      ssgOptions: defaultSSGOptions,
     }
   }
+  if (ssg.baseUrl && !ssg.baseUrl.startsWith("/")) {
+    throw new Error("[vite-plugin-kiru]: ssg.baseUrl must start with '/'")
+  }
 
-  return state
+  const {
+    baseUrl,
+    dir,
+    document,
+    page,
+    layout,
+    transition,
+    build: { maxConcurrentRenders },
+  } = defaultSSGOptions
+
+  return {
+    ...state,
+    ssgOptions: {
+      ...ssg,
+      baseUrl: ssg.baseUrl ?? baseUrl,
+      dir: ssg.dir ?? dir,
+      document: ssg.document ?? document,
+      page: ssg.page ?? page,
+      layout: ssg.layout ?? layout,
+      transition: ssg.transition ?? transition,
+      build: {
+        maxConcurrentRenders:
+          ssg.build?.maxConcurrentRenders ?? maxConcurrentRenders,
+      },
+    },
+  }
 }
 
 export function createViteConfig(

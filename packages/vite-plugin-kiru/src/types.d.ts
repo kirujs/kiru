@@ -95,10 +95,10 @@ export interface KiruPluginOptions {
   onFileExcluded?: (id: string) => void
 
   /**
-   * Options for SSG/SSR
+   * Options for SSG
    * @example
    * ```ts
-   * app: {
+   * ssg: {
    *   dir: "./src/app",
    *   document: "document.tsx",
    *   page: "index.{tsx,jsx}",
@@ -107,10 +107,10 @@ export interface KiruPluginOptions {
    * }
    * ```
    */
-  ssg?: SSGOptions
+  ssg?: SSGOptions | true
 }
 
-export { defaultEsBuildOptions } from "./config"
+export const defaultEsBuildOptions: ESBuildOptions
 
 /**
  * Registers a callback to be fired when the HMR is triggered
