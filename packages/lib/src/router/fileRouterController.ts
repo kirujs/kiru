@@ -290,7 +290,13 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         }
       }
 
-      if (config.loader) {
+      const { loader, title } = config
+
+      if (typeof title === "string") {
+        document.title = title
+      }
+
+      if (loader) {
         props = {
           ...props,
           loading: true,
@@ -303,14 +309,12 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
           routerState,
           enableTransition
         )
-      } else if (config.title) {
-        const { title } = config
-        document.title =
-          typeof title === "function" ? title(routerState, null) : title
+      } else if (typeof title === "function") {
+        document.title = title(routerState, null)
       }
 
-      this.state = routerState
       handleStateTransition(signal, enableTransition, () => {
+        this.state = routerState
         this.currentPage.value = {
           component: page.default,
           config,
@@ -333,7 +337,8 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
     routerState: RouterState,
     enableTransition = this.enableTransitions
   ) {
-    config.loader
+    const { loader, title } = config
+    loader
       .load(routerState)
       .then(
         (data) =>
@@ -353,12 +358,12 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         if (routerState.signal.aborted) return
 
         let transition = enableTransition
-        if (config.loader.transition !== undefined) {
-          transition = config.loader.transition
+        if (loader.transition !== undefined) {
+          transition = loader.transition
         }
 
-        if (typeof config.title === "function") {
-          window.document.title = config.title(
+        if (typeof title === "function") {
+          window.document.title = title(
             routerState,
             state.error ? null : state.data
           )
