@@ -34,6 +34,7 @@ export interface PluginState {
   dtHostScriptPath: string
   manifestPath: string
   ssgOptions: Required<SSGOptions> | null
+  staticProps: Record<string, Record<string, Record<string, any>>>
 }
 
 export function createPluginState(
@@ -171,5 +172,6 @@ export function updatePluginState(
     dtHostScriptPath: state.dtHostScriptPath!,
     manifestPath: state.manifestPath!,
     ssgOptions: state.ssgOptions!,
+    staticProps: {},
   } satisfies PluginState
 }

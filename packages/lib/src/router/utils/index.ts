@@ -64,10 +64,7 @@ function formatViteImportMap(
       load: map[key],
       specificity,
       segments,
-    }
-
-    if (__DEV__) {
-      value.filePath = key
+      filePath: key,
     }
 
     return {

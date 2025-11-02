@@ -19,6 +19,7 @@ export const config = definePageConfig({
       const user = (await response.json()) as FetchUserResponse
       return { user }
     },
+    mode: "static",
   },
   title: (_, data) => {
     if (!data) {

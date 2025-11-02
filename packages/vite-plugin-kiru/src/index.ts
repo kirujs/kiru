@@ -1,6 +1,6 @@
 import type { Plugin } from "vite"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
-import type { KiruPluginOptions } from "./types.js"
+import type { KiruPluginOptions, SSGOptions } from "./types.js"
 import { prepareDevOnlyHooks, prepareHMR } from "./codegen/index.js"
 import { ANSI } from "./ansi.js"
 import { createVirtualModules } from "./virtual-modules.js"
@@ -34,6 +34,7 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
       const initialState = createPluginState(opts)
       state = updatePluginState(initialState, config, opts)
       log = createLogger(state)
+      log("[vite-plugin-kiru] isSSR:", state.isSSRBuild, state.isBuild)
       if (state.ssgOptions) {
         virtualModules = createVirtualModules(
           state.projectRoot,
@@ -130,19 +131,16 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
 
       try {
         await generateStaticSite(
+          state as PluginState & { ssgOptions: Required<SSGOptions> },
           outputOptions,
           bundle,
-          state.projectRoot,
-          state.baseOutDir,
-          state.ssgOptions,
-          state.manifestPath,
           log
         )
       } catch (e) {
         log(ANSI.red("[SSG]: prerender failed"), e)
       }
     },
-    transform(src, id) {
+    async transform(src, id) {
       if (!shouldTransformFile(id, state)) {
         if (
           !state.includedPaths.some((p) => id.startsWith(p)) &&

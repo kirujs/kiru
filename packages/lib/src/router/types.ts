@@ -96,8 +96,17 @@ export type PageDataLoaderConfig<T = unknown> = {
    * The function to load the page data
    */
   load: (context: PageDataLoaderContext) => Promise<T>
+
   /**
-   * Enable transitions when swapping between "load", "error" and "data" states
+   * The mode to use for the page data loader
+   * @default "client"
+   * @description
+   * - **static**: The page data is loaded at build time and never updated
+   * - **client**: The page data is loaded upon navigation and updated on subsequent navigations
+   */
+  mode?: "static" | "client"
+  /**
+   * Enable transitions when swapping between "load", "error" and "data" states (only when mode is "client")
    */
   transition?: boolean
 }

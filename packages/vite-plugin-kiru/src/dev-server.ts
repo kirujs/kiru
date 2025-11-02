@@ -8,6 +8,7 @@ import {
 
 interface RenderContext {
   registerModule: (moduleId: string) => void
+  registerPreloadedPageProps: (props: Record<string, unknown>) => void
 }
 
 interface RenderResult {
@@ -18,7 +19,7 @@ interface RenderResult {
 
 interface VirtualServerModule {
   render: (url: string, ctx: RenderContext) => Promise<RenderResult>
-  generateStaticPaths: () => Promise<string[]> | string[]
+  generateStaticPaths: () => Promise<Record<string, string>>
 }
 
 export function injectClientScript(html: string): string {
@@ -40,10 +41,11 @@ export async function handleSSR(
   )) as VirtualServerModule
 
   const moduleIds: string[] = []
-  const ctx = {
+  const ctx: RenderContext = {
     registerModule: (moduleId: string) => {
       moduleIds.push(moduleId)
     },
+    registerPreloadedPageProps: () => {},
   }
 
   const { status, immediate, stream } = await mod.render(url, ctx)

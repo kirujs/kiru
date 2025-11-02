@@ -138,7 +138,16 @@ export class FileRouterController {
       if (__DEV__) {
         validateRoutes(this.pages)
       }
-      if (page.config?.loader) {
+      const loader = page.config?.loader
+      if (__DEV__) {
+        if (loader) {
+          this.loadRouteData(
+            page.config as PageConfigWithLoader,
+            pageProps,
+            this.state
+          )
+        }
+      } else if (loader && loader.mode !== "static") {
         this.loadRouteData(
           page.config as PageConfigWithLoader,
           pageProps,
@@ -262,7 +271,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       )
 
       const [page, ...layouts] = await Promise.all([
-        pagePromise,
+        pagePromise as Promise<PageModule>,
         ...layoutPromises,
       ])
 
@@ -283,7 +292,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         signal,
       }
 
-      let config = (page as unknown as PageModule).config ?? ({} as PageConfig)
+      let config = page.config ?? ({} as PageConfig)
       if (__DEV__) {
         if (this.pageRouteToConfig?.has(route)) {
           config = this.pageRouteToConfig.get(route)!
@@ -297,20 +306,38 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       }
 
       if (loader) {
-        props = {
-          ...props,
-          loading: true,
-          data: null,
-          error: null,
-        } satisfies PageProps<PageConfig<unknown>>
-        this.loadRouteData(
-          config as PageConfigWithLoader,
-          props,
-          routerState,
-          enableTransition
-        )
-      } else if (typeof title === "function") {
-        document.title = title(routerState, null)
+        if (loader.mode !== "static" || __DEV__) {
+          props = {
+            ...props,
+            loading: true,
+            data: null,
+            error: null,
+          } satisfies PageProps<PageConfig<unknown>>
+
+          this.loadRouteData(
+            config as PageConfigWithLoader,
+            props,
+            routerState,
+            enableTransition
+          )
+        } else {
+          const staticProps = page.__KIRU_STATIC_PROPS__?.[path]
+          if (staticProps) {
+            props = {
+              ...props,
+              ...staticProps,
+              loading: false,
+            } as PageProps<PageConfig<unknown>>
+            document.title = (title as Function)(routerState, staticProps.data)
+          } else {
+            props = {
+              ...props,
+              loading: true,
+              data: null,
+              error: null,
+            } satisfies PageProps<PageConfig<unknown>>
+          }
+        }
       }
 
       handleStateTransition(signal, enableTransition, () => {

@@ -1,9 +1,11 @@
 import type { OutputBundle, OutputOptions } from "rollup"
 import path from "node:path"
-import fs from "node:fs"
+import fs, { globSync } from "node:fs"
 import { pathToFileURL } from "node:url"
 import type { SSGOptions } from "./types.js"
 import { ANSI } from "./ansi.js"
+import type { Manifest } from "vite"
+import { PluginState } from "./config.js"
 
 interface VirtualServerModule {
   render: (
@@ -14,18 +16,21 @@ interface VirtualServerModule {
     immediate: string
     stream: any
   }>
-  generateStaticPaths: () => Promise<string[]> | string[]
+  generateStaticPaths: () => Promise<Record<string, string>>
+}
+
+interface RenderContext {
+  registerModule: (moduleId: string) => void
+  registerPreloadedPageProps: (props: Record<string, unknown>) => void
 }
 
 export async function generateStaticSite(
+  state: PluginState & { ssgOptions: Required<SSGOptions> },
   outputOptions: OutputOptions,
   bundle: OutputBundle,
-  projectRoot: string,
-  baseOutDir: string,
-  appOptions: Required<SSGOptions>,
-  manifestPath: string,
   log: (...data: any[]) => void
 ) {
+  const { projectRoot, baseOutDir, manifestPath } = state
   const outDirAbs = path.resolve(projectRoot, outputOptions?.dir ?? "dist")
 
   const ssrEntry = Object.values(bundle).find(
@@ -38,16 +43,7 @@ export async function generateStaticSite(
     pathToFileURL(ssrEntryAbs).href
   )) as VirtualServerModule
 
-  // Collect concrete paths (static + generateStaticParams)
-  let paths: string[] = []
-  try {
-    paths = await mod.generateStaticPaths()
-  } catch {}
-
-  if (paths.length === 0) {
-    paths = await derivePathsFromManifest(outDirAbs, manifestPath, appOptions)
-  }
-  if (paths.length === 0) paths.push("/")
+  const paths = await mod.generateStaticPaths()
 
   const clientOutDirAbs = path.resolve(projectRoot, `${baseOutDir}/client`)
   const { clientEntry, cssLinks } = await getClientAssets(
@@ -58,8 +54,16 @@ export async function generateStaticSite(
   log(ANSI.cyan("[SSG]"), "discovered routes:", paths)
 
   let wroteCount = 0
-  for (const route of paths) {
-    const html = await renderRoute(mod, route, clientEntry, cssLinks)
+  for (const route in paths) {
+    const srcFilePath = paths[route]
+    const html = await renderRoute(
+      state,
+      mod,
+      route,
+      srcFilePath,
+      clientEntry,
+      cssLinks
+    )
     const filePath = getOutputPath(clientOutDirAbs, route)
 
     log(ANSI.cyan("[SSG]"), "write:", ANSI.black(filePath))
@@ -68,50 +72,14 @@ export async function generateStaticSite(
     wroteCount++
   }
 
+  // Collect and append static props to client modules
+  await appendStaticPropsToClientModules(state, clientOutDirAbs, log)
+
   // Fallback: render index if no routes were processed
   if (wroteCount === 0) {
-    await renderFallbackIndex(mod, clientEntry, cssLinks, clientOutDirAbs, log)
-  }
-}
-
-async function derivePathsFromManifest(
-  outDirAbs: string,
-  manifestPath: string,
-  appOptions: Required<SSGOptions>
-): Promise<string[]> {
-  try {
-    const ssrManifestPath = path.resolve(outDirAbs, manifestPath)
-    if (!fs.existsSync(ssrManifestPath)) return []
-
-    const ssrManifest = JSON.parse(fs.readFileSync(ssrManifestPath, "utf-8"))
-    const entry = ssrManifest["virtual:kiru:entry-server"]
-    const imports: string[] = entry?.dynamicImports ?? []
-
-    const normalize = (p: string) => {
-      const dirPrefix = appOptions.dir + "/"
-      let k = p
-      if (k.startsWith(dirPrefix)) k = k.slice(dirPrefix.length)
-      if (k.endsWith("/index.tsx")) k = k.slice(0, -"/index.tsx".length)
-
-      const parts = k.split("/").filter(Boolean)
-      const urlParts = parts.filter(
-        (seg) => !(seg.startsWith("(") && seg.endsWith(")"))
-      )
-
-      // Skip 404 and dynamic routes
-      if (urlParts[urlParts.length - 1] === "404") return null
-      if (urlParts.some((seg) => seg.startsWith("["))) return null
-
-      return "/" + urlParts.join("/")
-    }
-
-    const derived = imports
-      .map((i) => normalize(i))
-      .filter((v): v is string => !!v)
-
-    return Array.from(new Set(["/", ...derived]))
-  } catch {
-    return []
+    throw new Error(
+      "No routes were processed. If you have created pages, this is likely a bug in the plugin."
+    )
   }
 }
 
@@ -181,12 +149,20 @@ function findClientEntry(dir: string): string | null {
 }
 
 async function renderRoute(
+  state: PluginState & { ssgOptions: Required<SSGOptions> },
   mod: VirtualServerModule,
   route: string,
+  srcFilePath: string,
   clientEntry: string | null,
   cssLinks: string
 ): Promise<string> {
-  const result = await mod.render(route, { registerModule: () => {} })
+  const ctx: RenderContext = {
+    registerModule: () => {},
+    registerPreloadedPageProps: (props) => {
+      ;(state.staticProps[srcFilePath] ??= {})[route] = props
+    },
+  }
+  const result = await mod.render(route, ctx)
   let html = result.immediate
 
   if (result.stream) {
@@ -228,19 +204,62 @@ function getOutputPath(clientOutDirAbs: string, route: string): string {
   return path.resolve(dirPath, `${last}.html`)
 }
 
-async function renderFallbackIndex(
-  mod: VirtualServerModule,
-  clientEntry: string | null,
-  cssLinks: string,
+async function appendStaticPropsToClientModules(
+  state: PluginState & { ssgOptions: Required<SSGOptions> },
   clientOutDirAbs: string,
   log: (...data: any[]) => void
 ) {
+  const { projectRoot, manifestPath, ssgOptions } = state
   try {
-    const html = await renderRoute(mod, "/", clientEntry, cssLinks)
-    const filePath = path.resolve(clientOutDirAbs, "index.html")
+    log(ANSI.cyan("[SSG]"), "Starting static props collection...")
+    const clientManifestPath = path.resolve(clientOutDirAbs, manifestPath)
+    if (!fs.existsSync(clientManifestPath)) {
+      log(
+        ANSI.yellow("[SSG]"),
+        "Client manifest not found, skipping static props"
+      )
+      return
+    }
+    log(ANSI.cyan("[SSG]"), "Found client manifest at:", clientManifestPath)
 
-    log("[SSG] write:", filePath)
-    fs.mkdirSync(path.dirname(filePath), { recursive: true })
-    fs.writeFileSync(filePath, html, "utf-8")
-  } catch {}
+    const srcPages = globSync(`${ssgOptions.dir}/**/${ssgOptions.page}`, {
+      cwd: projectRoot,
+    }).map((s) => s.replace(/\\/g, "/"))
+
+    const manifest: Manifest = JSON.parse(
+      fs.readFileSync(clientManifestPath, "utf-8")
+    )
+    log(
+      ANSI.cyan("[SSG]"),
+      "Parsed manifest with",
+      Object.keys(manifest).length,
+      "entries"
+    )
+
+    const clientEntryChunk = manifest["virtual:kiru:entry-client"]
+    if (!clientEntryChunk) {
+      throw new Error("Client entry chunk not found in manifest")
+    }
+
+    await Promise.all(
+      srcPages.map(async (moduleId) => {
+        const staticProps = state.staticProps[`/` + moduleId]
+        if (!staticProps) return
+
+        const chunk = manifest[moduleId]
+        if (!chunk) {
+          log(ANSI.red(`failed to get manifest chunk for module "${moduleId}"`))
+          return
+        }
+        const filePath = path.resolve(clientOutDirAbs, chunk.file)
+        const code = `export const __KIRU_STATIC_PROPS__ = ${JSON.stringify(
+          staticProps
+        )};`
+        fs.appendFileSync(filePath, `\n${code}`, "utf-8")
+        log("Added static props to:", chunk.file)
+      })
+    )
+  } catch (error) {
+    log(ANSI.red("[SSG]"), "Failed to append static props:", error)
+  }
 }

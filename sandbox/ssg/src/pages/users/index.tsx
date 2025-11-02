@@ -12,7 +12,6 @@ interface FetchUsersResponse {
 export const config = definePageConfig({
   loader: {
     load: async ({ signal }) => {
-      console.log("here")
       const response = await fetch(
         "https://dummyjson.com/users?select=firstName,lastName,image",
         { signal }
@@ -20,6 +19,7 @@ export const config = definePageConfig({
       if (!response.ok) throw new Error(response.statusText)
       return (await response.json()) as FetchUsersResponse
     },
+    mode: "static",
   },
   title: (_, data) => {
     if (!data) {

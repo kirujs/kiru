@@ -7,6 +7,10 @@ export interface DefaultComponentModule {
 export interface PageModule {
   default: Kiru.FC
   config?: PageConfig
+  __KIRU_STATIC_PROPS__?: Record<
+    string,
+    { data: unknown; error: string | null }
+  >
 }
 
 export interface ViteImportMap {
@@ -18,7 +22,7 @@ export interface FormattedViteImportMap {
     load: () => Promise<DefaultComponentModule>
     specificity: number
     segments: string[]
-    filePath?: string
+    filePath: string
   }
 }
 

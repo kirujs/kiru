@@ -8,6 +8,7 @@ import type { FormattedViteImportMap, PageModule } from "../types.internal"
 import type { FileRouterConfig, FileRouterPreloadConfig } from "../types"
 import { fileRouterInstance, fileRouterRoute } from "../globals.js"
 import { FileRouterController } from "../fileRouterController.js"
+import { FileRouterDataLoadError } from "../errors.js"
 
 interface InitClientOptions {
   dir: string
@@ -51,7 +52,17 @@ async function preparePreloadConfig(
   fileRouterRoute.current = null
 
   let pageProps = {}
-  if (typeof page.config?.loader?.load === "function") {
+  // Check if page has static props pre-loaded at build time
+  if (page.__KIRU_STATIC_PROPS__) {
+    const staticProps = page.__KIRU_STATIC_PROPS__[window.location.pathname]
+    if (staticProps) {
+      pageProps = staticProps.error
+        ? { data: null, error: staticProps.error, loading: false }
+        : { data: staticProps.data, error: null, loading: false }
+    } else {
+      pageProps = { loading: true, data: null, error: null }
+    }
+  } else if (typeof page.config?.loader?.load === "function") {
     pageProps = { loading: true, data: null, error: null }
   }
 

@@ -7,16 +7,18 @@ import {
   wrapWithLayouts,
 } from "../utils/index.js"
 import { RouterContext } from "../context.js"
-import type { RouterState } from "../types.js"
+import type { PageConfig, PageProps, RouterState } from "../types.js"
 import type { Readable } from "node:stream"
 import { FormattedViteImportMap, PageModule } from "../types.internal.js"
 import { __DEV__ } from "../../env.js"
+import { FileRouterDataLoadError } from "../errors.js"
 
 export interface RenderContext {
   pages: FormattedViteImportMap
   layouts: FormattedViteImportMap
   Document: Kiru.FC
   registerModule: (moduleId: string) => void
+  registerPreloadedPageProps: (props: Record<string, unknown>) => void
 }
 
 export interface RenderResult {
@@ -61,7 +63,7 @@ export async function render(
   const layoutEntries = matchLayouts(ctx.layouts, routeSegments)
 
   if (__DEV__) {
-    ;[routeMatch.pageEntry, ...layoutEntries].forEach((e) => {
+    ;[pageEntry, ...layoutEntries].forEach((e) => {
       ctx.registerModule(e.filePath!)
     })
   }
@@ -73,9 +75,42 @@ export async function render(
 
   const query = parseQuery(u.search)
 
-  let props: Record<string, unknown> = {}
-  if (typeof page.config?.loader?.load === "function") {
-    props = { loading: true, data: null, error: null }
+  let props = {} as PageProps<PageConfig>
+  const { loader } = page.config ?? {}
+  if (loader) {
+    if (loader.mode !== "static" || __DEV__) {
+      props = { loading: true, data: null, error: null }
+    } else {
+      const abortController = new AbortController()
+      const timeout = setTimeout(() => {
+        abortController.abort(
+          "[kiru/router]: Page data loading timed out after 10 seconds"
+        )
+      }, 10000)
+
+      try {
+        const data = await loader.load({
+          path: u.pathname,
+          params,
+          query,
+          signal: abortController.signal,
+        })
+        props = {
+          data,
+          error: null,
+          loading: false,
+        }
+      } catch (error) {
+        props = {
+          error: new FileRouterDataLoadError(error),
+          loading: false,
+          data: null,
+        }
+      } finally {
+        clearTimeout(timeout)
+        ctx.registerPreloadedPageProps({ data: props.data, error: props.error })
+      }
+    }
   }
 
   const children = wrapWithLayouts(
@@ -103,18 +138,20 @@ export async function render(
 }
 
 export async function generateStaticPaths(pages: FormattedViteImportMap) {
-  const results = new Set()
+  const results: Record<string, string> = {}
   const entries = Object.values(pages)
   for (const entry of entries) {
     // Build a clean URL path excluding group segments like (articles)
     const urlSegments = entry.segments.filter(
       (s) => !(s.startsWith("(") && s.endsWith(")"))
     )
+
     const basePath = "/" + urlSegments.join("/")
-    if (basePath.endsWith("/404")) continue
+    // if (basePath.endsWith("/404")) continue
+
     const hasDynamic = urlSegments.some((s) => s.startsWith(":"))
     if (!hasDynamic) {
-      results.add(basePath === "" ? "/" : basePath)
+      results[basePath === "" ? "/" : basePath] = entry.filePath
       continue
     }
     try {
@@ -130,9 +167,9 @@ export async function generateStaticPaths(pages: FormattedViteImportMap) {
           const value = params[key]
           p = p.replace(`:${key}*`, value).replace(`:${key}`, value)
         }
-        results.add(p)
+        results[p] = entry.filePath
       }
     } catch {}
   }
-  return Array.from(results)
+  return results
 }
