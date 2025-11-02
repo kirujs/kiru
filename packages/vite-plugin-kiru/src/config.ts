@@ -48,6 +48,13 @@ export function createPluginState(
     fileLinkFormatter = opts.devtools.formatFileLink ?? fileLinkFormatter
   }
 
+  // Validate devtools pathname
+  if (!dtClientPathname.startsWith("/")) {
+    throw new Error(
+      "[vite-plugin-kiru]: devtools.dtClientPathname must start with '/'"
+    )
+  }
+
   const state: Partial<PluginState> = {
     projectRoot: process.cwd().replace(/\\/g, "/"),
     includedPaths: [],
@@ -61,6 +68,11 @@ export function createPluginState(
 
   const { ssg } = opts
   if (ssg) {
+    // Validate SSG options
+    if (ssg.baseUrl && !ssg.baseUrl.startsWith("/")) {
+      throw new Error("[vite-plugin-kiru]: ssg.baseUrl must start with '/'")
+    }
+
     state.ssgOptions = {
       baseUrl: ssg?.baseUrl ?? "/",
       dir: ssg?.dir ?? "src/pages",

@@ -37,7 +37,11 @@ export async function render(
   )
   if (!routeMatch) {
     if (url === "/404" && result) {
-      // todo: warn in development (no 404 route)
+      if (__DEV__) {
+        console.warn(
+          "[kiru/router]: No 404 route defined. Using fallback 404 page."
+        )
+      }
       return {
         status: 404,
         immediate:
@@ -85,8 +89,12 @@ export async function render(
   const app = createElement(RouterContext.Provider, {
     children: createElement(ctx.Document, { children }),
     value: {
-      // todo: address lack of AbortSignal
-      state: { params, query, path: u.pathname } as RouterState,
+      state: {
+        params,
+        query,
+        path: u.pathname,
+        signal: new AbortController().signal, // Server-side signal (not abortable)
+      } as RouterState,
     },
   })
 

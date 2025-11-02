@@ -23,7 +23,11 @@ function formatViteImportMap(
   return Object.keys(map).reduce<FormattedViteImportMap>((acc, key) => {
     const dirIndex = key.indexOf(dir)
     if (dirIndex === -1) {
-      console.warn(`[kiru/router]: File "${key}" does not start with "${dir}".`)
+      if (__DEV__) {
+        console.warn(
+          `[kiru/router]: File "${key}" does not start with "${dir}".`
+        )
+      }
       return acc
     }
 

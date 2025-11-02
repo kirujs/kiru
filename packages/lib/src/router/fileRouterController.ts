@@ -3,7 +3,7 @@ import { flushSync } from "../scheduler.js"
 import { __DEV__ } from "../env.js"
 import { type FileRouterContextType } from "./context.js"
 import { FileRouterDataLoadError } from "./errors.js"
-import { fileRouterRoute } from "./globals.js"
+import { fileRouterInstance, fileRouterRoute } from "./globals.js"
 import type {
   ErrorPageProps,
   FileRouterConfig,
@@ -211,7 +211,15 @@ export class FileRouterController {
   }
 
   public dispose() {
+    this.abortController?.abort()
     this.cleanups.forEach((cleanup) => cleanup())
+    this.cleanups.length = 0
+    if (__DEV__) {
+      this.filePathToPageRoute?.clear()
+      this.pageRouteToConfig?.clear()
+    }
+    fileRouterRoute.current = null
+    fileRouterInstance.current = null
   }
 
   private async loadRoute(
@@ -457,9 +465,11 @@ function validateRoutes(pageMap: FormattedViteImportMap) {
 
   if (routeConflicts.length > 0) {
     let warning = "[kiru/router]: Route conflicts detected:\n"
-    warning += routeConflicts.map(([route1, route2]) => {
-      return `  - "${route1.filePath}" conflicts with "${route2.filePath}"\n`
-    })
+    warning += routeConflicts
+      .map(([route1, route2]) => {
+        return `  - "${route1.filePath}" conflicts with "${route2.filePath}"\n`
+      })
+      .join("")
     warning += "Routes are ordered by specificity (higher specificity wins)"
     console.warn(warning)
   }
