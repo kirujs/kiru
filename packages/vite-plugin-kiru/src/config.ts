@@ -4,6 +4,7 @@ import type {
   KiruPluginOptions,
   SSGOptions,
   FileLinkFormatter,
+  SSGBuildOptions,
 } from "./types.js"
 import {
   VIRTUAL_ENTRY_SERVER_ID,
@@ -33,7 +34,9 @@ export interface PluginState {
   dtClientPathname: string
   dtHostScriptPath: string
   manifestPath: string
-  ssgOptions: Required<SSGOptions> | null
+  ssgOptions:
+    | (Required<SSGOptions> & { build: Required<SSGBuildOptions> })
+    | null
   staticProps: Record<string, Record<string, Record<string, any>>>
 }
 
@@ -81,6 +84,9 @@ export function createPluginState(
       page: ssg?.page ?? "index.{tsx,jsx}",
       layout: ssg?.layout ?? "layout.{tsx,jsx}",
       transition: ssg?.transition ?? false,
+      build: {
+        maxConcurrentRenders: ssg?.build?.maxConcurrentRenders ?? 100,
+      },
     }
   }
 

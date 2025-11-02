@@ -51,36 +51,45 @@ export async function generateStaticSite(
     manifestPath
   )
 
-  log(ANSI.cyan("[SSG]"), "discovered routes:", paths)
+  log(ANSI.cyan("[SSG]"), "discovered routes:", Object.keys(paths))
 
-  let wroteCount = 0
-  for (const route in paths) {
-    const srcFilePath = paths[route]
-    const html = await renderRoute(
-      state,
-      mod,
-      route,
-      srcFilePath,
-      clientEntry,
-      cssLinks
+  const renderingChunks: Record<string, string>[] = []
+  const keys = Object.keys(paths)
+  const maxConcurrentRenders = state.ssgOptions.build.maxConcurrentRenders
+
+  // chunk by keys
+  for (let i = 0; i < keys.length; i += maxConcurrentRenders) {
+    const chunkKeys = keys.slice(i, i + maxConcurrentRenders)
+    renderingChunks.push(
+      chunkKeys.reduce((acc, key) => {
+        acc[key] = paths[key]
+        return acc
+      }, {} as Record<string, string>)
     )
-    const filePath = getOutputPath(clientOutDirAbs, route)
+  }
 
-    log(ANSI.cyan("[SSG]"), "write:", ANSI.black(filePath))
-    fs.mkdirSync(path.dirname(filePath), { recursive: true })
-    fs.writeFileSync(filePath, html, "utf-8")
-    wroteCount++
+  for (const chunk of renderingChunks) {
+    await Promise.all(
+      Object.entries(chunk).map(async ([route, srcFilePath]) => {
+        const html = await renderRoute(
+          state,
+          mod,
+          route,
+          srcFilePath,
+          clientEntry,
+          cssLinks
+        )
+        const filePath = getOutputPath(clientOutDirAbs, route)
+
+        log(ANSI.cyan("[SSG]"), "write:", ANSI.black(filePath))
+        fs.mkdirSync(path.dirname(filePath), { recursive: true })
+        fs.writeFileSync(filePath, html, "utf-8")
+      })
+    )
   }
 
   // Collect and append static props to client modules
   await appendStaticPropsToClientModules(state, clientOutDirAbs, log)
-
-  // Fallback: render index if no routes were processed
-  if (wroteCount === 0) {
-    throw new Error(
-      "No routes were processed. If you have created pages, this is likely a bug in the plugin."
-    )
-  }
 }
 
 async function getClientAssets(clientOutDirAbs: string, manifestPath: string) {
@@ -256,7 +265,7 @@ async function appendStaticPropsToClientModules(
           staticProps
         )};`
         fs.appendFileSync(filePath, `\n${code}`, "utf-8")
-        log("Added static props to:", chunk.file)
+        log(ANSI.cyan("[SSG]"), "Added static props to:", chunk.file)
       })
     )
   } catch (error) {

@@ -2,6 +2,14 @@ import type { ESBuildOptions, Plugin } from "vite"
 
 export type FileLinkFormatter = (path: string, line: number) => string
 
+export interface SSGBuildOptions {
+  /**
+   * The max number of pages to render/load concurrently
+   * @default 100
+   */
+  maxConcurrentRenders?: number
+}
+
 export interface SSGOptions {
   /**
    * The base URL of the app
@@ -33,6 +41,11 @@ export interface SSGOptions {
    * @default false
    */
   transition?: boolean
+
+  /**
+   * Options for build
+   */
+  build?: SSGBuildOptions
 }
 
 export interface DevtoolsOptions {
