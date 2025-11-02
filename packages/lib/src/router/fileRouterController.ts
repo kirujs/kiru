@@ -299,11 +299,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         }
       }
 
-      const { loader, title } = config
-
-      if (typeof title === "string") {
-        document.title = title
-      }
+      const { loader } = config
 
       if (loader) {
         if (loader.mode !== "static" || __DEV__) {
@@ -330,7 +326,6 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
               error: error ? new FileRouterDataLoadError(error) : null,
               loading: false,
             } as PageProps<PageConfig<unknown>>
-            document.title = (title as Function)(routerState, staticProps.data)
           } else {
             props = {
               ...props,
@@ -366,7 +361,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
     routerState: RouterState,
     enableTransition = this.enableTransitions
   ) {
-    const { loader, title } = config
+    const { loader } = config
     loader
       .load(routerState)
       .then(
@@ -389,13 +384,6 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         let transition = enableTransition
         if (loader.transition !== undefined) {
           transition = loader.transition
-        }
-
-        if (typeof title === "function") {
-          window.document.title = title(
-            routerState,
-            state.error ? null : state.data
-          )
         }
 
         handleStateTransition(routerState.signal, transition, () => {

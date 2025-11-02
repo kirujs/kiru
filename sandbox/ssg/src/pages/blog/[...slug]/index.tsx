@@ -1,4 +1,4 @@
-import { definePageConfig, useFileRouter } from "kiru/router"
+import { definePageConfig, Head, useFileRouter } from "kiru/router"
 
 export const config = definePageConfig({
   generateStaticParams: () => {
@@ -10,6 +10,9 @@ export default function BlogCatchall() {
   const { state } = useFileRouter()
   return (
     <div>
+      <Head.Content>
+        <title>Blog Catchall Route</title>
+      </Head.Content>
       <h1>Blog Catchall Route</h1>
       <p>Caught slug: {state.params.slug}</p>
     </div>

@@ -174,14 +174,6 @@ async function renderRoute(
   const result = await mod.render(route, ctx)
   let html = result.immediate
 
-  if (result.stream) {
-    html += await new Promise<string>((resolve) => {
-      let acc = ""
-      result.stream?.on("data", (c: any) => (acc += String(c)))
-      result.stream?.on("end", () => resolve(acc))
-    })
-  }
-
   if (clientEntry) {
     const scriptTag = `<script type="module" src="/${clientEntry}"></script>`
     const headInjected = cssLinks

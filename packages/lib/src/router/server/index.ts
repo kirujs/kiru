@@ -76,12 +76,19 @@ export async function render(
   const query = parseQuery(u.search)
 
   let props = {} as PageProps<PageConfig>
-  const { loader } = page.config ?? {}
-  if (loader) {
-    if (loader.mode !== "static" || __DEV__) {
+  const config = page.config ?? {}
+  const abortController = new AbortController()
+
+  if (config.loader) {
+    if (config.loader.mode !== "static" || __DEV__) {
       props = { loading: true, data: null, error: null }
     } else {
-      const abortController = new AbortController()
+      const routerState: RouterState = {
+        path: u.pathname,
+        params,
+        query,
+        signal: abortController.signal,
+      }
       const timeout = setTimeout(() => {
         abortController.abort(
           "[kiru/router]: Page data loading timed out after 10 seconds"
@@ -89,12 +96,7 @@ export async function render(
       }, 10000)
 
       try {
-        const data = await loader.load({
-          path: u.pathname,
-          params,
-          query,
-          signal: abortController.signal,
-        })
+        const data = await config.loader.load(routerState)
         props = {
           data,
           error: null,
@@ -128,13 +130,42 @@ export async function render(
         params,
         query,
         path: u.pathname,
-        signal: new AbortController().signal, // Server-side signal (not abortable)
+        signal: abortController.signal, // Server-side signal (not abortable)
       } as RouterState,
     },
   })
 
-  const { immediate, stream } = renderToReadableStream(app)
-  return { status: 200, immediate: "<!doctype html>" + immediate, stream }
+  let { immediate, stream } = renderToReadableStream(app)
+  const hasHeadOutlet = immediate.includes("<kiru-head-outlet>")
+  const hasHeadContent = immediate.includes("<kiru-head-content>")
+
+  if (hasHeadOutlet && hasHeadContent) {
+    let [preHeadContent = "", headContentInner = "", postHeadContent = ""] =
+      immediate.split(/<kiru-head-content>|<\/kiru-head-content>/)
+
+    preHeadContent = preHeadContent.replace(
+      "<kiru-head-outlet>",
+      headContentInner
+    )
+    immediate = `${preHeadContent}${postHeadContent}`
+  } else if (hasHeadContent) {
+    // remove head content element and everything within it
+    immediate = immediate.replace(
+      /<kiru-head-content>(.*?)<\/kiru-head-content>/,
+      ""
+    )
+  } else if (hasHeadOutlet) {
+    // remove head outlet element and everything within it
+    immediate = immediate.replaceAll("<kiru-head-outlet>", "")
+  }
+
+  // console.log("immediate", immediate)
+
+  return {
+    status: 200,
+    immediate: "<!doctype html>" + immediate,
+    stream,
+  }
 }
 
 export async function generateStaticPaths(pages: FormattedViteImportMap) {

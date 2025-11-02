@@ -1,4 +1,5 @@
 import { definePageConfig, Link, PageProps } from "kiru/router"
+import { Head } from "kiru/router"
 
 interface FetchUsersResponse {
   users: {
@@ -21,12 +22,6 @@ export const config = definePageConfig({
     },
     mode: "static",
   },
-  title: (_, data) => {
-    if (!data) {
-      return "Failed to load users"
-    }
-    return `Users (${data.users.length})`
-  },
 })
 
 export default function Page({
@@ -35,10 +30,21 @@ export default function Page({
   error,
 }: PageProps<typeof config>) {
   if (loading) return <p>Loading...</p>
-  if (error) return <p>{String(error.cause)}</p>
+  if (error)
+    return (
+      <>
+        <Head.Content>
+          <title>Failed to load users</title>
+        </Head.Content>
+        <p>{String(error.cause)}</p>
+      </>
+    )
 
   return (
     <div>
+      <Head.Content>
+        <title>Users - {data.users.length}</title>
+      </Head.Content>
       <h1>Users</h1>
       <p>This is the users page</p>
       <div className="flex flex-col gap-2">

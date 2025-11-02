@@ -1,4 +1,4 @@
-import { definePageConfig, PageProps, useFileRouter } from "kiru/router"
+import { definePageConfig, Head, PageProps, useFileRouter } from "kiru/router"
 
 interface FetchUserResponse {
   id: number
@@ -21,12 +21,6 @@ export const config = definePageConfig({
     },
     mode: "static",
   },
-  title: (_, data) => {
-    if (!data) {
-      return "Failed to load user"
-    }
-    return `${data.user.firstName} ${data.user.lastName}`
-  },
   generateStaticParams: async () => {
     const response = await fetch("https://dummyjson.com/users?select=id")
     if (!response.ok) throw new Error(response.statusText)
@@ -43,10 +37,23 @@ export default function UserDetailPage({
   const router = useFileRouter()
 
   if (loading) return <p>Loading...</p>
-  if (error) return <p>{String(error.cause)}</p>
+  if (error)
+    return (
+      <>
+        <Head.Content>
+          <title>Failed to load user</title>
+        </Head.Content>
+        <p>{String(error.cause)}</p>
+      </>
+    )
 
   return (
     <div>
+      <Head.Content>
+        <title>
+          User Detail - {data.user.firstName} {data.user.lastName}
+        </title>
+      </Head.Content>
       <button onclick={() => router.reload()}>Reload</button>
       <h1>User Detail</h1>
       <p>User ID: {data.user.id}</p>

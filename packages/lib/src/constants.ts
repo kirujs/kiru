@@ -46,6 +46,7 @@ const FLAG_DIRTY = 1 << 7
 const EVENT_PREFIX_REGEX = /^on:?/
 
 const voidElements = new Set([
+  "kiru-head-outlet",
   "area",
   "base",
   "br",

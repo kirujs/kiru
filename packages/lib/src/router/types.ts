@@ -117,18 +117,6 @@ export interface PageConfig<T = unknown> {
    */
   loader?: PageDataLoaderConfig<T>
   /**
-   * The title for this page
-   */
-  title?: string | ((context: PageDataLoaderContext, data: T | null) => string)
-  /**
-   * The description for this page
-   */
-  description?: string
-  /**
-   * The meta tags for this page
-   */
-  meta?: Record<string, string>
-  /**
    * Generate static params for this page. For each params
    * returned, a page will be generated
    */
