@@ -1,5 +1,6 @@
 import { createElement } from "../index.js"
-import { isVNode } from "../utils/index.js"
+import { Signal } from "../signals/base.js"
+import { isValidTextChild, isVNode } from "../utils/index.js"
 
 export { Content, Outlet }
 
@@ -27,7 +28,10 @@ function Content({ children }: { children: JSX.Children }) {
           case "title":
             const title = (
               Array.isArray(props.children) ? props.children : [props.children]
-            ).join("")
+            )
+              .map((c) => (Signal.isSignal(c) ? c.value : c))
+              .filter(isValidTextChild)
+              .join("")
             return (document.title = title)
           case "meta":
             return document
