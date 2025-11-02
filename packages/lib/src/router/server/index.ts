@@ -3,11 +3,17 @@ import { renderToReadableStream } from "../../ssr/server.js"
 import {
   matchLayouts,
   matchRoute,
+  match404Route,
   parseQuery,
   wrapWithLayouts,
 } from "../utils/index.js"
 import { RouterContext } from "../context.js"
-import type { PageConfig, PageProps, RouterState } from "../types.js"
+import type {
+  ErrorPageProps,
+  PageConfig,
+  PageProps,
+  RouterState,
+} from "../types.js"
 import type { Readable } from "node:stream"
 import { FormattedViteImportMap, PageModule } from "../types.internal.js"
 import { __DEV__ } from "../../env.js"
@@ -33,33 +39,40 @@ export async function render(
   result?: RenderResult
 ): Promise<RenderResult> {
   const u = new URL(url, "http://localhost")
-  const routeMatch = matchRoute(
-    ctx.pages,
-    u.pathname.split("/").filter(Boolean)
-  )
+  const pathSegments = u.pathname.split("/").filter(Boolean)
+  let routeMatch = matchRoute(ctx.pages, pathSegments)
+
   if (!routeMatch) {
-    if (url === "/404" && result) {
-      if (__DEV__) {
-        console.warn(
-          "[kiru/router]: No 404 route defined. Using fallback 404 page."
-        )
+    // Try to find a 404 page in parent directories
+    const fourOhFourMatch = match404Route(ctx.pages, pathSegments)
+    if (fourOhFourMatch) {
+      routeMatch = fourOhFourMatch
+    } else {
+      // Fallback to root 404 or default fallback
+      if (url === "/404" && result) {
+        if (__DEV__) {
+          console.warn(
+            "[kiru/router]: No 404 route defined. Using fallback 404 page."
+          )
+        }
+        return {
+          status: 404,
+          immediate:
+            "<!doctype html><html><head><title>Not Found</title></head><body><h1>404</h1></body></html>",
+          stream: null,
+        }
       }
-      return {
-        status: 404,
-        immediate:
-          "<!doctype html><html><head><title>Not Found</title></head><body><h1>404</h1></body></html>",
+      return render("/404", ctx, {
+        ...(result ?? {}),
+        immediate: "",
         stream: null,
-      }
+        status: 404,
+      })
     }
-    return render("/404", ctx, {
-      ...(result ?? {}),
-      immediate: "",
-      stream: null,
-      status: 404,
-    })
   }
 
   const { pageEntry, routeSegments, params } = routeMatch
+  const is404Route = routeMatch.routeSegments.includes("404")
   const layoutEntries = matchLayouts(ctx.layouts, routeSegments)
 
   if (__DEV__) {
@@ -75,7 +88,8 @@ export async function render(
 
   const query = parseQuery(u.search)
 
-  let props = {} as PageProps<PageConfig>
+  let props: PageProps<PageConfig> & Partial<ErrorPageProps> =
+    {} as PageProps<PageConfig>
   const config = page.config ?? {}
   const abortController = new AbortController()
 
@@ -112,6 +126,14 @@ export async function render(
         clearTimeout(timeout)
         ctx.registerPreloadedPageProps({ data: props.data, error: props.error })
       }
+    }
+  }
+
+  // Add error page props if this is a 404 route
+  if (is404Route) {
+    props = {
+      ...props,
+      source: { path: u.pathname },
     }
   }
 
@@ -162,7 +184,7 @@ export async function render(
   // console.log("immediate", immediate)
 
   return {
-    status: 200,
+    status: is404Route ? 404 : result?.status ?? 200,
     immediate: "<!doctype html>" + immediate,
     stream,
   }

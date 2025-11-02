@@ -29,11 +29,29 @@ export function createPreviewMiddleware(
       }
 
       if (!fs.existsSync(filePath)) {
-        // fallback to index.html for SPA
-        const indexPath = path.join(clientOutDir, "404.html")
-        if (fs.existsSync(indexPath)) {
-          filePath = indexPath
-        } else {
+        // Try to find a 404 page at parent directory levels
+        // Remove trailing slash and normalize the URL
+        const normalizedUrl = url.replace(/\/$/, "") || "/"
+        const urlSegments = normalizedUrl.split("/").filter(Boolean)
+        let found404 = false
+
+        // Start from deepest level and work up to root
+        for (let i = urlSegments.length; i >= 0; i--) {
+          const parentSegments = urlSegments.slice(0, i)
+          const fourOhFourPath = "/" + [...parentSegments, "404"].join("/")
+          const fourOhFourFilePath = path.join(
+            clientOutDir,
+            fourOhFourPath + ".html"
+          )
+
+          if (fs.existsSync(fourOhFourFilePath)) {
+            filePath = fourOhFourFilePath
+            found404 = true
+            break
+          }
+        }
+
+        if (!found404) {
           res.statusCode = 404
           res.end("Not Found")
           return
@@ -43,7 +61,9 @@ export function createPreviewMiddleware(
       const type = mime.getType(filePath) ?? "application/octet-stream"
       const content = fs.readFileSync(filePath)
 
-      res.statusCode = 200
+      // Set status to 404 if we're serving a 404 page
+      const is404Page = filePath.includes("/404.html")
+      res.statusCode = is404Page ? 404 : 200
       res.setHeader("Content-Type", type)
       res.end(content)
     } catch (err) {

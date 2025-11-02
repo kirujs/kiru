@@ -3,7 +3,12 @@
 import { createElement } from "../../element.js"
 import { hydrate } from "../../ssr/client.js"
 import { FileRouter } from "../fileRouter.js"
-import { matchLayouts, matchRoute, parseQuery } from "../utils/index.js"
+import {
+  matchLayouts,
+  matchRoute,
+  match404Route,
+  parseQuery,
+} from "../utils/index.js"
 import type { FormattedViteImportMap, PageModule } from "../types.internal"
 import type {
   ErrorPageProps,
@@ -39,18 +44,23 @@ async function preparePreloadConfig(
 ): Promise<FileRouterPreloadConfig> {
   let pageProps = {}
   let url = new URL(window.location.pathname, "http://localhost")
-  let routeMatch = matchRoute(
-    options.pages,
-    url.pathname.split("/").filter(Boolean)
-  )
+  const pathSegments = url.pathname.split("/").filter(Boolean)
+  let routeMatch = matchRoute(options.pages, pathSegments)
 
   if (routeMatch === null) {
     pageProps = { source: { path: url.pathname } } satisfies ErrorPageProps
-    url = new URL("/404", "http://localhost")
-    routeMatch = matchRoute(
-      options.pages,
-      url.pathname.split("/").filter(Boolean)
-    )
+    // Try to find a 404 page in parent directories
+    const _404Match = match404Route(options.pages, pathSegments)
+    if (_404Match) {
+      routeMatch = _404Match
+    } else {
+      // Fallback to root 404
+      url = new URL("/404", "http://localhost")
+      routeMatch = matchRoute(
+        options.pages,
+        url.pathname.split("/").filter(Boolean)
+      )
+    }
   }
   if (!routeMatch) {
     throw new Error(`No route defined (path: ${url.pathname}).`)

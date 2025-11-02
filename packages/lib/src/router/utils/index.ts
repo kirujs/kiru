@@ -9,6 +9,7 @@ import type {
 export {
   formatViteImportMap,
   matchRoute,
+  match404Route,
   matchLayouts,
   normalizePrefixPath,
   parseQuery,
@@ -140,6 +141,23 @@ function matchRoute(
 
   matches.sort((a, b) => b.pageEntry.specificity - a.pageEntry.specificity)
   return matches[0] || null
+}
+
+function match404Route(
+  pages: FormattedViteImportMap,
+  pathSegments: string[]
+): RouteMatch | null {
+  // Try to find a 404 page at each parent directory level
+  // Start from the deepest level and work up to root
+  for (let i = pathSegments.length; i >= 0; i--) {
+    const parentSegments = pathSegments.slice(0, i)
+    const fourOhFourSegments = [...parentSegments, "404"]
+    const match = matchRoute(pages, fourOhFourSegments)
+    if (match) {
+      return match
+    }
+  }
+  return null
 }
 
 function matchLayouts(

@@ -22,6 +22,7 @@ import {
   formatViteImportMap,
   matchLayouts,
   matchRoute,
+  match404Route,
   normalizePrefixPath,
   parseQuery,
   wrapWithLayouts,
@@ -241,24 +242,39 @@ export class FileRouterController {
 
     try {
       const pathSegments = path.split("/").filter(Boolean)
-      const routeMatch = matchRoute(this.pages, pathSegments)
+      let routeMatch = matchRoute(this.pages, pathSegments)
 
       if (!routeMatch) {
-        const _404 = matchRoute(this.pages, ["404"])
-        if (!_404) {
-          if (__DEV__) {
-            console.error(
-              `[kiru/router]: No 404 route defined (path: ${path}). 
+        // Try to find a 404 page in parent directories
+        const _404Match = match404Route(this.pages, pathSegments)
+        if (_404Match) {
+          routeMatch = _404Match
+        } else {
+          // Fallback to root 404
+          const _404 = matchRoute(this.pages, ["404"])
+          if (!_404) {
+            if (__DEV__) {
+              console.error(
+                `[kiru/router]: No 404 route defined (path: ${path}). 
 See https://kirujs.dev/docs/api/file-router#404 for more information.`
-            )
+              )
+            }
+            return
           }
-          return
+          const errorProps = {
+            source: { path },
+          } satisfies ErrorPageProps
+
+          return this.navigate("/404", { replace: true, props: errorProps })
         }
-        const errorProps = {
+      }
+
+      // If we matched a 404 route, add error props
+      if (routeMatch.routeSegments.includes("404")) {
+        props = {
+          ...props,
           source: { path },
         } satisfies ErrorPageProps
-
-        return this.navigate("/404", { replace: true, props: errorProps })
       }
 
       const { route, pageEntry, params, routeSegments } = routeMatch
