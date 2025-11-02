@@ -1,4 +1,6 @@
+import { ElementProps, unwrap } from "kiru"
 import { definePageConfig, Head, PageProps, useFileRouter } from "kiru/router"
+import { className as cls } from "kiru/utils"
 
 interface FetchUserResponse {
   id: number
@@ -66,7 +68,27 @@ export default function UserDetailPage({
         className="w-10 h-10 rounded-full"
       />
       <p>User Email: {data.user.email}</p>
-      <button onclick={() => router.navigate("/users")}>Back to Users</button>
+      <div className="flex gap-2 justify-between">
+        <Button onclick={() => router.navigate("/users")}>Back to Users</Button>
+        <Button onclick={() => router.navigate(`/users/${data.user.id - 1}`)}>
+          Prev User
+        </Button>
+        <Button onclick={() => router.navigate(`/users/${data.user.id + 1}`)}>
+          Next User
+        </Button>
+      </div>
     </div>
+  )
+}
+
+function Button({ className, ...props }: ElementProps<"button">) {
+  return (
+    <button
+      className={cls(
+        "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded",
+        unwrap(className)
+      )}
+      {...props}
+    />
   )
 }

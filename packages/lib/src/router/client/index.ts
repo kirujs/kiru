@@ -40,14 +40,15 @@ export async function initClient(options: InitClientOptions) {
 }
 
 async function preparePreloadConfig(
-  options: InitClientOptions
+  options: InitClientOptions,
+  isStatic404 = false
 ): Promise<FileRouterPreloadConfig> {
   let pageProps = {}
   let url = new URL(window.location.pathname, "http://localhost")
   const pathSegments = url.pathname.split("/").filter(Boolean)
   let routeMatch = matchRoute(options.pages, pathSegments)
 
-  if (routeMatch === null) {
+  if (routeMatch === null || isStatic404) {
     pageProps = { source: { path: url.pathname } } satisfies ErrorPageProps
     // Try to find a 404 page in parent directories
     const _404Match = match404Route(options.pages, pathSegments)
@@ -78,17 +79,17 @@ async function preparePreloadConfig(
   // Check if page has static props pre-loaded at build time
   if (page.__KIRU_STATIC_PROPS__) {
     const staticProps = page.__KIRU_STATIC_PROPS__[window.location.pathname]
-    if (staticProps) {
-      pageProps = staticProps.error
-        ? {
-            data: null,
-            error: new FileRouterDataLoadError(staticProps.error),
-            loading: false,
-          }
-        : { data: staticProps.data, error: null, loading: false }
-    } else {
-      pageProps = { loading: true, data: null, error: null }
+    if (!staticProps) {
+      return preparePreloadConfig(options, true)
     }
+
+    pageProps = staticProps.error
+      ? {
+          data: null,
+          error: new FileRouterDataLoadError(staticProps.error),
+          loading: false,
+        }
+      : { data: staticProps.data, error: null, loading: false }
   } else if (typeof page.config?.loader?.load === "function") {
     pageProps = { loading: true, data: null, error: null }
   }
