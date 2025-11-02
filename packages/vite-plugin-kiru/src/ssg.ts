@@ -51,15 +51,15 @@ export async function generateStaticSite(
     manifestPath
   )
 
-  log(ANSI.cyan("[SSG]"), "discovered routes:", Object.keys(paths))
+  const routes = Object.keys(paths)
+  log(ANSI.cyan("[SSG]"), `discovered ${routes.length} routes:`, routes)
 
   const renderingChunks: Record<string, string>[] = []
-  const keys = Object.keys(paths)
   const maxConcurrentRenders = state.ssgOptions.build.maxConcurrentRenders
 
   // chunk by keys
-  for (let i = 0; i < keys.length; i += maxConcurrentRenders) {
-    const chunkKeys = keys.slice(i, i + maxConcurrentRenders)
+  for (let i = 0; i < routes.length; i += maxConcurrentRenders) {
+    const chunkKeys = routes.slice(i, i + maxConcurrentRenders)
     renderingChunks.push(
       chunkKeys.reduce((acc, key) => {
         acc[key] = paths[key]
