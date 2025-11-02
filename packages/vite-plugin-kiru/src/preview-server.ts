@@ -30,7 +30,7 @@ export function createPreviewMiddleware(
 
       if (!fs.existsSync(filePath)) {
         // fallback to index.html for SPA
-        const indexPath = path.join(clientOutDir, "index.html")
+        const indexPath = path.join(clientOutDir, "404.html")
         if (fs.existsSync(indexPath)) {
           filePath = indexPath
         } else {

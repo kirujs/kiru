@@ -5,7 +5,11 @@ import { hydrate } from "../../ssr/client.js"
 import { FileRouter } from "../fileRouter.js"
 import { matchLayouts, matchRoute, parseQuery } from "../utils/index.js"
 import type { FormattedViteImportMap, PageModule } from "../types.internal"
-import type { FileRouterConfig, FileRouterPreloadConfig } from "../types"
+import type {
+  ErrorPageProps,
+  FileRouterConfig,
+  FileRouterPreloadConfig,
+} from "../types"
 import { fileRouterInstance, fileRouterRoute } from "../globals.js"
 import { FileRouterController } from "../fileRouterController.js"
 import { FileRouterDataLoadError } from "../errors.js"
@@ -33,13 +37,23 @@ export async function initClient(options: InitClientOptions) {
 async function preparePreloadConfig(
   options: InitClientOptions
 ): Promise<FileRouterPreloadConfig> {
-  const u = new URL(window.location.pathname, "http://localhost")
-  const routeMatch = matchRoute(
+  let pageProps = {}
+  let url = new URL(window.location.pathname, "http://localhost")
+  let routeMatch = matchRoute(
     options.pages,
-    u.pathname.split("/").filter(Boolean)
+    url.pathname.split("/").filter(Boolean)
   )
+
   if (routeMatch === null) {
-    throw new Error("todo: handle 404")
+    pageProps = { source: { path: url.pathname } } satisfies ErrorPageProps
+    url = new URL("/404", "http://localhost")
+    routeMatch = matchRoute(
+      options.pages,
+      url.pathname.split("/").filter(Boolean)
+    )
+  }
+  if (!routeMatch) {
+    throw new Error(`No route defined (path: ${url.pathname}).`)
   }
 
   const layoutEntries = matchLayouts(options.layouts, routeMatch.routeSegments)
@@ -51,7 +65,6 @@ async function preparePreloadConfig(
   ])
   fileRouterRoute.current = null
 
-  let pageProps = {}
   // Check if page has static props pre-loaded at build time
   if (page.__KIRU_STATIC_PROPS__) {
     const staticProps = page.__KIRU_STATIC_PROPS__[window.location.pathname]
@@ -77,7 +90,7 @@ async function preparePreloadConfig(
     pageProps: pageProps,
     pageLayouts: layouts,
     params: routeMatch.params,
-    query: parseQuery(u.search),
+    query: parseQuery(url.search),
     route: routeMatch.route,
   }
 }
