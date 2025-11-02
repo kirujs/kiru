@@ -323,9 +323,11 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         } else {
           const staticProps = page.__KIRU_STATIC_PROPS__?.[path]
           if (staticProps) {
+            const { data, error } = staticProps
             props = {
               ...props,
-              ...staticProps,
+              data: data,
+              error: error ? new FileRouterDataLoadError(error) : null,
               loading: false,
             } as PageProps<PageConfig<unknown>>
             document.title = (title as Function)(routerState, staticProps.data)

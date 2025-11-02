@@ -57,7 +57,11 @@ async function preparePreloadConfig(
     const staticProps = page.__KIRU_STATIC_PROPS__[window.location.pathname]
     if (staticProps) {
       pageProps = staticProps.error
-        ? { data: null, error: staticProps.error, loading: false }
+        ? {
+            data: null,
+            error: new FileRouterDataLoadError(staticProps.error),
+            loading: false,
+          }
         : { data: staticProps.data, error: null, loading: false }
     } else {
       pageProps = { loading: true, data: null, error: null }
