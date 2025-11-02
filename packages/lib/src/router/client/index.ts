@@ -10,14 +10,11 @@ import {
   parseQuery,
 } from "../utils/index.js"
 import type { FormattedViteImportMap, PageModule } from "../types.internal"
-import type {
-  ErrorPageProps,
-  FileRouterConfig,
-  FileRouterPreloadConfig,
-} from "../types"
+import type { FileRouterConfig, FileRouterPreloadConfig } from "../types"
 import { fileRouterInstance, fileRouterRoute } from "../globals.js"
 import { FileRouterController } from "../fileRouterController.js"
 import { FileRouterDataLoadError } from "../errors.js"
+import { __DEV__ } from "../../env.js"
 
 interface InitClientOptions {
   dir: string
@@ -49,19 +46,12 @@ async function preparePreloadConfig(
   let routeMatch = matchRoute(options.pages, pathSegments)
 
   if (routeMatch === null || isStatic404) {
-    pageProps = { source: { path: url.pathname } } satisfies ErrorPageProps
     // Try to find a 404 page in parent directories
     const _404Match = match404Route(options.pages, pathSegments)
-    if (_404Match) {
-      routeMatch = _404Match
-    } else {
-      // Fallback to root 404
-      url = new URL("/404", "http://localhost")
-      routeMatch = matchRoute(
-        options.pages,
-        url.pathname.split("/").filter(Boolean)
-      )
+    if (!_404Match) {
+      throw new Error(`No 404 route defined (path: ${url.pathname}).`)
     }
+    routeMatch = _404Match
   }
   if (!routeMatch) {
     throw new Error(`No route defined (path: ${url.pathname}).`)

@@ -1,24 +1,13 @@
-import { ErrorPageProps, Head } from "kiru/router"
+import { Head, useFileRouter } from "kiru/router"
 
-export default function _404Page({ source }: ErrorPageProps) {
-  if (source) {
-    return (
-      <>
-        <Head.Content>
-          <title>404 - {source.path}</title>
-        </Head.Content>
-        <h1>404 - {source.path}</h1>
-      </>
-    )
-  }
-
+export default function _404Page() {
+  const router = useFileRouter()
   return (
     <>
       <Head.Content>
-        <title>404</title>
+        <title>404 - {router.state.path}</title>
       </Head.Content>
-      <h1>404</h1>
-      <p>Page not found</p>
+      <h1>404 - {router.state.path}</h1>
     </>
   )
 }

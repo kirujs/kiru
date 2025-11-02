@@ -8,12 +8,7 @@ import {
   wrapWithLayouts,
 } from "../utils/index.js"
 import { RouterContext } from "../context.js"
-import type {
-  ErrorPageProps,
-  PageConfig,
-  PageProps,
-  RouterState,
-} from "../types.js"
+import type { PageConfig, PageProps, RouterState } from "../types.js"
 import type { Readable } from "node:stream"
 import { FormattedViteImportMap, PageModule } from "../types.internal.js"
 import { __DEV__ } from "../../env.js"
@@ -88,8 +83,7 @@ export async function render(
 
   const query = parseQuery(u.search)
 
-  let props: PageProps<PageConfig> & Partial<ErrorPageProps> =
-    {} as PageProps<PageConfig>
+  let props = {} as PageProps<PageConfig>
   const config = page.config ?? {}
   const abortController = new AbortController()
 
@@ -126,14 +120,6 @@ export async function render(
         clearTimeout(timeout)
         ctx.registerPreloadedPageProps({ data: props.data, error: props.error })
       }
-    }
-  }
-
-  // Add error page props if this is a 404 route
-  if (is404Route) {
-    props = {
-      ...props,
-      source: { path: u.pathname },
     }
   }
 

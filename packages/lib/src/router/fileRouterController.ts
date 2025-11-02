@@ -5,7 +5,6 @@ import { type FileRouterContextType } from "./context.js"
 import { FileRouterDataLoadError } from "./errors.js"
 import { fileRouterInstance, fileRouterRoute } from "./globals.js"
 import type {
-  ErrorPageProps,
   FileRouterConfig,
   PageConfig,
   PageDataLoaderConfig,
@@ -235,7 +234,8 @@ export class FileRouterController {
   private async loadRoute(
     path: string = window.location.pathname,
     props: Record<string, unknown> = {},
-    enableTransition = this.enableTransitions
+    enableTransition = this.enableTransitions,
+    isStatic404 = false
   ): Promise<void> {
     this.abortController?.abort()
     const signal = (this.abortController = new AbortController()).signal
@@ -244,37 +244,19 @@ export class FileRouterController {
       const pathSegments = path.split("/").filter(Boolean)
       let routeMatch = matchRoute(this.pages, pathSegments)
 
-      if (!routeMatch) {
+      if (!routeMatch || isStatic404) {
         // Try to find a 404 page in parent directories
         const _404Match = match404Route(this.pages, pathSegments)
-        if (_404Match) {
-          routeMatch = _404Match
-        } else {
-          // Fallback to root 404
-          const _404 = matchRoute(this.pages, ["404"])
-          if (!_404) {
-            if (__DEV__) {
-              console.error(
-                `[kiru/router]: No 404 route defined (path: ${path}). 
+        if (!_404Match) {
+          if (__DEV__) {
+            console.error(
+              `[kiru/router]: No 404 route defined (path: ${path}). 
 See https://kirujs.dev/docs/api/file-router#404 for more information.`
-              )
-            }
-            return
+            )
           }
-          const errorProps = {
-            source: { path },
-          } satisfies ErrorPageProps
-
-          return this.navigate("/404", { replace: true, props: errorProps })
+          return
         }
-      }
-
-      // If we matched a 404 route, add error props
-      if (routeMatch.routeSegments.includes("404")) {
-        props = {
-          ...props,
-          source: { path },
-        } satisfies ErrorPageProps
+        routeMatch = _404Match
       }
 
       const { route, pageEntry, params, routeSegments } = routeMatch
@@ -334,22 +316,17 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
           )
         } else {
           const staticProps = page.__KIRU_STATIC_PROPS__?.[path]
-          if (staticProps) {
-            const { data, error } = staticProps
-            props = {
-              ...props,
-              data: data,
-              error: error ? new FileRouterDataLoadError(error) : null,
-              loading: false,
-            } as PageProps<PageConfig<unknown>>
-          } else {
-            props = {
-              ...props,
-              loading: true,
-              data: null,
-              error: null,
-            } satisfies PageProps<PageConfig<unknown>>
+          if (!staticProps) {
+            return this.loadRoute(path, props, enableTransition, true)
           }
+
+          const { data, error } = staticProps
+          props = {
+            ...props,
+            data: data,
+            error: error ? new FileRouterDataLoadError(error) : null,
+            loading: false,
+          } as PageProps<PageConfig<unknown>>
         }
       }
 

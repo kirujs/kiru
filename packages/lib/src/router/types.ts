@@ -126,9 +126,3 @@ export interface PageConfig<T = unknown> {
 export type PageProps<T extends PageConfig<any>> = T extends PageConfig<infer U>
   ? AsyncTaskState<U, FileRouterDataLoadError>
   : {}
-
-export interface ErrorPageProps {
-  source?: {
-    path: string
-  }
-}
