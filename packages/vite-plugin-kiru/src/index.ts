@@ -34,7 +34,6 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
       const initialState = createPluginState(opts)
       state = updatePluginState(initialState, config, opts)
       log = createLogger(state)
-      log("[vite-plugin-kiru] isSSR:", state.isSSRBuild, state.isBuild)
       if (state.ssgOptions) {
         virtualModules = createVirtualModules(
           state.projectRoot,
