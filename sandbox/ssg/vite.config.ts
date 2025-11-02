@@ -12,11 +12,12 @@ export default defineConfig({
     kiru({
       include: ["../shared/"],
       loggingEnabled: true,
-      app: {
+      ssg: {
         dir: "./src/pages",
         document: "document.tsx",
         page: "index.{tsx,jsx}",
         layout: "layout.{tsx,jsx}",
+        transition: true,
       },
     }),
   ],
