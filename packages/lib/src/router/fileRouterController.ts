@@ -118,7 +118,7 @@ export class FileRouterController {
       this.state = {
         params,
         query,
-        path: route,
+        path: window.location.pathname,
         signal: this.abortController.signal,
       }
       this.currentPage.value = {
