@@ -365,7 +365,7 @@ declare global {
       bivarianceHack(event: E): void
     }["bivarianceHack"]
 
-    interface BaseEventHandler<T extends Element = Element>
+    interface BaseEvent<T extends Element = Element>
       extends DOMEvent<Event, T> {}
 
     interface AnimationEvent<T extends Element = Element>
@@ -412,6 +412,10 @@ declare global {
 
     interface WheelEvent<T extends Element = Element>
       extends DOMEvent<NativeWheelEvent, T> {}
+
+    type BaseEventHandler<T extends Element = Element> = EventHandler<
+      BaseEvent<T>
+    >
 
     type ClipboardEventHandler<T extends Element = Element> = EventHandler<
       ClipboardEvent<T>
