@@ -1,24 +1,26 @@
-import type { Plugin } from "vite"
+import path from "node:path"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
-import type { KiruPluginOptions, SSGOptions } from "./types.js"
 import { prepareDevOnlyHooks, prepareHMR } from "./codegen/index.js"
 import { ANSI } from "./ansi.js"
-import { createVirtualModules } from "./virtual-modules.js"
-import { handleSSR } from "./dev-server.js"
-import { createPreviewMiddleware } from "./preview-server.js"
-import { setupDevtools, createDevtoolsHtmlTransform } from "./devtools.js"
-import { generateStaticSite } from "./ssg.js"
 import {
   createPluginState,
   createViteConfig,
   updatePluginState,
   type PluginState,
 } from "./config.js"
+import { setupDevtools, createDevtoolsHtmlTransform } from "./devtools.js"
+import { handleSSR } from "./dev-server.js"
+import { createPreviewMiddleware } from "./preview-server.js"
+import { generateStaticSite } from "./ssg.js"
 import {
   createLogger,
   resolveUserDocument,
   shouldTransformFile,
 } from "./utils.js"
+import { createVirtualModules } from "./virtual-modules.js"
+
+import type { KiruPluginOptions, SSGOptions } from "./types.js"
+import type { Plugin } from "vite"
 
 export default function kiru(opts: KiruPluginOptions = {}): Plugin {
   let state: PluginState
@@ -79,6 +81,13 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
         server.middlewares.use(async (req, res, next) => {
           try {
             const url = req.originalUrl || req.url || "/"
+
+            const filePath = path.join(state.baseOutDir, "client", url)
+            const extName = path.extname(filePath)
+            if (extName && extName !== ".html") {
+              return next()
+            }
+
             const accept = req.headers["accept"] || ""
             if (
               typeof accept === "string" &&

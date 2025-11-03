@@ -14,8 +14,13 @@ export function createPreviewMiddleware(
     try {
       let url = req.url || "/"
 
-      // SPA/folder fallback: /blog -> /blog/index.html
       let filePath = path.join(clientOutDir, url)
+
+      const extName = path.extname(filePath)
+      if (extName && extName !== ".html") {
+        return next()
+      }
+
       if (url.endsWith("/")) {
         filePath = path.join(filePath, "index.html")
       }
