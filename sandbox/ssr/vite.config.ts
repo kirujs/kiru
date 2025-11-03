@@ -1,19 +1,32 @@
 import path from "node:path"
 import { defineConfig } from "vite"
-import ssr from "vike/plugin"
+import vike from "vike/plugin"
 import kiru from "vite-plugin-kiru"
+import tailwindcss from "@tailwindcss/vite"
+import devServer from "@hono/vite-dev-server"
 
 export default defineConfig({
-  esbuild: {
-    //sourcemap: false,
-    supported: {
-      "top-level-await": true, //browsers can handle top-level-await features
-    },
-  },
   resolve: {
     alias: {
       $: path.join(__dirname, "src"),
     },
   },
-  plugins: [ssr(), kiru({ include: ["../shared/"] })],
+  plugins: [
+    vike(),
+    kiru(),
+    tailwindcss(),
+    devServer({
+      entry: "./src/server/hono-entry.ts",
+      exclude: [
+        /^\/@.+$/,
+        /.*\.(ts|tsx)($|\?)/,
+        /.*\.(s?css|less)($|\?)/,
+        /^\/favicon\.ico$/,
+        /.*\.(svg|png)($|\?)/,
+        /^\/(public|assets|static)\/.+/,
+        /^\/node_modules\/.*/,
+      ],
+      injectClientScript: false,
+    }),
+  ],
 })

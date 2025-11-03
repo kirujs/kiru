@@ -30,7 +30,7 @@ export function createContext<T>(defaultValue: T): Kiru.Context<T> {
     asHmrAcceptor[$HMR_ACCEPT] = {
       inject: (prev) => {
         const newProvider = ctx.Provider
-        window.__kiru!.apps.forEach((ctx) => {
+        window.__kiru.apps.forEach((ctx) => {
           traverseApply(ctx.rootNode, (vNode) => {
             if (vNode.type === prev.Provider) {
               vNode.type = newProvider

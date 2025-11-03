@@ -1,7 +1,7 @@
 describe("basic reactivity & state", () => {
   beforeEach(() => {
     const port = Cypress.env("port")
-    cy.visit(`http://localhost:${port}/counter`)
+    cy.visit(`http://localhost:${port}/counter`).wait(1000)
   })
 
   it("updates text in the dom that was derived from state when the state changes", () => {

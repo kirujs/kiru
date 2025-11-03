@@ -1,28 +1,38 @@
-import { PageTitle } from "$/components/PageTitle"
-import type { ServerProps } from "./+data"
+import { Suspense, usePromise } from "kiru"
 
-export function Page({ products }: ServerProps) {
-  return (
-    <>
-      <PageTitle>Product 123s</PageTitle>
-      <div>
-        {products.map((product) => (
-          <ProductCard product={product} />
-        ))}
-      </div>
-    </>
-  )
+interface ProductsResponse {
+  products: {
+    id: number
+    title: string
+    description: string
+    price: number
+    discountPercentage: number
+    rating: number
+    stock: number
+    brand: string
+    category: string
+    thumbnail: string
+    images: string[]
+  }[]
 }
 
-function ProductCard({
-  product,
-}: {
-  product: ServerProps["products"][number]
-}) {
+export function Page() {
+  const products = usePromise<ProductsResponse>(async ({ signal }) => {
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const response = await fetch("https://dummyjson.com/products", { signal })
+    if (!response.ok) throw new Error(response.statusText)
+    return await response.json()
+  }, [])
+
   return (
-    <div className="flex flex-col gap-2 mb-2 pb-2 items-center border-b-2 border-white border-opacity-5 last:border-b-0">
-      <img src={product.thumbnail} />
-      <h2>{product.title}</h2>
-    </div>
+    <Suspense data={products.data} fallback={<div>Loading...</div>}>
+      {(data) => (
+        <ul>
+          {data.products.map((product) => (
+            <li key={product.id}>{product.title}</li>
+          ))}
+        </ul>
+      )}
+    </Suspense>
   )
 }

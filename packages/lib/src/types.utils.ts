@@ -61,3 +61,7 @@ export type AsyncTaskState<T, E extends Error = Error> =
       error: E
       loading: false
     }
+
+export type Guard<T, K extends keyof T> = {
+  [P in K]: T[P]
+}

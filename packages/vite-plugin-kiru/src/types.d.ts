@@ -2,12 +2,58 @@ import type { ESBuildOptions, Plugin } from "vite"
 
 export type FileLinkFormatter = (path: string, line: number) => string
 
+export interface SSGBuildOptions {
+  /**
+   * The max number of pages to render/load concurrently
+   * @default 100
+   */
+  maxConcurrentRenders?: number
+}
+
+export interface SSGOptions {
+  /**
+   * The base URL of the app
+   * @default "/"
+   */
+  baseUrl?: string
+  /**
+   * The directory of the app
+   * @default "src/pages"
+   */
+  dir?: string
+  /**
+   * The name of the document component
+   * @default "document.tsx"
+   */
+  document?: string
+  /**
+   * The filename of page components to search for
+   * @default "index.{tsx,jsx}"
+   */
+  page?: string
+  /**
+   * The filename of layout components to search for
+   * @default "layout.{tsx,jsx}"
+   */
+  layout?: string
+  /**
+   * Enable transitions for all routes and loading states
+   * @default false
+   */
+  transition?: boolean
+
+  /**
+   * Options for build
+   */
+  build?: SSGBuildOptions
+}
+
 export interface DevtoolsOptions {
   /**
    * Specifies the path to the devtools app displayed via popup
    * @default "/__devtools__"
    */
-  pathname?: string
+  dtClientPathname?: string
 
   /**
    * Formats the link displayed in devtools to the component's source code
@@ -47,6 +93,21 @@ export interface KiruPluginOptions {
    * Callback for when a file is excluded from transforms due to not being in project root or `include`
    */
   onFileExcluded?: (id: string) => void
+
+  /**
+   * Options for SSG
+   * @example
+   * ```ts
+   * ssg: {
+   *   dir: "./src/app",
+   *   document: "document.tsx",
+   *   page: "index.{tsx,jsx}",
+   *   layout: "layout.{tsx,jsx}",
+   *   transition: true
+   * }
+   * ```
+   */
+  ssg?: SSGOptions | true
 }
 
 export const defaultEsBuildOptions: ESBuildOptions

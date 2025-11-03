@@ -25,9 +25,9 @@ import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
 import { hookIndex, node, renderMode } from "./globals.js"
 import { hydrationStack } from "./hydration.js"
-import { assertValidElementProps } from "./utils/index.js"
 import { reconcileChildren } from "./reconciler.js"
 import {
+  assertValidElementProps,
   latest,
   traverseApply,
   isExoticType,
@@ -112,7 +112,7 @@ function queueUpdate(vNode: VNode) {
   // If this node is currently being rendered, just mark it dirty
   if (node.current === vNode) {
     if (__DEV__) {
-      window.__kiru?.profilingContext?.emit("updateDirtied", appCtx!)
+      window.__kiru.profilingContext?.emit("updateDirtied", appCtx!)
     }
     isRenderDirtied = true
     return
@@ -143,7 +143,7 @@ function doWork(): void {
     const n = deletions[0] ?? treesInProgress[0]
     if (n) {
       appCtx = getVNodeAppContext(n)!
-      window.__kiru?.profilingContext?.beginTick(appCtx)
+      window.__kiru.profilingContext?.beginTick(appCtx)
     } else {
       appCtx = null
     }
@@ -186,8 +186,8 @@ function doWork(): void {
     immediateEffectDirtiedRender = false
     consecutiveDirtyCount++
     if (__DEV__) {
-      window.__kiru?.profilingContext?.endTick(appCtx!)
-      window.__kiru?.profilingContext?.emit("updateDirtied", appCtx!)
+      window.__kiru.profilingContext?.endTick(appCtx!)
+      window.__kiru.profilingContext?.emit("updateDirtied", appCtx!)
     }
     return flushSync()
   }
@@ -196,9 +196,9 @@ function doWork(): void {
   onWorkFinished()
   flushEffects(postEffects)
   if (__DEV__) {
-    window.__kiru!.emit("update", appCtx!)
-    window.__kiru?.profilingContext?.emit("update", appCtx!)
-    window.__kiru?.profilingContext?.endTick(appCtx!)
+    window.__kiru.emit("update", appCtx!)
+    window.__kiru.profilingContext?.emit("update", appCtx!)
+    window.__kiru.profilingContext?.endTick(appCtx!)
   }
 }
 
@@ -214,7 +214,7 @@ function performUnitOfWork(vNode: VNode): VNode | void {
     }
   } catch (error) {
     if (__DEV__) {
-      window.__kiru?.emit(
+      window.__kiru.emit(
         "error",
         appCtx!,
         error instanceof Error ? error : new Error(String(error))

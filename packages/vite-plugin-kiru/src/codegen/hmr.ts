@@ -41,7 +41,11 @@ if (import.meta.hot && "window" in globalThis) {
 }
 `)
   } catch (error) {
-    console.error(error)
+    console.error(
+      "[vite-plugin-kiru]: HMR preparation failed for",
+      filePath,
+      error
+    )
   }
 }
 

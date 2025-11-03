@@ -1,7 +1,7 @@
 import { AppContext, signal } from "kiru"
 import { broadcastChannel, isDevtoolsApp } from "devtools-shared"
 
-export let kiruGlobal: typeof window.__kiru
+export let kiruGlobal!: typeof window.__kiru
 let allowStandalone = false
 if ("window" in globalThis) {
   if (window.opener) {

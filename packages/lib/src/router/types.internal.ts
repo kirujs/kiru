@@ -5,10 +5,30 @@ export interface DefaultComponentModule {
 }
 
 export interface PageModule {
-  default: DefaultComponentModule
+  default: Kiru.FC
   config?: PageConfig
+  __KIRU_STATIC_PROPS__?: Record<
+    string,
+    { data: unknown; error: string | null }
+  >
 }
 
 export interface ViteImportMap {
   [fp: string]: () => Promise<DefaultComponentModule>
+}
+
+export interface FormattedViteImportMap {
+  [key: string]: {
+    load: () => Promise<DefaultComponentModule>
+    specificity: number
+    segments: string[]
+    filePath: string
+  }
+}
+
+export interface RouteMatch {
+  route: string
+  pageEntry: FormattedViteImportMap[string]
+  params: Record<string, string>
+  routeSegments: string[]
 }

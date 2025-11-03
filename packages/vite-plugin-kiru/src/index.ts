@@ -1,120 +1,152 @@
-import {
-  type ESBuildOptions,
-  type IndexHtmlTransformResult,
-  type Plugin,
-  type UserConfig,
-} from "vite"
-import devtoolsClientBuild from "kiru-devtools-client"
-import devtoolsHostBuild from "kiru-devtools-host"
+import type { Plugin } from "vite"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
-import path from "node:path"
-import { FileLinkFormatter, KiruPluginOptions } from "./types"
-import { prepareDevOnlyHooks, prepareHMR } from "./codegen"
+import type { KiruPluginOptions, SSGOptions } from "./types.js"
+import { prepareDevOnlyHooks, prepareHMR } from "./codegen/index.js"
 import { ANSI } from "./ansi.js"
-
-export const defaultEsBuildOptions: ESBuildOptions = {
-  jsxInject: `import { createElement as _jsx, Fragment as _jsxFragment } from "kiru"`,
-  jsx: "transform",
-  jsxFactory: "_jsx",
-  jsxFragment: "_jsxFragment",
-  loader: "tsx",
-  include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
-}
+import { createVirtualModules } from "./virtual-modules.js"
+import { handleSSR } from "./dev-server.js"
+import { createPreviewMiddleware } from "./preview-server.js"
+import { setupDevtools, createDevtoolsHtmlTransform } from "./devtools.js"
+import { generateStaticSite } from "./ssg.js"
+import {
+  createPluginState,
+  createViteConfig,
+  updatePluginState,
+  type PluginState,
+} from "./config.js"
+import {
+  createLogger,
+  resolveUserDocument,
+  shouldTransformFile,
+} from "./utils.js"
 
 export default function kiru(opts: KiruPluginOptions = {}): Plugin {
-  let isProduction = false
-  let isBuild = false
-  let devtoolsEnabled = false
-
-  let loggingEnabled = false
-  const log = (...data: any[]) => {
-    if (!loggingEnabled) return
-    console.log(ANSI.cyan("[vite-plugin-kiru]"), ...data)
-  }
-
-  let fileLinkFormatter: FileLinkFormatter = (path: string, line: number) =>
-    `vscode://file/${path}:${line}`
-
-  let dtClientPathname = "/__devtools__"
-  if (typeof opts.devtools === "object") {
-    dtClientPathname = opts.devtools.pathname ?? dtClientPathname
-    fileLinkFormatter = opts.devtools.formatFileLink ?? fileLinkFormatter
-  }
-  const dtHostScriptPath = "/__devtools_host__.js"
-
-  let projectRoot = process.cwd().replace(/\\/g, "/")
-  let includedPaths: string[] = []
+  let state: PluginState
+  let log: (...data: any[]) => void
+  let virtualModules: Record<string, () => string> = {}
 
   return {
     name: "vite-plugin-kiru",
     config(config) {
-      return {
-        ...config,
-        esbuild: {
-          ...defaultEsBuildOptions,
-          ...config.esbuild,
-        },
-      } as UserConfig
+      return createViteConfig(config, opts)
     },
     configResolved(config) {
-      isProduction = config.isProduction
-      isBuild = config.command === "build"
-      devtoolsEnabled = opts.devtools !== false && !isBuild && !isProduction
-      loggingEnabled = opts.loggingEnabled === true
-
-      projectRoot = config.root.replace(/\\/g, "/")
-      includedPaths = (opts.include ?? []).map((p) =>
-        path.resolve(projectRoot, p).replace(/\\/g, "/")
+      const initialState = createPluginState(opts)
+      state = updatePluginState(initialState, config, opts)
+      log = createLogger(state)
+      if (state.ssgOptions) {
+        virtualModules = createVirtualModules(
+          state.projectRoot,
+          state.ssgOptions
+        )
+      }
+    },
+    transformIndexHtml() {
+      if (!state.devtoolsEnabled) return
+      return createDevtoolsHtmlTransform(
+        state.dtClientPathname,
+        state.dtHostScriptPath
       )
     },
-    transformIndexHtml(html) {
-      if (!devtoolsEnabled) return
-      return {
-        html,
-        tags: [
-          {
-            tag: "script",
-            children: `window.__KIRU_DEVTOOLS_PATHNAME__ = "${dtClientPathname}";`,
-          },
-          {
-            tag: "script",
-            attrs: {
-              type: "module",
-              src: dtHostScriptPath,
-            },
-          },
-        ],
-      } satisfies IndexHtmlTransformResult
+    configurePreviewServer(server) {
+      if (!state.ssgOptions) return
+      server.middlewares.use(
+        createPreviewMiddleware(state.projectRoot, state.baseOutDir)
+      )
     },
     configureServer(server) {
-      if (isProduction || isBuild) return
+      if (state.isProduction || state.isBuild) return
+      const {
+        ssgOptions,
+        devtoolsEnabled,
+        dtClientPathname,
+        dtHostScriptPath,
+        fileLinkFormatter,
+        projectRoot,
+      } = state
+
       if (devtoolsEnabled) {
-        log(`Serving devtools host at ${ANSI.magenta(dtHostScriptPath)}`)
-        server.middlewares.use(dtHostScriptPath, (_, res) => {
-          res.setHeader("Content-Type", "application/javascript")
-          res.end(devtoolsHostBuild, "utf-8")
-        })
-        log(`Serving devtools client at ${ANSI.magenta(dtClientPathname)}`)
-        server.middlewares.use(dtClientPathname, (_, res) => {
-          res.end(devtoolsClientBuild, "utf-8")
+        setupDevtools(
+          server,
+          { dtClientPathname, formatFileLink: fileLinkFormatter },
+          dtHostScriptPath,
+          log
+        )
+      }
+
+      if (ssgOptions) {
+        // SSR HTML middleware using document.tsx
+        server.middlewares.use(async (req, res, next) => {
+          try {
+            const url = req.originalUrl || req.url || "/"
+            const accept = req.headers["accept"] || ""
+            if (
+              typeof accept === "string" &&
+              accept.includes("text/html") &&
+              !url.startsWith("/node_modules/") &&
+              !url.startsWith("/@") &&
+              !url.startsWith(dtHostScriptPath) &&
+              !url.startsWith(dtClientPathname)
+            ) {
+              const { status, html, stream } = await handleSSR(
+                server,
+                url,
+                state.projectRoot,
+                () => resolveUserDocument(projectRoot, ssgOptions)
+              )
+              res.statusCode = status
+              res.setHeader("Content-Type", "text/html")
+              res.write(html)
+              if (stream) {
+                // @ts-ignore - Node stream
+                stream.pipe(res)
+              } else {
+                res.end()
+              }
+              return
+            }
+          } catch (e) {
+            console.error(e)
+          }
+          next()
         })
       }
     },
-    transform(src, id) {
-      if (
-        id.startsWith("\0") ||
-        id.startsWith("vite:") ||
-        id.includes("/node_modules/")
-      )
-        return { code: src }
+    resolveId(id) {
+      if (id in virtualModules) {
+        return "\0" + id
+      }
+      return null
+    },
+    load(id) {
+      if (!id.startsWith("\0")) return null
+      const raw = id.slice(1)
+      if (!(raw in virtualModules)) return null
+      return virtualModules[raw]()
+    },
+    async writeBundle(outputOptions, bundle) {
+      if (!state.ssgOptions) return
+      if (!state.isBuild || !state.isSSRBuild) return
 
-      if (!/\.[cm]?[jt]sx?$/.test(id)) return { code: src }
-
-      const filePath = path.resolve(id).replace(/\\/g, "/")
-      const isIncludedByUser = includedPaths.some((p) => filePath.startsWith(p))
-
-      if (!isIncludedByUser && !filePath.startsWith(projectRoot)) {
-        opts?.onFileExcluded?.(id)
+      try {
+        await generateStaticSite(
+          state as PluginState & { ssgOptions: Required<SSGOptions> },
+          outputOptions,
+          bundle,
+          log
+        )
+      } catch (e) {
+        log(ANSI.red("[SSG]: prerender failed"), e)
+      }
+    },
+    async transform(src, id) {
+      if (!shouldTransformFile(id, state)) {
+        if (
+          !state.includedPaths.some((p) => id.startsWith(p)) &&
+          !id.startsWith(state.projectRoot)
+        ) {
+          opts?.onFileExcluded?.(id)
+        }
         return { code: src }
       }
 
@@ -125,15 +157,15 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
       const ctx: TransformCTX = {
         code,
         ast,
-        isBuild,
-        fileLinkFormatter,
+        isBuild: state.isBuild,
+        fileLinkFormatter: state.fileLinkFormatter,
         filePath: id,
         log,
       }
 
       prepareDevOnlyHooks(ctx)
 
-      if (!isProduction && !isBuild) {
+      if (!state.isProduction && !state.isBuild) {
         prepareHMR(ctx)
       }
 
@@ -159,6 +191,9 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
     },
   } satisfies Plugin
 }
+
+// Export additional utilities
+export { defaultEsBuildOptions } from "./config.js"
 
 // @ts-ignore
 export function onHMR(callback: () => void) {}

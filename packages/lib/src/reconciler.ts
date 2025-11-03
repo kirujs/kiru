@@ -1,5 +1,10 @@
 import { $FRAGMENT, FLAG_PLACEMENT, FLAG_UPDATE } from "./constants.js"
-import { getVNodeAppContext, isVNode, latest } from "./utils/index.js"
+import {
+  getVNodeAppContext,
+  isValidTextChild,
+  isVNode,
+  latest,
+} from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import { __DEV__ } from "./env.js"
 import { createElement, Fragment } from "./element.js"
@@ -150,7 +155,7 @@ function reconcileChildrenArray(parent: VNode, children: unknown[]) {
 function updateSlot(parent: VNode, oldChild: VNode | null, child: unknown) {
   // Update the node if the keys match, otherwise return null.
   const key = oldChild?.props.key
-  if (isValidTextNodeValue(child)) {
+  if (isValidTextChild(child)) {
     if (key !== undefined) return null
     if (
       oldChild?.type === "#text" &&
@@ -268,7 +273,7 @@ function updateFragment(
 }
 
 function createChild(parent: VNode, child: unknown): VNode | null {
-  if (isValidTextNodeValue(child)) {
+  if (isValidTextChild(child)) {
     if (__DEV__) {
       dev_emitCreateNode()
     }
@@ -341,12 +346,7 @@ function updateFromMap(
   child: any
 ): VNode | null {
   const isSig = Signal.isSignal(child)
-  if (
-    isSig ||
-    (typeof child === "string" && child !== "") ||
-    typeof child === "number" ||
-    typeof child === "bigint"
-  ) {
+  if (isSig || isValidTextChild(child)) {
     const oldChild = existingChildren.get(index)
     if (oldChild) {
       if (oldChild.props.nodeValue === child) {
@@ -430,16 +430,6 @@ function updateFromMap(
   return null
 }
 
-function isValidTextNodeValue(
-  value: unknown
-): value is string | number | bigint {
-  return (
-    (typeof value === "string" && value !== "") ||
-    typeof value === "number" ||
-    typeof value === "bigint"
-  )
-}
-
 function propsChanged(oldProps: VNode["props"], newProps: VNode["props"]) {
   const aKeys = Object.keys(oldProps)
   const bKeys = Object.keys(newProps)
@@ -458,12 +448,12 @@ function setParent(child: VNode, parent: VNode) {
 
 function dev_emitUpdateNode() {
   if (!("window" in globalThis)) return
-  window.__kiru?.profilingContext?.emit("updateNode", appCtx)
+  window.__kiru.profilingContext?.emit("updateNode", appCtx)
 }
 
 function dev_emitCreateNode() {
   if (!("window" in globalThis)) return
-  window.__kiru?.profilingContext?.emit("createNode", appCtx)
+  window.__kiru.profilingContext?.emit("createNode", appCtx)
 }
 
 const $LIST_CHILD = Symbol("kiru:marked-list-child")

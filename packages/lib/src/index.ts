@@ -1,4 +1,3 @@
-import { __DEV__ } from "./env.js"
 import { createKiruGlobalContext } from "./globalContext.js"
 
 export type * from "./types"
@@ -15,8 +14,7 @@ export * from "./renderToString.js"
 export { nextIdle, flushSync, requestUpdate } from "./scheduler.js"
 export * from "./store.js"
 
-if (__DEV__) {
-  if ("window" in globalThis) {
-    globalThis.window.__kiru ??= createKiruGlobalContext()
-  }
+// @ts-ignore
+if ("window" in globalThis && !globalThis.__KIRU_DEVTOOLS__) {
+  globalThis.window.__kiru ??= createKiruGlobalContext()
 }

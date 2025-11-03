@@ -1,4 +1,4 @@
-import { Signal } from "../signals/index.js"
+import { Signal } from "../signals/base.js"
 import {
   FLAG_DELETION,
   $FRAGMENT,
@@ -17,6 +17,7 @@ export {
   cloneVNode,
   isVNodeDeleted,
   isVNode,
+  isValidTextChild,
   isExoticType,
   isFragment,
   isLazy,
@@ -52,6 +53,14 @@ function isVNodeDeleted(vNode: Kiru.VNode): boolean {
 
 function isVNode(thing: unknown): thing is Kiru.VNode {
   return typeof thing === "object" && thing !== null && "type" in thing
+}
+
+function isValidTextChild(thing: unknown): thing is string | number | bigint {
+  return (
+    (typeof thing === "string" && thing !== "") ||
+    typeof thing === "number" ||
+    typeof thing === "bigint"
+  )
 }
 
 function isExoticType(type: Kiru.VNode["type"]): type is Kiru.ExoticSymbol {

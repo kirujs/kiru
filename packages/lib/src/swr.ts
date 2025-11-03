@@ -95,7 +95,7 @@ const SWRGlobalState = {
 
 if ("window" in globalThis) {
   if (__DEV__) {
-    SWRGlobalState.cache = window.__kiru!.SWRGlobalCache ??= new Map()
+    SWRGlobalState.cache = window.__kiru.SWRGlobalCache ??= new Map()
   } else {
     SWRGlobalState.cache = new Map()
   }

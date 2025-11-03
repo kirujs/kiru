@@ -24,15 +24,18 @@ export function mount(
   container: HTMLElement,
   options?: AppContextOptions
 ): AppContext {
-  const rootNode = createElement(container.nodeName.toLowerCase(), {})
   if (__DEV__) {
     if (container.__kiruNode) {
       throw new Error(
         "[kiru]: container in use - call unmount on the previous app first."
       )
     }
+  }
+  const rootNode = createElement(container.nodeName.toLowerCase(), {})
+  if (__DEV__) {
     container.__kiruNode = rootNode
   }
+
   rootNode.dom = container
   rootNode.flags |= FLAG_STATIC_DOM
 
@@ -46,11 +49,6 @@ export function mount(
     unmount,
   }
 
-  if (__DEV__) {
-    rootNode.app = appContext
-    window.__kiru?.emit("mount", appContext)
-  }
-
   function render(children: JSX.Element) {
     rootNode.props.children = children
     renderRootSync(rootNode)
@@ -62,10 +60,21 @@ export function mount(
     if (__DEV__) {
       delete container.__kiruNode
       delete rootNode.app
-      window.__kiru?.emit("unmount", appContext)
     }
+    window.__kiru.emit("unmount", appContext)
+  }
+
+  if (__DEV__) {
+    rootNode.app = appContext
   }
 
   render(children)
+  window.__kiru.emit("mount", appContext)
+  if (__DEV__) {
+    queueMicrotask(() => {
+      window.dispatchEvent(new Event("kiru:ready"))
+    })
+  }
+
   return appContext
 }
