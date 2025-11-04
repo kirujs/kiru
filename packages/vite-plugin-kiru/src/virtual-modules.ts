@@ -40,7 +40,6 @@ import {
   render as kiruServerRender,
   generateStaticPaths as kiruServerGenerateStaticPaths
 } from "kiru/router/server"
-import { renderToString } from "kiru"
 import Document from "${userDoc}"
 import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
 
