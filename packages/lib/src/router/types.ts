@@ -111,7 +111,7 @@ export type PageDataLoaderConfig<T = unknown> = {
        * - **static**: The page data is loaded at build time and never updated
        * - **client**: The page data is loaded upon navigation and updated on subsequent navigations
        */
-      mode?: "static" | "client"
+      mode?: "client"
       /**
        * Enable transitions when swapping between "load", "error" and "data" states
        */
