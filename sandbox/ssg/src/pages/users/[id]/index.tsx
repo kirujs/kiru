@@ -21,7 +21,11 @@ export const config = definePageConfig({
       const user = (await response.json()) as FetchUserResponse
       return { user }
     },
-    mode: "static",
+    mode: "client",
+    cache: {
+      type: "memory",
+      ttl: 1000 * 60 * 5, // 5 minutes
+    },
   },
   generateStaticParams: async () => {
     const response = await fetch("https://dummyjson.com/users?select=id")
@@ -56,7 +60,7 @@ export default function UserDetailPage({
           User Detail - {data.user.firstName} {data.user.lastName}
         </title>
       </Head.Content>
-      <button onclick={() => router.reload()}>Reload</button>
+      <Button onclick={() => router.reload()}>Reload</Button>
       <h1>User Detail</h1>
       <p>User ID: {data.user.id}</p>
       <p>

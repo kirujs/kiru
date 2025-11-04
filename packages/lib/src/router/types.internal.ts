@@ -17,18 +17,20 @@ export interface ViteImportMap {
   [fp: string]: () => Promise<DefaultComponentModule>
 }
 
-export interface FormattedViteImportMap {
-  [key: string]: {
-    load: () => Promise<DefaultComponentModule>
-    specificity: number
-    segments: string[]
-    filePath: string
-  }
+export interface FormattedViteImportMapEntry<T = DefaultComponentModule> {
+  load: () => Promise<T>
+  specificity: number
+  segments: string[]
+  absolutePath: string
+}
+
+export interface FormattedViteImportMap<T = DefaultComponentModule> {
+  [key: string]: FormattedViteImportMapEntry<T>
 }
 
 export interface RouteMatch {
   route: string
-  pageEntry: FormattedViteImportMap[string]
+  pageEntry: FormattedViteImportMapEntry<PageModule>
   params: Record<string, string>
   routeSegments: string[]
 }

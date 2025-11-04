@@ -15,6 +15,7 @@ export interface FileRouterPreloadConfig {
   params: RouteParams
   query: RouteQuery
   route: string
+  cacheData: null | { value: unknown }
 }
 
 export interface FileRouterConfig {
@@ -91,25 +92,54 @@ export interface RouterState {
 
 type PageDataLoaderContext = RouterState & {}
 
+export interface PageDataLoaderCacheConfig {
+  type: "memory" | "localStorage" | "sessionStorage"
+  ttl: number
+}
+
 export type PageDataLoaderConfig<T = unknown> = {
   /**
    * The function to load the page data
    */
   load: (context: PageDataLoaderContext) => Promise<T>
+} & (
+  | {
+      /**
+       * The mode to use for the page data loader
+       * @default "client"
+       * @description
+       * - **static**: The page data is loaded at build time and never updated
+       * - **client**: The page data is loaded upon navigation and updated on subsequent navigations
+       */
+      mode?: "client"
+      /**
+       * Enable transitions when swapping between "load", "error" and "data" states
+       */
+      transition?: boolean
 
-  /**
-   * The mode to use for the page data loader
-   * @default "client"
-   * @description
-   * - **static**: The page data is loaded at build time and never updated
-   * - **client**: The page data is loaded upon navigation and updated on subsequent navigations
-   */
-  mode?: "static" | "client"
-  /**
-   * Enable transitions when swapping between "load", "error" and "data" states (only when mode is "client")
-   */
-  transition?: boolean
-}
+      /**
+       * Configure caching for this loader
+       * @example
+       * ```ts
+       * cache: {
+       *   type: "memory", // or "localStorage" / "sessionStorage"
+       *   ttl: 1000 * 60 * 5, // 5 minutes
+       }
+       * ```
+       */
+      cache?: PageDataLoaderCacheConfig
+    }
+  | {
+      /**
+       * The mode to use for the page data loader
+       * @default "client"
+       * @description
+       * - **static**: The page data is loaded at build time and never updated
+       * - **client**: The page data is loaded upon navigation and updated on subsequent navigations
+       */
+      mode: "static"
+    }
+)
 
 export interface PageConfig<T = unknown> {
   /**

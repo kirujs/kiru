@@ -1,3 +1,4 @@
+import type { RouterCache } from "./cache"
 import type { FileRouterController } from "./fileRouterController"
 
 export const fileRouterInstance = {
@@ -6,4 +7,8 @@ export const fileRouterInstance = {
 
 export const fileRouterRoute = {
   current: null as string | null,
+}
+
+export const routerCache = {
+  current: null as RouterCache | null,
 }
