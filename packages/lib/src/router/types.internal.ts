@@ -19,7 +19,6 @@ export interface ViteImportMap {
 
 export interface FormattedViteImportMapEntry<T = DefaultComponentModule> {
   load: () => Promise<T>
-  module?: T
   specificity: number
   segments: string[]
   absolutePath: string
