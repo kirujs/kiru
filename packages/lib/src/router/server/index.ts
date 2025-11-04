@@ -1,4 +1,4 @@
-import { createElement } from "../../element.js"
+import { createElement, Fragment } from "../../element.js"
 import { renderToReadableStream } from "../../ssr/server.js"
 import {
   matchLayouts,
@@ -131,8 +131,21 @@ export async function render(
     props
   )
 
+  let { immediate: documentShell } = renderToReadableStream(
+    createElement(ctx.Document)
+  )
+
+  if (
+    documentShell.includes("</body>") ||
+    !documentShell.includes("<kiru-body-outlet>")
+  ) {
+    throw new Error(
+      "[kiru/router]: Document is expected to contain a <Body.Outlet> element. See https://kirujs.dev/docs/api/file-router#ssg"
+    )
+  }
+
   const app = createElement(RouterContext.Provider, {
-    children: createElement(ctx.Document, { children }),
+    children: Fragment({ children }),
     value: {
       state: {
         params,
@@ -143,35 +156,38 @@ export async function render(
     },
   })
 
-  let { immediate, stream } = renderToReadableStream(app)
-  const hasHeadOutlet = immediate.includes("<kiru-head-outlet>")
-  const hasHeadContent = immediate.includes("<kiru-head-content>")
+  let { immediate: pageOutletContent, stream } = renderToReadableStream(app)
+  const hasHeadContent = pageOutletContent.includes("<kiru-head-content>")
+  const hasHeadOutlet = documentShell.includes("<kiru-head-outlet>")
 
   if (hasHeadOutlet && hasHeadContent) {
     let [preHeadContent = "", headContentInner = "", postHeadContent = ""] =
-      immediate.split(/<kiru-head-content>|<\/kiru-head-content>/)
+      pageOutletContent.split(/<kiru-head-content>|<\/kiru-head-content>/)
 
-    preHeadContent = preHeadContent.replace(
+    documentShell = documentShell.replace(
       "<kiru-head-outlet>",
       headContentInner
     )
-    immediate = `${preHeadContent}${postHeadContent}`
+    pageOutletContent = `${preHeadContent}${postHeadContent}`
   } else if (hasHeadContent) {
     // remove head content element and everything within it
-    immediate = immediate.replace(
+    pageOutletContent = pageOutletContent.replace(
       /<kiru-head-content>(.*?)<\/kiru-head-content>/,
       ""
     )
   } else if (hasHeadOutlet) {
     // remove head outlet element and everything within it
-    immediate = immediate.replaceAll("<kiru-head-outlet>", "")
+    documentShell = documentShell.replaceAll("<kiru-head-outlet>", "")
   }
+
+  const [prePageOutlet, postPageOutlet] =
+    documentShell.split("<kiru-body-outlet>")
 
   // console.log("immediate", immediate)
 
   return {
     status: is404Route ? 404 : result?.status ?? 200,
-    immediate: "<!doctype html>" + immediate,
+    immediate: `<!doctype html>${prePageOutlet}<body>${pageOutletContent}</body>${postPageOutlet}`,
     stream,
   }
 }

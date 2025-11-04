@@ -1,7 +1,7 @@
-import { Head } from "kiru/router"
+import { Head, Body } from "kiru/router"
 import "../index.css"
 
-export default function Document({ children }: { children?: JSX.Element }) {
+export default function Document() {
   return (
     <html lang="en">
       <head>
@@ -10,7 +10,7 @@ export default function Document({ children }: { children?: JSX.Element }) {
         <title>Kiru SSG Sandbox</title>
         <Head.Outlet />
       </head>
-      <body>{children}</body>
+      <Body.Outlet />
     </html>
   )
 }

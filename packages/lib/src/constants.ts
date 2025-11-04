@@ -47,6 +47,7 @@ const EVENT_PREFIX_REGEX = /^on:?/
 
 const voidElements = new Set([
   "kiru-head-outlet",
+  "kiru-body-outlet",
   "area",
   "base",
   "br",

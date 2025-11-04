@@ -2,7 +2,7 @@ import { Link } from "kiru/router"
 
 export default function RootLayout({ children }: { children: JSX.Children }) {
   return (
-    <div id="app">
+    <>
       <header>
         <h1>My App</h1>
         <nav>
@@ -16,6 +16,6 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
       <footer>
         <p>&copy; 2024 My App</p>
       </footer>
-    </div>
+    </>
   )
 }
