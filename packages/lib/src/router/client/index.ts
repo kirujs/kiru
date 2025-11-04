@@ -11,10 +11,11 @@ import {
 } from "../utils/index.js"
 import type { FormattedViteImportMap, PageModule } from "../types.internal"
 import type { FileRouterConfig, FileRouterPreloadConfig } from "../types"
-import { fileRouterInstance, fileRouterRoute } from "../globals.js"
+import { fileRouterInstance, fileRouterRoute, routerCache } from "../globals.js"
 import { FileRouterController } from "../fileRouterController.js"
 import { FileRouterDataLoadError } from "../errors.js"
 import { __DEV__ } from "../../env.js"
+import { RouterCache } from "../cache.js"
 
 interface InitClientOptions {
   dir: string
@@ -24,7 +25,9 @@ interface InitClientOptions {
 }
 
 export async function initClient(options: InitClientOptions) {
+  routerCache.current = new RouterCache()
   const { dir, baseUrl, pages, layouts } = options
+
   const config: FileRouterConfig = {
     dir,
     baseUrl,
@@ -41,6 +44,7 @@ async function preparePreloadConfig(
   isStatic404 = false
 ): Promise<FileRouterPreloadConfig> {
   let pageProps = {}
+  let cacheData: null | { value: unknown } = null
   let url = new URL(window.location.pathname, "http://localhost")
   const pathSegments = url.pathname.split("/").filter(Boolean)
   let routeMatch = matchRoute(options.pages, pathSegments)
@@ -82,6 +86,18 @@ async function preparePreloadConfig(
       : { data: staticProps.data, error: null, loading: false }
   } else if (typeof page.config?.loader?.load === "function") {
     pageProps = { loading: true, data: null, error: null }
+
+    const loader = page.config.loader
+    // Check cache first if caching is enabled
+    if (loader.mode !== "static" && loader.cache) {
+      const cacheKey = {
+        path: window.location.pathname,
+        params: routeMatch.params,
+        query: parseQuery(url.search),
+      }
+
+      cacheData = routerCache.current!.get(cacheKey, loader.cache)
+    }
   }
 
   return {
@@ -93,5 +109,6 @@ async function preparePreloadConfig(
     params: routeMatch.params,
     query: parseQuery(url.search),
     route: routeMatch.route,
+    cacheData,
   }
 }

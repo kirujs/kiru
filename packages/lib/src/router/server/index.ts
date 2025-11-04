@@ -72,7 +72,7 @@ export async function render(
 
   if (__DEV__) {
     ;[pageEntry, ...layoutEntries].forEach((e) => {
-      ctx.registerModule(e.filePath!)
+      ctx.registerModule(e.absolutePath!)
     })
   }
 
@@ -190,7 +190,7 @@ export async function generateStaticPaths(pages: FormattedViteImportMap) {
 
     const hasDynamic = urlSegments.some((s) => s.startsWith(":"))
     if (!hasDynamic) {
-      results[basePath === "" ? "/" : basePath] = entry.filePath
+      results[basePath === "" ? "/" : basePath] = entry.absolutePath
       continue
     }
     try {
@@ -206,7 +206,7 @@ export async function generateStaticPaths(pages: FormattedViteImportMap) {
           const value = params[key]
           p = p.replace(`:${key}*`, value).replace(`:${key}`, value)
         }
-        results[p] = entry.filePath
+        results[p] = entry.absolutePath
       }
     } catch {}
   }

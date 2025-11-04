@@ -1,9 +1,9 @@
 import { Signal } from "../signals/base.js"
-import { flushSync } from "../scheduler.js"
+import { flushSync, nextIdle } from "../scheduler.js"
 import { __DEV__ } from "../env.js"
 import { type FileRouterContextType } from "./context.js"
 import { FileRouterDataLoadError } from "./errors.js"
-import { fileRouterInstance, fileRouterRoute } from "./globals.js"
+import { fileRouterInstance, fileRouterRoute, routerCache } from "./globals.js"
 import type {
   FileRouterConfig,
   PageConfig,
@@ -26,6 +26,7 @@ import {
   parseQuery,
   wrapWithLayouts,
 } from "./utils/index.js"
+import { RouterCache, type CacheKey } from "./cache.js"
 
 interface PageConfigWithLoader<T = unknown> extends PageConfig {
   loader: PageDataLoaderConfig<T>
@@ -34,7 +35,7 @@ interface PageConfigWithLoader<T = unknown> extends PageConfig {
 export class FileRouterController {
   public contextValue: FileRouterContextType
   private enableTransitions: boolean
-  private pages: FormattedViteImportMap
+  private pages: FormattedViteImportMap<PageModule>
   private layouts: FormattedViteImportMap
   private abortController: AbortController
   private currentPage: Signal<{
@@ -53,6 +54,7 @@ export class FileRouterController {
   private pageRouteToConfig?: Map<string, PageConfig>
 
   constructor() {
+    routerCache.current ??= new RouterCache()
     this.enableTransitions = false
     this.pages = {}
     this.layouts = {}
@@ -68,6 +70,7 @@ export class FileRouterController {
     }
     const __this = this
     this.contextValue = {
+      invalidate: this.invalidate.bind(this),
       get state() {
         return __this.state
       },
@@ -114,6 +117,7 @@ export class FileRouterController {
         route,
         params,
         query,
+        cacheData,
       } = preloaded
       this.state = {
         params,
@@ -139,20 +143,30 @@ export class FileRouterController {
         validateRoutes(this.pages)
       }
       const loader = page.config?.loader
-      if (__DEV__) {
-        if (loader) {
+      if (loader && loader.mode !== "static" && pageProps.loading === true) {
+        if (cacheData === null) {
           this.loadRouteData(
             page.config as PageConfigWithLoader,
             pageProps,
             this.state
           )
+        } else {
+          nextIdle(() => {
+            const props = {
+              ...pageProps,
+              data: cacheData.value,
+              error: null,
+              loading: false,
+            }
+            let transition = this.enableTransitions
+            if (loader.transition !== undefined) {
+              transition = loader.transition
+            }
+            handleStateTransition(this.state.signal, transition, () => {
+              this.currentPageProps.value = props
+            })
+          })
         }
-      } else if (loader && loader.mode !== "static") {
-        this.loadRouteData(
-          page.config as PageConfigWithLoader,
-          pageProps,
-          this.state
-        )
       }
     } else {
       this.pages = formatViteImportMap(
@@ -182,28 +196,55 @@ export class FileRouterController {
       return
     }
     const curPage = this.currentPage.value
-    if (curPage?.route === existing.route && config.loader) {
+    const loader = config.loader
+    if (curPage?.route === existing.route && loader) {
       const p = this.currentPageProps.value
       let transition = this.enableTransitions
-      if (config.loader.transition !== undefined) {
-        transition = config.loader.transition
+      if (loader.mode !== "static" && loader.transition !== undefined) {
+        transition = loader.transition
       }
-      const props = {
-        ...p,
-        loading: true,
-        data: null,
-        error: null,
-      }
-      handleStateTransition(this.state.signal, transition, () => {
-        this.currentPageProps.value = props
-      })
 
-      this.loadRouteData(
-        config as PageConfigWithLoader,
-        props,
-        this.state,
-        transition
-      )
+      // Check cache first if caching is enabled
+      let cachedData = null
+      if (loader.mode !== "static" && loader.cache) {
+        const cacheKey: CacheKey = {
+          path: this.state.path,
+          params: this.state.params,
+          query: this.state.query,
+        }
+        cachedData = routerCache.current!.get(cacheKey, loader.cache)
+      }
+
+      if (cachedData !== null) {
+        // Use cached data immediately - no loading state needed
+        const props = {
+          ...p,
+          data: cachedData.value,
+          error: null,
+          loading: false,
+        }
+        handleStateTransition(this.state.signal, transition, () => {
+          this.currentPageProps.value = props
+        })
+      } else {
+        // No cached data - show loading state and load data
+        const props = {
+          ...p,
+          loading: true,
+          data: null,
+          error: null,
+        }
+        handleStateTransition(this.state.signal, transition, () => {
+          this.currentPageProps.value = props
+        })
+
+        this.loadRouteData(
+          config as PageConfigWithLoader,
+          props,
+          this.state,
+          transition
+        )
+      }
     }
 
     this.pageRouteToConfig?.set(existing.route, config)
@@ -269,7 +310,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       )
 
       const [page, ...layouts] = await Promise.all([
-        pagePromise as Promise<PageModule>,
+        pagePromise,
         ...layoutPromises,
       ])
 
@@ -301,19 +342,41 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
 
       if (loader) {
         if (loader.mode !== "static" || __DEV__) {
-          props = {
-            ...props,
-            loading: true,
-            data: null,
-            error: null,
-          } satisfies PageProps<PageConfig<unknown>>
+          // Check cache first if caching is enabled
+          let cachedData = null
+          if (loader.mode !== "static" && loader.cache) {
+            const cacheKey: CacheKey = {
+              path: routerState.path,
+              params: routerState.params,
+              query: routerState.query,
+            }
+            cachedData = routerCache.current!.get(cacheKey, loader.cache)
+          }
 
-          this.loadRouteData(
-            config as PageConfigWithLoader,
-            props,
-            routerState,
-            enableTransition
-          )
+          if (cachedData !== null) {
+            // Use cached data immediately - no loading state needed
+            props = {
+              ...props,
+              data: cachedData.value,
+              error: null,
+              loading: false,
+            } satisfies PageProps<PageConfig<unknown>>
+          } else {
+            // No cached data - show loading state and load data
+            props = {
+              ...props,
+              loading: true,
+              data: null,
+              error: null,
+            } satisfies PageProps<PageConfig<unknown>>
+
+            this.loadRouteData(
+              config as PageConfigWithLoader,
+              props,
+              routerState,
+              enableTransition
+            )
+          }
         } else {
           const staticProps = page.__KIRU_STATIC_PROPS__?.[path]
           if (!staticProps) {
@@ -355,15 +418,28 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
     enableTransition = this.enableTransitions
   ) {
     const { loader } = config
+
+    // Load data from loader (cache check is now done earlier in loadRoute)
     loader
       .load(routerState)
       .then(
-        (data) =>
-          ({
+        (data) => {
+          // Cache the data if caching is enabled
+          if (loader.mode !== "static" && loader.cache) {
+            const cacheKey: CacheKey = {
+              path: routerState.path,
+              params: routerState.params,
+              query: routerState.query,
+            }
+            routerCache.current!.set(cacheKey, data, loader.cache)
+          }
+
+          return {
             data,
             error: null,
             loading: false,
-          } satisfies PageProps<PageConfig<unknown>>),
+          } satisfies PageProps<PageConfig<unknown>>
+        },
         (error) =>
           ({
             data: null,
@@ -375,7 +451,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         if (routerState.signal.aborted) return
 
         let transition = enableTransition
-        if (loader.transition !== undefined) {
+        if (loader.mode !== "static" && loader.transition !== undefined) {
           transition = loader.transition
         }
 
@@ -386,6 +462,23 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
           } satisfies PageProps<PageConfig<unknown>>
         })
       })
+  }
+
+  private invalidate(...paths: string[]) {
+    // Invalidate cache entries
+    routerCache.current!.invalidate(...paths)
+
+    // Check if current page matches any invalidated paths
+    const currentPath = this.state.path
+    const shouldRefresh = routerCache.current!.pathMatchesPattern(
+      currentPath,
+      paths
+    )
+
+    if (shouldRefresh) {
+      // Refresh the current page to get fresh data
+      this.loadRoute(currentPath, {}, this.enableTransitions)
+    }
   }
 
   private async navigate(
@@ -482,7 +575,7 @@ function validateRoutes(pageMap: FormattedViteImportMap) {
     let warning = "[kiru/router]: Route conflicts detected:\n"
     warning += routeConflicts
       .map(([route1, route2]) => {
-        return `  - "${route1.filePath}" conflicts with "${route2.filePath}"\n`
+        return `  - "${route1.absolutePath}" conflicts with "${route2.absolutePath}"\n`
       })
       .join("")
     warning += "Routes are ordered by specificity (higher specificity wins)"

@@ -1,4 +1,4 @@
-import { definePageConfig, Link, PageProps } from "kiru/router"
+import { definePageConfig, Link, PageProps, useFileRouter } from "kiru/router"
 import { Head } from "kiru/router"
 
 interface FetchUsersResponse {
@@ -13,6 +13,7 @@ interface FetchUsersResponse {
 export const config = definePageConfig({
   loader: {
     load: async ({ signal }) => {
+      console.log("Fetching users")
       const response = await fetch(
         "https://dummyjson.com/users?select=firstName,lastName,image",
         { signal }
@@ -20,7 +21,11 @@ export const config = definePageConfig({
       if (!response.ok) throw new Error(response.statusText)
       return (await response.json()) as FetchUsersResponse
     },
-    mode: "static",
+    mode: "client",
+    cache: {
+      type: "sessionStorage",
+      ttl: 1000 * 60 * 5, // 5 minutes
+    },
   },
 })
 
@@ -29,6 +34,8 @@ export default function Page({
   loading,
   error,
 }: PageProps<typeof config>) {
+  const router = useFileRouter()
+
   if (loading) return <p>Loading...</p>
   if (error)
     return (
@@ -46,7 +53,18 @@ export default function Page({
         <title>Users - {data.users.length}</title>
       </Head.Content>
       <h1>Users</h1>
-      <p>This is the users page</p>
+      <div className="flex gap-2">
+        <p>This is the users page</p>
+        <button onclick={() => router.invalidate("/users")}>
+          Invalidate this page
+        </button>
+        <button onclick={() => router.invalidate("/users/1")}>
+          Invalidate User 1
+        </button>
+        <button onclick={() => router.invalidate("/users/[id]")}>
+          Invalidate Users
+        </button>
+      </div>
       <div className="flex flex-col gap-2">
         {data.users.map((user) => (
           <div key={user.id} className="flex gap-2">
