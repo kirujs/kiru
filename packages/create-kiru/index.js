@@ -22,7 +22,11 @@ const templates = [
     value: "https://github.com/kirujs/kiru-csr-template.git",
   },
   {
-    name: "SSR/SSG (Server-side rendering)",
+    name: "SSG (Static site generation)",
+    value: "https://github.com/kirujs/kiru-ssg-template.git",
+  },
+  {
+    name: "SSR (Server-side rendering) with Vike",
     value: "https://github.com/kirujs/kiru-ssr-template.git",
   },
   {
