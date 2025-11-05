@@ -1,24 +1,25 @@
-import type { ViteDevServer, ModuleNode } from "vite"
 import path from "node:path"
-import type { Readable } from "node:stream"
 import {
   VIRTUAL_ENTRY_SERVER_ID,
   VIRTUAL_ENTRY_CLIENT_ID,
 } from "./virtual-modules.js"
+import type { ViteDevServer, ModuleNode } from "vite"
 
 interface RenderContext {
   registerModule: (moduleId: string) => void
   registerPreloadedPageProps: (props: Record<string, unknown>) => void
 }
 
-interface RenderResult {
+export interface VirtualServerModuleRenderResult {
   status: number
-  immediate: string
-  stream: Readable | null
+  body: string
 }
 
 interface VirtualServerModule {
-  render: (url: string, ctx: RenderContext) => Promise<RenderResult>
+  render: (
+    url: string,
+    ctx: RenderContext
+  ) => Promise<VirtualServerModuleRenderResult>
   generateStaticPaths: () => Promise<Record<string, string>>
 }
 
@@ -41,6 +42,9 @@ export async function handleSSR(
   )) as VirtualServerModule
 
   const moduleIds: string[] = []
+  const documentModule = resolveUserDocument().substring(projectRoot.length)
+  moduleIds.push(documentModule)
+
   const ctx: RenderContext = {
     registerModule: (moduleId: string) => {
       moduleIds.push(moduleId)
@@ -48,14 +52,11 @@ export async function handleSSR(
     registerPreloadedPageProps: () => {},
   }
 
-  const { status, immediate, stream } = await mod.render(url, ctx)
-  let html = injectClientScript(immediate)
+  const { status, body } = await mod.render(url, ctx)
+  let html = injectClientScript(body)
 
   const importedModules: Set<ModuleNode> = new Set()
   const seen = new Set<ModuleNode>()
-
-  const documentModule = resolveUserDocument().substring(projectRoot.length)
-  moduleIds.push(documentModule)
 
   const scan = (mod: ModuleNode) => {
     if (importedModules.has(mod)) return
@@ -99,5 +100,5 @@ export async function handleSSR(
     html = html.replace("<head>", "<head>" + stylesheets.join("\n"))
   }
 
-  return { status, html, stream }
+  return { status, html }
 }

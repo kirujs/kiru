@@ -1,5 +1,5 @@
 import { createElement, Fragment } from "../../element.js"
-import { renderToReadableStream } from "../../ssr/server.js"
+
 import {
   matchLayouts,
   matchRoute,
@@ -9,10 +9,10 @@ import {
 } from "../utils/index.js"
 import { RouterContext } from "../context.js"
 import type { PageConfig, PageProps, RouterState } from "../types.js"
-import type { Readable } from "node:stream"
 import { FormattedViteImportMap, PageModule } from "../types.internal.js"
 import { __DEV__ } from "../../env.js"
 import { FileRouterDataLoadError } from "../errors.js"
+import { renderToString } from "../../renderToString.js"
 
 export interface RenderContext {
   pages: FormattedViteImportMap
@@ -24,8 +24,7 @@ export interface RenderContext {
 
 export interface RenderResult {
   status: number
-  immediate: string
-  stream: Readable | null
+  body: string
 }
 
 export async function render(
@@ -52,15 +51,12 @@ export async function render(
         }
         return {
           status: 404,
-          immediate:
-            "<!doctype html><html><head><title>Not Found</title></head><body><h1>404</h1></body></html>",
-          stream: null,
+          body: "<!doctype html><html><head><title>Not Found</title></head><body><h1>404</h1></body></html>",
         }
       }
       return render("/404", ctx, {
         ...(result ?? {}),
-        immediate: "",
-        stream: null,
+        body: "",
         status: 404,
       })
     }
@@ -131,9 +127,7 @@ export async function render(
     props
   )
 
-  let { immediate: documentShell } = renderToReadableStream(
-    createElement(ctx.Document)
-  )
+  let documentShell = renderToString(createElement(ctx.Document))
 
   if (
     documentShell.includes("</body>") ||
@@ -156,7 +150,7 @@ export async function render(
     },
   })
 
-  let { immediate: pageOutletContent, stream } = renderToReadableStream(app)
+  let pageOutletContent = renderToString(app)
   const hasHeadContent = pageOutletContent.includes("<kiru-head-content>")
   const hasHeadOutlet = documentShell.includes("<kiru-head-outlet>")
 
@@ -187,8 +181,7 @@ export async function render(
 
   return {
     status: is404Route ? 404 : result?.status ?? 200,
-    immediate: `<!doctype html>${prePageOutlet}<body>${pageOutletContent}</body>${postPageOutlet}`,
-    stream,
+    body: `<!doctype html>${prePageOutlet}<body>${pageOutletContent}</body>${postPageOutlet}`,
   }
 }
 

@@ -55,11 +55,12 @@ export async function generateStaticPaths() {
   }
 
   function createEntryClientModule(): string {
+    // todo: only include Document in dev mode, we should instead scan for included assets
     return `
 import { onLoadedDev } from "kiru/router/dev"
 import { initClient } from "kiru/router/client"
 import { dir, baseUrl, pages, layouts } from "${VIRTUAL_ROUTES_ID}"
-import "${resolveUserDocument()}" // todo: only include this in dev mode
+import "${resolveUserDocument()}"
 
 initClient({ dir, baseUrl, pages, layouts })
 if (import.meta.env.DEV) {

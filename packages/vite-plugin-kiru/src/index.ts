@@ -97,7 +97,7 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
               !url.startsWith(dtHostScriptPath) &&
               !url.startsWith(dtClientPathname)
             ) {
-              const { status, html, stream } = await handleSSR(
+              const { status, html } = await handleSSR(
                 server,
                 url,
                 state.projectRoot,
@@ -105,13 +105,7 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
               )
               res.statusCode = status
               res.setHeader("Content-Type", "text/html")
-              res.write(html)
-              if (stream) {
-                // @ts-ignore - Node stream
-                stream.pipe(res)
-              } else {
-                res.end()
-              }
+              res.end(html)
               return
             }
           } catch (e) {

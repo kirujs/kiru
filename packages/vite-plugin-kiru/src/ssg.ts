@@ -1,21 +1,18 @@
-import type { OutputBundle, OutputOptions } from "rollup"
 import path from "node:path"
 import fs, { globSync } from "node:fs"
 import { pathToFileURL } from "node:url"
-import type { SSGOptions } from "./types.js"
 import { ANSI } from "./ansi.js"
+import type { OutputBundle, OutputOptions } from "rollup"
+import type { SSGOptions } from "./types.js"
 import type { Manifest } from "vite"
-import { PluginState } from "./config.js"
+import type { PluginState } from "./config.js"
+import type { VirtualServerModuleRenderResult } from "./dev-server.js"
 
 interface VirtualServerModule {
   render: (
     url: string,
     ctx: { registerModule: (id: string) => void }
-  ) => Promise<{
-    status: number
-    immediate: string
-    stream: any
-  }>
+  ) => Promise<VirtualServerModuleRenderResult>
   generateStaticPaths: () => Promise<Record<string, string>>
 }
 
@@ -172,7 +169,7 @@ async function renderRoute(
     },
   }
   const result = await mod.render(route, ctx)
-  let html = result.immediate
+  let html = result.body
 
   if (clientEntry) {
     const scriptTag = `<script type="module" src="/${clientEntry}"></script>`
