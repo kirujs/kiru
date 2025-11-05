@@ -43,18 +43,15 @@ const useHookDebugGroup = (name: string, action: HookDebugGroupAction) => {
  * Used obtain an 'requestUpdate' function for the current component.
  */
 const useRequestUpdate = () => {
-  const n = node.current
-  if (!n) error_hookMustBeCalledTopLevel("useRequestUpdate")
-  return () => requestUpdate(n)
+  const vNode = getVNodeOrError("useRequestUpdate")
+  return () => requestUpdate(vNode)
 }
 
 /**
  * Used to obtain the 'VNode' for the current component.
  */
 const useVNode = () => {
-  const n = node.current
-  if (!n) error_hookMustBeCalledTopLevel("useVNode")
-  return n
+  return getVNodeOrError("useVNode")
 }
 
 type HookCallbackContext<T> = {
@@ -116,8 +113,7 @@ function useHook<
   hookDataOrInitializer: HookState<T> | (() => HookState<T>),
   callback: U
 ): ReturnType<U> {
-  const vNode = node.current
-  if (!vNode) error_hookMustBeCalledTopLevel(hookName)
+  const vNode = getVNodeOrError(hookName)
 
   if (__DEV__) {
     if (
@@ -219,10 +215,14 @@ function useHook<
   }
 }
 
-function error_hookMustBeCalledTopLevel(hookName: string): never {
-  throw new KiruError(
-    `Hook "${hookName}" must be used at the top level of a component or inside another composite hook.`
-  )
+function getVNodeOrError(hookName: string) {
+  const vNode = node.current
+  if (!vNode) {
+    throw new KiruError(
+      `Hook "${hookName}" must be used at the top level of a component or inside another composite hook.`
+    )
+  }
+  return vNode
 }
 
 function cleanupHook(hook: { cleanup?: () => void }) {
