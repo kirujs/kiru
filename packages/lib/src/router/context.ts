@@ -5,6 +5,14 @@ import type { RouteQuery, RouterState } from "./types.js"
 
 export interface FileRouterContextType {
   /**
+   * Invalidate cached loader data for the given paths
+   * @example
+   * invalidate("/users", "/posts", "/users/1")
+   * // or invalidate based on folder path
+   * invalidate("/users/[id]") // (invalidates /users/1, /users/2, etc.)
+   */
+  invalidate(...paths: string[]): void
+  /**
    * The current router state
    */
   state: RouterState

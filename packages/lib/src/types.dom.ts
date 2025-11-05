@@ -832,6 +832,7 @@ interface HtmlElementAttributes {
     content?: string
     httpEquiv?: string
     name?: string
+    property?: string
   }
   meter: {
     value?: string | number

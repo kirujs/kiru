@@ -7,7 +7,7 @@ type CountContextType = {
 const CountContext = createContext<CountContextType>(null!)
 const useCount = () => useContext(CountContext)
 
-export default function MemoPage() {
+export default function MemoTest() {
   const [count, setCount] = useState(0)
   return (
     <div id="memo">

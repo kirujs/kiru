@@ -32,7 +32,7 @@ watch([globalCounter], (counter) => {
   ].slice(-5)
 })
 
-export default function SignalsPage() {
+export default function SignalsTest() {
   // Component-scoped signals
   const count = useSignal(0)
   const name = useSignal("World")

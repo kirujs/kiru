@@ -5,11 +5,11 @@ import type {
   RouteMatch,
   ViteImportMap,
 } from "../types.internal"
-import { PageConfig, PageProps } from "../types.js"
 
 export {
   formatViteImportMap,
   matchRoute,
+  match404Route,
   matchLayouts,
   normalizePrefixPath,
   parseQuery,
@@ -24,7 +24,11 @@ function formatViteImportMap(
   return Object.keys(map).reduce<FormattedViteImportMap>((acc, key) => {
     const dirIndex = key.indexOf(dir)
     if (dirIndex === -1) {
-      console.warn(`[kiru/router]: File "${key}" does not start with "${dir}".`)
+      if (__DEV__) {
+        console.warn(
+          `[kiru/router]: File "${key}" does not start with "${dir}".`
+        )
+      }
       return acc
     }
 
@@ -61,10 +65,7 @@ function formatViteImportMap(
       load: map[key],
       specificity,
       segments,
-    }
-
-    if (__DEV__) {
-      value.filePath = key
+      absolutePath: key,
     }
 
     return {
@@ -142,6 +143,23 @@ function matchRoute(
   return matches[0] || null
 }
 
+function match404Route(
+  pages: FormattedViteImportMap,
+  pathSegments: string[]
+): RouteMatch | null {
+  // Try to find a 404 page at each parent directory level
+  // Start from the deepest level and work up to root
+  for (let i = pathSegments.length; i >= 0; i--) {
+    const parentSegments = pathSegments.slice(0, i)
+    const fourOhFourSegments = [...parentSegments, "404"]
+    const match = matchRoute(pages, fourOhFourSegments)
+    if (match) {
+      return match
+    }
+  }
+  return null
+}
+
 function matchLayouts(
   layouts: FormattedViteImportMap,
   routeSegments: string[]
@@ -197,7 +215,7 @@ function parseQuery(
 function wrapWithLayouts(
   layouts: Kiru.FC[],
   page: Kiru.FC,
-  props: PageProps<PageConfig>
+  props: Record<string, unknown>
 ) {
   return layouts.reduceRight(
     (children, Layout) => createElement(Layout, { children }),

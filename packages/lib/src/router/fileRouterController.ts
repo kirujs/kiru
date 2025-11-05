@@ -1,13 +1,13 @@
 import { Signal } from "../signals/base.js"
-import { flushSync } from "../scheduler.js"
+import { flushSync, nextIdle } from "../scheduler.js"
 import { __DEV__ } from "../env.js"
 import { type FileRouterContextType } from "./context.js"
 import { FileRouterDataLoadError } from "./errors.js"
-import { fileRouterInstance } from "./globals.js"
+import { fileRouterInstance, fileRouterRoute, routerCache } from "./globals.js"
 import type {
-  ErrorPageProps,
   FileRouterConfig,
   PageConfig,
+  PageDataLoaderConfig,
   PageProps,
   RouteQuery,
   RouterState,
@@ -21,23 +21,29 @@ import {
   formatViteImportMap,
   matchLayouts,
   matchRoute,
+  match404Route,
   normalizePrefixPath,
   parseQuery,
   wrapWithLayouts,
 } from "./utils/index.js"
+import { RouterCache, type CacheKey } from "./cache.js"
+
+interface PageConfigWithLoader<T = unknown> extends PageConfig {
+  loader: PageDataLoaderConfig<T>
+}
 
 export class FileRouterController {
   public contextValue: FileRouterContextType
   private enableTransitions: boolean
-  private pages: FormattedViteImportMap
+  private pages: FormattedViteImportMap<PageModule>
   private layouts: FormattedViteImportMap
   private abortController: AbortController
-  private routeState: Signal<{
+  private currentPage: Signal<{
     component: Kiru.FC<any>
     config?: PageConfig
     route: string
   } | null>
-  private currentPageProps: Signal<PageProps<PageConfig>>
+  private currentPageProps: Signal<Record<string, unknown>>
   private currentLayouts: Signal<Kiru.FC[]>
   private state: RouterState
   private cleanups: (() => void)[] = []
@@ -46,14 +52,14 @@ export class FileRouterController {
     { route: string; config: PageConfig }
   >
   private pageRouteToConfig?: Map<string, PageConfig>
-  private currentRoute: string | null
 
-  constructor(config: FileRouterConfig) {
-    fileRouterInstance.current = this
+  constructor() {
+    routerCache.current ??= new RouterCache()
+    this.enableTransitions = false
     this.pages = {}
     this.layouts = {}
     this.abortController = new AbortController()
-    this.routeState = new Signal(null)
+    this.currentPage = new Signal(null)
     this.currentPageProps = new Signal({})
     this.currentLayouts = new Signal([])
     this.state = {
@@ -64,6 +70,7 @@ export class FileRouterController {
     }
     const __this = this
     this.contextValue = {
+      invalidate: this.invalidate.bind(this),
       get state() {
         return __this.state
       },
@@ -77,29 +84,6 @@ export class FileRouterController {
       this.filePathToPageRoute = new Map()
       this.pageRouteToConfig = new Map()
     }
-    this.currentRoute = null
-
-    const { pages, layouts, dir = "/pages", baseUrl = "/", transition } = config
-    this.enableTransitions = !!transition
-    const [normalizedDir, normalizedBaseUrl] = [
-      normalizePrefixPath(dir),
-      normalizePrefixPath(baseUrl),
-    ]
-    this.pages = formatViteImportMap(
-      pages as ViteImportMap,
-      normalizedDir,
-      normalizedBaseUrl
-    )
-    if (__DEV__) {
-      validateRoutes(this.pages)
-    }
-    this.layouts = formatViteImportMap(
-      layouts as ViteImportMap,
-      normalizedDir,
-      normalizedBaseUrl
-    )
-
-    this.loadRoute()
 
     const handlePopState = () => this.loadRoute()
     window.addEventListener("popstate", handlePopState)
@@ -108,39 +92,166 @@ export class FileRouterController {
     )
   }
 
-  public onPageConfigDefined<T extends PageConfig>(fp: string, config: T) {
+  public init(config: FileRouterConfig) {
+    const {
+      pages,
+      layouts,
+      dir = "/pages",
+      baseUrl = "/",
+      transition,
+      preloaded,
+    } = config
+    this.enableTransitions = !!transition
+    const [normalizedDir, normalizedBaseUrl] = [
+      normalizePrefixPath(dir),
+      normalizePrefixPath(baseUrl),
+    ]
+
+    if (preloaded) {
+      const {
+        pages,
+        layouts,
+        page,
+        pageProps,
+        pageLayouts,
+        route,
+        params,
+        query,
+        cacheData,
+      } = preloaded
+      this.state = {
+        params,
+        query,
+        path: window.location.pathname,
+        signal: this.abortController.signal,
+      }
+      this.currentPage.value = {
+        component: page.default,
+        config: page.config,
+        route,
+      }
+      this.currentPageProps.value = pageProps
+      this.currentLayouts.value = pageLayouts.map((l) => l.default)
+      this.pages = pages
+      this.layouts = layouts
+      if (__DEV__) {
+        if (page.config) {
+          this.onPageConfigDefined(route, page.config)
+        }
+      }
+      if (__DEV__) {
+        validateRoutes(this.pages)
+      }
+      const loader = page.config?.loader
+      if (loader && loader.mode !== "static" && pageProps.loading === true) {
+        if (cacheData === null) {
+          this.loadRouteData(
+            page.config as PageConfigWithLoader,
+            pageProps,
+            this.state
+          )
+        } else {
+          nextIdle(() => {
+            const props = {
+              ...pageProps,
+              data: cacheData.value,
+              error: null,
+              loading: false,
+            }
+            let transition = this.enableTransitions
+            if (loader.transition !== undefined) {
+              transition = loader.transition
+            }
+            handleStateTransition(this.state.signal, transition, () => {
+              this.currentPageProps.value = props
+            })
+          })
+        }
+      }
+    } else {
+      this.pages = formatViteImportMap(
+        pages as ViteImportMap,
+        normalizedDir,
+        normalizedBaseUrl
+      )
+
+      this.layouts = formatViteImportMap(
+        layouts as ViteImportMap,
+        normalizedDir,
+        normalizedBaseUrl
+      )
+      if (__DEV__) {
+        validateRoutes(this.pages)
+      }
+      this.loadRoute()
+    }
+  }
+
+  public onPageConfigDefined<T extends PageConfig<any>>(fp: string, config: T) {
     const existing = this.filePathToPageRoute?.get(fp)
     if (existing === undefined) {
-      const route = this.currentRoute
+      const route = fileRouterRoute.current
       if (!route) return
       this.filePathToPageRoute?.set(fp, { route, config })
       return
     }
-    const curPage = this.routeState.value
-    if (curPage?.route === existing.route && config.loader) {
+    const curPage = this.currentPage.value
+    const loader = config.loader
+    if (curPage?.route === existing.route && loader) {
       const p = this.currentPageProps.value
       let transition = this.enableTransitions
-      if (config.loader.transition !== undefined) {
-        transition = config.loader.transition
+      if (loader.mode !== "static" && loader.transition !== undefined) {
+        transition = loader.transition
       }
-      const props = {
-        ...p,
-        loading: true,
-        data: null,
-        error: null,
-      }
-      handleStateTransition(this.state.signal, transition, () => {
-        this.currentPageProps.value = props
-      })
 
-      this.loadRouteData(config.loader, props, this.state, transition)
+      // Check cache first if caching is enabled
+      let cachedData = null
+      if (loader.mode !== "static" && loader.cache) {
+        const cacheKey: CacheKey = {
+          path: this.state.path,
+          params: this.state.params,
+          query: this.state.query,
+        }
+        cachedData = routerCache.current!.get(cacheKey, loader.cache)
+      }
+
+      if (cachedData !== null) {
+        // Use cached data immediately - no loading state needed
+        const props = {
+          ...p,
+          data: cachedData.value,
+          error: null,
+          loading: false,
+        }
+        handleStateTransition(this.state.signal, transition, () => {
+          this.currentPageProps.value = props
+        })
+      } else {
+        // No cached data - show loading state and load data
+        const props = {
+          ...p,
+          loading: true,
+          data: null,
+          error: null,
+        }
+        handleStateTransition(this.state.signal, transition, () => {
+          this.currentPageProps.value = props
+        })
+
+        this.loadRouteData(
+          config as PageConfigWithLoader,
+          props,
+          this.state,
+          transition
+        )
+      }
     }
 
     this.pageRouteToConfig?.set(existing.route, config)
   }
 
   public getChildren() {
-    const page = this.routeState.value
+    const page = this.currentPage.value
     if (!page) return null
 
     const props = this.currentPageProps.value,
@@ -150,24 +261,34 @@ export class FileRouterController {
   }
 
   public dispose() {
+    this.abortController?.abort()
     this.cleanups.forEach((cleanup) => cleanup())
+    this.cleanups.length = 0
+    if (__DEV__) {
+      this.filePathToPageRoute?.clear()
+      this.pageRouteToConfig?.clear()
+    }
+    fileRouterRoute.current = null
+    fileRouterInstance.current = null
   }
 
   private async loadRoute(
     path: string = window.location.pathname,
-    props: PageProps<PageConfig> = {},
-    enableTransition = this.enableTransitions
+    props: Record<string, unknown> = {},
+    enableTransition = this.enableTransitions,
+    isStatic404 = false
   ): Promise<void> {
     this.abortController?.abort()
     const signal = (this.abortController = new AbortController()).signal
 
     try {
       const pathSegments = path.split("/").filter(Boolean)
-      const routeMatch = matchRoute(this.pages, pathSegments)
+      let routeMatch = matchRoute(this.pages, pathSegments)
 
-      if (!routeMatch) {
-        const _404 = matchRoute(this.pages, ["404"])
-        if (!_404) {
+      if (!routeMatch || isStatic404) {
+        // Try to find a 404 page in parent directories
+        const _404Match = match404Route(this.pages, pathSegments)
+        if (!_404Match) {
           if (__DEV__) {
             console.error(
               `[kiru/router]: No 404 route defined (path: ${path}). 
@@ -176,16 +297,12 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
           }
           return
         }
-        const errorProps = {
-          source: { path },
-        } satisfies ErrorPageProps
-
-        return this.navigate("/404", { replace: true, props: errorProps })
+        routeMatch = _404Match
       }
 
       const { route, pageEntry, params, routeSegments } = routeMatch
 
-      this.currentRoute = route
+      fileRouterRoute.current = route
       const pagePromise = pageEntry.load()
 
       const layoutPromises = matchLayouts(this.layouts, routeSegments).map(
@@ -198,7 +315,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       ])
 
       const query = parseQuery(window.location.search)
-      this.currentRoute = null
+      fileRouterRoute.current = null
       if (signal.aborted) return
 
       if (typeof page.default !== "function") {
@@ -214,21 +331,71 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         signal,
       }
 
-      let config = (page as unknown as PageModule).config
+      let config = page.config ?? ({} as PageConfig)
       if (__DEV__) {
         if (this.pageRouteToConfig?.has(route)) {
-          config = this.pageRouteToConfig.get(route)
+          config = this.pageRouteToConfig.get(route)!
         }
       }
 
-      if (config?.loader) {
-        props = { ...props, loading: true, data: null, error: null }
-        this.loadRouteData(config.loader, props, routerState, enableTransition)
+      const { loader } = config
+
+      if (loader) {
+        if (loader.mode !== "static" || __DEV__) {
+          // Check cache first if caching is enabled
+          let cachedData = null
+          if (loader.mode !== "static" && loader.cache) {
+            const cacheKey: CacheKey = {
+              path: routerState.path,
+              params: routerState.params,
+              query: routerState.query,
+            }
+            cachedData = routerCache.current!.get(cacheKey, loader.cache)
+          }
+
+          if (cachedData !== null) {
+            // Use cached data immediately - no loading state needed
+            props = {
+              ...props,
+              data: cachedData.value,
+              error: null,
+              loading: false,
+            } satisfies PageProps<PageConfig<unknown>>
+          } else {
+            // No cached data - show loading state and load data
+            props = {
+              ...props,
+              loading: true,
+              data: null,
+              error: null,
+            } satisfies PageProps<PageConfig<unknown>>
+
+            this.loadRouteData(
+              config as PageConfigWithLoader,
+              props,
+              routerState,
+              enableTransition
+            )
+          }
+        } else {
+          const staticProps = page.__KIRU_STATIC_PROPS__?.[path]
+          if (!staticProps) {
+            return this.loadRoute(path, props, enableTransition, true)
+          }
+
+          const { data, error } = staticProps
+          props = {
+            ...props,
+            data: data,
+            error: error ? new FileRouterDataLoadError(error) : null,
+            loading: false,
+          } as PageProps<PageConfig<unknown>>
+        }
       }
 
-      this.state = routerState
       handleStateTransition(signal, enableTransition, () => {
-        this.routeState.value = {
+        this.state = routerState
+        this.currentPage.value = {
           component: page.default,
           config,
           route: "/" + routeSegments.join("/"),
@@ -240,42 +407,78 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       })
     } catch (error) {
       console.error("[kiru/router]: Failed to load route component:", error)
-      this.routeState.value = null
+      this.currentPage.value = null
     }
   }
 
   private async loadRouteData(
-    loader: NonNullable<PageConfig["loader"]>,
-    props: PageProps<PageConfig>,
+    config: PageConfigWithLoader,
+    props: Record<string, unknown>,
     routerState: RouterState,
     enableTransition = this.enableTransitions
   ) {
+    const { loader } = config
+
+    // Load data from loader (cache check is now done earlier in loadRoute)
     loader
       .load(routerState)
       .then(
-        (data) => ({ data, error: null }),
-        (error) => ({
-          data: null,
-          error: new FileRouterDataLoadError(error),
-        })
+        (data) => {
+          // Cache the data if caching is enabled
+          if (loader.mode !== "static" && loader.cache) {
+            const cacheKey: CacheKey = {
+              path: routerState.path,
+              params: routerState.params,
+              query: routerState.query,
+            }
+            routerCache.current!.set(cacheKey, data, loader.cache)
+          }
+
+          return {
+            data,
+            error: null,
+            loading: false,
+          } satisfies PageProps<PageConfig<unknown>>
+        },
+        (error) =>
+          ({
+            data: null,
+            error: new FileRouterDataLoadError(error),
+            loading: false,
+          } satisfies PageProps<PageConfig<unknown>>)
       )
-      .then(({ data, error }) => {
+      .then((state) => {
         if (routerState.signal.aborted) return
 
         let transition = enableTransition
-        if (loader.transition !== undefined) {
+        if (loader.mode !== "static" && loader.transition !== undefined) {
           transition = loader.transition
         }
 
         handleStateTransition(routerState.signal, transition, () => {
           this.currentPageProps.value = {
             ...props,
-            loading: false,
-            data,
-            error,
-          }
+            ...state,
+          } satisfies PageProps<PageConfig<unknown>>
         })
       })
+  }
+
+  private invalidate(...paths: string[]) {
+    // Invalidate cache entries
+    routerCache.current!.invalidate(...paths)
+
+    // Check if current page matches any invalidated paths
+    const currentPath = this.state.path
+    const shouldRefresh = routerCache.current!.pathMatchesPattern(
+      currentPath,
+      paths
+    )
+
+    if (shouldRefresh) {
+      // Refresh the current page to get fresh data
+      this.loadRoute(currentPath, {}, this.enableTransitions)
+    }
   }
 
   private async navigate(
@@ -298,13 +501,13 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         throw new Error(`No route defined (path: ${path}).`)
       }
       const { pageEntry, route } = routeMatch
-      this.currentRoute = route
+      fileRouterRoute.current = route
       const pagePromise = pageEntry.load()
       const layoutPromises = matchLayouts(this.layouts, route.split("/")).map(
         (layoutEntry) => layoutEntry.load()
       )
       await Promise.all([pagePromise, ...layoutPromises])
-      this.currentRoute = null
+      fileRouterRoute.current = null
     } catch (error) {
       console.error("[kiru/router]: Failed to prefetch route:", error)
     }
@@ -370,9 +573,11 @@ function validateRoutes(pageMap: FormattedViteImportMap) {
 
   if (routeConflicts.length > 0) {
     let warning = "[kiru/router]: Route conflicts detected:\n"
-    warning += routeConflicts.map(([route1, route2]) => {
-      return `  - "${route1.filePath}" conflicts with "${route2.filePath}"\n`
-    })
+    warning += routeConflicts
+      .map(([route1, route2]) => {
+        return `  - "${route1.absolutePath}" conflicts with "${route2.absolutePath}"\n`
+      })
+      .join("")
     warning += "Routes are ordered by specificity (higher specificity wins)"
     console.warn(warning)
   }
