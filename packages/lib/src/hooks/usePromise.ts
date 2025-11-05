@@ -48,21 +48,35 @@ function usePromise<T>(
         nodeToPromiseIndex.set(vNode, index + 1)
 
         const promiseId = `${id}:data:${index}`
-        const state: Kiru.PromiseState<T> = { id: promiseId, state: "pending" }
-        const promise =
+
+        let promise: Promise<T>
+        if (renderMode.current === "string") {
+          // if we're rendering to a string, there's no need to fire the callback
+          promise = Promise.resolve() as Promise<T>
+        } else if (
           renderMode.current === "hydrate" &&
           hydrationMode.current === "dynamic"
-            ? resolvePrefetchedPromise<T>(promiseId, controller.signal)
-            : callback({ signal: controller.signal })
+        ) {
+          // if we're hydrating and the hydration mode is not static,
+          // we need to resolve the promise from cache/event
+          promise = resolvePrefetchedPromise<T>(promiseId, controller.signal)
+        } else {
+          // dom / stream / (hydrate + static)
+          promise = callback({ signal: controller.signal })
+        }
 
-        const p = (hook.promise = Object.assign(promise, state))
-        p.then((value) => {
-          p.state = "fulfilled"
-          p.value = value
-        })
+        const state: Kiru.PromiseState<T> = { id: promiseId, state: "pending" }
+        const statefulPromise = (hook.promise = Object.assign(promise, state))
+
+        statefulPromise
+          .then((value) => {
+            statefulPromise.state = "fulfilled"
+            statefulPromise.value = value
+          })
           .catch((error) => {
-            p.state = "rejected"
-            p.error = error instanceof Error ? error : new Error(error)
+            statefulPromise.state = "rejected"
+            statefulPromise.error =
+              error instanceof Error ? error : new Error(error)
           })
           .finally(() => {
             pending.value = false
