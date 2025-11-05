@@ -10,6 +10,7 @@ import {
   VIRTUAL_ENTRY_SERVER_ID,
   VIRTUAL_ENTRY_CLIENT_ID,
 } from "./virtual-modules.js"
+import { ManualChunksOption } from "rollup"
 
 export const defaultEsBuildOptions: ESBuildOptions = {
   jsxInject: `import { createElement as _jsx, Fragment as _jsxFragment } from "kiru"`,
@@ -52,6 +53,18 @@ const defaultSSGOptions: Required<SSGOptions> & {
   build: {
     maxConcurrentRenders: 100,
   },
+}
+
+/**
+ * Without specifying manual chunks, we get the following warning when building sandbox/docs:
+ * ```plaintext
+ * Export "useComputed" of module "../../packages/lib/dist/signals/computed.js" was reexported through module "../../packages/lib/dist/signals/index.js" while both modules are dependencies of each other and will end up in different chunks by current Rollup settings. This scenario is not well supported at the moment as it will produce a circular dependency between chunks and will likely lead to broken execution order.
+Either change the import in "src/components/demos/CodeDemo.tsx" to point directly to the exporting module or reconfigure "output.manualChunks" to ensure these modules end up in the same chunk.
+ *```
+ * Apparently this change is sufficient and it does make sense to ensure these modules land in the same chunk.
+ */
+const manualChunks: ManualChunksOption = {
+  kiru: ["kiru", "kiru/router", "kiru/router/client"],
 }
 
 export function createPluginState(
@@ -136,6 +149,13 @@ export function createViteConfig(
         ...defaultEsBuildOptions,
         ...config.esbuild,
       },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks,
+          },
+        },
+      },
     }
   }
   const isSsrBuild = config.build?.ssr
@@ -165,6 +185,9 @@ export function createViteConfig(
       outDir: desiredOutDir,
       rollupOptions: {
         ...rollup,
+        output: {
+          manualChunks,
+        },
         input,
       },
     },
