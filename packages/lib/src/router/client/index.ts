@@ -22,19 +22,20 @@ interface InitClientOptions {
   baseUrl: string
   pages: FormattedViteImportMap
   layouts: FormattedViteImportMap
+  transition: boolean
 }
 
 export async function initClient(options: InitClientOptions) {
   routerCache.current = new RouterCache()
-  const { dir, baseUrl, pages, layouts } = options
+  const { dir, baseUrl, pages, layouts, transition } = options
 
   const config: FileRouterConfig = {
     dir,
     baseUrl,
     pages,
     layouts,
+    transition,
     preloaded: await preparePreloadConfig(options),
-    transition: true,
   }
 
   const app = createElement(FileRouter, { config })

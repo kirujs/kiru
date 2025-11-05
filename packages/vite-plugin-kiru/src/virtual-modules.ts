@@ -18,7 +18,7 @@ export function createVirtualModules(
   }
 
   function createRoutesModule(): string {
-    const { dir, baseUrl, page, layout } = ssgOptions
+    const { dir, baseUrl, page, layout, transition } = ssgOptions
     return `
 import { formatViteImportMap, normalizePrefixPath } from "kiru/router/utils"
 
@@ -28,8 +28,9 @@ const pagesMap = import.meta.glob(["/**/${page}"])
 const layoutsMap = import.meta.glob(["/**/${layout}"])
 const pages = formatViteImportMap(pagesMap, dir, baseUrl)
 const layouts = formatViteImportMap(layoutsMap, dir, baseUrl)
+const transition = "${transition}"
 
-export { dir, baseUrl, pages, layouts }
+export { dir, baseUrl, pages, layouts, transition }
 `
   }
 
@@ -58,10 +59,10 @@ export async function generateStaticPaths() {
     // todo: only include Document in dev mode, we should instead scan for included assets
     return `
 import { initClient } from "kiru/router/client"
-import { dir, baseUrl, pages, layouts } from "${VIRTUAL_ROUTES_ID}"
+import { dir, baseUrl, pages, layouts, transition } from "${VIRTUAL_ROUTES_ID}"
 import "${resolveUserDocument()}"
 
-initClient({ dir, baseUrl, pages, layouts })
+initClient({ dir, baseUrl, pages, layouts, transition })
 `
   }
 
