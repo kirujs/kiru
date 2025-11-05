@@ -8,7 +8,7 @@ esbuild.buildSync({
   target: "esnext",
   format: "esm",
   outfile: "./dist/index.js",
-  external: ["kiru"],
+  external: ["kiru", "vite"],
   write: true,
 })
 

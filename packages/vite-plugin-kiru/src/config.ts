@@ -139,7 +139,7 @@ export function createViteConfig(
     }
   }
   const isSsrBuild = config.build?.ssr
-  const rollup = (config.build as any)?.rollupOptions ?? {}
+  const rollup = config.build?.rollupOptions ?? {}
   let input = rollup.input
 
   if (!input) {
