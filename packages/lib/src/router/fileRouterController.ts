@@ -97,6 +97,7 @@ export class FileRouterController {
       this.loadRoute().then(() => {
         nextIdle(() => {
           if (state.prevHash !== state.nextHash) {
+            window.location.hash = ""
             window.location.hash = state.nextHash
           }
           if (!state.nextHash) {
@@ -507,9 +508,9 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
     const url = new URL(path, "http://localhost")
     const { pathname: nextPath, hash: nextHash } = url
     if (options?.replace) {
-      window.history.replaceState({}, "", url.pathname)
+      window.history.replaceState({}, "", path)
     } else {
-      window.history.pushState({}, "", url.pathname)
+      window.history.pushState({}, "", path)
     }
     window.dispatchEvent(
       new PopStateEvent("popstate", {
