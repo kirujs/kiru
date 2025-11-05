@@ -262,6 +262,7 @@ type LinkRel =
   | "nofollow"
   | "noreferrer"
   | "pingback"
+  | "preconnect"
   | "prefetch"
   | "preload"
   | "prev"
