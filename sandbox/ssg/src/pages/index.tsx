@@ -7,6 +7,7 @@ export default function HomePage() {
     <div>
       <Head.Content>
         <title>My App - Home ({count})</title>
+        test
       </Head.Content>
       <button onclick={() => count.value++}>Increment</button>
       <span>Count: {count}</span>

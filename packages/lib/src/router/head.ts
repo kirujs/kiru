@@ -1,66 +1,51 @@
+import { __DEV__ } from "../env.js"
 import { createElement } from "../index.js"
 import { Signal } from "../signals/base.js"
 import { isValidTextChild, isVNode } from "../utils/index.js"
 
-export { Content, Outlet }
+export { HeadContent, HeadOutlet }
 
-/**
- * Used with SSG. Renders content to the document head via a corresponding `<Head.Outlet>` component placed in your `document.tsx`.
- * @example
- * // src/pages/index.tsx
- * export default function Index() {
- *   return (
- *     <div>
- *       <Head.Content>
- *         <title>My App - Home</title>
- *       </Head.Content>
- *       <h1>Home</h1>
- *     </div>
- *   )
- }
- */
-function Content({ children }: { children: JSX.Children }) {
+const validHeadChildren = ["title", "base", "link", "meta", "style", "script"]
+
+function HeadContent({ children }: { children: JSX.Children }): JSX.Element {
+  if (__DEV__) {
+    const asArray = Array.isArray(children) ? children : [children]
+    if (
+      asArray.some(
+        (c) =>
+          !isVNode(c) ||
+          typeof c.type !== "string" ||
+          !validHeadChildren.includes(c.type)
+      )
+    ) {
+      throw new Error(
+        "[kiru/router]: <Head.Content> only accepts title, base, link, meta, style and script elements as children."
+      )
+    }
+  }
   if ("window" in globalThis) {
-    ;(Array.isArray(children) ? children : [children])
-      .filter(isVNode)
-      .forEach(({ type, props }) => {
-        switch (type) {
-          case "title":
-            const title = (
-              Array.isArray(props.children) ? props.children : [props.children]
-            )
-              .map((c) => (Signal.isSignal(c) ? c.value : c))
-              .filter(isValidTextChild)
-              .join("")
-            return (document.title = title)
-          case "meta":
-            return document
-              .querySelector(`meta[name="${props.name}"]`)
-              ?.setAttribute("content", String(props.content))
-        }
-      })
+    const asArray = Array.isArray(children) ? children : [children]
+    const titleNode = asArray.find(
+      (c) => isVNode(c) && c.type === "title"
+    ) as Kiru.VNode
+
+    if (titleNode) {
+      const props = titleNode.props
+      const titleChildren = Array.isArray(props.children)
+        ? props.children
+        : [props.children]
+
+      document.title = titleChildren
+        .map((c) => (Signal.isSignal(c) ? c.value : c))
+        .filter(isValidTextChild)
+        .join("")
+    }
+
     return null
   }
   return createElement("kiru-head-content", { children })
 }
 
-/**
- * Used with SSG. Renders content to the document head from a `<Head>` component in the currently rendered page.
- * @example
- * // document.tsx
- * export default function Document() {
- *   return (
- *     <html lang="en">
- *       <head>
- *         <meta charset="utf-8" />
- *         <meta name="viewport" content="width=device-width, initial-scale=1" />
- *         <Head.Outlet />
- *       </head>
- *       <body>{children}</body>
- *     </html>
- *   )
- }
- */
-function Outlet() {
+function HeadOutlet(): JSX.Element {
   return createElement("kiru-head-outlet")
 }
