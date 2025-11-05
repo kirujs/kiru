@@ -10,8 +10,11 @@ export default function Document() {
         <meta http-equiv="X-UA-Compatible" content="ie=edge" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        {/** @ts-ignore */}
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin=""
+        />
         <meta property="og:title" content="Kiru" />
         <meta
           property="og:description"

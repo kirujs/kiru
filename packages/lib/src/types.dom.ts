@@ -158,6 +158,7 @@ type StyleObject = Prettify<
   }>
 >
 
+type CrossOriginValue = "" | "anonymous" | "use-credentials"
 type ValidUrl = `http${"s" | ""}://${string}`
 type ValidPath = `/${string}`
 type ValidUrlOrPath = ValidUrl | ValidPath | string
@@ -168,7 +169,7 @@ type MediaPreload = "none" | "metadata" | "auto" | ""
 interface HTMLMediaElementAttrs {
   autoplay?: boolean
   controls?: boolean
-  crossOrigin?: string
+  crossOrigin?: CrossOriginValue
   loop?: boolean
   muted?: boolean
   preload?: MediaPreload
@@ -757,7 +758,7 @@ interface HtmlElementAttributes {
   img: {
     alt?: string
     src?: ValidUrlOrPath
-    crossOrigin?: string
+    crossOrigin?: CrossOriginValue
     useMap?: string
     width?: string | number
     height?: string | number
@@ -809,7 +810,7 @@ interface HtmlElementAttributes {
     value?: number
   }
   link: {
-    crossOrigin?: string
+    crossOrigin?: CrossOriginValue
     disabled?: boolean
     fetchPriority?: "auto" | "high" | "low"
     href?: ValidUrlOrPath
@@ -891,7 +892,7 @@ interface HtmlElementAttributes {
   samp: {}
   script: {
     async?: boolean
-    crossOrigin?: string
+    crossOrigin?: CrossOriginValue
     defer?: boolean
     integrity?: string
     noModule?: boolean
