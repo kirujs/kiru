@@ -66,11 +66,9 @@ export async function render(
   const is404Route = routeMatch.routeSegments.includes("404")
   const layoutEntries = matchLayouts(ctx.layouts, routeSegments)
 
-  if (__DEV__) {
-    ;[pageEntry, ...layoutEntries].forEach((e) => {
-      ctx.registerModule(e.absolutePath!)
-    })
-  }
+  ;[pageEntry, ...layoutEntries].forEach((e) => {
+    ctx.registerModule(e.absolutePath!)
+  })
 
   const [page, ...layouts] = await Promise.all([
     pageEntry.load() as unknown as Promise<PageModule>,

@@ -43,10 +43,16 @@ export async function generateStaticSite(
   const paths = await mod.generateStaticPaths()
 
   const clientOutDirAbs = path.resolve(projectRoot, `${baseOutDir}/client`)
-  const { clientEntry, cssLinks } = await getClientAssets(
-    clientOutDirAbs,
-    manifestPath
-  )
+  const { clientEntry } = await getClientAssets(clientOutDirAbs, manifestPath)
+
+  // load manifest once for all routes to avoid multiple reads?
+  let manifest: Manifest | null = null
+  const clientManifestPath = path.resolve(clientOutDirAbs, manifestPath)
+  if (fs.existsSync(clientManifestPath)) {
+    try {
+      manifest = JSON.parse(fs.readFileSync(clientManifestPath, "utf-8"))
+    } catch {}
+  }
 
   const routes = Object.keys(paths)
   log(ANSI.cyan("[SSG]"), `discovered ${routes.length} routes:`, routes)
@@ -74,7 +80,8 @@ export async function generateStaticSite(
           route,
           srcFilePath,
           clientEntry,
-          cssLinks
+          manifest,
+          log
         )
         const filePath = getOutputPath(clientOutDirAbs, route)
 
@@ -91,7 +98,6 @@ export async function generateStaticSite(
 
 async function getClientAssets(clientOutDirAbs: string, manifestPath: string) {
   let clientEntry: string | null = null
-  let cssLinks = ""
 
   try {
     const clientManifestPath = path.resolve(clientOutDirAbs, manifestPath)
@@ -102,32 +108,6 @@ async function getClientAssets(clientOutDirAbs: string, manifestPath: string) {
       if (manifest[clientEntryKey]?.file) {
         clientEntry = manifest[clientEntryKey].file
       }
-
-      // Find CSS files for the entry
-      const entryKey = clientEntry
-        ? Object.keys(manifest).find((k) => manifest[k]?.file === clientEntry)
-        : null
-
-      if (entryKey) {
-        const seen = new Set<string>()
-        const cssFiles = new Set<string>()
-
-        const collectCss = (key: string) => {
-          if (seen.has(key)) return
-          seen.add(key)
-          const it = manifest[key]
-          if (!it) return
-          ;(it.css || []).forEach((c: string) => cssFiles.add(c))
-          ;(it.imports || []).forEach((imp: string) => collectCss(imp))
-        }
-
-        collectCss(entryKey)
-        if (cssFiles.size) {
-          cssLinks = Array.from(cssFiles)
-            .map((f) => `<link rel="stylesheet" type="text/css" href="/${f}">`)
-            .join("")
-        }
-      }
     }
   } catch {}
 
@@ -135,7 +115,140 @@ async function getClientAssets(clientOutDirAbs: string, manifestPath: string) {
     clientEntry = findClientEntry(clientOutDirAbs)
   }
 
-  return { clientEntry, cssLinks }
+  return { clientEntry }
+}
+
+function collectCssForModules(
+  manifest: Manifest,
+  moduleIds: string[],
+  projectRoot: string,
+  log?: (...data: any[]) => void
+): string {
+  const seen = new Set<string>()
+  const cssFiles = new Set<string>()
+
+  if (log) {
+    log(
+      ANSI.yellow("[SSG CSS]"),
+      `Collecting CSS for ${moduleIds.length} modules:`
+    )
+    moduleIds.forEach((id) => log(ANSI.yellow("[SSG CSS]"), `  - ${id}`))
+  }
+
+  const collectCss = (key: string) => {
+    if (seen.has(key)) return
+    seen.add(key)
+    const it = manifest[key]
+    if (!it) {
+      if (log)
+        log(ANSI.yellow("[SSG CSS]"), `  Key not found in manifest: ${key}`)
+      return
+    }
+    if (log) {
+      log(ANSI.yellow("[SSG CSS]"), `  Processing manifest key: ${key}`)
+      if (it.css && it.css.length > 0) {
+        log(ANSI.yellow("[SSG CSS]"), `    Found CSS: ${it.css.join(", ")}`)
+      }
+      if (it.imports && it.imports.length > 0) {
+        log(
+          ANSI.yellow("[SSG CSS]"),
+          `    Found imports: ${it.imports.length} imports`
+        )
+      }
+    }
+    ;(it.css || []).forEach((c: string) => cssFiles.add(c))
+    ;(it.imports || []).forEach((imp: string) => collectCss(imp))
+  }
+
+  // Include entry client CSS which contains document-level styles
+  const entryClientKey = "virtual:kiru:entry-client"
+  if (manifest[entryClientKey] && !seen.has(entryClientKey)) {
+    if (log) log(ANSI.yellow("[SSG CSS]"), `Including entry client CSS`)
+    collectCss(entryClientKey)
+  }
+
+  for (const moduleId of moduleIds) {
+    let normalizedId = moduleId.replace(/\\/g, "/")
+    if (normalizedId.startsWith(projectRoot)) {
+      normalizedId = normalizedId.substring(projectRoot.length)
+    }
+    if (normalizedId.startsWith("/")) {
+      normalizedId = normalizedId.substring(1)
+    }
+
+    if (log) {
+      log(ANSI.yellow("[SSG CSS]"), `Looking for module: ${moduleId}`)
+      log(ANSI.yellow("[SSG CSS]"), `  Normalized: ${normalizedId}`)
+    }
+
+    let found = false
+
+    if (manifest[normalizedId]) {
+      if (log) log(ANSI.green("[SSG CSS]"), `  ✓ Found as: ${normalizedId}`)
+      collectCss(normalizedId)
+      found = true
+      continue
+    }
+
+    if (manifest["/" + normalizedId]) {
+      if (log) log(ANSI.green("[SSG CSS]"), `  ✓ Found as: /${normalizedId}`)
+      collectCss("/" + normalizedId)
+      found = true
+      continue
+    }
+
+    if (manifest[moduleId]) {
+      if (log) log(ANSI.green("[SSG CSS]"), `  ✓ Found as: ${moduleId}`)
+      collectCss(moduleId)
+      found = true
+      continue
+    }
+
+    // Fallback: match by basename in case manifest uses different path formats
+    for (const key in manifest) {
+      const keyNormalized = key.replace(/\\/g, "/")
+      const moduleBaseName = path.basename(normalizedId)
+      const keyBaseName = path.basename(keyNormalized)
+
+      if (
+        (keyNormalized.endsWith(normalizedId) ||
+          normalizedId.endsWith(keyNormalized)) &&
+        moduleBaseName === keyBaseName
+      ) {
+        if (log)
+          log(ANSI.green("[SSG CSS]"), `  ✓ Found by basename match: ${key}`)
+        collectCss(key)
+        found = true
+        break
+      }
+    }
+
+    if (!found && log) {
+      log(
+        ANSI.red("[SSG CSS]"),
+        `  ✗ Module not found in manifest: ${moduleId}`
+      )
+    }
+  }
+
+  if (cssFiles.size) {
+    const links = Array.from(cssFiles)
+      .map((f) => `<link rel="stylesheet" type="text/css" href="/${f}">`)
+      .join("")
+    if (log) {
+      log(ANSI.green("[SSG CSS]"), `Collected ${cssFiles.size} CSS file(s):`)
+      Array.from(cssFiles).forEach((f) =>
+        log(ANSI.green("[SSG CSS]"), `  - ${f}`)
+      )
+    }
+    return links
+  }
+
+  if (log) {
+    log(ANSI.yellow("[SSG CSS]"), "No CSS files collected")
+  }
+
+  return ""
 }
 
 function findClientEntry(dir: string): string | null {
@@ -160,16 +273,52 @@ async function renderRoute(
   route: string,
   srcFilePath: string,
   clientEntry: string | null,
-  cssLinks: string
+  manifest: Manifest | null,
+  log: (...data: any[]) => void
 ): Promise<string> {
+  const moduleIds: string[] = []
+  const { projectRoot, ssgOptions } = state
+
+  const documentPath = path.resolve(
+    projectRoot,
+    ssgOptions.dir,
+    ssgOptions.document
+  )
+  const documentModuleId = documentPath.replace(/\\/g, "/")
+  moduleIds.push(documentModuleId)
+
+  if (state.loggingEnabled) {
+    log(ANSI.cyan("[SSG]"), `Rendering route: ${route}`)
+    log(ANSI.cyan("[SSG]"), `  Document module: ${documentModuleId}`)
+  }
+
   const ctx: RenderContext = {
-    registerModule: () => {},
+    registerModule: (moduleId: string) => {
+      moduleIds.push(moduleId)
+      if (state.loggingEnabled) {
+        log(ANSI.cyan("[SSG]"), `  Registered module: ${moduleId}`)
+      }
+    },
     registerPreloadedPageProps: (props) => {
       ;(state.staticProps[srcFilePath] ??= {})[route] = props
     },
   }
   const result = await mod.render(route, ctx)
   let html = result.body
+
+  if (state.loggingEnabled) {
+    log(ANSI.cyan("[SSG]"), `  Total modules tracked: ${moduleIds.length}`)
+  }
+
+  let cssLinks = ""
+  if (manifest) {
+    cssLinks = collectCssForModules(
+      manifest,
+      moduleIds,
+      projectRoot,
+      state.loggingEnabled ? log : undefined
+    )
+  }
 
   if (clientEntry) {
     const scriptTag = `<script type="module" src="/${clientEntry}"></script>`
