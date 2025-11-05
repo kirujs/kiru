@@ -1,0 +1,37 @@
+import { Head } from "kiru/router"
+import { TabGroup } from "$/components/TabGroup"
+import { selectedTab } from "./selectedTab"
+import { siteCodeLang } from "$/state/siteCodeLang"
+import ExampleApp from "./example.App.md"
+import ExampleAppTS from "./example.App.ts.md"
+import ExampleIndex from "./example.index.md"
+import { CopyInnerText } from "$/components/CopyInnerText"
+
+<Head.Content>
+  <title>Kiru - Portal</title>
+  <meta name="keywords" content="portal" />
+</Head.Content>
+
+# Portal
+
+`Portal` is a component used to escape the application DOM 
+tree. Children of the portal will be rendered as a child of the 
+container. 
+
+### Example
+
+<div>
+  <div className="not-prose">
+    <TabGroup
+      items={["App", "index.html"]}
+      onSelect={(value) => (selectedTab.value = value)}
+      value={selectedTab.value}
+      itemSuffix={(item) => item === "App" ? `.${siteCodeLang.value}x` : ""}
+    />
+    <CopyInnerText>
+    {selectedTab.value === "App" ?
+      siteCodeLang.value === "js" ?(<ExampleApp />) : (<ExampleAppTS />) 
+    : (<ExampleIndex />)}
+    </CopyInnerText>
+  </div>
+</div>

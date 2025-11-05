@@ -1,0 +1,33 @@
+.tab-group {
+  --active: #b42641;
+
+  ul {
+    display: flex;
+    gap: 1rem;
+    list-style: none;
+    margin: 0;
+    overflow-x: auto;
+    background-color: #0e0e0ea3;
+    border-radius: .35rem .35rem 0 0;
+    padding: 0 1rem;
+    border-bottom: 1px solid #1e1e1e;
+    backdrop-filter: blur(12px);
+
+    li {
+      font-size: .85rem;
+      border-bottom: 2px solid transparent;
+      border-radius: .35rem .35rem 0 0;
+      color: #ccc;
+      transition: color .15s, border-color .15s;
+
+      &.active {
+        border-color: var(--active);
+        color: #fff;
+      }
+
+      button {
+        padding: .5rem .25rem .35rem .25rem;
+      }
+    }
+  }
+}

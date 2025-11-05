@@ -1,0 +1,19 @@
+import { Head } from "kiru/router"
+import ExampleCode from "./example.md"
+import { CopyInnerText } from "$/components/CopyInnerText"
+
+<Head.Content>
+  <title>Kiru - useEffectEvent</title>
+  <meta name="keywords" content="useEffectEvent, hooks" />
+</Head.Content>
+
+# useEffectEvent
+
+Creates a copy of a function that always executes with the latest state.
+Useful when a function would typically be 'stuck' with old values due to encapsulation.
+
+### Example
+
+<CopyInnerText>
+<ExampleCode />
+</CopyInnerText>

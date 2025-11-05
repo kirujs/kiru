@@ -1,0 +1,115 @@
+import { Head } from "kiru/router"
+import { CodePreview } from "$/components/CodePreview"
+import { storeTypePreview } from "$/components/previews/Store.type.preview"
+import { methodFactoryTypePreview } from "$/components/previews/MethodFactory.type.preview"
+import { createStoreTypePreview } from "$/components/previews/createStore.type.preview"
+import { siteCodeLang } from "$/state/siteCodeLang"
+import CountStoreExample from "./CountStoreExample.md"
+import CountStoreExampleTS from "./CountStoreExample.ts.md"
+import TodoItemExample from "./todoItem.md"
+import TodoItemExampleTS from "./todoItem.ts.md"
+import { CopyInnerText } from "$/components/CopyInnerText"
+
+<Head.Content>
+  <title>Kiru - Store</title>
+  <meta name="keywords" content="createStore, useStore, MethodFactory, store, state, global state" />
+</Head.Content>
+
+# Store
+
+The <CodePreview data={storeTypePreview} /> API was created to satisfy the need of 
+an external state store which does not reside within
+the application tree, and allows for precision updates
+when state changes.
+
+### Creating a Store
+To create a store, you need to provide two arguments to the <CodePreview data={createStoreTypePreview} /> function:
+<ol>
+  <li><b>Initial State</b>: The initial state of your store.</li>
+  <li><b><CodePreview data={methodFactoryTypePreview} /></b>: This is a 
+  function that receives two arguments - ``setState`` and ``getState`` - 
+  and returns an object containing methods for interacting with the store 
+  state. These methods will be accessible through the returned store object.</li>
+</ol>
+
+<CopyInnerText>
+{siteCodeLang.value === "ts" ? <CountStoreExampleTS /> : <CountStoreExample />}
+</CopyInnerText>
+
+### Accessing Store State and Methods
+
+#### There are two main ways to interact with the store:
+
+<ol>
+  <li>
+    <b>
+      `useStore` hook
+        </b>
+        : A <b>Store</b> object is callable within a component and returns the
+        current store value and methods.
+
+        ```jsx
+        function Counter() {
+          const { value, increment, decrement } = useCountStore()
+
+          return (
+            <div>
+              <p>Count: {value}</p>
+              <button onclick={increment}>Increment</button>
+              <button onclick={decrement}>Decrement</button>
+            </div>
+          )
+        }
+        ```
+
+        <ul className="py-4 ">
+          <li className="mb-5">
+            You can provide a function to ``useStore`` to return a computed value.
+            This will cause the component to only update when the result of that computation changes:
+
+            {siteCodeLang.value === "ts" ? <TodoItemExampleTS /> : <TodoItemExample />}
+
+          </li>
+          <li>
+            You can also provide a second function, allowing you to specify how
+            the result of your computation should be compared:
+
+            ```jsx
+            function TodoList() {
+              const { value: items } = useTodoStore(null, (prev, next) => {
+                return prev.length === next.length
+              })
+
+              return (
+                <ul>
+                  {items.map((item) => (
+                    <TodoItem key={item.id} id={item.id} />
+                  ))}
+                </ul>
+              )
+            }
+            ```
+
+            In the above example, the TodoList component will only update when the number of items in the store changes.
+            We can also provide ``null`` as the first argument, which means the comparison will use the current state.
+          </li>
+        </ul>
+      </li>
+      <li>
+        <b>Direct Access</b>: You can also access the store's methods and state
+        directly using the returned object from createStore:
+
+        ```jsx
+        useCountStore.getState() // Returns the current state
+        useCountStore.setState((state) => state + 1) // Updates the state
+        useCountStore.methods.increment() // Calls the method defined in the method factory
+
+        /**
+        * Subscribe to the store, providing a function to run whenever state changes. 
+        * Subscribing in this way returns a function to unsubscribe.
+        */
+        const unsub = useCountStore.subscribe((newValue) => console.log(newValue))
+        ```
+        
+      </li>
+    </ol>

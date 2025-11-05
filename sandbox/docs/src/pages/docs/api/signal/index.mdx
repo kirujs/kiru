@@ -1,0 +1,323 @@
+import { Head } from "kiru/router"
+import { CodePreview } from "$/components/CodePreview"
+import { CopyInnerText } from "$/components/CopyInnerText"
+import { siteCodeLang } from "$/state/siteCodeLang"
+import { CalloutBlock } from "$/components/atoms/CalloutBlock"
+import { ExternalLink } from "$/components/atoms/ExternalLink"
+import { watchEffectTypePreview } from "$/components/previews/WatchEffect.type.preview"
+import { DocsSection } from "$/components/DocsSection"
+import ExampleComputedPrev from "./example.computedPrev.md"
+import ExampleComputedPrevTs from "./example.computedPrev.ts.md"
+
+<Head.Content>
+  <title>Kiru - Signal</title>
+  <meta name="keywords" content="signal, state, global state, computed, effect, two way binding, For, Derive" />
+</Head.Content>
+
+# Signal
+
+A **Signal** is a reactive primitive used to manage state. 
+Signals hold a value that can be read and updated. 
+When the value changes, any subscribers to the signal are notified, 
+allowing for efficient updates to dependent components.
+
+<DocsSection id="general-usage" title="General Usage">
+  ### Creating a Signal
+
+```ts
+import { signal } from "kiru"
+
+const userName = signal("bob")
+```
+
+`signal` takes an initial value and optionally a `displayName` 
+for debugging. It returns an instance of the `Signal` class with the 
+following properties:
+
+- **value**: Gets or sets the signal's current value
+- **subscribe**: Registers a function to be called when the signal's value changes
+- **peek**: Retrieves the value without tracking reactivity
+- **sneak**: Sets the value without emitting a signal change
+- **notify**: Emits a signal change
+
+### Reading and Writing Signal Values
+
+You can access a signal's value directly:
+
+```ts
+console.log(userName.value)  // "bob"
+userName.value = "alice"
+```
+<CalloutBlock>
+  Assigning a new value triggers reactivity, notifying any subscribers.
+  If you mutate the signal's value without assigning to the `value` property, 
+  eg. `mySignal.value.something = "test"`, the signal will not notify subscribers. 
+  In this case, use **`mySignal.notify()`** to manually trigger an update.
+</CalloutBlock>
+
+### Subscribing to Signals
+
+You can subscribe to a signal's value changes using the `subscribe` method:
+
+```ts
+const unsubscribe = userName.subscribe((newValue) => {
+  console.log("Value updated:", newValue)
+})
+```
+
+The subscribe function returns an `unsubscribe` function, 
+allowing you to remove the subscription when needed:
+
+```ts
+unsubscribe()
+```
+</DocsSection>
+
+<CalloutBlock fontSize="normal">
+  Going forward, we'll refer to the act of reading a signal's value 
+  as **observing**. This is one of the more complex, but powerful 
+  aspects of signals. The core philosophy around their design is 
+  _reactivity via observation, **where it matters**_.
+</CalloutBlock>
+
+
+<DocsSection id="computed-signals" title="Computed">
+  Use `computed` to create a `ComputedSignal`, which is derived from a getter function.
+  A `ComputedSignal` is *lazily evaluated*, meaning that the getter function won't be called 
+  until it is `observed` or subscribed to. Manually assigning a new value to it has no effect.
+
+```ts
+import { computed } from "kiru"
+
+const userGreeting = computed(() => `Hello, ${userName}!`)
+```
+
+The `computed` signal will automatically track dependencies (signals that were `observed`) 
+and update whenever any of them change.
+
+Computed signals also receive the previous value as an argument to the getter function.
+This can be useful for cleaning up previous resources, or for creating a new resource 
+based on the previous value.
+
+{siteCodeLang.value === "js" ? <ExampleComputedPrev /> : <ExampleComputedPrevTs />}
+
+<CalloutBlock variant="info">
+  We've also snuck a quality-of-life feature in here - signals 
+implement `toString()` so they can be used in strings!
+</CalloutBlock> 
+
+</DocsSection>
+
+<DocsSection id="signal-effects" title="Watch">
+Use `watch` create a <CodePreview data={watchEffectTypePreview} /> that 
+will fire the callback whenever `observed` signals change.
+```ts
+import { watch } from "kiru"
+
+const watcher = watch(() => console.log(`Greeting has been updated: ${userGreeting}`))
+
+watcher.stop()
+watcher.start()
+```
+The callback provided to `watch` will fire immediately. 
+When a signal that it `observes` changes, it will be queued to fire again 
+within a <ExternalLink href="https://developer.mozilla.org/en-US/docs/Web/API/Window/queueMicrotask">microtask</ExternalLink>. 
+This allows us to automatically "batch" execution of callbacks.
+
+You can also explicitly pass a list of signals to `watch` to observe.
+Their values will be passed to the callback in the order they were passed.
+
+```ts
+const watcher = watch([userName, userGreeting], (newName, newGreeting) => {
+  console.log(`Name has been updated: ${newName}`)
+  console.log(`Greeting has been updated: ${newGreeting}`)
+})
+```
+
+</DocsSection>
+
+<DocsSection id="usage-in-components" title="In Components">
+### General usage
+
+In Kiru components, reading and writing signals is slightly nuanced
+but has the capability to provide unmatched performance.
+
+export const prefix = `import { signal, computed } from "kiru"
+
+const userName = signal("bob")
+const userGreeting = computed(() => \`Hello, \${userName}!\`)\n\n`;
+
+<CopyInnerText prefix={prefix}>
+```tsx
+function App() {
+  return (
+    <div>
+      <h1>{userGreeting.value}</h1>
+      <input 
+        type="text" 
+        value={userName.value} 
+        oninput={(e) => (userName.value = e.target.value)} 
+      />
+    </div>
+  )
+}
+```
+</CopyInnerText>
+
+In the above example, our `userGreeting` and `userName` signals from earlier 
+are `observed` by the component during render, causing the component to 
+automatically subscribe to them. This means the component and all of its 
+children will be updated whenever their values change.
+
+While this may be the desired effect, signals can be much more performant
+when used for text or attributes. See the following: 
+
+<CopyInnerText prefix={prefix}>
+```tsx
+function App() {
+  return (
+    <div>
+      <h1>{userGreeting}</h1>
+      <input 
+        type="text" 
+        value={userName} 
+        oninput={(e) => (userName.value = e.target.value)} 
+      />
+    </div>
+  )
+}
+```
+</CopyInnerText>
+
+
+Because neither of the signals are `observed` at the time of rendering, 
+when they change, Kiru will only change the things that matter - in 
+this case, the text node inside of our heading that displays the greeting 
+and the `value` attribute of our input. 
+
+
+### Using local signals
+
+`signal`, `computed`, and `watch` can all be created locally in Kiru 
+components via the `useSignal`, `useComputed`, and `useWatch` hooks. 
+This will allow them to be persisted across renders and automatically 
+disposed of when the component unmounts.
+
+
+<CopyInnerText>
+```tsx
+import { useSignal, useComputed, useWatch } from "kiru"
+
+function App() {
+  const userName = useSignal("bob")
+  const userGreeting = useComputed(() => `Hello, ${userName}!`)
+
+  useWatch([userName], console.log)
+
+  return (
+    <div>
+      <h1>{userGreeting}</h1>
+      <input 
+        type="text" 
+        value={userName} 
+        oninput={(e) => (userName.value = e.target.value)} 
+      />
+    </div>
+  )
+} 
+```
+</CopyInnerText>
+</DocsSection>
+
+<DocsSection id="two-way-binding" title="Two Way Binding">
+The `bind:` prefix can be used to create two-way binding for any property 
+that changes via user interaction. When the signal changes, the property 
+is updated, and vice versa.
+
+<CopyInnerText prefix={`import { useSignal, useWatch } from "kiru"\n\n`}>
+```tsx
+function App() {
+  const userName = useSignal("bob")
+
+  useWatch(() => console.log(userName.value))
+
+  return (
+    <div>
+      <input type="text" bind:value={userName} /> 
+    </div>
+  )
+} 
+```
+</CopyInnerText>
+</DocsSection>
+
+<DocsSection id="for-component" title="<For />">
+The `<For />` component iterates over a signal, producing an automatically-updating 
+list with fine-grained reactivity. This is a great optimization tool for when you would otherwise 
+use `signal.value.map((item) => ...)` in JSX, causing the component that renders
+it to update whenever the signal changes.
+
+<CopyInnerText importsOverride={`import { useSignal, useComputed, For } from "kiru"`}>
+```tsx
+import { For } from "kiru"
+
+function App() {
+  const items = useSignal([0, 1, 2, 3, 4])
+  const doubledItems = useComputed(() => items.value.map((i) => i * 2))
+
+  return (
+    <div>
+      <ul>
+        <For each={doubledItems} fallback={<i>No items</i>}>
+          {(item, index) => <li>{item}</li>}
+        </For>
+      </ul>
+      <button onclick={() => (items.value = [...items.value, items.value.length])}>
+        Add
+      </button>
+    </div>
+  )
+}
+```
+</CopyInnerText>
+</DocsSection>
+
+<DocsSection id="derive-component" title="<Derive />">
+Similar to `<For />`, `<Derive />` allows you to easily create fine-grained reactivity in JSX. 
+The `<Derive />` component produces a JSX element that automatically updates whenever the 
+provided `from` signal changes. 
+
+<CopyInnerText importsOverride={`import { useSignal, useComputed, Derive } from "kiru"`}>
+```tsx
+import { Derive } from "kiru"
+
+function App() {
+  const name = useSignal("bob")
+  const age = useSignal(42)
+  const person = useComputed(() => ({ name: name.value, age: age.value }))
+
+  return (
+    <div>
+      <input bind:value={name} />
+      <input type="number" bind:value={age} />
+      <Derive from={person}>
+        {(person) => (
+          <div>
+            {person.name} is {person.age} years old
+          </div>
+        )}
+      </Derive>
+      {/* You can also use multiple signals! */}
+      <Derive from={[name, age]}>
+        {(name, age) => (
+          <div>
+            {name} is {age} years old
+          </div>
+        )}
+      </Derive>
+    </div>
+  )
+}
+```
+</CopyInnerText>
+</DocsSection>

@@ -1,0 +1,31 @@
+import { Head } from "kiru/router"
+import { CodePreview } from "$/components/CodePreview"
+import { TransitionStateTypePreview } from "$/components/previews/TransitionState.type.preview"
+import { siteCodeLang } from "$/state/siteCodeLang"
+import ExampleCode from "./example.md"
+import ExampleCodeTS from "./example.ts.md"
+import { CopyInnerText } from "$/components/CopyInnerText"
+
+<Head.Content>
+  <title>Kiru - Transition</title>
+  <meta name="keywords" content="transition" />
+</Head.Content>
+
+# Transition
+
+`Transition` enables you to animate the DOM in a procedural
+/ coroutine-like fashion. Useful for modals, drawers, dialogs and more.
+
+### Using Transitions
+<ul>
+  <li><b>element</b><sup style="color:red">\*</sup>: a function that recieves the transition state as an argument and returns a JSX.Element. </li>
+  <li><b>in</b><sup style="color:red">\*</sup>: specifies whether the current <CodePreview data={TransitionStateTypePreview} /> should move toward the ``entered`` or ``exited`` state.</li>
+  <li><b>duration</b> <small style="color:#ccc">(optional, default 150ms)</small>: allows you to specify duration in milliseconds.</li>
+  <li><b>onTransitionEnd</b>: allows you to specify a function to be called when the transition ends.</li>
+</ul>
+
+### Example
+
+<CopyInnerText>
+{siteCodeLang.value === "ts" ? <ExampleCodeTS /> : <ExampleCode />}
+</CopyInnerText>

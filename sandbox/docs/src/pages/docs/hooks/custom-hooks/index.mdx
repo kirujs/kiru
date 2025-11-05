@@ -1,0 +1,85 @@
+import { Head } from "kiru/router"
+import { CodePreview } from "$/components/CodePreview"
+import { useHookTypePreview } from "$/components/previews/useHook.type.preview"
+import { useHookCallbackTypePreview } from "$/components/previews/useHookCallback.type.preview"
+import { CopyInnerText } from "$/components/CopyInnerText"
+
+<Head.Content>
+  <title>Kiru - Custom hooks</title>
+  <meta name="keywords" content="hooks, custom hooks" />
+</Head.Content>
+
+# Custom hooks
+
+Custom hooks allow you to encapsulate reusable logic within your Kiru components. This documentation outlines the steps and considerations for building your own custom hooks.
+
+**Understanding the Code:**
+
+The provided code snippet showcases the ``useHook`` function, which is the foundation for creating hooks in Kiru. Here's a breakdown of its functionality:
+
+- **<CodePreview data={useHookTypePreview} /> function:**
+
+    - Takes three arguments:
+
+        - ``hookName``: A string representing the name of your custom hook.
+        - ``hookData``: An object containing data specific to your hook's logic.
+        - ``callback``: A function that defines the behavior of your custom hook. It receives an object containing information about the current execution context and can access the provided ``hookData``.
+ 
+    - Retrieves the Kiru virtual node (vNode) associated with the component.
+    - Validates that the hook is called at an appropriate location (top level of a component or within another hook).
+    - Extracts relevant context information from the vNode.
+    - Calls the provided ``callback`` function with details about the current state and methods for updating the component or scheduling effects.
+    - Stores the used ``hookData`` within the vNode for future references.
+    - Returns the result returned by the ``callback`` function.
+
+**Creating a Custom Hook:**
+
+1. **Naming:** Choose a descriptive name starting with `use` (e.g., `useAuth`, `useWindowSize`).
+2. **``hookData``:** Define the data structure your hook will use. This can be an object containing state variables, functions, or other necessary information.
+3. **<CodePreview data={useHookCallbackTypePreview} /> function:** This function implements the core logic of your custom hook. It receives an object containing details about the current execution context, including:
+
+    - ``hook``: The current ``hookData`` object.
+    - ``isInit``: A boolean indicating whether the hook is being called for the first time.
+    - ``update``: A function to trigger a re-render of the component.
+    - ``queueEffect``: A function to schedule side effects within your hook.
+    - ``vNode``: The Kiru virtual node associated with the component.
+
+4. **Return value:** The ``callback`` function should return the value(s) you want to expose to your component's logic.
+
+**Example (simplified, adapted from ``useState``):**
+
+<CopyInnerText>
+```jsx
+function useCounter(initialValue = 0) {
+  return useHook(
+    "useCounter",
+    { count: initialValue },
+    ({ hook, update }) => {
+      const increment = () => {
+        hook.count++
+        update()
+      }
+
+      const decrement = () => {
+        hook.count--
+        update()
+      }
+
+      return [hook.count, increment, decrement]
+    }
+  )
+}
+```
+</CopyInnerText>
+
+**Key Considerations:**
+
+- **Accessing previous state (optional):** The ``isInit`` argument in the callback allows you to determine whether the hook is being called for the first time.
+- **Triggering re-renders:** Use the provided ``update`` function to trigger a re-render of the component when your hook's state changes.
+- **Scheduling effects:** Use the ``queueEffect`` function to schedule side effects that are executed post-update within your custom hook.
+- **``sideEffectsEnabled`` function (optional):** Kiru exposes a ``sideEffectsEnabled`` function that allows you to determine whether side effects (eg. DOM interactions) should be executed. ``sideEffectsEnabled`` will return ``false`` if Kiru's current ``renderMode`` is set to ``string`` or ``stream``.
+
+By following these guidelines, you can create custom hooks that promote code reusability, improve component organization, and enhance the maintainability of your Kiru applications.
+
+
+

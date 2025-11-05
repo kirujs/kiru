@@ -1,0 +1,46 @@
+import { Head } from "kiru/router"
+import { match } from "lit-match"
+import { siteCodeLang } from "$/state/siteCodeLang"
+import { selectedTab } from "./selectedTab"
+import { TabGroup } from "$/components/TabGroup"
+import ExampleApp from "./example.App.md"
+import ExampleCounterStore from "./example.counterStore.md"
+import ExampleCounterStoreTS from "./example.counterStore.ts.md"
+import { CopyInnerText } from "$/components/CopyInnerText"
+
+<Head.Content>
+  <title>Kiru - useSyncExternalStore</title>
+  <meta name="keywords" content="useSyncExternalStore, hooks" />
+</Head.Content>
+
+# useSyncExternalStore
+
+Allows you to subscribe to an external store and read the current state synchronously. 
+It's particularly useful when you are working with state management libraries or any 
+custom external store where you need to synchronize the Kiru component with the store's state.
+
+### Example
+
+<div>
+  <div className="not-prose">
+    <TabGroup
+      items={["App", "counterStore"]}
+      onSelect={(value) => (selectedTab.value = value)}
+      value={selectedTab.value}
+      itemSuffix={(item) => `.${siteCodeLang.value}${item === "App" ? "x" : ""}`}
+    />
+    <CopyInnerText>
+    {match(siteCodeLang.value)
+        .with("js", () => {
+          return match(selectedTab.value)
+            .with("App", () => <ExampleApp />)
+            .else(() => <ExampleCounterStore />)
+        })
+        .else(() => {
+          return match(selectedTab.value)
+            .with("App", () => <ExampleApp />)
+            .else(() => <ExampleCounterStoreTS />)
+        })}
+    </CopyInnerText>
+  </div>
+</div>

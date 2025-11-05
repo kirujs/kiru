@@ -1,0 +1,28 @@
+import { Head } from "kiru/router"
+import { siteCodeLang } from "$/state/siteCodeLang"
+import ExampleCode from "./example.md"
+import ExampleCodeTS from "./example.ts.md"
+import { CopyInnerText } from "$/components/CopyInnerText"
+
+<Head.Content>
+  <title>Kiru - useId</title>
+  <meta name="keywords" content="useId, hooks" />
+</Head.Content>
+
+# useId
+
+Generates a unique, stable ID for a component. 
+This hook ensures that each rendered instance of a component gets its own 
+unique identifier (derived from its position in the tree), 
+making it ideal for cases where you need to bind elements like form labels, 
+inputs, or any other HTML element requiring a unique id.
+
+The generated id will remain consistent as long as the component's position 
+in the application tree remains the same, ensuring that re-renders don't 
+break associations between elements, such as form fields and labels.
+
+### Example
+
+<CopyInnerText>
+{siteCodeLang.value === "ts" ? <ExampleCodeTS /> : <ExampleCode />}
+</CopyInnerText>

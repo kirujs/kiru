@@ -1,0 +1,27 @@
+import { Head, Link } from "kiru/router"
+import { siteCodeLang } from "$/state/siteCodeLang"
+import ExampleCode from "./example.md"
+import ExampleCodeTS from "./example.ts.md"
+import { CopyInnerText } from "$/components/CopyInnerText"
+
+<Head.Content>
+  <title>Kiru - useReducer</title>
+  <meta name="keywords" content="useReducer, hooks" />
+</Head.Content>
+
+# useReducer
+
+Provides a way to manage complex state logic, offering advantages 
+over the basic <Link to="/docs/hooks/useState">useState</Link> hook in 
+specific scenarios.
+
+### Example
+
+<CopyInnerText>
+{siteCodeLang.value === "ts" ? <ExampleCodeTS /> : <ExampleCode />}
+</CopyInnerText>
+
+### Related
+<ul>
+  <li><Link to="/docs/hooks/useState">useState</Link></li>
+</ul>

@@ -1,0 +1,48 @@
+.like-button {
+  position: relative;
+}
+
+.like-button:after {
+  content: '';
+  pointer-events: none;
+  background-color: crimson;
+  position: absolute;
+  scale: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: none;
+  height: 100%;
+  width: 100%;
+  transition: background-color .3s, scale .3s;
+  border-radius: 50%;
+}
+
+.like-button>svg {
+  transition: color .3s;
+}
+
+.like-button[data-liked="true"][just-liked="true"]:after {
+  animation-name: likeButtonHighlight;
+  animation-duration: .3s;
+}
+
+.like-button[data-liked="true"]>svg {
+  color: crimson
+}
+
+@keyframes likeButtonHighlight {
+  0% {
+    scale: 0;
+  }
+
+  50% {
+    scale: 1;
+  }
+
+  100% {
+    scale: 1;
+    opacity: 0;
+  }
+}

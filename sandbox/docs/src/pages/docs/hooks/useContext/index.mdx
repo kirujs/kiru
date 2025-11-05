@@ -1,0 +1,25 @@
+import { Head, Link } from "kiru/router"
+import { siteCodeLang } from "$/state/siteCodeLang"
+import ExampleCode from "./example.md"
+import ExampleCodeTS from "./example.ts.md"
+import { CopyInnerText } from "$/components/CopyInnerText"
+
+<Head.Content>
+  <title>Kiru - useContext</title>
+  <meta name="keywords" content="useContext, context, hooks" />
+</Head.Content>
+
+# useContext
+
+Gets the value from a <Link to="/docs/api/context">Context</Link> Provider component within the current component's heirarchy. If no provider is found, it will return the context's default value.
+
+### Example
+
+<CopyInnerText>
+{siteCodeLang.value === "ts" ? <ExampleCodeTS /> : <ExampleCode />}
+</CopyInnerText>
+
+### Related
+<ul>
+  <li><Link to="/docs/api/context">Context</Link></li>
+</ul>

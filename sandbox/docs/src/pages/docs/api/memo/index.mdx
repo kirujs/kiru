@@ -1,0 +1,33 @@
+import { Head } from "kiru/router"
+import { CodePreview } from "$/components/CodePreview"
+import { siteCodeLang } from "$/state/siteCodeLang"
+import { CopyInnerText } from "$/components/CopyInnerText"
+import ExampleCode from "./example.md"
+import ExampleCodeTS from "./example.ts.md"
+import ExampleCustomCompare from "./exampleCustomCompare.md"
+import ExampleCustomCompareTS from "./exampleCustomCompare.ts.md"
+
+<Head.Content>
+  <title>Kiru - Memo</title>
+  <meta name="keywords" content="memo" />
+</Head.Content>
+
+# Memo
+
+`memo` is a higher-order component that's used for optimizing the performance 
+of components by preventing unnecessary re-renders. 
+When a parent component re-renders, an identity check is performed for each of the props passed. 
+If none have changed, it will not re-render.
+You can override this behavior by passing a different `compare` function.
+
+### Example
+
+<CopyInnerText>
+{siteCodeLang.value === "ts" ? <ExampleCodeTS /> : <ExampleCode />}
+</CopyInnerText>
+
+### Specifying a custom `compare` function
+
+<CopyInnerText>
+{siteCodeLang.value === "ts" ? <ExampleCustomCompareTS /> : <ExampleCustomCompare />}
+</CopyInnerText>

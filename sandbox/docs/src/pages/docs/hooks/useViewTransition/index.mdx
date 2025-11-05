@@ -1,0 +1,21 @@
+import { Head } from "kiru/router"
+import ExampleCode from "./example.md"
+import { CopyInnerText } from "$/components/CopyInnerText"
+
+<Head.Content>
+  <title>Kiru - useViewTransition</title>
+  <meta name="keywords" content="useViewTransition, hooks" />
+</Head.Content>
+
+# useViewTransition
+
+Allows you to easily use the [View Transition API](https://developer.mozilla.org/en-US/docs/Web/API/Document/startViewTransition)
+by wrapping the `callback` in a `document.startViewTransition` call.
+
+Falls back to the regular `callback` if not supported.
+
+### Example
+
+<CopyInnerText>
+<ExampleCode />
+</CopyInnerText>

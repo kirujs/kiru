@@ -1,0 +1,96 @@
+import { Head } from "kiru/router"
+import { match } from "lit-match"
+import { TabGroup } from "$/components/TabGroup"
+import { CodePreview } from "$/components/CodePreview"
+import { fileRouterTypePreview } from "$/components/previews/FileRouter.type.preview"
+import { definePageConfigTypePreview } from "$/components/previews/definePageConfig.type.preview"
+import { pagePropsTypePreview } from "$/components/previews/PageProps.type.preview"
+import { linkTypePreview } from "$/components/previews/link.type.preview"
+import { useFileRouterTypePreview } from "$/components/previews/useFileRouter.type.preview"
+import { siteCodeLang } from "$/state/siteCodeLang"
+import { ExternalLink } from "$/components/atoms/ExternalLink"
+import { CopyInnerText } from "$/components/CopyInnerText"
+import { selectedTab, tabs } from "./selectedTab"
+
+import ExampleMain from "./example.main.md"
+import ExampleMainTs from "./example.main.ts.md"
+import ExamplePagesLayout from "./example.pages-layout.md"
+import ExamplePagesLayoutTs from "./example.pages-layout.ts.md"
+import ExamplePagesIndex from "./example.pages-index.md"
+import ExamplePagesIndexTs from "./example.pages-index.ts.md"
+import ExamplePagesIdIndex from "./example.pages-[id]-index.md"
+import ExamplePagesIdIndexTs from "./example.pages-[id]-index.ts.md"
+
+
+<Head.Content>
+  <title>Kiru - FileRouter</title>
+  <meta name="keywords" content="filerouter, router, route, link, useFileRouter" />
+</Head.Content>
+
+
+# FileRouter
+
+### Overview
+
+The <CodePreview data={fileRouterTypePreview} /> provides a file-based routing system for 
+single-page applications (SPA). It automatically generates routes based on your file 
+structure, enabling you to create pages and layouts using conventional file naming patterns. 
+
+### Key Components
+
+1. <CodePreview data={fileRouterTypePreview} />
+    - The main router component that handles file-based routing.
+    - Automatically generates routes from your file structure.
+
+2. <CodePreview data={definePageConfigTypePreview} />
+    - Function to configure page-specific behavior and data loading.
+    - Returns a configuration object to be exported from page components.
+
+3. <CodePreview data={pagePropsTypePreview} />
+    - TypeScript interface for page component props.
+    - Provides typed access to `data`, `loading`, `error`, and other page-specific properties.
+
+4. <CodePreview data={linkTypePreview} />
+    - An anchor tag that handles client-side navigation without full page reloads.
+    - Maintains crawlability by providing a valid href attribute for search engines.
+    - Automatically prefetches the route's module & dependencies when hovered or focused.
+
+5. <CodePreview data={useFileRouterTypePreview} />
+    - A hook that provides access to the router state and navigation methods, as well as manual route module prefetching.
+
+### Example
+
+The following demonstrates how to set up a file-based routing system with FileRouter:
+
+- **main**: Shows how to initialize the FileRouter with page and layout glob patterns
+- **pages/layout**: Demonstrates creating a root layout component with navigation
+- **pages/index**: Shows a page component with data loading using `definePageConfig`
+- **pages/[id]/index**: Demonstrates dynamic routes with parameter access and navigation
+
+<div>
+  <div className="not-prose">
+    <TabGroup
+      items={tabs}
+      onSelect={(value) => (selectedTab.value = value)}
+      value={selectedTab.value}
+      itemSuffix={() => `.${siteCodeLang.value}x`}
+    />
+    <CopyInnerText>
+      {match(siteCodeLang.value)
+        .with("js", () => { 
+          return match(selectedTab.value)
+            .with("main", () => <ExampleMain />)
+            .with("pages/layout", () => <ExamplePagesLayout />)
+            .with("pages/index", () => <ExamplePagesIndex />)
+            .else(() => <ExamplePagesIdIndex />)
+        })
+        .else(() => {
+          return match(selectedTab.value)
+            .with("main", () => <ExampleMainTs />)
+            .with("pages/layout", () => <ExamplePagesLayoutTs />)
+            .with("pages/index", () => <ExamplePagesIndexTs />)
+            .else(() => <ExamplePagesIdIndexTs />)
+      })}
+    </CopyInnerText>
+  </div>
+</div>

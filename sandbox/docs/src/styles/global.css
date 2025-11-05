@@ -1,0 +1,285 @@
+/* This CSS is common to all pages */
+
+@import url('utils.css') layer(base);
+@import url('dialog.css') layer(base);
+@import url('scrollbars.css') layer(base);
+@import 'tailwindcss';
+
+@plugin '@tailwindcss/typography';
+
+@theme {
+  --color-primary: crimson;
+  --color-primary-light: #ec1b43;
+  --color-info: #322a2c;
+  --color-dark: #151313;
+  --color-light: #fffafa;
+  --color-light-highlight: #fbf6f6;
+
+  --color-stone-750: #332f2f;
+
+  --spacing-xs: 0.125rem;
+
+  --breakpoint-xs: 460px;
+
+  --background-image-theme-gradient: linear-gradient(153deg, #4421488a, #2f1212cf);
+}
+
+/*
+  The default border color has changed to `currentColor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
+
+
+
+* {
+  box-sizing: border-box;
+}
+
+
+:root {
+  --color-light: #fffbfb;
+  --color-dark: #0d090d;
+  color-scheme: dark;
+  background-color: var(--color-dark);
+  color: #fffafa;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  --content-width: 1080px;
+  --navbar-height: 60px;
+  --navbar-height-negative: -60px;
+  --tw-border-opacity: 1;
+  scroll-padding: 100px;
+  scrollbar-gutter: stable;
+}
+
+::placeholder {
+  color: #777171 !important
+}
+
+:focus-visible {
+  outline: 2px solid crimson;
+  border-radius: 3px;
+}
+
+::selection {
+  background: #dc143ccc;
+  color: #fff;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(72vh 60vh at 50% -20vh, rgba(61, 17, 31, 0.4) 0%, transparent 100%),
+    radial-gradient(75% 35% at 50% 95%, rgba(111, 36, 141, 0.085) 0%, transparent 90%);
+  background-attachment: fixed;
+}
+
+a {
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+.prose a:not(.text-light) {
+  color: #ea495e !important
+}
+
+.prose :where(ul ul, ul ol, ol ul, ol ol):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+  margin-top: .25rem;
+  margin-bottom: .25rem;
+}
+
+@media screen and (max-width: 480px) {
+  .prose :where(h1):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+    font-size: 1.75rem;
+  }
+}
+
+.prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *)):not(:has(span)) {
+  background-color: #2e2e2ea3;
+  border-radius: .25rem;
+  padding: .15rem .15rem;
+}
+
+
+.callout-block code {
+  background-color: #0e0e0e63;
+  border-radius: .25rem;
+  padding: .125rem .25rem;
+  font-size: 87.5%;
+}
+
+.prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *)):before,
+.prose :where(code):not(:where([class~="not-prose"], [class~="not-prose"] *)):after {
+  content: none;
+}
+
+.prose :where(li):not(:where([class~="not-prose"], [class~="not-prose"] *))::marker {
+  color: #bbb;
+}
+
+.prose :where(hr):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+  border-color: #fffc;
+  border-width: 2px;
+  opacity: .5;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.docs-section-header a {
+  color: #fff !important;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1.25em;
+  margin-top: 2em;
+  margin-bottom: 1em;
+  line-height: 1.3333333;
+}
+
+@media screen and (min-width: 480px) {
+  .docs-section-header a {
+    font-size: 1.5em;
+  }
+}
+
+.docs-section {
+  position: relative;
+  margin-bottom: 3rem;
+}
+
+.docs-section:after {
+  content: '';
+  pointer-events: none;
+  background-color: #fff;
+  position: absolute;
+  opacity: 0;
+  top: -1rem;
+  right: -1rem;
+  bottom: -1rem;
+  left: -1rem;
+  transform: none;
+  /* height: 100%;
+  width: 100%; */
+  transition: opacity .3s ease-out;
+  border-radius: 5px;
+}
+
+.docs-section.highlight:after {
+  opacity: .066
+}
+
+pre.shiki {
+  font-weight: 400;
+  font-size: 0.7rem;
+  line-height: 1.7142857;
+  border-radius: .35rem;
+  background-color: #0006 !important;
+}
+
+pre.shiki>code {
+  background-color: unset;
+}
+
+/** strings */
+pre.shiki span[style="color:#9ECBFF;"],
+pre.shiki span[style="color: rgb(158, 203, 255);"] {
+  color: #fde3e3 !important;
+}
+
+/** variables/literals */
+pre.shiki span[style="color:#79B8FF;"],
+pre.shiki span[style="color: rgb(121, 184, 255);"] {
+  color: #f0a05e !important;
+}
+
+/** XML element tags */
+pre.shiki span[style="color:#85E89D;"],
+pre.shiki span[style="color: rgb(133, 232, 157);"] {
+  color: #e8585c !important;
+}
+
+/** comments: */
+pre.shiki span[style="color:#6A737D;"],
+pre.shiki span[style="color: rgb(106, 115, 125);"] {
+  color: #939192 !important;
+}
+
+
+pre.shiki span.line.diff.remove {
+  background-color: #512525;
+}
+
+pre.shiki span.line.diff.remove:before {
+  content: "-";
+  line-height: 1.25rem;
+  position: absolute;
+  margin-left: 10px;
+  color: red;
+}
+
+pre.shiki span.line.diff.add {
+  background-color: #174327;
+}
+
+pre.shiki span.line.diff.add:before {
+  content: "+";
+  line-height: 1.25rem;
+  position: absolute;
+  margin-left: 10px;
+  color: #1fc31f;
+}
+
+.not-prose pre.shiki {
+  border-radius: 0 0 .35rem .35rem;
+}
+
+@media screen and (min-width: 768px) {
+  pre.shiki {
+    font-size: 0.775rem;
+  }
+}
+
+@media screen and (min-width: 1024px) {
+  pre.shiki {
+    font-size: 0.85rem;
+  }
+}
+
+.not-prose pre.shiki {
+  overflow-x: auto;
+  padding-top: 0.8571429em;
+  padding-inline-end: 1.1428571em;
+  padding-bottom: 0.8571429em;
+  padding-inline-start: 1.1428571em;
+}
+
+.code-copy-wrapper>pre.shiki {
+  margin-top: 0;
+}
+
+#package-json-comparison pre.shiki {
+  margin: 0;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  /* background-color: #ffffff07 !important; */
+  padding: 0.5rem !important;
+}

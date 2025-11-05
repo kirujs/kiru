@@ -1,0 +1,3 @@
+```bash
+bun create kiru
+```
