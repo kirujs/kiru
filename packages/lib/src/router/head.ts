@@ -1,7 +1,9 @@
-import { __DEV__ } from "../env.js"
-import { createElement } from "../index.js"
 import { Signal } from "../signals/base.js"
 import { isValidTextChild, isVNode } from "../utils/index.js"
+import { createElement } from "../element.js"
+import { __DEV__ } from "../env.js"
+import { KiruError } from "../error.js"
+import { node } from "../globals.js"
 
 export { HeadContent, HeadOutlet }
 
@@ -9,18 +11,21 @@ const validHeadChildren = ["title", "base", "link", "meta", "style", "script"]
 
 function HeadContent({ children }: { children: JSX.Children }): JSX.Element {
   if (__DEV__) {
+    const n = node.current!
     const asArray = Array.isArray(children) ? children : [children]
-    if (
-      asArray.some(
-        (c) =>
-          !isVNode(c) ||
-          typeof c.type !== "string" ||
-          !validHeadChildren.includes(c.type)
-      )
-    ) {
-      throw new Error(
-        "[kiru/router]: <Head.Content> only accepts title, base, link, meta, style and script elements as children."
-      )
+    const invalidNodes = asArray.filter(
+      (c) =>
+        !isVNode(c) ||
+        typeof c.type !== "string" ||
+        !validHeadChildren.includes(c.type)
+    )
+    if (invalidNodes.length) {
+      throw new KiruError({
+        message: `[kiru/router]: <Head.Content> only accepts title, base, link, meta, style and script elements as children. Received: ${invalidNodes.map(
+          (n) => (isVNode(n) ? `<${n.type.toString()}>` : `"${n}"`)
+        )}`,
+        vNode: n,
+      })
     }
   }
   if ("window" in globalThis) {
