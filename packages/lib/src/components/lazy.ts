@@ -1,7 +1,7 @@
 import { createElement } from "../element.js"
 import { __DEV__ } from "../env.js"
-import { renderMode } from "../globals.js"
 import { useRequestUpdate } from "../hooks/utils.js"
+import { sideEffectsEnabled } from "../utils/runtime.js"
 
 interface FCModule {
   default: Kiru.FC<any>
@@ -31,10 +31,10 @@ const lazyCache: Map<string, LazyState> =
 export function lazy<T extends LazyImportValue>(
   componentPromiseFn: () => Promise<T>
 ): Kiru.FC<LazyComponentProps<T>> {
-  function LazyComponent(props: LazyComponentProps<T>) {
+  function LazyWrapper(props: LazyComponentProps<T>) {
     const { fallback = null, ...rest } = props
     const requestUpdate = useRequestUpdate()
-    if (renderMode.current === "string" || renderMode.current === "stream") {
+    if (!sideEffectsEnabled()) {
       return fallback
     }
 
@@ -62,13 +62,14 @@ export function lazy<T extends LazyImportValue>(
       cachedState.promise.then(requestUpdate)
       return fallback
     }
-    if (__DEV__) {
-      return createElement(cachedState.result, rest)
-    }
+
     return createElement(cachedState.result, rest)
   }
-  LazyComponent.displayName = "Kaioken.lazy"
-  return LazyComponent
+
+  if (__DEV__) {
+    LazyWrapper.displayName = "Kiru.lazy"
+  }
+  return LazyWrapper
 }
 
 /**
