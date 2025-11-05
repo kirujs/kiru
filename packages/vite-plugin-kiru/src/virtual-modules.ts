@@ -28,7 +28,7 @@ const pagesMap = import.meta.glob(["/**/${page}"])
 const layoutsMap = import.meta.glob(["/**/${layout}"])
 const pages = formatViteImportMap(pagesMap, dir, baseUrl)
 const layouts = formatViteImportMap(layoutsMap, dir, baseUrl)
-const transition = "${transition}"
+const transition = ${transition}
 
 export { dir, baseUrl, pages, layouts, transition }
 `
