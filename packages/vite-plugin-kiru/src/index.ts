@@ -20,16 +20,18 @@ import {
 import { createVirtualModules } from "./virtual-modules.js"
 
 import type { KiruPluginOptions, SSGOptions } from "./types.js"
-import type { Plugin } from "vite"
+import { build, InlineConfig, type Plugin, type PluginOption } from "vite"
 
-export default function kiru(opts: KiruPluginOptions = {}): Plugin {
+export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   let state: PluginState
   let log: (...data: any[]) => void
   let virtualModules: Record<string, () => string> = {}
+  let inlineConfig: InlineConfig | undefined
 
-  return {
+  const mainPlugin = {
     name: "vite-plugin-kiru",
     config(config) {
+      inlineConfig = config
       return createViteConfig(config, opts)
     },
     configResolved(config) {
@@ -193,6 +195,28 @@ export default function kiru(opts: KiruPluginOptions = {}): Plugin {
       }
     },
   } satisfies Plugin
+  return [
+    mainPlugin,
+    {
+      name: "vite-plugin-kiru:ssg",
+      apply: "build",
+      enforce: "post",
+      async closeBundle(error) {
+        if (error || this.environment.config.build.ssr) return
+
+        log(ANSI.cyan("[SSG]"), "Starting SSG build...")
+        await build({
+          ...inlineConfig,
+          configFile: false,
+          build: {
+            ...inlineConfig?.build,
+            ssr: true,
+          },
+        })
+        log(ANSI.cyan("[SSG]"), "SSG build complete!")
+      },
+    } satisfies Plugin,
+  ]
 }
 
 // Export additional utilities

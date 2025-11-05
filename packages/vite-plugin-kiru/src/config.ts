@@ -162,8 +162,6 @@ export function createViteConfig(
       ...config.build,
       ssr,
       manifest: "vite-manifest.json",
-      ssrEmitAssets: true,
-      ssrManifest: true,
       outDir: desiredOutDir,
       rollupOptions: {
         ...rollup,

@@ -4,6 +4,7 @@ import kiru from "vite-plugin-kiru"
 export default defineConfig({
   plugins: [
     kiru({
+      loggingEnabled: true,
       ssg: {
         dir: "./src/pages",
         document: "document.tsx",

@@ -21,11 +21,13 @@ export const config = definePageConfig({
       if (!response.ok) throw new Error(response.statusText)
       return (await response.json()) as FetchUsersResponse
     },
-    mode: "client",
-    cache: {
-      type: "sessionStorage",
-      ttl: 1000 * 60 * 5, // 5 minutes
-    },
+    mode: "static",
+  },
+  generateStaticParams: async () => {
+    const response = await fetch("https://dummyjson.com/users?select=id")
+    if (!response.ok) throw new Error(response.statusText)
+    const users = await response.json()
+    return users.users.map((user: any) => ({ id: user.id.toString() }))
   },
 })
 
