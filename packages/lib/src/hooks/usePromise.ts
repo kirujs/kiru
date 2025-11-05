@@ -1,6 +1,6 @@
 import { PREFETCHED_DATA_EVENT } from "../constants.js"
 import { __DEV__ } from "../env.js"
-import { renderMode } from "../globals.js"
+import { hydrationMode, renderMode } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"
 import { Signal, useSignal } from "../signals/base.js"
 import { cleanupHook, depsRequireChange, useHook } from "./utils.js"
@@ -50,7 +50,8 @@ function usePromise<T>(
         const promiseId = `${id}:data:${index}`
         const state: Kiru.PromiseState<T> = { id: promiseId, state: "pending" }
         const promise =
-          renderMode.current === "hydrate"
+          renderMode.current === "hydrate" &&
+          hydrationMode.current === "dynamic"
             ? resolvePrefetchedPromise<T>(promiseId, controller.signal)
             : callback({ signal: controller.signal })
 

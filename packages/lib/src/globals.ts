@@ -1,4 +1,4 @@
-export { node, hookIndex, renderMode }
+export { node, hookIndex, renderMode, hydrationMode }
 
 const node = {
   current: null as Kiru.VNode | null,
@@ -10,4 +10,8 @@ const hookIndex = {
 
 const renderMode = {
   current: ("window" in globalThis ? "dom" : "string") as Kiru.RenderMode,
+}
+
+const hydrationMode = {
+  current: "dynamic" as "static" | "dynamic",
 }

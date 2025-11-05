@@ -6,6 +6,9 @@ import { renderRootSync } from "./scheduler.js"
 type VNode = Kiru.VNode
 
 export interface AppContextOptions {
+  /**
+   * App name - shown in devtools
+   */
   name?: string
 }
 

@@ -36,7 +36,10 @@ export async function initClient(options: InitClientOptions) {
     preloaded: await preparePreloadConfig(options),
     transition: true,
   }
-  hydrate(createElement(FileRouter, { config }), document.body)
+
+  const app = createElement(FileRouter, { config })
+  hydrate(app, document.body, { hydrationMode: "static" })
+
   if (__DEV__) {
     onLoadedDev()
   }
