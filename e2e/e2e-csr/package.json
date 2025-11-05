@@ -1,5 +1,5 @@
 {
-  "name": "e2e",
+  "name": "e2e-csr",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "pnpm exec cypress run --env port=5173"
+    "test": "pnpm exec cypress run"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

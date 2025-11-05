@@ -63,9 +63,6 @@ Either change the import in "src/components/demos/CodeDemo.tsx" to point directl
  *```
  * Apparently this change is sufficient and it does make sense to ensure these modules land in the same chunk.
  */
-const manualChunks: ManualChunksOption = {
-  kiru: ["kiru", "kiru/router", "kiru/router/client"],
-}
 
 export function createPluginState(
   opts: KiruPluginOptions = {}
@@ -149,13 +146,6 @@ export function createViteConfig(
         ...defaultEsBuildOptions,
         ...config.esbuild,
       },
-      build: {
-        rollupOptions: {
-          output: {
-            manualChunks,
-          },
-        },
-      },
     }
   }
   const isSsrBuild = config.build?.ssr
@@ -186,7 +176,9 @@ export function createViteConfig(
       rollupOptions: {
         ...rollup,
         output: {
-          manualChunks,
+          manualChunks: ssr
+            ? {}
+            : { kiru: ["kiru", "kiru/router", "kiru/router/client"] },
         },
         input,
       },
