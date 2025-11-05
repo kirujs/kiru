@@ -202,7 +202,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       apply: "build",
       enforce: "post",
       async closeBundle(error) {
-        if (error || this.environment.config.build.ssr) return
+        if (error || this.environment.config.build.ssr || !state.ssgOptions)
+          return
 
         log(ANSI.cyan("[SSG]"), "Starting SSG build...")
         await build({
