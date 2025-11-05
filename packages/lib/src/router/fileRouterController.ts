@@ -491,12 +491,17 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
   ) {
     const f = options?.replace ? "replaceState" : "pushState"
     window.history[f]({}, "", path)
-    return this.loadRoute(path, options?.props, options?.transition)
+    const url = new URL(path, "http://localhost")
+    return this.loadRoute(url.pathname, options?.props, options?.transition)
   }
 
   private async prefetchRouteModules(path: string) {
+    const url = new URL(path, "http://localhost")
     try {
-      const routeMatch = matchRoute(this.pages, path.split("/").filter(Boolean))
+      const routeMatch = matchRoute(
+        this.pages,
+        url.pathname.split("/").filter(Boolean)
+      )
       if (!routeMatch) {
         throw new Error(`No route defined (path: ${path}).`)
       }
