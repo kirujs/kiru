@@ -89,6 +89,7 @@ export async function render(
     } else {
       const routerState: RouterState = {
         path: u.pathname,
+        hash: "",
         params,
         query,
         signal: abortController.signal,

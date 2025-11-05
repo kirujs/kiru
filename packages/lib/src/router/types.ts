@@ -74,6 +74,10 @@ export interface RouterState {
    */
   path: string
   /**
+   * The current hash
+   */
+  hash: string
+  /**
    * The current route params
    * @example
    * "/foo/[id]/page.tsx" -> { id: "123" }

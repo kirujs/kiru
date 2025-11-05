@@ -64,6 +64,7 @@ export class FileRouterController {
     this.currentLayouts = new Signal([])
     this.state = {
       path: window.location.pathname,
+      hash: window.location.hash,
       params: {},
       query: {},
       signal: this.abortController.signal,
@@ -86,7 +87,24 @@ export class FileRouterController {
     }
 
     const handlePopState = () => this.loadRoute()
-    window.addEventListener("popstate", handlePopState)
+    window.addEventListener("popstate", (e) => {
+      const state = e.state
+      if (!isCustomNavigationState(state)) {
+        this.loadRoute()
+        return
+      }
+
+      this.loadRoute().then(() => {
+        nextIdle(() => {
+          if (state.prevHash !== state.nextHash) {
+            window.location.hash = state.nextHash
+          }
+          if (!state.nextHash) {
+            window.scrollTo(0, 0)
+          }
+        })
+      })
+    })
     this.cleanups.push(() =>
       window.removeEventListener("popstate", handlePopState)
     )
@@ -123,6 +141,7 @@ export class FileRouterController {
         params,
         query,
         path: window.location.pathname,
+        hash: window.location.hash,
         signal: this.abortController.signal,
       }
       this.currentPage.value = {
@@ -158,10 +177,7 @@ export class FileRouterController {
               error: null,
               loading: false,
             }
-            let transition = this.enableTransitions
-            if (loader.transition !== undefined) {
-              transition = loader.transition
-            }
+            const transition = loader.transition ?? this.enableTransitions
             handleStateTransition(this.state.signal, transition, () => {
               this.currentPageProps.value = props
             })
@@ -199,10 +215,9 @@ export class FileRouterController {
     const loader = config.loader
     if (curPage?.route === existing.route && loader) {
       const p = this.currentPageProps.value
-      let transition = this.enableTransitions
-      if (loader.mode !== "static" && loader.transition !== undefined) {
-        transition = loader.transition
-      }
+      const transition =
+        (loader.mode !== "static" && loader.transition) ??
+        this.enableTransitions
 
       // Check cache first if caching is enabled
       let cachedData = null
@@ -326,6 +341,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
 
       const routerState: RouterState = {
         path,
+        hash: window.location.hash,
         params,
         query,
         signal,
@@ -450,10 +466,8 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       .then((state) => {
         if (routerState.signal.aborted) return
 
-        let transition = enableTransition
-        if (loader.mode !== "static" && loader.transition !== undefined) {
-          transition = loader.transition
-        }
+        const transition =
+          (loader.mode !== "static" && loader.transition) ?? enableTransition
 
         handleStateTransition(routerState.signal, transition, () => {
           this.currentPageProps.value = {
@@ -486,13 +500,29 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
     options?: {
       replace?: boolean
       transition?: boolean
-      props?: Record<string, unknown>
     }
   ) {
-    const f = options?.replace ? "replaceState" : "pushState"
-    window.history[f]({}, "", path)
+    const { pathname: prevPath, hash: prevHash } = window.location
+
     const url = new URL(path, "http://localhost")
-    return this.loadRoute(url.pathname, options?.props, options?.transition)
+    const { pathname: nextPath, hash: nextHash } = url
+    if (options?.replace) {
+      window.history.replaceState({}, "", url.pathname)
+    } else {
+      window.history.pushState({}, "", url.pathname)
+    }
+    window.dispatchEvent(
+      new PopStateEvent("popstate", {
+        state: {
+          ["kiru-router-event"]: true,
+          prevPath,
+          nextPath,
+          prevHash,
+          nextHash,
+          transition: options?.transition ?? this.enableTransitions,
+        } satisfies CustomNavigationState,
+      })
+    )
   }
 
   private async prefetchRouteModules(path: string) {
@@ -634,4 +664,24 @@ function routesConflict(route1: string, route2: string): boolean {
   }
 
   return true
+}
+
+interface CustomNavigationState {
+  ["kiru-router-event"]: true
+  prevHash: string
+  nextHash: string
+  prevPath: string
+  nextPath: string
+  transition: boolean
+}
+
+function isCustomNavigationState(
+  state: unknown
+): state is CustomNavigationState {
+  return (
+    typeof state === "object" &&
+    state !== null &&
+    "kiru-router-event" in state &&
+    state["kiru-router-event"] === true
+  )
 }
