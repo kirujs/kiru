@@ -46,7 +46,7 @@ const defaultSSGOptions: Required<SSGOptions> & {
 } = {
   baseUrl: "/",
   dir: "src/pages",
-  document: "document.tsx",
+  document: "document.{tsx,jsx}",
   page: "index.{tsx,jsx}",
   layout: "layout.{tsx,jsx}",
   transition: false,
