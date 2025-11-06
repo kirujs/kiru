@@ -16,10 +16,14 @@ export function resolveUserDocument(
   ssgOptions: Required<SSGOptions>
 ): string {
   const { dir, document } = ssgOptions
-  const fp = path.resolve(projectRoot, dir, document)
-  const res = globSync(fp)
-  if (res.length) return res[0].replace(/\\/g, "/")
-  throw new Error(`Document not found at ${fp}`)
+  const matches = globSync(path.resolve(dir, document), {
+    cwd: projectRoot,
+  })
+  if (!matches.length) {
+    throw new Error(`Document not found`)
+  }
+
+  return path.resolve(projectRoot, matches[0]).replace(/\\/g, "/")
 }
 
 const TRANSFORMABLE_EXTENSIONS = new Set([
