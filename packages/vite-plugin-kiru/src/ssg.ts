@@ -1,5 +1,6 @@
 import path from "node:path"
 import fs from "node:fs"
+import { globSync } from "glob"
 import { pathToFileURL } from "node:url"
 import { ANSI } from "./ansi.js"
 import type { OutputBundle, OutputOptions } from "rollup"
@@ -296,8 +297,6 @@ async function appendStaticPropsToClientModules(
       return
     }
     log(ANSI.cyan("[SSG]"), "Found client manifest at:", clientManifestPath)
-
-    const { globSync } = await import("node:fs")
 
     const srcPages = globSync(`${ssgOptions.dir}/**/${ssgOptions.page}`, {
       cwd: projectRoot,

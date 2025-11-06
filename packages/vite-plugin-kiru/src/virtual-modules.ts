@@ -9,7 +9,7 @@ export async function createVirtualModules(
   projectRoot: string,
   ssgOptions: Required<SSGOptions>
 ) {
-  const userDoc = await resolveUserDocument(projectRoot, ssgOptions)
+  const userDoc = resolveUserDocument(projectRoot, ssgOptions)
 
   function createRoutesModule(): string {
     const { dir, baseUrl, page, layout, transition } = ssgOptions

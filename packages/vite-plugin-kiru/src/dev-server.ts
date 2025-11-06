@@ -35,16 +35,14 @@ export async function handleSSR(
   server: ViteDevServer,
   url: string,
   projectRoot: string,
-  resolveUserDocument: () => Promise<string>
+  resolveUserDocument: () => string
 ) {
   const mod = (await server.ssrLoadModule(
     VIRTUAL_ENTRY_SERVER_ID
   )) as VirtualServerModule
 
   const moduleIds: string[] = []
-  const documentModule = (await resolveUserDocument()).substring(
-    projectRoot.length
-  )
+  const documentModule = resolveUserDocument().substring(projectRoot.length)
   moduleIds.push(documentModule)
 
   const ctx: RenderContext = {
