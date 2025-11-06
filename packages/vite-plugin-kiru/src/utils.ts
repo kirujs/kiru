@@ -16,11 +16,10 @@ export function resolveUserDocument(
   ssgOptions: Required<SSGOptions>
 ): string {
   const { dir, document } = ssgOptions
-  const matches = globSync(path.resolve(dir, document), {
-    cwd: projectRoot,
-  })
+  const fp = path.resolve(projectRoot, dir, document).replace(/\\/g, "/")
+  const matches = globSync(fp)
   if (!matches.length) {
-    throw new Error(`Document not found`)
+    throw new Error(`Document not found at ${fp}`)
   }
 
   return path.resolve(projectRoot, matches[0]).replace(/\\/g, "/")

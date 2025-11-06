@@ -81,8 +81,7 @@ export async function generateStaticSite(
           route,
           srcFilePath,
           clientEntry,
-          manifest,
-          log
+          manifest
         )
         const filePath = getOutputPath(clientOutDirAbs, route)
 
@@ -217,8 +216,7 @@ async function renderRoute(
   route: string,
   srcFilePath: string,
   clientEntry: string | null,
-  manifest: Manifest | null,
-  log: (...data: any[]) => void
+  manifest: Manifest | null
 ): Promise<string> {
   const moduleIds: string[] = []
   const { projectRoot, ssgOptions } = state
@@ -241,9 +239,6 @@ async function renderRoute(
   }
   const result = await mod.render(route, ctx)
   let html = result.body
-
-  log(ANSI.cyan("[SSG]"), `  Total modules tracked: ${moduleIds.length}`)
-
   let cssLinks = ""
   if (manifest) {
     cssLinks = collectCssForModules(manifest, moduleIds, projectRoot)
