@@ -1129,6 +1129,7 @@ interface SvgElementAttributes {
     mask?: string
   }
   defs: {}
+  desc: {}
   ellipse: SvgStrokeAttributes & {
     cx?: string | number
     cy?: string | number
