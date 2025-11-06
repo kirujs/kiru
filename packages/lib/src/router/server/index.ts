@@ -87,7 +87,6 @@ export async function render(
     } else {
       const routerState: RouterState = {
         pathname: u.pathname,
-        path: u.pathname,
         hash: "",
         params,
         query,

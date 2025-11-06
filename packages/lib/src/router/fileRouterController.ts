@@ -64,7 +64,6 @@ export class FileRouterController {
     this.currentLayouts = new Signal([])
     this.state = {
       pathname: window.location.pathname,
-      path: window.location.pathname,
       hash: window.location.hash,
       params: {},
       query: {},
@@ -74,7 +73,17 @@ export class FileRouterController {
     this.contextValue = {
       invalidate: this.invalidate.bind(this),
       get state() {
-        return __this.state
+        return {
+          ...__this.state,
+          get path() {
+            if (__DEV__) {
+              console.warn(
+                "[kiru/router]: `FileRouterContext.state.path` is deprecated. Use `FileRouterContext.state.pathname` instead."
+              )
+            }
+            return __this.state.pathname
+          },
+        }
       },
       navigate: this.navigate.bind(this),
       prefetchRouteModules: this.prefetchRouteModules.bind(this),
@@ -143,7 +152,6 @@ export class FileRouterController {
         params,
         query,
         pathname: window.location.pathname,
-        path: window.location.pathname,
         hash: window.location.hash,
         signal: this.abortController.signal,
       }
@@ -344,7 +352,6 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
 
       const routerState: RouterState = {
         pathname: path,
-        path,
         hash: window.location.hash,
         params,
         query,

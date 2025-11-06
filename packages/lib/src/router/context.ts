@@ -15,7 +15,14 @@ export interface FileRouterContextType {
   /**
    * The current router state
    */
-  state: RouterState
+  state: RouterState & {
+    /**
+     * The current route path
+     * @deprecated
+     * Use `router.state.pathname` instead
+     */
+    path: string
+  }
 
   /**
    * Navigate to a new route, optionally replacing the current route

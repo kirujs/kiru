@@ -75,15 +75,6 @@ export interface RouterState {
    * "/users/[id]" -> "/users/123"
    */
   pathname: string
-
-  /**
-   * The current path
-   * @example
-   * "/users/[id]" -> "/users/123"
-   * @deprecated
-   * Use `pathname` instead
-   */
-  path: string
   /**
    * The current hash
    * @example
