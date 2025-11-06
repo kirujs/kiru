@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import fs from "node:fs"
-import degit from "degit"
-import { program } from "commander"
 import { spawn } from "node:child_process"
+import { program } from "commander"
+import degit from "degit"
 import { execa } from "execa"
 import inquirer from "inquirer"
 
@@ -44,7 +44,7 @@ program
   .description(
     "A command-line tool for quickly creating Kiru applications from a template."
   )
-  .version("0.0.9", "-v, --version", "output the current version")
+  .version("0.0.10", "-v, --version", "output the current version")
   .usage("[options]")
   .option("-d, --dir <dir>", "Destination directory")
   .option(
