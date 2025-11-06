@@ -1,6 +1,5 @@
-import path from "node:path"
-import fs from "node:fs"
 import type { SSGOptions } from "./types.js"
+import { resolveUserDocument } from "./utils.js"
 
 export const VIRTUAL_ROUTES_ID = "virtual:kiru:routes"
 export const VIRTUAL_ENTRY_SERVER_ID = "virtual:kiru:entry-server"
@@ -10,13 +9,6 @@ export function createVirtualModules(
   projectRoot: string,
   ssgOptions: Required<SSGOptions>
 ) {
-  function resolveUserDocument(): string {
-    const { dir, document } = ssgOptions
-    const fp = path.resolve(projectRoot, dir, document)
-    if (fs.existsSync(fp)) return fp.replace(/\\/g, "/")
-    throw new Error(`Document not found at ${fp}`)
-  }
-
   function createRoutesModule(): string {
     const { dir, baseUrl, page, layout, transition } = ssgOptions
     return `
@@ -35,7 +27,7 @@ export { dir, baseUrl, pages, layouts, transition }
   }
 
   function createEntryServerModule(): string {
-    const userDoc = resolveUserDocument()
+    const userDoc = resolveUserDocument(projectRoot, ssgOptions)
     return `
 import {
   render as kiruServerRender,
@@ -60,7 +52,7 @@ export async function generateStaticPaths() {
     return `
 import { initClient } from "kiru/router/client"
 import { dir, baseUrl, pages, layouts, transition } from "${VIRTUAL_ROUTES_ID}"
-import "${resolveUserDocument()}"
+import "${resolveUserDocument(projectRoot, ssgOptions)}"
 
 initClient({ dir, baseUrl, pages, layouts, transition })
 `

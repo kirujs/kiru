@@ -121,40 +121,17 @@ async function getClientAssets(clientOutDirAbs: string, manifestPath: string) {
 function collectCssForModules(
   manifest: Manifest,
   moduleIds: string[],
-  projectRoot: string,
-  log?: (...data: any[]) => void
+  projectRoot: string
 ): string {
   const seen = new Set<string>()
   const cssFiles = new Set<string>()
-
-  if (log) {
-    log(
-      ANSI.yellow("[SSG CSS]"),
-      `Collecting CSS for ${moduleIds.length} modules:`
-    )
-    moduleIds.forEach((id) => log(ANSI.yellow("[SSG CSS]"), `  - ${id}`))
-  }
 
   const collectCss = (key: string) => {
     if (seen.has(key)) return
     seen.add(key)
     const it = manifest[key]
     if (!it) {
-      if (log)
-        log(ANSI.yellow("[SSG CSS]"), `  Key not found in manifest: ${key}`)
       return
-    }
-    if (log) {
-      log(ANSI.yellow("[SSG CSS]"), `  Processing manifest key: ${key}`)
-      if (it.css && it.css.length > 0) {
-        log(ANSI.yellow("[SSG CSS]"), `    Found CSS: ${it.css.join(", ")}`)
-      }
-      if (it.imports && it.imports.length > 0) {
-        log(
-          ANSI.yellow("[SSG CSS]"),
-          `    Found imports: ${it.imports.length} imports`
-        )
-      }
     }
     ;(it.css || []).forEach((c: string) => cssFiles.add(c))
     ;(it.imports || []).forEach((imp: string) => collectCss(imp))
@@ -163,7 +140,6 @@ function collectCssForModules(
   // Include entry client CSS which contains document-level styles
   const entryClientKey = "virtual:kiru:entry-client"
   if (manifest[entryClientKey] && !seen.has(entryClientKey)) {
-    if (log) log(ANSI.yellow("[SSG CSS]"), `Including entry client CSS`)
     collectCss(entryClientKey)
   }
 
@@ -176,31 +152,18 @@ function collectCssForModules(
       normalizedId = normalizedId.substring(1)
     }
 
-    if (log) {
-      log(ANSI.yellow("[SSG CSS]"), `Looking for module: ${moduleId}`)
-      log(ANSI.yellow("[SSG CSS]"), `  Normalized: ${normalizedId}`)
-    }
-
-    let found = false
-
     if (manifest[normalizedId]) {
-      if (log) log(ANSI.green("[SSG CSS]"), `  ✓ Found as: ${normalizedId}`)
       collectCss(normalizedId)
-      found = true
       continue
     }
 
     if (manifest["/" + normalizedId]) {
-      if (log) log(ANSI.green("[SSG CSS]"), `  ✓ Found as: /${normalizedId}`)
       collectCss("/" + normalizedId)
-      found = true
       continue
     }
 
     if (manifest[moduleId]) {
-      if (log) log(ANSI.green("[SSG CSS]"), `  ✓ Found as: ${moduleId}`)
       collectCss(moduleId)
-      found = true
       continue
     }
 
@@ -215,19 +178,9 @@ function collectCssForModules(
           normalizedId.endsWith(keyNormalized)) &&
         moduleBaseName === keyBaseName
       ) {
-        if (log)
-          log(ANSI.green("[SSG CSS]"), `  ✓ Found by basename match: ${key}`)
         collectCss(key)
-        found = true
         break
       }
-    }
-
-    if (!found && log) {
-      log(
-        ANSI.red("[SSG CSS]"),
-        `  ✗ Module not found in manifest: ${moduleId}`
-      )
     }
   }
 
@@ -235,17 +188,7 @@ function collectCssForModules(
     const links = Array.from(cssFiles)
       .map((f) => `<link rel="stylesheet" type="text/css" href="/${f}">`)
       .join("")
-    if (log) {
-      log(ANSI.green("[SSG CSS]"), `Collected ${cssFiles.size} CSS file(s):`)
-      Array.from(cssFiles).forEach((f) =>
-        log(ANSI.green("[SSG CSS]"), `  - ${f}`)
-      )
-    }
     return links
-  }
-
-  if (log) {
-    log(ANSI.yellow("[SSG CSS]"), "No CSS files collected")
   }
 
   return ""
@@ -287,17 +230,9 @@ async function renderRoute(
   const documentModuleId = documentPath.replace(/\\/g, "/")
   moduleIds.push(documentModuleId)
 
-  if (state.loggingEnabled) {
-    log(ANSI.cyan("[SSG]"), `Rendering route: ${route}`)
-    log(ANSI.cyan("[SSG]"), `  Document module: ${documentModuleId}`)
-  }
-
   const ctx: RenderContext = {
     registerModule: (moduleId: string) => {
       moduleIds.push(moduleId)
-      if (state.loggingEnabled) {
-        log(ANSI.cyan("[SSG]"), `  Registered module: ${moduleId}`)
-      }
     },
     registerPreloadedPageProps: (props) => {
       ;(state.staticProps[srcFilePath] ??= {})[route] = props
@@ -306,18 +241,11 @@ async function renderRoute(
   const result = await mod.render(route, ctx)
   let html = result.body
 
-  if (state.loggingEnabled) {
-    log(ANSI.cyan("[SSG]"), `  Total modules tracked: ${moduleIds.length}`)
-  }
+  log(ANSI.cyan("[SSG]"), `  Total modules tracked: ${moduleIds.length}`)
 
   let cssLinks = ""
   if (manifest) {
-    cssLinks = collectCssForModules(
-      manifest,
-      moduleIds,
-      projectRoot,
-      state.loggingEnabled ? log : undefined
-    )
+    cssLinks = collectCssForModules(manifest, moduleIds, projectRoot)
   }
 
   if (clientEntry) {

@@ -23,7 +23,7 @@ export interface SSGOptions {
   dir?: string
   /**
    * The name of the document component
-   * @default "document.tsx"
+   * @default "document.{tsx,jsx}"
    */
   document?: string
   /**
@@ -100,7 +100,7 @@ export interface KiruPluginOptions {
    * ```ts
    * ssg: {
    *   dir: "./src/app",
-   *   document: "document.tsx",
+   *   document: "document.{tsx,jsx}",
    *   page: "index.{tsx,jsx}",
    *   layout: "layout.{tsx,jsx}",
    *   transition: true

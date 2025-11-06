@@ -17,7 +17,8 @@ export function resolveUserDocument(
 ): string {
   const { dir, document } = ssgOptions
   const fp = path.resolve(projectRoot, dir, document)
-  if (fs.existsSync(fp)) return fp.replace(/\\/g, "/")
+  const res = fs.globSync(fp)
+  if (res.length) return res[0].replace(/\\/g, "/")
   throw new Error(`Document not found at ${fp}`)
 }
 

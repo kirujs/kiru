@@ -48,7 +48,7 @@ kiru({
   app: {
     baseUrl: "/", // Base URL for the app
     dir: "src/pages", // Directory containing pages
-    document: "document.tsx", // Document component file
+    document: "document.{tsx,jsx}", // Document component file
     page: "index.{tsx,jsx}", // Page component pattern
     layout: "layout.{tsx,jsx}", // Layout component pattern
   },
