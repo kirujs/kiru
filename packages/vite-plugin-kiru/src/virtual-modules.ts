@@ -5,10 +5,12 @@ export const VIRTUAL_ROUTES_ID = "virtual:kiru:routes"
 export const VIRTUAL_ENTRY_SERVER_ID = "virtual:kiru:entry-server"
 export const VIRTUAL_ENTRY_CLIENT_ID = "virtual:kiru:entry-client"
 
-export function createVirtualModules(
+export async function createVirtualModules(
   projectRoot: string,
   ssgOptions: Required<SSGOptions>
 ) {
+  const userDoc = await resolveUserDocument(projectRoot, ssgOptions)
+
   function createRoutesModule(): string {
     const { dir, baseUrl, page, layout, transition } = ssgOptions
     return `
@@ -27,7 +29,6 @@ export { dir, baseUrl, pages, layouts, transition }
   }
 
   function createEntryServerModule(): string {
-    const userDoc = resolveUserDocument(projectRoot, ssgOptions)
     return `
 import {
   render as kiruServerRender,
@@ -52,7 +53,7 @@ export async function generateStaticPaths() {
     return `
 import { initClient } from "kiru/router/client"
 import { dir, baseUrl, pages, layouts, transition } from "${VIRTUAL_ROUTES_ID}"
-import "${resolveUserDocument(projectRoot, ssgOptions)}"
+import "${userDoc}"
 
 initClient({ dir, baseUrl, pages, layouts, transition })
 `

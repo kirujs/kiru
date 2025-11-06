@@ -34,12 +34,12 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       inlineConfig = config
       return createViteConfig(config, opts)
     },
-    configResolved(config) {
+    async configResolved(config) {
       const initialState = createPluginState(opts)
       state = updatePluginState(initialState, config, opts)
       log = createLogger(state)
       if (state.ssgOptions) {
-        virtualModules = createVirtualModules(
+        virtualModules = await createVirtualModules(
           state.projectRoot,
           state.ssgOptions
         )

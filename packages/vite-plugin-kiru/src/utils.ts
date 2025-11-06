@@ -1,5 +1,4 @@
 import path from "node:path"
-import fs from "node:fs"
 import type { PluginState } from "./config.js"
 import { ANSI } from "./ansi.js"
 import { SSGOptions } from "./types.js"
@@ -11,13 +10,14 @@ export function createLogger(state: PluginState) {
   }
 }
 
-export function resolveUserDocument(
+export async function resolveUserDocument(
   projectRoot: string,
   ssgOptions: Required<SSGOptions>
-): string {
+): Promise<string> {
   const { dir, document } = ssgOptions
   const fp = path.resolve(projectRoot, dir, document)
-  const res = fs.globSync(fp)
+  const { globSync } = await import("node:fs")
+  const res = globSync(fp)
   if (res.length) return res[0].replace(/\\/g, "/")
   throw new Error(`Document not found at ${fp}`)
 }
