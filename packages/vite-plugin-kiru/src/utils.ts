@@ -21,16 +21,24 @@ export function resolveUserDocument(
   throw new Error(`Document not found at ${fp}`)
 }
 
+const TRANSFORMABLE_EXTENSIONS = new Set([
+  ".tsx",
+  ".jsx",
+  ".ts",
+  ".js",
+  ".mjs",
+  ".mts",
+  ".md",
+  ".mdx",
+])
+
 export function shouldTransformFile(id: string, state: PluginState): boolean {
+  // Fast exclusions
   if (
-    id.startsWith("\0") ||
+    id[0] === "\0" ||
     id.startsWith("vite:") ||
     id.includes("/node_modules/")
   ) {
-    return false
-  }
-
-  if (!/\.[cm]?[jt]sx?$/.test(id)) {
     return false
   }
 
@@ -38,6 +46,10 @@ export function shouldTransformFile(id: string, state: PluginState): boolean {
   const isIncludedByUser = state.includedPaths.some((p) =>
     filePath.startsWith(p)
   )
+  const isWithinProject = filePath.startsWith(state.projectRoot)
 
-  return isIncludedByUser || filePath.startsWith(state.projectRoot)
+  return (
+    (isWithinProject || isIncludedByUser) &&
+    TRANSFORMABLE_EXTENSIONS.has(path.extname(filePath))
+  )
 }
