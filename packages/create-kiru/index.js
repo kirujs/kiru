@@ -44,7 +44,7 @@ program
   .description(
     "A command-line tool for quickly creating Kiru applications from a template."
   )
-  .version("0.0.10", "-v, --version", "output the current version")
+  .version("0.0.11", "-v, --version", "output the current version")
   .usage("[options]")
   .option("-d, --dir <dir>", "Destination directory")
   .option(
