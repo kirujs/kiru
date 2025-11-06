@@ -70,11 +70,24 @@ export interface RouteQuery {
 
 export interface RouterState {
   /**
+   * The current pathname
+   * @example
+   * "/users/[id]" -> "/users/123"
+   */
+  pathname: string
+
+  /**
    * The current path
+   * @example
+   * "/users/[id]" -> "/users/123"
+   * @deprecated
+   * Use `pathname` instead
    */
   path: string
   /**
    * The current hash
+   * @example
+   * "/users/123#profile" -> "#profile"
    */
   hash: string
   /**

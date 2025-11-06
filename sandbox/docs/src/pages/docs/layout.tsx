@@ -11,13 +11,13 @@ export default function DocsLayout({ children }: { children: JSX.Children }) {
   const sectionIds = useMemo(() => {
     let pageData: DocItem | null = null
     for (const docItem of docMeta) {
-      if (docItem.href === router.state.path) {
+      if (docItem.href === router.state.pathname) {
         pageData = docItem
         break
       }
       if (docItem.pages) {
         const res = docItem.pages.find(
-          (page) => page.href === router.state.path
+          (page) => page.href === router.state.pathname
         )
         if (res) {
           pageData = res
@@ -27,7 +27,7 @@ export default function DocsLayout({ children }: { children: JSX.Children }) {
     }
     if (!pageData) return []
     return pageData.sections?.map(({ id }) => id) ?? []
-  }, [router.state.path])
+  }, [router.state.pathname])
   useHashChangeDispatcher(sectionIds)
 
   return (

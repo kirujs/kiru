@@ -11,7 +11,7 @@ export default function AboutPage() {
         You can see the navigation from the root layout and the sidebar from the
         about layout.
       </p>
-      <p>Current path: {router.state.path}</p>
+      <p>Current path: {router.state.pathname}</p>
       <p>Query params: {JSON.stringify(router.state.query)}</p>
       <button onclick={() => router.navigate("/")}>Go Home</button>
     </div>

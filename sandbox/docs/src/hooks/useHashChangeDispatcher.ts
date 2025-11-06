@@ -8,7 +8,7 @@ export const useHashChangeDispatcher = (sectionIds: string[]) => {
   const hasScrolled = useRef(false)
   useEffect(() => {
     hasScrolled.current = false
-  }, [router.state.path])
+  }, [router.state.pathname])
 
   function findSectionCompletelyInViewport() {
     for (const sectionId of sectionIds) {

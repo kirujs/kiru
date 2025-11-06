@@ -35,7 +35,7 @@ export function CommandPallete() {
     }
   }, [])
 
-  useEffect(() => (open && setOpen(false), void 0), [router.state.path])
+  useEffect(() => (open && setOpen(false), void 0), [router.state.pathname])
 
   function focusSender() {
     const el = prevActiveElement.current
@@ -216,7 +216,7 @@ function CommandPalleteItem({
       className="w-full text-muted bg-white/1 border border-white/5 p-2 rounded-sm focus:bg-white/5 hover:bg-white/5"
       to={item.href}
       onclick={() =>
-        isLinkActive(item.href, router.state.path) && setOpen(false)
+        isLinkActive(item.href, router.state.pathname) && setOpen(false)
       }
       target={external ? "_blank" : "_self"}
     >

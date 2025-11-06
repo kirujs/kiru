@@ -5,7 +5,7 @@ export default function _404Page() {
 
   return (
     <>
-      <h1>404 - {router.state.path}</h1>
+      <h1>404 - {router.state.pathname}</h1>
       <p>Page not found</p>
     </>
   )

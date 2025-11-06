@@ -50,7 +50,7 @@ export function SidebarContent() {
           {data.pages && (
             <LinkList>
               {data.pages.map((page) => {
-                const isActive = isLinkActive(page.href, router.state.path)
+                const isActive = isLinkActive(page.href, router.state.pathname)
                 let hasNewSection = false
                 if (page.status?.type !== "new") {
                   hasNewSection = !!page.sections?.some((s) => s.isNew)
@@ -70,7 +70,7 @@ export function SidebarContent() {
                         key={page.href}
                         to={page.href}
                         onclick={() =>
-                          isLinkActive(page.href, router.state.path) &&
+                          isLinkActive(page.href, router.state.pathname) &&
                           open &&
                           setOpen(false)
                         }

@@ -8,7 +8,7 @@ export default function Blog404() {
         <title>Blog 404 Route</title>
       </Head.Content>
       <h1>Blog 404 Route</h1>
-      <p>src: {router.state.path}</p>
+      <p>src: {router.state.pathname}</p>
     </div>
   )
 }

@@ -15,7 +15,7 @@ export function NavDrawer() {
   } = useNavDrawer()
   const router = useFileRouter()
 
-  useEffect(() => (open && setOpen(false), void 0), [router.state.path])
+  useEffect(() => (open && setOpen(false), void 0), [router.state.pathname])
 
   return (
     <Transition
@@ -55,14 +55,14 @@ export function NavDrawer() {
                     <Link
                       key={link.href}
                       to={link.href}
-                      className={`inline-flex items-center gap-1 text-base font-medium ${isLinkActive(link.activePath ?? link.href, router.state.path) ? "" : "text-muted"}`}
+                      className={`inline-flex items-center gap-1 text-base font-medium ${isLinkActive(link.activePath ?? link.href, router.state.pathname) ? "" : "text-muted"}`}
                     >
                       {link.title}
                     </Link>
                   )
                 )}
               </div>
-              {router.state.path.startsWith("/docs") && (
+              {router.state.pathname.startsWith("/docs") && (
                 <>
                   <hr className="my-6 mx-2 border-white border-opacity-10" />
                   <div className="flex flex-col gap-2 text-base xs:text-base px-2 ">

@@ -86,6 +86,7 @@ export async function render(
       props = { loading: true, data: null, error: null }
     } else {
       const routerState: RouterState = {
+        pathname: u.pathname,
         path: u.pathname,
         hash: "",
         params,
@@ -143,7 +144,7 @@ export async function render(
       state: {
         params,
         query,
-        path: u.pathname,
+        pathname: u.pathname,
         signal: abortController.signal, // Server-side signal (not abortable)
       } as RouterState,
     },

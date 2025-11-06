@@ -5,9 +5,9 @@ export default function _404Page() {
   return (
     <>
       <Head.Content>
-        <title>404 - {router.state.path}</title>
+        <title>404 - {router.state.pathname}</title>
       </Head.Content>
-      <h1>404 - {router.state.path}</h1>
+      <h1>404 - {router.state.pathname}</h1>
     </>
   )
 }

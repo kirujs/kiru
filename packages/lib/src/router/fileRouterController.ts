@@ -63,6 +63,7 @@ export class FileRouterController {
     this.currentPageProps = new Signal({})
     this.currentLayouts = new Signal([])
     this.state = {
+      pathname: window.location.pathname,
       path: window.location.pathname,
       hash: window.location.hash,
       params: {},
@@ -141,6 +142,7 @@ export class FileRouterController {
       this.state = {
         params,
         query,
+        pathname: window.location.pathname,
         path: window.location.pathname,
         hash: window.location.hash,
         signal: this.abortController.signal,
@@ -224,7 +226,7 @@ export class FileRouterController {
       let cachedData = null
       if (loader.mode !== "static" && loader.cache) {
         const cacheKey: CacheKey = {
-          path: this.state.path,
+          path: this.state.pathname,
           params: this.state.params,
           query: this.state.query,
         }
@@ -341,6 +343,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       }
 
       const routerState: RouterState = {
+        pathname: path,
         path,
         hash: window.location.hash,
         params,
@@ -363,7 +366,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
           let cachedData = null
           if (loader.mode !== "static" && loader.cache) {
             const cacheKey: CacheKey = {
-              path: routerState.path,
+              path: routerState.pathname,
               params: routerState.params,
               query: routerState.query,
             }
@@ -444,7 +447,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
           // Cache the data if caching is enabled
           if (loader.mode !== "static" && loader.cache) {
             const cacheKey: CacheKey = {
-              path: routerState.path,
+              path: routerState.pathname,
               params: routerState.params,
               query: routerState.query,
             }
@@ -484,7 +487,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
     routerCache.current!.invalidate(...paths)
 
     // Check if current page matches any invalidated paths
-    const currentPath = this.state.path
+    const currentPath = this.state.pathname
     const shouldRefresh = routerCache.current!.pathMatchesPattern(
       currentPath,
       paths
@@ -551,7 +554,9 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
 
   private setQuery(query: RouteQuery) {
     const queryString = buildQueryString(query)
-    const newUrl = `${this.state.path}${queryString ? `?${queryString}` : ""}`
+    const newUrl = `${this.state.pathname}${
+      queryString ? `?${queryString}` : ""
+    }`
     window.history.pushState(null, "", newUrl)
     this.state = { ...this.state, query }
     return this.loadRoute()
