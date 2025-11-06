@@ -253,6 +253,7 @@ type LinkRel =
   | "archives"
   | "author"
   | "bookmark"
+  | "canonical"
   | "external"
   | "first"
   | "help"
