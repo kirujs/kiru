@@ -10,7 +10,6 @@ import {
   VIRTUAL_ENTRY_SERVER_ID,
   VIRTUAL_ENTRY_CLIENT_ID,
 } from "./virtual-modules.js"
-import { ManualChunksOption } from "rollup"
 
 export const defaultEsBuildOptions: ESBuildOptions = {
   jsxInject: `import { createElement as _jsx, Fragment as _jsxFragment } from "kiru"`,
