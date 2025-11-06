@@ -133,7 +133,7 @@ export async function render(
     !documentShell.includes("<kiru-body-outlet>")
   ) {
     throw new Error(
-      "[kiru/router]: Document is expected to contain a <Body.Outlet> element. See https://kirujs.dev/docs/api/file-router#ssg"
+      "[kiru/router]: Document is expected to contain a <Body.Outlet> element. See https://kirujs.dev/docs/api/file-router#general-usage"
     )
   }
 
