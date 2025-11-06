@@ -12,9 +12,12 @@
   },
   "dependencies": {
     "commander": "^12.1.0",
+    "degit": "^2.8.4",
     "execa": "^9.6.0",
-    "inquirer": "^11.1.0",
-    "simple-git": "^3.28.0"
+    "inquirer": "^11.1.0"
   },
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@types/degit": "^2.8.6"
+  }
 }

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import fs from "node:fs"
-import path from "node:path"
-import { simpleGit } from "simple-git"
+import degit from "degit"
 import { program } from "commander"
-import inquirer from "inquirer"
+import { spawn } from "node:child_process"
 import { execa } from "execa"
+import inquirer from "inquirer"
 
 const pieces = process.argv[1]?.split("/") || []
 let executingPackageManager = "npm"
@@ -18,104 +18,96 @@ if (pieces.find((x) => x.includes("pnpm"))) {
 
 const templates = [
   {
-    name: "CSR (Client-side rendering)",
+    name: "CSR",
+    description: "Client-side rendering",
     value: "https://github.com/kirujs/kiru-csr-template.git",
   },
   {
-    name: "SSG (Static site generation)",
+    name: "SSG",
+    description: "Static site generation",
     value: "https://github.com/kirujs/kiru-ssg-template.git",
   },
   {
-    name: "SSR (Server-side rendering) with Vike",
+    name: "SSR",
+    description: "Server-side rendering with Vike",
     value: "https://github.com/kirujs/kiru-ssr-template.git",
   },
   {
-    name: "Tauri (Webview-based Desktop app)",
+    name: "Tauri",
+    description: "Webview-based Desktop application",
     value: "https://github.com/kirujs/kiru-tauri-template.git",
   },
 ]
 
-const defaultDir = "."
-
 program
-  .option("-d, --dest <dest>", "Destination directory")
-  .option("-t, --template <template>", "Choose template")
-  .action(async ({ dest, template }) => {
-    console.log("[create-kiru]: Welcome!\n")
-    if (!dest) {
-      const { selectedDest } = await inquirer.prompt([
-        {
-          type: "input",
-          name: "selectedDest",
-          message:
-            "Where should we create your project? \n(default: current directory)",
-          default: defaultDir,
-        },
-      ])
-      dest = selectedDest
+  .name("create-kiru")
+  .description(
+    "A command-line tool for quickly creating Kiru applications from a template."
+  )
+  .version("0.0.9", "-v, --version", "output the current version")
+  .usage("[options]")
+  .option("-d, --dir <dir>", "Destination directory")
+  .option(
+    "-t, --template <template>",
+    "Choose template (available options: CSR, SSG, SSR, Tauri)"
+  )
+  .option("-i, --install", "Install dependencies")
+  .option("-s, --start", "Start the app")
+  .option("-h, --help", "Show help")
+  .action(async ({ dir, template, install, start, help }) => {
+    console.log("[create-kiru]: Welcome!")
+    if (help) {
+      console.log(program.helpInformation())
+      return
+    }
+    let templateOption
+    if (template) {
+      template = template.toLowerCase()
+      const match = templates.find((t) => t.name.toLowerCase() === template)
+
+      if (!match) {
+        console.error(`[create-kiru]: Invalid template.
+Available templates: ${templates.map((t) => t.name).join(", ")}.
+Exiting...`)
+        return
+      }
+
+      console.log(
+        `[create-kiru]: Using template: ${match.name} (${match.description})`
+      )
+
+      templateOption = match
     }
 
-    // if the folder exists already and contains files, ask if it should be overwritten
-    if (fs.existsSync(dest)) {
-      const stats = fs.statSync(dest)
-      if (stats.isDirectory()) {
-        const destChildren = fs.readdirSync(dest)
-        if (destChildren.length > 0) {
-          const { overwrite } = await inquirer.prompt([
-            {
-              type: "list",
-              name: "overwrite",
-              message:
-                "The folder already exists and is not empty. \nIn order to proceed, it will be deleted. Do you want to continue?",
-              choices: [
-                {
-                  name: "Yes",
-                  value: "y",
-                },
-                {
-                  name: "No",
-                  value: "n",
-                },
-              ],
-            },
-          ])
-          if (overwrite === "n") return
+    if (!dir) {
+      const { selectedDir } = await inquirer.prompt([
+        {
+          type: "input",
+          name: "selectedDir",
+          message:
+            "Where should we create your project? \n(default: current directory)",
+          default: ".",
+        },
+      ])
+      dir = selectedDir
+    }
 
-          for (const file of destChildren) {
-            const filePath = path.join(dest, file)
-            fs.rmSync(filePath, { recursive: true, force: true })
-          }
-        }
-      } else if (stats.isFile()) {
-        const { overwrite } = await inquirer.prompt([
-          {
-            type: "list",
-            name: "overwrite",
-            message:
-              "There is already a file at the destination. \nIn order to proceed, it will be deleted. Do you want to continue?",
-            choices: [
-              {
-                name: "Yes",
-                value: "y",
-              },
-              {
-                name: "No",
-                value: "n",
-              },
-            ],
-          },
-        ])
-        if (overwrite === "n") return
-        fs.rmSync(dest, { recursive: true, force: true })
-      } else {
-        throw new Error(
-          `[create-kiru]: Unknown file type at ${dest}. Exiting...`
-        )
+    // if it's a directory, ensure it is empty
+    if (fs.existsSync(dir)) {
+      const stats = fs.statSync(dir)
+      if (!stats.isDirectory()) {
+        console.error(`[create-kiru]: ${dir} is not a directory. Exiting...`)
+        return
+      }
+
+      const files = fs.readdirSync(dir)
+      if (files.length > 0) {
+        console.error(`[create-kiru]: ${dir} is not empty. Exiting...`)
+        return
       }
     }
 
-    let templateUrl = ""
-    if (!template) {
+    if (!templateOption) {
       const { selectedTemplate } = await inquirer.prompt([
         {
           type: "list",
@@ -124,21 +116,24 @@ program
           choices: templates,
         },
       ])
-      templateUrl = selectedTemplate
-    } else {
-      templateUrl = templates.find((t) => t.value === template)?.value || ""
-    }
-    const isValidTemplate = templates.some((t) => t.value === templateUrl)
-    if (!isValidTemplate) {
-      console.error("[create-kiru]: Invalid template. Exiting...")
-      return
+
+      const match = templates.find((t) => t.value === selectedTemplate)
+
+      if (!match) {
+        console.error("[create-kiru]: Invalid template. Exiting...")
+        return
+      }
+
+      templateOption = match
     }
 
-    console.log(`Downloading project template '${templateUrl}'...`)
     try {
-      await simpleGit().clone(templateUrl, dest)
-      fs.rmSync(`${dest}/.git`, { recursive: true, force: true })
-      simpleGit(dest).init()
+      const emitter = degit(`${templateOption.value}#main`)
+      emitter.on("info", (info) => {
+        console.log("[create-kiru]:", info.message)
+      })
+
+      await emitter.clone(dir)
     } catch (error) {
       console.error(
         `[create-kiru]: An error occurred while cloning the template:`,
@@ -147,67 +142,86 @@ program
       return
     }
 
-    const availablePackageManagers = await detectPackageManager()
+    if (!install) {
+      const { installNow } = await inquirer.prompt([
+        {
+          type: "confirm",
+          name: "installNow",
+          message: `Do you want to install the dependencies now? (Detected package manager: ${executingPackageManager})`,
+          default: true,
+        },
+      ])
 
-    const { packageManager } = await inquirer.prompt([
-      {
-        type: "list",
-        name: "packageManager",
-        message: "Which package manager do you want to use?",
-        choices: availablePackageManagers,
-        default: executingPackageManager,
-      },
-    ])
-
-    let devCmd
-    if (packageManager === "pnpm") {
-      devCmd = "pnpm dev"
-    } else if (packageManager === "yarn") {
-      devCmd = "yarn dev"
-    } else if (packageManager === "bun") {
-      devCmd = "bun dev"
-    } else {
-      devCmd = "npm run dev"
+      if (!installNow) {
+        console.log(
+          `[create-kiru]: Configuration complete. Run \`${executingPackageManager} install\` in ${dir} to install them.`
+        )
+        return
+      }
     }
-    console.log(`[create-kiru]: Project template downloaded. Get started by running the following:
-    
-    
-  cd ${dest}
-  ${packageManager} install
-  ${devCmd}
-`)
+
+    try {
+      console.log(`[create-kiru]: Installing dependencies...`)
+      const stream = execa({
+        shell: true,
+        windowsHide: false,
+      })`cd ${dir} && ${executingPackageManager} install`.readable()
+
+      stream.on("data", (d) => console.log(d.toString()))
+      await new Promise((resolve) => stream.on("end", resolve))
+
+      console.log(`[create-kiru]: Dependencies installed successfully!`)
+    } catch (error) {
+      console.error(
+        `[create-kiru]: An error occurred while installing dependencies:`,
+        error
+      )
+      return
+    }
+
+    let runDevCommand = `${executingPackageManager} dev`
+    if (executingPackageManager === "npm") {
+      runDevCommand = `npm run dev`
+    }
+
+    if (!start) {
+      const { startNow } = await inquirer.prompt([
+        {
+          type: "confirm",
+          name: "startNow",
+          message: "Do you want to run the project now?",
+          default: true,
+        },
+      ])
+      if (!startNow) {
+        console.log(
+          `[create-kiru]: Configuration complete. Run \`${runDevCommand}\` in ${dir} to start the app.`
+        )
+        return
+      }
+    }
+
+    try {
+      console.log(`[create-kiru]: Running Vite dev server...`)
+      const args = executingPackageManager === "npm" ? ["run", "dev"] : ["dev"]
+      const child = spawn(executingPackageManager, [...args, "--", "--open"], {
+        shell: true,
+        windowsHide: false,
+        cwd: dir,
+      })
+      child.stdout.on("data", (d) => console.log(d.toString()))
+      child.stderr.on("data", (d) => console.log(d.toString()))
+      process.on("SIGINT", () => {
+        child.kill("SIGINT")
+        console.log(`[create-kiru]: Vite dev server stopped.`)
+        process.exit(0)
+      })
+    } catch (error) {
+      console.error(
+        `[create-kiru]: An error occurred while running dev server:`,
+        error
+      )
+    }
   })
 
 program.parse(process.argv)
-
-const detectPackageManager = async () => {
-  const [hasYarn, hasPnpm, hasBun] = await Promise.all([
-    hasGlobalInstallation("yarn"),
-    hasGlobalInstallation("pnpm"),
-    hasGlobalInstallation("bun"),
-  ])
-
-  const packageManagers = []
-  if (hasPnpm) packageManagers.push("pnpm")
-  if (hasYarn) packageManagers.push("yarn")
-  if (hasBun) packageManagers.push("bun")
-  packageManagers.push("npm") // npm as fallback
-
-  const currentPmIdx = packageManagers.indexOf(executingPackageManager)
-  // shift it to the start
-  packageManagers.unshift(...packageManagers.splice(currentPmIdx, 1))
-  return packageManagers
-}
-
-/**
- * Check if a global pm is available
- * @param {string} pm
- * @returns {Promise<boolean>}
- */
-function hasGlobalInstallation(pm) {
-  return execa(pm, ["--version"])
-    .then((res) => {
-      return /^\d+.\d+.\d+$/.test(res.stdout)
-    })
-    .catch(() => false)
-}
