@@ -204,7 +204,7 @@ Exiting...`)
     try {
       console.log(`[create-kiru]: Running Vite dev server...`)
       const args = executingPackageManager === "npm" ? ["run", "dev"] : ["dev"]
-      const child = spawn(executingPackageManager, [...args, "--", "--open"], {
+      const child = spawn(executingPackageManager, [...args, "--open"], {
         shell: true,
         windowsHide: false,
         cwd: dir,
