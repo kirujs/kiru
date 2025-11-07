@@ -65,7 +65,7 @@ export const Link: Kiru.FC<LinkProps> = ({
       e.preventDefault()
       navigate(to, { replace, transition })
     },
-    [to, navigate, onclick, replace]
+    [onclick, navigate, to, replace, transition]
   )
 
   return createElement("a", {

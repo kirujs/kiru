@@ -96,29 +96,17 @@ export class FileRouterController {
       this.pageRouteToConfig = new Map()
     }
 
-    const handlePopState = () => this.loadRoute()
     window.addEventListener("popstate", (e) => {
-      const state = e.state
-      if (!isCustomNavigationState(state)) {
-        this.loadRoute()
-        return
-      }
+      e.preventDefault()
+      const { pathname: prevPath, hash: prevHash } = this.state
+      const { pathname: nextPath, hash: nextHash } = window.location
 
       this.loadRoute().then(() => {
-        nextIdle(() => {
-          if (state.prevHash !== state.nextHash) {
-            window.location.hash = ""
-            window.location.hash = state.nextHash
-          }
-          if (!state.nextHash) {
-            window.scrollTo(0, 0)
-          }
-        })
+        if (prevHash !== nextHash || prevPath !== nextPath) {
+          this.queueScrollManagement(nextHash)
+        }
       })
     })
-    this.cleanups.push(() =>
-      window.removeEventListener("popstate", handlePopState)
-    )
   }
 
   public init(config: FileRouterConfig) {
@@ -195,6 +183,7 @@ export class FileRouterController {
           })
         }
       }
+      // window.history.scrollRestoration = "manual"
     } else {
       this.pages = formatViteImportMap(
         pages as ViteImportMap,
@@ -210,6 +199,7 @@ export class FileRouterController {
       if (__DEV__) {
         validateRoutes(this.pages)
       }
+      //window.history.scrollRestoration = "manual"
       this.loadRoute()
     }
   }
@@ -513,27 +503,36 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       transition?: boolean
     }
   ) {
-    const { pathname: prevPath, hash: prevHash } = window.location
-
     const url = new URL(path, "http://localhost")
-    const { pathname: nextPath, hash: nextHash } = url
+    const { hash: prevHash, pathname: prevPath } = this.state
+    const { hash: nextHash, pathname: nextPath } = url
+
     if (options?.replace) {
       window.history.replaceState({}, "", path)
     } else {
       window.history.pushState({}, "", path)
     }
-    window.dispatchEvent(
-      new PopStateEvent("popstate", {
-        state: {
-          ["kiru-router-event"]: true,
-          prevPath,
-          nextPath,
-          prevHash,
-          nextHash,
-          transition: options?.transition ?? this.enableTransitions,
-        } satisfies CustomNavigationState,
-      })
-    )
+
+    this.loadRoute(
+      void 0,
+      void 0,
+      options?.transition ?? this.enableTransitions
+    ).then(() => {
+      if (prevHash !== nextHash || prevPath !== nextPath) {
+        this.queueScrollManagement(nextHash)
+      }
+    })
+  }
+
+  private queueScrollManagement(nextHash: string) {
+    nextIdle(() => {
+      let nextEl: HTMLElement | null = null
+      if (nextHash && (nextEl = document.getElementById(nextHash.slice(1)))) {
+        nextEl.scrollIntoView()
+      } else {
+        window.scrollTo(0, 0)
+      }
+    })
   }
 
   private async prefetchRouteModules(path: string) {
@@ -677,24 +676,4 @@ function routesConflict(route1: string, route2: string): boolean {
   }
 
   return true
-}
-
-interface CustomNavigationState {
-  ["kiru-router-event"]: true
-  prevHash: string
-  nextHash: string
-  prevPath: string
-  nextPath: string
-  transition: boolean
-}
-
-function isCustomNavigationState(
-  state: unknown
-): state is CustomNavigationState {
-  return (
-    typeof state === "object" &&
-    state !== null &&
-    "kiru-router-event" in state &&
-    state["kiru-router-event"] === true
-  )
 }
