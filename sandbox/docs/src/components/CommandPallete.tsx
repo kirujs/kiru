@@ -95,7 +95,7 @@ const filteredGroups = computed(() => {
         const defs = [
           sectionTitleLower,
           ...item.title.toLowerCase().split(" "),
-          ...(item.keywords ?? []).map((word) => word.toLowerCase()),
+          ...(item.tags ?? []).map((word) => word.toLowerCase()),
         ]
         let matched = 0
         for (let i = 0; i < terms.length; i++) {
@@ -201,7 +201,22 @@ function CommandPalleteItem({
           <span className="badge">Upcoming</span>
         </span>
 
-        <CommandPalleteBadges item={item} />
+        {item.tags && <CommandPalleteItemTags tags={item.tags} />}
+      </a>
+    )
+  }
+  if (external) {
+    return (
+      <a
+        className="w-full text-muted bg-white/1 border border-white/5 p-2 rounded-sm focus:bg-white/5 hover:bg-white/5"
+        href={item.href}
+        target="_blank"
+      >
+        <div className="flex items-start justify-between">
+          <span className="flex gap-1 items-center text-sm font-light">
+            {item.title} <ExternalLinkIcon width=".85rem" height=".85rem" />
+          </span>
+        </div>
       </a>
     )
   }
@@ -218,25 +233,23 @@ function CommandPalleteItem({
       onclick={() =>
         isLinkActive(item.href, router.state.pathname) && setOpen(false)
       }
-      target={external ? "_blank" : "_self"}
     >
       <div className="flex items-start justify-between">
         <span className="flex gap-1 items-center text-sm font-light">
           {item.title}{" "}
-          {external ? <ExternalLinkIcon width=".85rem" height=".85rem" /> : ""}
         </span>
         <DocItemStatus status={item.status} hasNewSection={hasNewSection} />
       </div>
-      <CommandPalleteBadges item={item} />
+      {item.tags && <CommandPalleteItemTags tags={item.tags} />}
     </Link>
   )
 }
 
-function CommandPalleteBadges({ item }: { item: DocPageLink }) {
-  if (!item.keywords) return null
+function CommandPalleteItemTags({ tags }: { tags: string[] }) {
+  if (!tags) return null
   return (
     <div className="flex flex-wrap gap-1 mt-1">
-      {item.keywords.map((keyword) => (
+      {tags.map((keyword) => (
         <span key={keyword} className="badge badge-muted">
           {keyword}
         </span>

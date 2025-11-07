@@ -15,6 +15,10 @@ export default function Page() {
           name="keywords"
           content="Kiru, KiruJS, Kiru JS, Typescript, Javascript, library, framework, frontend"
         />
+        <meta
+          name="description"
+          content="A batteries-included, easy-to-use rendering library with a tiny footprint"
+        />
       </Head.Content>
       <div className="w-full h-full overflow-x-hidden">
         <section>

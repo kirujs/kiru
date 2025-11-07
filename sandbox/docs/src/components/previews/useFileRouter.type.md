@@ -1,7 +1,8 @@
 ```ts
 () => {
   state: {
-    path: string
+    pathname: string
+    hash: string
     params: Record<string, string>
     query: Record<string, string>
     signal: AbortSignal
@@ -9,5 +10,6 @@
   navigate: (path: string, options?: { replace?: boolean; transition?: boolean }) => void
   prefetchRouteModules: (path: string) => void
   reload: (options?: { transition?: boolean }) => void
+  invalidate: (...paths: string[]) => void
 }
 ```

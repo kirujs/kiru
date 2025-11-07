@@ -9,6 +9,10 @@ export default function KeysWarningPage() {
       <Head.Content>
         <title>Kiru - Keys Warning</title>
         <meta name="keywords" content="error, keys warning, keys, warning" />
+        <meta
+          name="description"
+          content="Learn about keys warnings in Kiru - why items in lists need stable key props and how to fix duplicate or missing key errors."
+        />
       </Head.Content>
       <div className="flex justify-center pt-30 pb-5">
         <div className="w-full max-w-3xl flex flex-col gap-4 relative px-5 mt-(--navbar-height)">

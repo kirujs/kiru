@@ -17,9 +17,12 @@ import MountCode from "./mountCode.md"
 import MountCodeTS from "./mountCode.ts.md"
 import { siteCodeLang } from "$/state/siteCodeLang"
 import { DISCORD_LINK } from "$/constants"
+import { match } from "lit-match"
 
 <Head.Content>
-  <title>Kiru - Docs</title>
+  <title>Kiru - Getting Started</title>
+  <meta name="keywords" content="getting started, installation, setup, npm, pnpm, yarn, bun, vite, Kiru" />
+  <meta name="description" content="Get started with Kiru by installing it in a new project or adding it to an existing project. Learn how to set up Kiru with your preferred package manager." />
 </Head.Content>
 
 # Getting started
@@ -29,15 +32,12 @@ import { DISCORD_LINK } from "$/constants"
     <div className="not-prose">
       <PackageManagerSelector />
       <CopyInnerText>
-        {packageManager.value === "Bun" ? (
-          <BunCliBash />
-        ) : packageManager.value === "NPM" ? (
-          <NpmCliBash />
-        ) : packageManager.value === "Yarn" ? (
-          <YarnCliBash />
-        ) : (
-          <PnpmCliBash />
-        )}
+        {match(packageManager.value)
+          .with("Bun", () => <BunCliBash />)
+          .with("NPM", () => <NpmCliBash />)
+          .with("Yarn", () => <YarnCliBash />)
+          .with("PNPM", () => <PnpmCliBash />)
+          .exhaustive()}
       </CopyInnerText>
     </div>
   </div>
@@ -53,15 +53,12 @@ import { DISCORD_LINK } from "$/constants"
   <div className="not-prose">
     <PackageManagerSelector />
     <CopyInnerText>
-      {packageManager.value === "Bun" ? (
-        <BunInstallBash />
-      ) : packageManager.value === "NPM" ? (
-        <NpmInstallBash />
-      ) : packageManager.value === "Yarn" ? (
-        <YarnInstallBash />
-      ) : (
-        <PnpmInstallBash />
-      )}
+      {match(packageManager.value)
+        .with("Bun", () => <BunInstallBash />)
+        .with("NPM", () => <NpmInstallBash />)
+        .with("Yarn", () => <YarnInstallBash />)
+        .with("PNPM", () => <PnpmInstallBash />)
+        .exhaustive()}
     </CopyInnerText>
   </div>
 
@@ -104,10 +101,7 @@ import { DISCORD_LINK } from "$/constants"
   
   <div className="not-prose">
     <CopyInnerText>
-      {siteCodeLang.value === "js" ?
-        (<MountCode />)
-        : (<MountCodeTS />)
-      }  
+      {siteCodeLang.value === "js" ? <MountCode /> : <MountCodeTS />}
     </CopyInnerText>
   </div>
 

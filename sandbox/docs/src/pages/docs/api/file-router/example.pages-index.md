@@ -1,5 +1,5 @@
 ```tsx
-import { definePageConfig, Link, PageProps } from "kiru/router"
+import { definePageConfig, Link } from "kiru/router"
 
 export const config = definePageConfig({
   loader: {

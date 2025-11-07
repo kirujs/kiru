@@ -1,15 +1,15 @@
 ```jsx
 import { lazy } from "kiru"
 
-const DefaultExportedLazyComponent = lazy(() => import("./MyComponent"))
-const NamedExportedLazyComponent = lazy(() =>
+const DefaultExportLazyComponent = lazy(() => import("./MyComponent"))
+const NamedExportLazyComponent = lazy(() =>
   import("./MyComponent").then((module) => module.MyComponent)
 )
 
 const App = () => (
   <div>
-    <DefaultExportedLazyComponent fallback={<div>Loading...</div>} />
-    <LazyNamedComponent fallback={<div>Loading...</div>} />
+    <DefaultExportLazyComponent fallback={<div>Loading...</div>} />
+    <NamedExportLazyComponent fallback={<div>Loading...</div>} />
   </div>
 )
 ```

@@ -1,14 +1,14 @@
 import { useCallback, useMemo } from "kiru"
 import "./TabGroup.css"
 
-interface TabGroupProps {
-  items: string[]
-  value: string
-  onSelect: (value: string) => void
-  itemSuffix?: string | ((item: string) => string)
+interface TabGroupProps<T extends string[]> {
+  items: T
+  value: T[number]
+  onSelect: (value: T[number]) => void
+  itemSuffix?: string | ((item: T[number]) => string)
 }
 
-export function TabGroup(props: TabGroupProps) {
+export function TabGroup<T extends string[]>(props: TabGroupProps<T>) {
   return (
     <div className="tab-group">
       <ul>

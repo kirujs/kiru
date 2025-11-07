@@ -39,10 +39,9 @@ export default defineConfig({
       }),
     },
     kiru({
-      loggingEnabled: true,
       ssg: {
-        page: "index.{tsx,mdx,md}",
-        transition: false,
+        page: "index.{tsx,mdx}",
+        layout: "layout.{tsx,mdx}",
       },
     }),
   ],

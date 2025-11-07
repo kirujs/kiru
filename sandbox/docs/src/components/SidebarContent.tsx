@@ -87,9 +87,10 @@ export function SidebarContent() {
                       {(hash) =>
                         isActive &&
                         page.sections && (
-                          <LinkList className="px-2 py-1 my-2 bg-white/5 text-sm rounded border border-white/5">
+                          <LinkList className="px-2 py-1 my-2 bg-white/5 rounded border border-white/5 gap-2 text-xs">
                             {page.sections.map((section) => (
                               <StyledLink
+                                className="leading-4"
                                 isActive={section.id === hash}
                                 key={section.id}
                                 to={
@@ -144,7 +145,7 @@ function Header({ children }: ElementProps<"div">) {
 function LinkList({ className, ...props }: ElementProps<"div">) {
   return (
     <div
-      className={cls("flex flex-col w-full gap", unwrap(className))}
+      className={cls("flex flex-col w-full", unwrap(className))}
       {...props}
     />
   )
@@ -153,11 +154,15 @@ function LinkList({ className, ...props }: ElementProps<"div">) {
 function StyledLink({
   isActive,
   children,
+  className,
   ...props
 }: LinkProps & { isActive?: boolean }) {
   return (
     <Link
-      className={`flex items-center justify-between ${isActive ? "text-light" : "text-muted"}`}
+      className={cls(
+        `flex items-center justify-between ${isActive ? "text-light" : "text-muted"}`,
+        unwrap(className)
+      )}
       {...props}
     >
       {children}
