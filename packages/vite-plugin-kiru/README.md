@@ -1,14 +1,6 @@
 # vite-plugin-kiru
 
-Vite plugin for <a href="https://kirujs.dev">Kiru</a> apps that enables HMR, devtools, file-based routing, and SSG/SSR.
-
-## Installation
-
-```bash
-npm i -D vite-plugin-kiru
-# or
-pnpm add -D vite-plugin-kiru
-```
+Vite plugin for <a href="https://kirujs.dev">Kiru</a> apps that enables HMR, devtools, and SSG with file-based routing & sitemap generation.
 
 ## Basic Usage
 
@@ -60,25 +52,106 @@ kiru({
   onFileExcluded: (id) => {
     console.log(`Excluded: ${id}`)
   },
+
+  // Static Site Generation (SSG) configuration
+  ssg: {
+    // Base URL for the app
+    baseUrl: "/",
+    // Directory containing pages
+    dir: "./src/pages",
+    // Document component filename pattern
+    document: "document.{tsx,jsx}",
+    // Page component filename pattern
+    page: "index.{tsx,jsx}",
+    // Layout component filename pattern
+    layout: "layout.{tsx,jsx}",
+    // Enable view transitions for route changes and page loaders
+    transition: true,
+    // Build options
+    build: {
+      // Maximum number of pages to render concurrently
+      maxConcurrentRenders: 100,
+    },
+    // Sitemap generation options
+    sitemap: {
+      // Domain for sitemap URLs (required)
+      domain: "https://example.com",
+      // Default last modified date for all URLs
+      lastmod: new Date(),
+      // Default change frequency (hourly | daily | weekly | monthly | yearly | never)
+      changefreq: "weekly", // default: "weekly"
+      // Default priority (0.0 to 1.0)
+      priority: 0.5, // default: 0.5
+      // Per-route overrides
+      overrides: {
+        "/": {
+          changefreq: "daily",
+          priority: 0.8,
+          lastmod: new Date("2024-01-01"),
+          // Images to include for this route
+          images: ["/images/hero.png"],
+          // Videos to include for this route
+          videos: [
+            {
+              title: "Product Demo",
+              thumbnail_loc: "/images/video-thumbnail.png",
+              description: "A demonstration of our product features.",
+            },
+          ],
+        },
+        "/blog": {
+          changefreq: "weekly",
+          priority: 0.7,
+        },
+      },
+    },
+  },
+
+  // Or, if you want to enable SSG with default configuration:
+  ssg: true,
+  // (this will not include sitemap generation as it requires manual configuration)
 })
 ```
 
+## Static Site Generation (SSG)
+
+The plugin supports static site generation with configurable sitemap creation. When SSG is enabled, all routes are pre-rendered at build time and a `sitemap.xml` file is generated if configured.
+
+### Sitemap Generation
+
+The sitemap feature generates a `sitemap.xml` file in your build output with all discovered routes (excluding 404 pages).
+
+**Features:**
+
+- Automatic route discovery from your file structure
+- Configurable default `changefreq`, `priority`, and `lastmod` for all routes
+- Per-route overrides for fine-grained control
+- Support for images and videos (Google sitemap extensions)
+
+**Example:**
+
+```ts
+ssg: {
+  sitemap: {
+    domain: "https://kirujs.dev",
+    changefreq: "weekly",
+    priority: 0.5,
+    overrides: {
+      "/": {
+        changefreq: "daily",
+        priority: 0.8,
+        images: ["/images/kiru.png"],
+      },
+    },
+  },
+}
+```
+
+This will generate a `sitemap.xml` file in `dist/client/sitemap.xml` with all your routes properly formatted.
+
 ## Features
 
-- **File-based routing**: Automatic route generation from your pages directory
-- **SSR/SSG**: Server-side rendering and static site generation
+- **SSG + file-based routing**: Automatic route discovery, static site and sitemap generation
 - **HMR**: Hot module replacement for fast development
 - **Devtools**: Built-in development tools for debugging
 - **TypeScript**: Full TypeScript support with proper type definitions
-
-## Architecture
-
-The plugin is organized into focused modules:
-
-- `virtual-modules.ts` - Virtual module generation for routing
-- `dev-server.ts` - Development server SSR handling
-- `preview-server.ts` - Preview server middleware
-- `devtools.ts` - Development tools integration
-- `ssg.ts` - Static site generation
-- `config.ts` - Configuration management
-- `utils.ts` - Shared utilities
