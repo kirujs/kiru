@@ -126,6 +126,7 @@ export function createPluginState(
       page: ssg.page ?? page,
       layout: ssg.layout ?? layout,
       transition: ssg.transition ?? transition,
+      sitemap: ssg.sitemap,
       build: {
         maxConcurrentRenders:
           ssg.build?.maxConcurrentRenders ?? maxConcurrentRenders,

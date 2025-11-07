@@ -10,6 +10,86 @@ export interface SSGBuildOptions {
   maxConcurrentRenders?: number
 }
 
+export type SSGSitemapChangefreq =
+  // | "always"
+  "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never"
+
+export interface SSGSitemapVideo {
+  title: string
+  thumbnail_loc: string
+  description?: string
+}
+
+export interface SSGSitemapOverride {
+  /**
+   * Change frequency override for this route
+   * @default "weekly"
+   */
+  changefreq?: SSGSitemapChangefreq
+  /**
+   * Priority override for this route (0.0 to 1.0)
+   * @default 0.5
+   */
+  priority?: number
+  /**
+   * Last modified date override for this route
+   */
+  lastmod?: Date
+  /**
+   * Images to include for this route
+   * @example ["/images/kiru.png"]
+   */
+  images?: string[]
+  /**
+   * Videos to include for this route
+   * @example
+   * ```ts
+   * videos: [
+   *   {
+   *     title: "Kiru",
+   *     thumbnail_loc: "/images/kiru.png",
+   *     description: "Kiru is a framework for building web applications."
+   *   }
+   * ]
+   * ```
+   */
+  videos?: Array<SSGSitemapVideo>
+}
+
+export interface SSGSitemapOptions {
+  /**
+   * The domain to use for sitemap URLs
+   * @example "https://example.com"
+   */
+  domain: string
+  /**
+   * Default last modified date for all URLs
+   */
+  lastmod?: Date
+  /**
+   * Default change frequency for all URLs
+   * @default "weekly"
+   */
+  changefreq?: SSGSitemapChangefreq
+  /**
+   * Default priority for all URLs (0.0 to 1.0)
+   * @default 0.5
+   */
+  priority?: number
+  /**
+   * Per-route overrides for sitemap entries
+   * @example
+   * ```ts
+   * overrides: {
+   *   "/": {
+   *     changefreq: "never",
+   *     priority: 0.8,
+   *   },
+   * }
+   */
+  overrides?: Record<string, SSGSitemapOverride>
+}
+
 export interface SSGOptions {
   /**
    * The base URL of the app
@@ -41,6 +121,11 @@ export interface SSGOptions {
    * @default false
    */
   transition?: boolean
+
+  /**
+   * Options for sitemap generation
+   */
+  sitemap?: SSGSitemapOptions
 
   /**
    * Options for build

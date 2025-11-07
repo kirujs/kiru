@@ -28,7 +28,7 @@ export async function generateStaticSite(
   bundle: OutputBundle,
   log: (...data: any[]) => void
 ) {
-  const { projectRoot, baseOutDir, manifestPath } = state
+  const { projectRoot, baseOutDir, manifestPath, ssgOptions } = state
   const outDirAbs = path.resolve(projectRoot, outputOptions?.dir ?? "dist")
 
   const ssrEntry = Object.values(bundle).find(
@@ -59,7 +59,7 @@ export async function generateStaticSite(
   log(ANSI.cyan("[SSG]"), `discovered ${routes.length} routes:`, routes)
 
   const renderingChunks: Record<string, string>[] = []
-  const maxConcurrentRenders = state.ssgOptions.build.maxConcurrentRenders
+  const maxConcurrentRenders = ssgOptions.build.maxConcurrentRenders
 
   // chunk by keys
   for (let i = 0; i < routes.length; i += maxConcurrentRenders) {
@@ -94,6 +94,11 @@ export async function generateStaticSite(
 
   // Collect and append static props to client modules
   await appendStaticPropsToClientModules(state, clientOutDirAbs, log)
+
+  // Generate sitemap if configured
+  if (ssgOptions.sitemap?.domain) {
+    await generateSitemap(state, routes, clientOutDirAbs, log)
+  }
 }
 
 async function getClientAssets(clientOutDirAbs: string, manifestPath: string) {
@@ -273,6 +278,158 @@ function getOutputPath(clientOutDirAbs: string, route: string): string {
     last = last.slice(0, -1)
   }
   return path.resolve(dirPath, `${last}.html`)
+}
+
+async function generateSitemap(
+  state: PluginState & { ssgOptions: Required<SSGOptions> },
+  routes: string[],
+  clientOutDirAbs: string,
+  log: (...data: any[]) => void
+) {
+  const sitemapConfig = state.ssgOptions.sitemap!
+  const {
+    domain,
+    lastmod: lastModified,
+    changefreq = "weekly",
+    priority = 0.5,
+    overrides = {},
+  } = sitemapConfig
+  const baseUrl = state.ssgOptions.baseUrl
+
+  // Normalize domain (remove trailing slash)
+  const normalizedDomain = domain.replace(/\/$/, "")
+  // Normalize baseUrl (ensure it starts with / and doesn't end with / unless it's just "/")
+  const normalizedBaseUrl = baseUrl === "/" ? "" : baseUrl.replace(/\/$/, "")
+
+  // Check if we need image or video namespaces
+  let hasImages = false
+  let hasVideos = false
+  for (const route of routes) {
+    const override = overrides[route]
+    if (override?.images?.length) {
+      hasImages = true
+    }
+    if (override?.videos?.length) {
+      hasVideos = true
+    }
+  }
+
+  // Sort routes by specificity: "/" first, then by depth (fewer segments first), then alphabetically
+  const sortedRoutes = [...routes]
+    .filter((route) => !route.endsWith("/404")) // Exclude 404 pages
+    .sort((a, b) => {
+      // "/" always comes first
+      if (a === "/") return -1
+      if (b === "/") return 1
+
+      // Count path segments (depth)
+      const aDepth = a.split("/").filter(Boolean).length
+      const bDepth = b.split("/").filter(Boolean).length
+
+      // Sort by depth first (fewer segments = less specific = comes first)
+      if (aDepth !== bDepth) {
+        return aDepth - bDepth
+      }
+
+      // If same depth, sort alphabetically (simple string comparison for URL paths)
+      return a < b ? -1 : a > b ? 1 : 0
+    })
+
+  // Generate sitemap XML
+  const urls = sortedRoutes
+    .map((route) => {
+      // Normalize route (ensure it starts with /)
+      const normalizedRoute = route.startsWith("/") ? route : `/${route}`
+      // Combine domain, baseUrl, and route
+      const url = `${normalizedDomain}${normalizedBaseUrl}${normalizedRoute}`
+
+      // Get override for this route
+      const override = overrides[route] || {}
+      const routeChangefreq = override.changefreq ?? changefreq
+      const routePriority = override.priority ?? priority
+      const routeLastModified = override.lastmod ?? lastModified
+
+      // Build URL entry
+      let urlEntry = `  <url>
+    <loc>${escapeXml(url)}</loc>
+    <changefreq>${routeChangefreq}</changefreq>
+    <priority>${routePriority}</priority>`
+
+      // Add lastModified if provided (use override first, then global)
+      if (routeLastModified) {
+        const lastMod = routeLastModified.toISOString().split("T")[0]
+        urlEntry += `\n    <lastmod>${lastMod}</lastmod>`
+      }
+
+      // Add images if provided
+      if (override.images?.length) {
+        for (const image of override.images) {
+          const imageUrl = image.startsWith("http")
+            ? image
+            : `${normalizedDomain}${normalizedBaseUrl}${
+                image.startsWith("/") ? image : `/${image}`
+              }`
+          urlEntry += `\n    <image:image>
+      <image:loc>${escapeXml(imageUrl)}</image:loc>
+    </image:image>`
+        }
+      }
+
+      // Add videos if provided
+      if (override.videos?.length) {
+        for (const video of override.videos) {
+          const thumbnailUrl = video.thumbnail_loc.startsWith("http")
+            ? video.thumbnail_loc
+            : `${normalizedDomain}${normalizedBaseUrl}${
+                video.thumbnail_loc.startsWith("/")
+                  ? video.thumbnail_loc
+                  : `/${video.thumbnail_loc}`
+              }`
+          urlEntry += `\n    <video:video>
+      <video:title>${escapeXml(video.title)}</video:title>
+      <video:thumbnail_loc>${escapeXml(thumbnailUrl)}</video:thumbnail_loc>`
+          if (video.description) {
+            urlEntry += `\n      <video:description>${escapeXml(
+              video.description
+            )}</video:description>`
+          }
+          urlEntry += `\n    </video:video>`
+        }
+      }
+
+      urlEntry += `\n  </url>`
+      return urlEntry
+    })
+    .join("\n")
+
+  // Build namespaces
+  const namespaces = [
+    'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
+    hasImages &&
+      'xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"',
+    hasVideos &&
+      'xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"',
+  ]
+    .filter(Boolean)
+    .join(" ")
+
+  const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset ${namespaces}>
+${urls}
+</urlset>`
+
+  const sitemapPath = path.resolve(clientOutDirAbs, "sitemap.xml")
+  fs.writeFileSync(sitemapPath, sitemapXml, "utf-8")
+  log(ANSI.cyan("[SSG]"), "Generated sitemap:", ANSI.black(sitemapPath))
+}
+
+function escapeXml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
 }
 
 async function appendStaticPropsToClientModules(
