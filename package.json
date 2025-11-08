@@ -5,10 +5,13 @@
   "scripts": {
     "build": "pnpm --filter !\"./sandbox/*\" run -r build",
     "dev": "pnpm --filter \"./packages/*\" run -r --parallel dev",
-    "test": "NODE_ENV=development pnpm --filter \"kiru\" run test && NODE_ENV=development pnpm --filter \"e2e-csr\" run test && NODE_ENV=development pnpm --filter \"e2e-ssg\" run test"
+    "test": "cross-env NODE_ENV=development pnpm --filter \"kiru\" run test && cross-env NODE_ENV=development pnpm --filter \"e2e-csr\" run test && cross-env NODE_ENV=development pnpm --filter \"e2e-ssg\" run test"
   },
   "engines": {
     "node": ">=22.20.0",
     "pnpm": ">=10.18.0"
+  },
+  "dependencies": {
+    "cross-env": "^10.1.0"
   }
 }
