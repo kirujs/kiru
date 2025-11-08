@@ -1,6 +1,4 @@
 import { __DEV__ } from "../env.js"
-import type { HMRAccept } from "../hmr.js"
-import { $HMR_ACCEPT } from "../constants.js"
 import { useHook } from "../hooks/utils.js"
 import { effectQueue } from "./globals.js"
 import { executeWithTracking } from "./effect.js"
@@ -17,7 +15,6 @@ export class WatchEffect<const Deps extends readonly Signal<unknown>[] = []> {
   protected unsubs: Map<string, Function>
   protected cleanup: (() => void) | null
   protected isRunning?: boolean
-  protected [$HMR_ACCEPT]?: HMRAccept<WatchEffect<Deps>>
 
   constructor(
     getter: (...values: SignalValues<Deps>) => WatchCallbackReturn,
@@ -30,16 +27,6 @@ export class WatchEffect<const Deps extends readonly Signal<unknown>[] = []> {
     this.isRunning = false
     this.cleanup = null
     if (__DEV__) {
-      this[$HMR_ACCEPT] = {
-        provide: () => this,
-        inject: (prev) => {
-          if (prev.isRunning) return
-          this.stop()
-        },
-        destroy: () => {
-          this.stop()
-        },
-      }
       if ("window" in globalThis) {
         const signals = window.__kiru.HMRContext!.signals
         if (signals.isWaitingForNextWatchCall()) {

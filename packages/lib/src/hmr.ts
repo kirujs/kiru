@@ -56,7 +56,6 @@ export function createHMRContext() {
   let isModuleReplacementExecution = false
   const isReplacement = () => isModuleReplacementExecution
   let isWaitingForNextWatchCall = false
-  let tmpUnnamedWatchers: WatchEffect[] = []
 
   const onHmrCallbacks: Array<() => void> = []
   const onHmr = (callback: () => void) => {
@@ -74,7 +73,11 @@ export function createHMRContext() {
       moduleMap.set(filePath, mod)
     } else {
       while (onHmrCallbacks.length) onHmrCallbacks.shift()!()
+      for (const prevWatcher of mod.unnamedWatchers.splice(0)) {
+        prevWatcher.stop()
+      }
     }
+
     currentModuleMemory = mod!
     currentModuleFilePath = filePath
   }
@@ -134,25 +137,6 @@ export function createHMRContext() {
     dirtiedApps.forEach((ctx) => ctx.rootNode && requestUpdate(ctx.rootNode))
     isModuleReplacementExecution = false
 
-    if (tmpUnnamedWatchers.length) {
-      let i = 0
-      for (; i < tmpUnnamedWatchers.length; i++) {
-        const newWatcher = tmpUnnamedWatchers[i]
-        const oldWatcher = currentModuleMemory.unnamedWatchers[i]
-        if (oldWatcher) {
-          newWatcher[$HMR_ACCEPT]!.inject(oldWatcher[$HMR_ACCEPT]!.provide())
-          oldWatcher[$HMR_ACCEPT]!.destroy()
-        }
-        currentModuleMemory.unnamedWatchers[i] = newWatcher
-      }
-      for (; i < currentModuleMemory.unnamedWatchers.length; i++) {
-        const oldWatcher = currentModuleMemory.unnamedWatchers[i]
-        oldWatcher[$HMR_ACCEPT]!.destroy()
-      }
-      currentModuleMemory.unnamedWatchers.length = tmpUnnamedWatchers.length
-      tmpUnnamedWatchers.length = 0
-    }
-
     currentModuleMemory = null
     currentModuleFilePath = null
   }
@@ -165,7 +149,7 @@ export function createHMRContext() {
       return isWaitingForNextWatchCall
     },
     pushWatch(watch: WatchEffect) {
-      tmpUnnamedWatchers.push(watch)
+      currentModuleMemory!.unnamedWatchers.push(watch)
       isWaitingForNextWatchCall = false
     },
   }

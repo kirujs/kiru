@@ -1,6 +1,10 @@
-import { signal } from "kiru"
+import { signal, watch } from "kiru"
 
-const text = signal("Hello World! 123")
+const text = signal("Hello World!")
+
+watch(() => {
+  console.log(text.value)
+})
 
 export default function HomePage() {
   return (
