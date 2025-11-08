@@ -5,6 +5,7 @@ import type {
   SSGOptions,
   FileLinkFormatter,
   SSGBuildOptions,
+  SSGSitemapOptions,
 } from "./types.js"
 import {
   VIRTUAL_ENTRY_SERVER_ID,
@@ -35,12 +36,15 @@ export interface PluginState {
   dtHostScriptPath: string
   manifestPath: string
   ssgOptions:
-    | (Required<SSGOptions> & { build: Required<SSGBuildOptions> })
+    | (Required<Omit<SSGOptions, "sitemap">> & {
+        sitemap?: SSGSitemapOptions
+        build: Required<SSGBuildOptions>
+      })
     | null
   staticProps: Record<string, Record<string, Record<string, any>>>
 }
 
-const defaultSSGOptions: Required<SSGOptions> & {
+const defaultSSGOptions: Required<Omit<SSGOptions, "sitemap">> & {
   build: Required<SSGBuildOptions>
 } = {
   baseUrl: "/",
