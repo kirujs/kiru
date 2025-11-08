@@ -17,15 +17,6 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
           <li>
             <Link to="/counter">Counter</Link>
           </li>
-          <li>
-            <Link to="/todos">Todos</Link>
-          </li>
-          <li>
-            <Link to="/memo">Memo</Link>
-          </li>
-          <li>
-            <Link to="/signals">Signals</Link>
-          </li>
         </ul>
       </nav>
       <div id="router-outlet">{children}</div>

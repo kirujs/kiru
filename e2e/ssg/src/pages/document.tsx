@@ -1,4 +1,4 @@
-import { Body } from "kiru/router"
+import { Body, Head } from "kiru/router"
 import "../style.css"
 
 export default function Document() {
@@ -8,7 +8,7 @@ export default function Document() {
         <meta charset="UTF-8" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Vite + TS + Kiru</title>
+        <Head.Outlet />
       </head>
       <Body.Outlet />
     </html>

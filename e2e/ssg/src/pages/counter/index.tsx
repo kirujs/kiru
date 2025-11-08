@@ -1,9 +1,13 @@
 import { useState } from "kiru"
+import { Head } from "kiru/router"
 
 export default function CounterPage() {
   const [toggled, setToggled] = useState(false)
   return (
     <div>
+      <Head.Content>
+        <title>Counter</title>
+      </Head.Content>
       {/* used for checking that counter persists state after reordering these children */}
       {toggled && <p>Toggled</p>}
       <ActualCounter />

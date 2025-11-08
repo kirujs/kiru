@@ -4,6 +4,12 @@ describe("router", () => {
     cy.visit(`http://localhost:${port}`)
   })
 
+  it("displays the correct title", () => {
+    cy.get("head title").should("exist").should("have.text", "Home")
+    cy.get('nav a[href="/about"]').click()
+    cy.get("head title").should("exist").should("have.text", "About")
+  })
+
   it("displays the correct route child element", () => {
     cy.get("main #router-outlet h2").should("exist").should("have.text", "Home")
   })
