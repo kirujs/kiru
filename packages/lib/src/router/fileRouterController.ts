@@ -171,9 +171,8 @@ export class FileRouterController {
       }
       this.devtools = {
         getPages: () => this.pages,
-        getLayouts: () => this.layouts,
-        navigate: this.navigate.bind(this),
         invalidate: this.invalidate.bind(this),
+        navigate: this.navigate.bind(this),
         reload: () => {
           if (this.invalidate(this.state.pathname)) {
             return Promise.resolve() // invalidate triggered a reload
@@ -660,7 +659,7 @@ function validateRoutes(pageMap: FormattedViteImportMap) {
     let warning = "[kiru/router]: Route conflicts detected:\n"
     warning += routeConflicts
       .map(([route1, route2]) => {
-        return `  - "${route1.absolutePath}" conflicts with "${route2.absolutePath}"\n`
+        return `  - "${route1.filePath}" conflicts with "${route2.filePath}"\n`
       })
       .join("")
     warning += "Routes are ordered by specificity (higher specificity wins)"

@@ -67,7 +67,7 @@ export async function render(
   const layoutEntries = matchLayouts(ctx.layouts, routeSegments)
 
   ;[pageEntry, ...layoutEntries].forEach((e) => {
-    ctx.registerModule(e.absolutePath!)
+    ctx.registerModule(e.filePath)
   })
 
   const [page, ...layouts] = await Promise.all([
@@ -198,7 +198,7 @@ export async function generateStaticPaths(pages: FormattedViteImportMap) {
 
     const hasDynamic = urlSegments.some((s) => s.startsWith(":"))
     if (!hasDynamic) {
-      results[basePath === "" ? "/" : basePath] = entry.absolutePath
+      results[basePath === "" ? "/" : basePath] = entry.filePath
       continue
     }
     try {
@@ -214,7 +214,7 @@ export async function generateStaticPaths(pages: FormattedViteImportMap) {
           const value = params[key]
           p = p.replace(`:${key}*`, value).replace(`:${key}`, value)
         }
-        results[p] = entry.absolutePath
+        results[p] = entry.filePath
       }
     } catch {}
   }

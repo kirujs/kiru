@@ -25,11 +25,12 @@ export interface ViteImportMap {
 }
 
 export interface FormattedViteImportMapEntry<T = DefaultComponentModule> {
+  filePath: string
   load: () => Promise<T>
-  specificity: number
+  params: string[]
+  route: string
   segments: string[]
-  absolutePath: string
-  folderPath: string
+  specificity: number
 }
 
 export interface FormattedViteImportMap<T = DefaultComponentModule> {
@@ -45,10 +46,9 @@ export interface RouteMatch {
 
 export interface DevtoolsInterface {
   getPages: () => FormattedViteImportMap<PageModule>
-  getLayouts: () => FormattedViteImportMap
+  invalidate: FileRouterContextType["invalidate"]
   navigate: FileRouterContextType["navigate"]
   reload: FileRouterContextType["reload"]
-  invalidate: FileRouterContextType["invalidate"]
   subscribe: (
     cb: (page: CurrentPage | null, props: Record<string, unknown>) => void
   ) => () => void

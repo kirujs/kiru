@@ -39,6 +39,7 @@ function formatViteImportMap(
     }
     const segments: string[] = []
     const parts = k.split("/").slice(0, -1)
+    const params: string[] = []
 
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i]
@@ -48,12 +49,16 @@ function formatViteImportMap(
             `[kiru/router]: Catchall must be the folder name. Got "${key}"`
           )
         }
-        segments.push(`:${part.slice(4, -1)}*`)
+        const param = part.slice(4, -1)
+        params.push(param)
+        segments.push(`:${param}*`)
         specificity += 1
         break
       }
       if (part.startsWith("[") && part.endsWith("]")) {
-        segments.push(`:${part.slice(1, -1)}`)
+        const param = part.slice(1, -1)
+        params.push(param)
+        segments.push(`:${param}`)
         specificity += 10
         continue
       }
@@ -62,11 +67,12 @@ function formatViteImportMap(
     }
 
     const value: FormattedViteImportMap[string] = {
+      filePath: key,
       load: map[key],
-      specificity,
+      params,
+      route: "/" + parts.join("/"),
       segments,
-      absolutePath: key,
-      folderPath: "/" + parts.join("/"),
+      specificity,
     }
 
     return {
