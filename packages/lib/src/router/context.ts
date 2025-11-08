@@ -3,6 +3,19 @@ import { __DEV__ } from "../env.js"
 import { useContext } from "../hooks/index.js"
 import type { RouteQuery, RouterState } from "./types.js"
 
+export interface ReloadOptions {
+  /**
+   * Trigger a view transition (overrides transition from config)
+   * @default false
+   */
+  transition?: boolean
+  /**
+   * Invalidate the cache for the current route
+   * @default true
+   */
+  invalidate?: boolean
+}
+
 export interface FileRouterContextType {
   /**
    * Invalidate cached loader data for the given paths
@@ -41,7 +54,10 @@ export interface FileRouterContextType {
   /**
    * Reload the current route, optionally triggering a view transition
    */
-  reload: (options?: { transition?: boolean }) => Promise<void>
+  reload: (options?: {
+    transition?: boolean
+    invalidate?: boolean
+  }) => Promise<void>
 
   /**
    * Set the current query parameters

@@ -7,7 +7,7 @@ export function definePageConfig<T>(config: PageConfig<T>): PageConfig<T> {
     const filePath = window.__kiru?.HMRContext?.getCurrentFilePath()
     const fileRouter = fileRouterInstance.current
     if (filePath && fileRouter) {
-      fileRouter.onPageConfigDefined(filePath, config)
+      fileRouter.dev_onPageConfigDefined!(filePath, config)
     }
   }
 

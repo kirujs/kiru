@@ -23,7 +23,7 @@ export const config = definePageConfig({
     },
     mode: "client",
     cache: {
-      type: "memory",
+      type: "sessionStorage",
       ttl: 1000 * 60 * 5, // 5 minutes
     },
   },

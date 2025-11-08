@@ -1,6 +1,7 @@
 import {
   AppViewIcon,
   CogIcon,
+  FileRouterViewIcon,
   GaugeIcon,
   GlobeIcon,
   SettingsProvider,
@@ -13,15 +14,14 @@ import { SettingsEditor } from "devtools-shared/src/Settings"
 import { ProfilingTabView } from "./tabs/ProfilingTabView"
 import { SWRTabView } from "./tabs/SWRTabView"
 import { selectedNode } from "./state"
+import { FileRouterView } from "./tabs/FileRouterView"
 
 type TabViewProps = { active: boolean; children: JSX.Element }
 
 const TabView = (props: TabViewProps) => {
+  if (!props.active) return null
   return (
-    <main
-      className="flex flex-col flex-1 max-h-[calc(100vh-1rem)] overflow-y-auto"
-      style={props.active ? {} : { display: "none" }}
-    >
+    <main className="flex flex-col flex-1 max-h-[calc(100vh-1rem)] overflow-y-auto">
       {props.children}
     </main>
   )
@@ -31,6 +31,10 @@ const APP_TABS = {
   Apps: {
     Icon: AppViewIcon,
     View: AppTabView,
+  },
+  FileRouter: {
+    Icon: FileRouterViewIcon,
+    View: FileRouterView,
   },
   Stores: {
     Icon: StoresViewIcon,

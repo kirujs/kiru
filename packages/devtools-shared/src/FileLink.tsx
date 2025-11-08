@@ -2,9 +2,10 @@ import { useMemo } from "kiru"
 import { broadcastChannel } from "./broadcastChannel"
 import { ExternalLinkIcon } from "./icons"
 import { getFileLink } from "./utils"
+import { $DEV_FILE_LINK } from "../../lib/dist/constants.js"
 
 type FileLinkProps = {
-  fn: Function & { __devtoolsFileLink?: string }
+  fn: Function & { [$DEV_FILE_LINK]?: string }
   onclick?: (e: Event) => void
 }
 

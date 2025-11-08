@@ -1,7 +1,7 @@
 import { Signal } from "../signals/base.js"
 import { flushSync, nextIdle } from "../scheduler.js"
 import { __DEV__ } from "../env.js"
-import { type FileRouterContextType } from "./context.js"
+import { ReloadOptions, type FileRouterContextType } from "./context.js"
 import { FileRouterDataLoadError } from "./errors.js"
 import { fileRouterInstance, fileRouterRoute, routerCache } from "./globals.js"
 import type {
@@ -13,6 +13,8 @@ import type {
   RouterState,
 } from "./types.js"
 import type {
+  CurrentPage,
+  DevtoolsInterface,
   FormattedViteImportMap,
   PageModule,
   ViteImportMap,
@@ -27,6 +29,7 @@ import {
   wrapWithLayouts,
 } from "./utils/index.js"
 import { RouterCache, type CacheKey } from "./cache.js"
+import { watch } from "../signals/watch.js"
 
 interface PageConfigWithLoader<T = unknown> extends PageConfig {
   loader: PageDataLoaderConfig<T>
@@ -38,11 +41,7 @@ export class FileRouterController {
   private pages: FormattedViteImportMap<PageModule>
   private layouts: FormattedViteImportMap
   private abortController: AbortController
-  private currentPage: Signal<{
-    component: Kiru.FC<any>
-    config?: PageConfig
-    route: string
-  } | null>
+  private currentPage: Signal<CurrentPage | null>
   private currentPageProps: Signal<Record<string, unknown>>
   private currentLayouts: Signal<Kiru.FC[]>
   private state: RouterState
@@ -52,6 +51,11 @@ export class FileRouterController {
     { route: string; config: PageConfig }
   >
   private pageRouteToConfig?: Map<string, PageConfig>
+  public dev_onPageConfigDefined?: <T extends PageConfig<any>>(
+    fp: string,
+    config: T
+  ) => void
+  public devtools?: DevtoolsInterface
 
   constructor() {
     routerCache.current ??= new RouterCache()
@@ -71,7 +75,9 @@ export class FileRouterController {
     }
     const __this = this
     this.contextValue = {
-      invalidate: this.invalidate.bind(this),
+      invalidate: (...paths: string[]) => {
+        this.invalidate(...paths)
+      },
       get state() {
         return {
           ...__this.state,
@@ -87,13 +93,101 @@ export class FileRouterController {
       },
       navigate: this.navigate.bind(this),
       prefetchRouteModules: this.prefetchRouteModules.bind(this),
-      reload: (options?: { transition?: boolean }) =>
-        this.loadRoute(void 0, void 0, options?.transition),
+      reload: (options?: ReloadOptions) => {
+        if (
+          (options?.invalidate ?? true) &&
+          this.invalidate(this.state.pathname)
+        ) {
+          return Promise.resolve() // invalidate triggered a reload
+        }
+
+        return this.loadRoute(void 0, void 0, options?.transition)
+      },
       setQuery: this.setQuery.bind(this),
     }
     if (__DEV__) {
       this.filePathToPageRoute = new Map()
       this.pageRouteToConfig = new Map()
+      this.dev_onPageConfigDefined = (fp, config) => {
+        const existing = this.filePathToPageRoute?.get(fp)
+        if (existing === undefined) {
+          const route = fileRouterRoute.current
+          if (!route) return
+          this.filePathToPageRoute?.set(fp, { route, config })
+          return
+        }
+        const curPage = this.currentPage.value
+        const loader = config.loader
+        if (curPage?.route === existing.route && loader) {
+          const p = this.currentPageProps.value
+          const transition =
+            (loader.mode !== "static" && loader.transition) ??
+            this.enableTransitions
+
+          // Check cache first if caching is enabled
+          let cachedData = null
+          if (loader.mode !== "static" && loader.cache) {
+            const cacheKey: CacheKey = {
+              path: this.state.pathname,
+              params: this.state.params,
+              query: this.state.query,
+            }
+            cachedData = routerCache.current!.get(cacheKey, loader.cache)
+          }
+
+          if (cachedData !== null) {
+            // Use cached data immediately - no loading state needed
+            const props = {
+              ...p,
+              data: cachedData.value,
+              error: null,
+              loading: false,
+            }
+            handleStateTransition(this.state.signal, transition, () => {
+              this.currentPageProps.value = props
+            })
+          } else {
+            // No cached data - show loading state and load data
+            const props = {
+              ...p,
+              loading: true,
+              data: null,
+              error: null,
+            }
+            handleStateTransition(this.state.signal, transition, () => {
+              this.currentPageProps.value = props
+            })
+
+            this.loadRouteData(
+              config as PageConfigWithLoader,
+              props,
+              this.state,
+              transition
+            )
+          }
+        }
+
+        this.pageRouteToConfig?.set(existing.route, config)
+      }
+      this.devtools = {
+        getPages: () => this.pages,
+        getLayouts: () => this.layouts,
+        navigate: this.navigate.bind(this),
+        invalidate: this.invalidate.bind(this),
+        reload: () => {
+          if (this.invalidate(this.state.pathname)) {
+            return Promise.resolve() // invalidate triggered a reload
+          }
+          return this.loadRoute()
+        },
+        subscribe: (callback) => {
+          const watcher = watch(
+            [this.currentPage, this.currentPageProps],
+            callback
+          )
+          return () => watcher.stop()
+        },
+      }
     }
 
     window.addEventListener("popstate", (e) => {
@@ -154,14 +248,17 @@ export class FileRouterController {
       this.layouts = layouts
       if (__DEV__) {
         if (page.config) {
-          this.onPageConfigDefined(route, page.config)
+          this.dev_onPageConfigDefined!(route, page.config)
         }
       }
       if (__DEV__) {
         validateRoutes(this.pages)
       }
       const loader = page.config?.loader
-      if (loader && loader.mode !== "static" && pageProps.loading === true) {
+      if (
+        loader &&
+        ((loader.mode !== "static" && pageProps.loading === true) || __DEV__)
+      ) {
         if (cacheData === null) {
           this.loadRouteData(
             page.config as PageConfigWithLoader,
@@ -176,6 +273,7 @@ export class FileRouterController {
               error: null,
               loading: false,
             }
+            // @ts-ignore
             const transition = loader.transition ?? this.enableTransitions
             handleStateTransition(this.state.signal, transition, () => {
               this.currentPageProps.value = props
@@ -202,68 +300,6 @@ export class FileRouterController {
       //window.history.scrollRestoration = "manual"
       this.loadRoute()
     }
-  }
-
-  public onPageConfigDefined<T extends PageConfig<any>>(fp: string, config: T) {
-    const existing = this.filePathToPageRoute?.get(fp)
-    if (existing === undefined) {
-      const route = fileRouterRoute.current
-      if (!route) return
-      this.filePathToPageRoute?.set(fp, { route, config })
-      return
-    }
-    const curPage = this.currentPage.value
-    const loader = config.loader
-    if (curPage?.route === existing.route && loader) {
-      const p = this.currentPageProps.value
-      const transition =
-        (loader.mode !== "static" && loader.transition) ??
-        this.enableTransitions
-
-      // Check cache first if caching is enabled
-      let cachedData = null
-      if (loader.mode !== "static" && loader.cache) {
-        const cacheKey: CacheKey = {
-          path: this.state.pathname,
-          params: this.state.params,
-          query: this.state.query,
-        }
-        cachedData = routerCache.current!.get(cacheKey, loader.cache)
-      }
-
-      if (cachedData !== null) {
-        // Use cached data immediately - no loading state needed
-        const props = {
-          ...p,
-          data: cachedData.value,
-          error: null,
-          loading: false,
-        }
-        handleStateTransition(this.state.signal, transition, () => {
-          this.currentPageProps.value = props
-        })
-      } else {
-        // No cached data - show loading state and load data
-        const props = {
-          ...p,
-          loading: true,
-          data: null,
-          error: null,
-        }
-        handleStateTransition(this.state.signal, transition, () => {
-          this.currentPageProps.value = props
-        })
-
-        this.loadRouteData(
-          config as PageConfigWithLoader,
-          props,
-          this.state,
-          transition
-        )
-      }
-    }
-
-    this.pageRouteToConfig?.set(existing.route, config)
   }
 
   public getChildren() {
@@ -492,8 +528,10 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
 
     if (shouldRefresh) {
       // Refresh the current page to get fresh data
-      this.loadRoute(currentPath, {}, this.enableTransitions)
+      this.loadRoute()
+      return true
     }
+    return false
   }
 
   private async navigate(

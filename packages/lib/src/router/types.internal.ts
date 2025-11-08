@@ -1,4 +1,11 @@
+import type { FileRouterContextType } from "./context"
 import type { PageConfig } from "./types"
+
+export interface CurrentPage {
+  component: Kiru.FC<any>
+  config?: PageConfig
+  route: string
+}
 
 export interface DefaultComponentModule {
   default: Kiru.FC
@@ -22,6 +29,7 @@ export interface FormattedViteImportMapEntry<T = DefaultComponentModule> {
   specificity: number
   segments: string[]
   absolutePath: string
+  folderPath: string
 }
 
 export interface FormattedViteImportMap<T = DefaultComponentModule> {
@@ -33,4 +41,15 @@ export interface RouteMatch {
   pageEntry: FormattedViteImportMapEntry<PageModule>
   params: Record<string, string>
   routeSegments: string[]
+}
+
+export interface DevtoolsInterface {
+  getPages: () => FormattedViteImportMap<PageModule>
+  getLayouts: () => FormattedViteImportMap
+  navigate: FileRouterContextType["navigate"]
+  reload: FileRouterContextType["reload"]
+  invalidate: FileRouterContextType["invalidate"]
+  subscribe: (
+    cb: (page: CurrentPage | null, props: Record<string, unknown>) => void
+  ) => () => void
 }

@@ -66,6 +66,7 @@ function formatViteImportMap(
       specificity,
       segments,
       absolutePath: key,
+      folderPath: "/" + parts.join("/"),
     }
 
     return {

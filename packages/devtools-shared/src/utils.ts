@@ -1,4 +1,5 @@
 import type { AppContext } from "kiru"
+import { $DEV_FILE_LINK } from "../../lib/dist/constants.js"
 
 export function className(...classes: (string | false | undefined)[]) {
   return classes.filter(Boolean).join(" ")
@@ -28,8 +29,8 @@ export function getNodeName(node: Kiru.VNode) {
 }
 
 export const getFileLink = (
-  fn: Function & { __devtoolsFileLink?: string }
-): string | null => fn.__devtoolsFileLink ?? null
+  fn: Function & { [$DEV_FILE_LINK]?: string }
+): string | null => fn[$DEV_FILE_LINK] ?? null
 
 export function isDevtoolsApp(app: AppContext) {
   return app.name === "kiru.devtools"

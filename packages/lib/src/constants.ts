@@ -8,6 +8,7 @@ export {
   $MEMO,
   $ERROR_BOUNDARY,
   $SUSPENSE_THROW,
+  $DEV_FILE_LINK,
   CONSECUTIVE_DIRTY_LIMIT,
   PREFETCHED_DATA_EVENT,
   EVENT_PREFIX_REGEX,
@@ -31,6 +32,7 @@ const $HMR_ACCEPT = Symbol.for("kiru.hmrAccept")
 const $MEMO = Symbol.for("kiru.memo")
 const $ERROR_BOUNDARY = Symbol.for("kiru.errorBoundary")
 const $SUSPENSE_THROW = Symbol.for("kiru.suspenseThrow")
+const $DEV_FILE_LINK = Symbol.for("kiru.devFileLink")
 
 const CONSECUTIVE_DIRTY_LIMIT = 50
 const PREFETCHED_DATA_EVENT = "kiru:prefetched"

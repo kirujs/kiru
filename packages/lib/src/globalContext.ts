@@ -1,6 +1,8 @@
 import { __DEV__ } from "./env.js"
 import { createHMRContext } from "./hmr.js"
 import { createProfilingContext } from "./profiling.js"
+import { fileRouterInstance } from "./router/globals.js"
+import type { FileRouterController } from "./router/fileRouterController"
 import type { AppContext } from "./appContext"
 import type { Store } from "./store"
 import type { SWRCache } from "./swr"
@@ -86,6 +88,9 @@ interface KiruGlobalContext {
   HMRContext?: ReturnType<typeof createHMRContext>
   profilingContext?: ReturnType<typeof createProfilingContext>
   SWRGlobalCache?: SWRCache
+  fileRouterInstance?: {
+    current: FileRouterController | null
+  }
 }
 
 function createKiruGlobalContext(): KiruGlobalContext {
@@ -136,6 +141,7 @@ function createKiruGlobalContext(): KiruGlobalContext {
     globalContext.HMRContext = createHMRContext()
     globalContext.profilingContext = createProfilingContext()
     globalContext.stores = createReactiveMap()
+    globalContext.fileRouterInstance = fileRouterInstance
   }
 
   return globalContext

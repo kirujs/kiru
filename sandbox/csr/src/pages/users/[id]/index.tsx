@@ -19,6 +19,10 @@ export const config = definePageConfig({
       const user = (await response.json()) as FetchUserResponse
       return { user }
     },
+    cache: {
+      type: "memory",
+      ttl: 1000 * 60 * 5, // 5 minutes
+    },
   },
 })
 

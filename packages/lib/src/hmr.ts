@@ -1,4 +1,4 @@
-import { $HMR_ACCEPT } from "./constants.js"
+import { $HMR_ACCEPT, $DEV_FILE_LINK } from "./constants.js"
 import { __DEV__ } from "./env.js"
 import { traverseApply } from "./utils/index.js"
 import { requestUpdate } from "./scheduler.js"
@@ -93,7 +93,7 @@ export function createHMRContext() {
       const oldEntry = currentModuleMemory.hotVars.get(name)
 
       // @ts-ignore - this is how we tell devtools what file the hotvar is from
-      newEntry.value.__devtoolsFileLink = newEntry.link
+      newEntry.value[$DEV_FILE_LINK] = newEntry.link
 
       if (typeof newEntry.value === "function") {
         if (oldEntry?.value) {
