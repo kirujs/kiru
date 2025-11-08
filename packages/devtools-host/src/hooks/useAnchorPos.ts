@@ -42,10 +42,7 @@ export const useAnchorPos = () => {
       viewPortRef,
       elementBound
     )
-  }, [
-    Math.round(elementBound.width.value),
-    Math.round(elementBound.height.value),
-  ])
+  }, [])
 
   const distanceCovered = useComputed(() => {
     const { x, y } = mouse.value
