@@ -39,7 +39,7 @@ function formatViteImportMap(
     }
     const segments: string[] = []
     const parts = k.split("/").slice(0, -1)
-    const params: string[] = []
+    const params = new Set<string>()
 
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i]
@@ -50,14 +50,24 @@ function formatViteImportMap(
           )
         }
         const param = part.slice(4, -1)
-        params.push(param)
+        if (params.has(param)) {
+          throw new Error(
+            `[kiru/router]: Duplicate parameter "${param}" in "${key}"`
+          )
+        }
+        params.add(param)
         segments.push(`:${param}*`)
         specificity += 1
         break
       }
       if (part.startsWith("[") && part.endsWith("]")) {
         const param = part.slice(1, -1)
-        params.push(param)
+        if (params.has(param)) {
+          throw new Error(
+            `[kiru/router]: Duplicate parameter "${param}" in "${key}"`
+          )
+        }
+        params.add(param)
         segments.push(`:${param}`)
         specificity += 10
         continue
@@ -69,7 +79,7 @@ function formatViteImportMap(
     const value: FormattedViteImportMap[string] = {
       filePath: key,
       load: map[key],
-      params,
+      params: Array.from(params),
       route: "/" + parts.join("/"),
       segments,
       specificity,
