@@ -1,11 +1,12 @@
-import { type ElementProps, type Signal } from "kiru"
-import { className as cls } from "./utils"
+import { type ElementProps, type Signal, useId } from "kiru"
+import { className as cls } from "kiru/utils"
 
 type FilterProps = ElementProps<"div"> & {
   value: Signal<string>
 }
 
 export function Filter({ value, className, ...props }: FilterProps) {
+  const id = useId()
   return (
     <div
       className={cls(
@@ -22,6 +23,9 @@ export function Filter({ value, className, ...props }: FilterProps) {
         )}
         placeholder="Filter..."
         type="text"
+        autocomplete={id + Math.random().toString(36).substring(2, 15)}
+        name="filter-search"
+        id="filter-search"
         bind:value={value}
       />
     </div>

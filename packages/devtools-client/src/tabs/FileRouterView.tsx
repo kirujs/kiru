@@ -22,9 +22,88 @@ const allPages = signal<FormattedViteImportMap>({})
 const currentPage = signal<CurrentPage | null>(null)
 const currentPageProps = signal<Record<string, unknown>>({})
 
-const sortedRoutes = computed(() => {
-  return Object.keys(allPages.value).sort()
-})
+interface RouteTreeNode {
+  routeKey: string // The key in the FormattedViteImportMap
+  route: string // The route path
+  entry: FormattedViteImportMapEntry<DefaultComponentModule>
+  children: RouteTreeNode[]
+}
+
+function buildRouteTree(pages: FormattedViteImportMap): RouteTreeNode[] {
+  const routeMap = new Map<string, RouteTreeNode>()
+  const routePathMap = new Map<string, RouteTreeNode>() // Maps path without route groups to nodes
+  const rootNodes: RouteTreeNode[] = []
+
+  // Helper to filter out route groups (segments that look like "(this)")
+  function filterRouteGroups(segments: string[]): string[] {
+    return segments.filter((seg) => !(seg.startsWith("(") && seg.endsWith(")")))
+  }
+
+  // Helper to build route path from segments (excluding route groups)
+  function buildRoutePathFromSegments(segments: string[]): string {
+    const filtered = filterRouteGroups(segments)
+    return "/" + filtered.join("/")
+  }
+
+  // First pass: create all nodes
+  for (const [routeKey, entry] of Object.entries(pages)) {
+    const route = entry.route
+    const pathSegments = filterRouteGroups(entry.segments)
+    const routePath = buildRoutePathFromSegments(pathSegments)
+
+    const node: RouteTreeNode = {
+      routeKey,
+      route,
+      entry,
+      children: [],
+    }
+
+    routeMap.set(route, node)
+    // Also index by path without route groups for parent lookup
+    routePathMap.set(routePath, node)
+  }
+
+  // Second pass: build tree structure
+  for (const [, entry] of Object.entries(pages)) {
+    const route = entry.route
+    const segments = entry.segments
+    const node = routeMap.get(route)!
+
+    // Filter out route groups to find actual path segments
+    const pathSegments = filterRouteGroups(segments)
+
+    // Find parent route (one path segment shorter, ignoring route groups)
+    if (pathSegments.length > 1) {
+      const parentPathSegments = pathSegments.slice(0, -1)
+      const parentRoutePath = buildRoutePathFromSegments(parentPathSegments)
+      const parentNode = routePathMap.get(parentRoutePath)
+
+      if (parentNode) {
+        parentNode.children.push(node)
+      } else {
+        // Parent doesn't exist as a route, add to root
+        rootNodes.push(node)
+      }
+    } else {
+      // Top-level route
+      rootNodes.push(node)
+    }
+  }
+
+  // Sort nodes and their children recursively
+  function sortTree(nodes: RouteTreeNode[]): RouteTreeNode[] {
+    return nodes
+      .sort((a, b) => a.route.localeCompare(b.route))
+      .map((node) => ({
+        ...node,
+        children: sortTree(node.children),
+      }))
+  }
+
+  return sortTree(rootNodes)
+}
+
+const routeTree = computed(() => buildRouteTree(allPages.value))
 
 const selectedRoute = signal<string | null>(null)
 
@@ -35,9 +114,34 @@ const filterTerms = computed(() =>
     .split(" ")
     .filter((t) => t.length > 0)
 )
-function keyMatchesFilter(key: string) {
-  return filterTerms.value.every((term) => key.toLowerCase().includes(term))
+
+function routeMatchesFilter(
+  route: string,
+  entry: FormattedViteImportMapEntry<DefaultComponentModule>
+): boolean {
+  if (filterTerms.value.length === 0) return true
+  const searchText = (route + " " + entry.filePath).toLowerCase()
+  return filterTerms.value.every((term) => searchText.includes(term))
 }
+
+function filterTree(nodes: RouteTreeNode[]): RouteTreeNode[] {
+  return nodes
+    .map((node) => {
+      const filteredChildren = filterTree(node.children)
+      const matches = routeMatchesFilter(node.route, node.entry)
+
+      if (matches || filteredChildren.length > 0) {
+        return {
+          ...node,
+          children: filteredChildren,
+        }
+      }
+      return null
+    })
+    .filter((node): node is RouteTreeNode => node !== null)
+}
+
+const filteredRouteTree = computed(() => filterTree(routeTree.value))
 
 export function FileRouterView() {
   useEffect(() => {
@@ -71,59 +175,15 @@ export function FileRouterView() {
         <div className="flex-grow sticky pr-2 top-0 flex flex-col gap-2">
           <Filter value={filterValue} className="sticky top-0" />
           <div className="flex-grow flex flex-col gap-1 items-start">
-            <Derive from={[sortedRoutes, selectedRoute, allPages]}>
-              {(routes, selected, allPages) =>
-                routes
-                  .filter((route) => keyMatchesFilter(route))
-                  .map((route) => (
-                    <button
-                      onclick={() => (selectedRoute.value = route)}
-                      className={cls(
-                        "flex items-center gap-2 justify-between px-2 py-1 w-full cursor-pointer rounded",
-                        "border border-white border-opacity-10 group",
-                        route === selected
-                          ? " bg-white bg-opacity-5 text-neutral-100"
-                          : " hover:[&:not(:group-hover)]:bg-white/10 hover:[&:not(:group-hover)]:text-neutral-100 text-neutral-400"
-                      )}
-                    >
-                      <span className="text-sm">{allPages[route].route}</span>
-                      <Derive from={[currentPage]}>
-                        {(currentPage) => {
-                          const entry = allPages[route]
-                          return currentPage?.route === route ? (
-                            <div className="flex items-center gap-2 relative">
-                              <span className="text-xs text-neutral-300 bg-white/15 rounded px-1 py-0.5 font-medium">
-                                Current
-                              </span>
-                              <button
-                                className="flex items-center gap-2 text-neutral-400 hover:text-neutral-100 hover:bg-white/10 rounded p-1"
-                                onclick={(e) => {
-                                  e.stopPropagation()
-                                  fileRouterDevtools.reload()
-                                }}
-                              >
-                                <RefreshIcon className="w-4 h-4" />
-                              </button>
-                              {entry.params.length > 0 && (
-                                <PageNavigationButton
-                                  entry={entry}
-                                  route={route}
-                                />
-                              )}
-                            </div>
-                          ) : (
-                            <div className="flex invisible items-center gap-2 relative group-hover:visible">
-                              <PageNavigationButton
-                                entry={entry}
-                                route={route}
-                              />
-                            </div>
-                          )
-                        }}
-                      </Derive>
-                    </button>
-                  ))
-              }
+            <Derive from={[filteredRouteTree, selectedRoute, currentPage]}>
+              {(tree, selected, currentPage) => (
+                <RouteTreeNodes
+                  nodes={tree}
+                  selected={selected}
+                  currentPage={currentPage}
+                  depth={0}
+                />
+              )}
             </Derive>
           </div>
         </div>
@@ -133,6 +193,97 @@ export function FileRouterView() {
           </Derive>
         </div>
       </FiftyFiftySplitter>
+    </>
+  )
+}
+
+function RouteTreeNodes({
+  nodes,
+  selected,
+  currentPage,
+  depth,
+}: {
+  nodes: RouteTreeNode[]
+  selected: string | null
+  currentPage: CurrentPage | null
+  depth: number
+}) {
+  return (
+    <>
+      {nodes.map((node) => {
+        const routeKey = node.routeKey
+        const route = node.route
+        const entry = node.entry
+        const isSelected = routeKey === selected
+        const isCurrent = currentPage?.route === route
+        const hasChildren = node.children.length > 0
+
+        // For nested routes, show only the last segment (relative path)
+        // For top-level routes, show the full path
+        // entry.route contains the file-based format like "/users/[id]" or "/users/[...slug]"
+        let displayRoute = entry.route
+        if (depth > 0) {
+          // Split route by "/" and filter out empty strings and route groups
+          const routeParts = entry.route.split("/").filter(Boolean)
+
+          if (routeParts.length > 0) {
+            displayRoute = "/" + routeParts[routeParts.length - 1]
+          }
+        }
+
+        return (
+          <div
+            key={routeKey}
+            className={cls("flex-grow", depth > 0 ? "ml-4" : "w-full")}
+          >
+            <button
+              onclick={() => (selectedRoute.value = routeKey)}
+              className={cls(
+                "flex items-center gap-2 justify-between px-2 py-1 w-full cursor-pointer rounded",
+                "border border-white border-opacity-10 group",
+                isSelected
+                  ? " bg-white bg-opacity-5 text-neutral-100"
+                  : " hover:[&:not(:group-hover)]:bg-white/10 hover:[&:not(:group-hover)]:text-neutral-100 text-neutral-400"
+              )}
+            >
+              <span className="text-sm">{displayRoute}</span>
+              {isCurrent ? (
+                <div className="flex items-center gap-2 relative">
+                  <span className="text-xs text-neutral-300 bg-white/15 rounded px-1 py-0.5 font-medium">
+                    Current
+                  </span>
+                  <button
+                    className="flex items-center gap-2 text-neutral-400 hover:text-neutral-100 hover:bg-white/10 rounded p-1"
+                    onclick={(e) => {
+                      e.stopPropagation()
+                      fileRouterDevtools.reload()
+                    }}
+                  >
+                    <RefreshIcon className="w-4 h-4" />
+                  </button>
+                  {entry.params.length > 0 && (
+                    <PageNavigationButton entry={entry} route={entry.route} />
+                  )}
+                </div>
+              ) : (
+                <div className="flex invisible items-center gap-2 relative group-hover:visible">
+                  <PageNavigationButton entry={entry} route={entry.route} />
+                </div>
+              )}
+            </button>
+            {hasChildren && (
+              <div className="mt-1 flex flex-col gap-1">
+                <RouteTreeNodes
+                  nodes={node.children}
+                  selected={selected}
+                  currentPage={currentPage}
+                  depth={depth + 1}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
     </>
   )
 }

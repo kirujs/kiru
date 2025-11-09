@@ -297,7 +297,7 @@ type IFrameSandbox = string | boolean
 // | "allow-top-navigation-by-user-activation"
 
 type InputAccept = "audio/*" | "video/*" | "image/*" | MimeType
-type AutoComplete = "on" | "off"
+type AutoComplete = string
 type FormMethod = "get" | "post" | "dialog"
 
 type Direction = "ltr" | "rtl" | "auto"
