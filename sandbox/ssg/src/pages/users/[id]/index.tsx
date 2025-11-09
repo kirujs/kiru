@@ -81,6 +81,11 @@ export default function UserDetailPage({
           Next User
         </Button>
       </div>
+      <div className="flex gap-2 justify-between">
+        <Button onclick={() => router.navigate(`/users/${data.user.id}/posts`)}>
+          Posts
+        </Button>
+      </div>
     </div>
   )
 }
