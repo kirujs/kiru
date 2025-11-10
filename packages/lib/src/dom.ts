@@ -4,7 +4,6 @@ import {
   propFilters,
   propToHtmlAttr,
   getVNodeAppContext,
-  isPrimitiveChild,
 } from "./utils/index.js"
 import {
   booleanAttributes,
@@ -345,19 +344,11 @@ function tryHydrateNullableSignalChild(vNode: VNode): MaybeDom {
     return
   }
   const value = unwrap(vNode.props.nodeValue)
-  if (!isPrimitiveChild(value)) {
-    if (__DEV__) {
-      console.error(
-        `[kiru]: Hydration mismatch - expected primitive child but received ${value}`
-      )
-    }
+  if (value !== null && value !== undefined) {
     return
   }
   const dom = createTextNode(vNode)
-  const parent = hydrationStack.parent()
-  if (parent) {
-    parent.appendChild(dom)
-  }
+  hydrationStack.parent().appendChild(dom)
   return dom
 }
 
