@@ -195,7 +195,7 @@ export class FileRouterController {
       const { pathname: nextPath, hash: nextHash } = window.location
 
       this.loadRoute().then(() => {
-        if (prevHash !== nextHash || prevPath !== nextPath) {
+        if (nextHash !== prevHash || nextPath !== prevPath) {
           this.queueScrollManagement(nextHash)
         }
       })
@@ -540,22 +540,25 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       transition?: boolean
     }
   ) {
-    const url = new URL(path, "http://localhost")
-    const { hash: prevHash, pathname: prevPath } = this.state
-    const { hash: nextHash, pathname: nextPath } = url
-
     if (options?.replace) {
       window.history.replaceState({}, "", path)
     } else {
       window.history.pushState({}, "", path)
     }
 
+    const url = new URL(path, "http://localhost")
+    const { hash: nextHash, pathname: nextPath } = url
+    const { hash: prevHash, pathname: prevPath } = this.state
+
     this.loadRoute(
       void 0,
       void 0,
       options?.transition ?? this.enableTransitions
     ).then(() => {
-      if (prevHash !== nextHash || prevPath !== nextPath) {
+      if (nextHash !== prevHash) {
+        window.dispatchEvent(new HashChangeEvent("hashchange"))
+      }
+      if (nextHash !== prevHash || nextPath !== prevPath) {
         this.queueScrollManagement(nextHash)
       }
     })
