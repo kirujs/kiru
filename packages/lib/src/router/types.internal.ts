@@ -1,5 +1,6 @@
 import type { FileRouterContextType } from "./context"
 import type { PageConfig } from "./types"
+import type { NavGuardBuilder } from "./guard"
 
 export interface CurrentPage {
   component: Kiru.FC<any>
@@ -18,6 +19,10 @@ export interface PageModule {
     string,
     { data: unknown; error: string | null }
   >
+}
+
+export interface GuardModule {
+  guard: NavGuardBuilder
 }
 
 export interface ViteImportMap {

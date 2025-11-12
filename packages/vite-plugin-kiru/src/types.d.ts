@@ -117,6 +117,11 @@ export interface SSGOptions {
    */
   layout?: string
   /**
+   * The filename of guard files to search for
+   * @default "guard.{ts,js}"
+   */
+  guard?: string
+  /**
    * Enable transitions for all routes and loading states
    * @default false
    */

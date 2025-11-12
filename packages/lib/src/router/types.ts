@@ -3,12 +3,14 @@ import { FileRouterDataLoadError } from "./errors"
 import {
   DefaultComponentModule,
   FormattedViteImportMap,
+  GuardModule,
   PageModule,
 } from "./types.internal"
 
 export interface FileRouterPreloadConfig {
-  pages: FormattedViteImportMap
+  pages: FormattedViteImportMap<PageModule>
   layouts: FormattedViteImportMap
+  guards?: FormattedViteImportMap<GuardModule>
   page: PageModule
   pageProps: Record<string, unknown>
   pageLayouts: DefaultComponentModule[]
@@ -40,6 +42,14 @@ export interface FileRouterConfig {
    * ```
    */
   layouts: Record<string, unknown>
+  /**
+   * The import map to use for loading guards
+   * @example
+   * ```tsx
+   * <FileRouter config={{ guards: import.meta.glob("/∗∗/guard.{ts,js}"), ... }} />
+   * ```
+   */
+  guards?: Record<string, unknown>
 
   /**
    * The base url to use as a prefix for route matching

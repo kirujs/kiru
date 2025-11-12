@@ -7,6 +7,7 @@ mount(
     config={{
       pages: import.meta.glob("/**/index.tsx"),
       layouts: import.meta.glob("/**/layout.tsx"),
+      guards: import.meta.glob("/**/guard.ts"),
       transition: true,
     }}
   />,

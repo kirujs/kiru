@@ -12,19 +12,18 @@ export async function createVirtualModules(
   const userDoc = resolveUserDocument(projectRoot, ssgOptions)
 
   function createRoutesModule(): string {
-    const { dir, baseUrl, page, layout, transition } = ssgOptions
+    const { dir, baseUrl, page, layout, guard, transition } = ssgOptions
     return `
 import { formatViteImportMap, normalizePrefixPath } from "kiru/router/utils"
 
 const dir = normalizePrefixPath("${dir}")
 const baseUrl = normalizePrefixPath("${baseUrl}")
-const pagesMap = import.meta.glob(["/**/${page}"])
-const layoutsMap = import.meta.glob(["/**/${layout}"])
-const pages = formatViteImportMap(pagesMap, dir, baseUrl)
-const layouts = formatViteImportMap(layoutsMap, dir, baseUrl)
+const pages = formatViteImportMap(import.meta.glob(["/**/${page}"]), dir, baseUrl)
+const layouts = formatViteImportMap(import.meta.glob(["/**/${layout}"]), dir, baseUrl)
+const guards = formatViteImportMap(import.meta.glob(["/**/${guard}"]), dir, baseUrl)
 const transition = ${transition}
 
-export { dir, baseUrl, pages, layouts, transition }
+export { dir, baseUrl, pages, layouts, guards, transition }
 `
   }
 
@@ -35,11 +34,11 @@ import {
   generateStaticPaths as kiruServerGenerateStaticPaths
 } from "kiru/router/server"
 import Document from "${userDoc}"
-import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
+import { pages, layouts, guards } from "${VIRTUAL_ROUTES_ID}"
 
 export async function render(url, ctx) {
   const { registerModule, registerPreloadedPageProps } = ctx
-  return kiruServerRender(url, { registerModule, registerPreloadedPageProps, Document, pages, layouts })
+  return kiruServerRender(url, { registerModule, registerPreloadedPageProps, Document, pages, layouts, guards })
 }
 
 export async function generateStaticPaths() {
@@ -52,10 +51,10 @@ export async function generateStaticPaths() {
     // todo: only include Document in dev mode, we should instead scan for included assets
     return `
 import { initClient } from "kiru/router/client"
-import { dir, baseUrl, pages, layouts, transition } from "${VIRTUAL_ROUTES_ID}"
+import { dir, baseUrl, pages, layouts, guards, transition } from "${VIRTUAL_ROUTES_ID}"
 import "${userDoc}"
 
-initClient({ dir, baseUrl, pages, layouts, transition })
+initClient({ dir, baseUrl, pages, layouts, guards, transition })
 `
   }
 

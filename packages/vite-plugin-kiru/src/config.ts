@@ -52,6 +52,7 @@ const defaultSSGOptions: Required<Omit<SSGOptions, "sitemap">> & {
   document: "document.{tsx,jsx}",
   page: "index.{tsx,jsx}",
   layout: "layout.{tsx,jsx}",
+  guard: "guard.{ts,js}",
   transition: false,
   build: {
     maxConcurrentRenders: 100,
@@ -116,6 +117,7 @@ export function createPluginState(
     document,
     page,
     layout,
+    guard,
     transition,
     build: { maxConcurrentRenders },
   } = defaultSSGOptions
@@ -129,6 +131,7 @@ export function createPluginState(
       document: ssg.document ?? document,
       page: ssg.page ?? page,
       layout: ssg.layout ?? layout,
+      guard: ssg.guard ?? guard,
       transition: ssg.transition ?? transition,
       sitemap: ssg.sitemap,
       build: {
