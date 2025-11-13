@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     kiru({ ssr: true }),
     devServer({
-      entry: "./src/server/index.ts",
+      entry: "./src/server/hono-entry.ts",
       exclude: [
         /^\/@.+$/,
         /.*\.(ts|tsx)($|\?)/,

@@ -34,8 +34,8 @@ app.get("*", async (c, next) => {
       await res.write(html)
       // write lazy content as it resolves
       if (stream) {
-        stream.onData((chunk: string) => res.write(chunk))
-        await new Promise<void>((resolve) => stream.onFinished(resolve))
+        stream.on("data", (chunk) => res.write(chunk))
+        await new Promise((resolve) => stream.on("end", resolve))
       }
     })
   } catch (error) {
