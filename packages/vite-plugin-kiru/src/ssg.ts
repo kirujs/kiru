@@ -7,13 +7,13 @@ import type { OutputBundle, OutputOptions } from "rollup"
 import type { SSGOptions } from "./types.js"
 import type { Manifest } from "vite"
 import type { PluginState } from "./config.js"
-import type { VirtualServerModuleRenderResult } from "./dev-server.js"
+import type { VirtualSSGServerModuleRenderResult } from "./dev-server.js"
 
 interface VirtualServerModule {
   render: (
     url: string,
     ctx: { registerModule: (id: string) => void }
-  ) => Promise<VirtualServerModuleRenderResult>
+  ) => Promise<VirtualSSGServerModuleRenderResult>
   generateStaticPaths: () => Promise<Record<string, string>>
 }
 

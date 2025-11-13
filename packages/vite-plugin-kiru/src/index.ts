@@ -69,7 +69,6 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       if (state.isProduction || state.isBuild) return
       const {
         ssgOptions,
-        ssrOptions,
         devtoolsEnabled,
         dtClientPathname,
         dtHostScriptPath,
@@ -86,12 +85,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         )
       }
 
-      // Detect SSR vs SSG mode
-      const renderMode = ssrOptions ? "ssr" : ssgOptions ? "ssg" : null
-      const renderOptions = ssrOptions || ssgOptions
-
-      if (renderOptions) {
-        // SSR/SSG HTML middleware using document.tsx
+      // Only set up middleware for SSG mode
+      // In SSR mode, the user's server framework (e.g., Hono) handles requests
+      if (ssgOptions) {
+        // SSG HTML middleware using document.tsx
         server.middlewares.use(async (req, res, next) => {
           try {
             const url = req.originalUrl || req.url || "/"
@@ -115,8 +112,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
                 server,
                 url,
                 state.projectRoot,
-                () => resolveUserDocument(projectRoot, renderOptions),
-                renderMode!
+                () => resolveUserDocument(projectRoot, ssgOptions)
               )
               res.statusCode = status
               res.setHeader("Content-Type", "text/html")
@@ -126,7 +122,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           } catch (e) {
             const error = e as Error
             console.error(
-              ANSI.red(`[${renderMode?.toUpperCase()}] Middleware Error`),
+              ANSI.red("[SSG] Middleware Error"),
               `\n${ANSI.yellow("URL:")} ${req.url}`,
               `\n${ANSI.yellow("Error:")} ${error.message}`
             )

@@ -1,3 +1,5 @@
+import path from "path"
+import { type Readable } from "stream"
 import { createElement, Fragment } from "../../element.js"
 
 import {
@@ -25,16 +27,27 @@ export interface SSRHttpResponse {
   html: string
   statusCode: number
   headers: Array<[string, string]>
-  stream?: {
-    onData: (callback: (chunk: string) => void) => void
-    onFinished: (callback: () => void) => void
-  }
+  stream?: Readable
+}
+
+export interface SSRRenderResult {
+  httpResponse: SSRHttpResponse | null
 }
 
 export async function render(
   url: string,
   ctx: SSRRenderContext
-): Promise<SSRHttpResponse> {
+): Promise<SSRRenderResult> {
+  const extName = path.extname(url)
+  if (extName && extName.length > 0) {
+    return {
+      httpResponse: null,
+    }
+  } else if (url.startsWith("/@")) {
+    return {
+      httpResponse: null,
+    }
+  }
   const u = new URL(url, "http://localhost")
   const pathSegments = u.pathname.split("/").filter(Boolean)
   let routeMatch = matchRoute(ctx.pages, pathSegments)
@@ -53,16 +66,24 @@ export async function render(
           )
         }
         return {
-          statusCode: 404,
-          headers: [["Content-Type", "text/html"]],
-          html: "<!doctype html><html><head><title>Not Found</title></head><body><h1>404</h1></body></html>",
+          httpResponse: {
+            statusCode: 404,
+            headers: [["Content-Type", "text/html"]],
+            html: "<!doctype html><html><head><title>Not Found</title></head><body><h1>404</h1></body></html>",
+          },
         }
       }
       // Recursively render the 404 page
       const notFoundResponse = await render("/404", ctx)
       return {
-        ...notFoundResponse,
-        statusCode: 404,
+        httpResponse: {
+          html: notFoundResponse.httpResponse?.html ?? "",
+          headers: notFoundResponse.httpResponse?.headers ?? [
+            ["Content-Type", "text/html"],
+          ],
+          ...notFoundResponse,
+          statusCode: 404,
+        },
       }
     }
   }
@@ -183,9 +204,11 @@ export async function render(
   const statusCode = is404Route ? 404 : 200
 
   return {
-    html,
-    statusCode,
-    headers: [["Content-Type", "text/html"]],
-    // stream property can be added in the future for streaming support
+    httpResponse: {
+      html,
+      statusCode,
+      headers: [["Content-Type", "text/html"]],
+      // stream property can be added in the future for streaming support
+    },
   }
 }
