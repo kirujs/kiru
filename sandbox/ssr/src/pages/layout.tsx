@@ -6,9 +6,9 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
   return (
     <div className="min-h-screen flex flex-col gap-20 justify-between px-10 py-20">
       <h1 className="text-3xl md:text-4xl md:leading-normal font-bold text-center">
-        Welcome to your Kiru SSG app!
+        Welcome to your Kiru SSR app!
       </h1>
-      <div className="flex gap-4 justify-center">
+      <div className="flex gap-4 justify-center flex-wrap">
         <Link to="/" className={state.pathname === "/" ? "" : "underline"}>
           Home
         </Link>
@@ -17,6 +17,24 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
           className={state.pathname === "/todos" ? "" : "underline"}
         >
           Todos
+        </Link>
+        <Link
+          to="/about"
+          className={state.pathname === "/about" ? "" : "underline"}
+        >
+          About
+        </Link>
+        <Link
+          to="/dynamic/123"
+          className={state.pathname.startsWith("/dynamic") ? "" : "underline"}
+        >
+          Dynamic
+        </Link>
+        <Link
+          to="/streaming"
+          className={state.pathname === "/streaming" ? "" : "underline"}
+        >
+          Streaming
         </Link>
       </div>
       {children}

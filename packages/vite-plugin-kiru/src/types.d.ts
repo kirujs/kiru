@@ -133,6 +133,39 @@ export interface SSGOptions {
   build?: SSGBuildOptions
 }
 
+export interface SSROptions {
+  /**
+   * The base URL of the app
+   * @default "/"
+   */
+  baseUrl?: string
+  /**
+   * The directory of the app
+   * @default "src/pages"
+   */
+  dir?: string
+  /**
+   * The name of the document component
+   * @default "document.{tsx,jsx}"
+   */
+  document?: string
+  /**
+   * The filename of page components to search for
+   * @default "index.{tsx,jsx}"
+   */
+  page?: string
+  /**
+   * The filename of layout components to search for
+   * @default "layout.{tsx,jsx}"
+   */
+  layout?: string
+  /**
+   * Enable transitions for all routes and loading states
+   * @default false
+   */
+  transition?: boolean
+}
+
 export interface DevtoolsOptions {
   /**
    * Specifies the path to the devtools app displayed via popup
@@ -193,6 +226,21 @@ export interface KiruPluginOptions {
    * ```
    */
   ssg?: SSGOptions | true
+
+  /**
+   * Options for SSR
+   * @example
+   * ```ts
+   * ssr: {
+   *   dir: "./src/app",
+   *   document: "document.{tsx,jsx}",
+   *   page: "index.{tsx,jsx}",
+   *   layout: "layout.{tsx,jsx}",
+   *   transition: true
+   * }
+   * ```
+   */
+  ssr?: SSROptions | true
 }
 
 export const defaultEsBuildOptions: ESBuildOptions

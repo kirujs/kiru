@@ -4,9 +4,9 @@ import devServer from "@hono/vite-dev-server"
 
 export default defineConfig({
   plugins: [
-    kiru({ devtools: true }),
+    kiru({ ssr: true }),
     devServer({
-      entry: "./src/server/server.ts",
+      entry: "./src/server/index.ts",
       exclude: [
         /^\/@.+$/,
         /.*\.(ts|tsx)($|\?)/,

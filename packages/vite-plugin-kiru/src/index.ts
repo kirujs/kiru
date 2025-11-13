@@ -38,10 +38,17 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       const initialState = createPluginState(opts)
       state = updatePluginState(initialState, config, opts)
       log = createLogger(state)
-      if (state.ssgOptions) {
+      if (state.ssrOptions) {
         virtualModules = await createVirtualModules(
           state.projectRoot,
-          state.ssgOptions
+          state.ssrOptions,
+          "ssr"
+        )
+      } else if (state.ssgOptions) {
+        virtualModules = await createVirtualModules(
+          state.projectRoot,
+          state.ssgOptions,
+          "ssg"
         )
       }
     },
@@ -62,6 +69,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       if (state.isProduction || state.isBuild) return
       const {
         ssgOptions,
+        ssrOptions,
         devtoolsEnabled,
         dtClientPathname,
         dtHostScriptPath,
@@ -78,8 +86,12 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         )
       }
 
-      if (ssgOptions) {
-        // SSR HTML middleware using document.tsx
+      // Detect SSR vs SSG mode
+      const renderMode = ssrOptions ? "ssr" : ssgOptions ? "ssg" : null
+      const renderOptions = ssrOptions || ssgOptions
+
+      if (renderOptions) {
+        // SSR/SSG HTML middleware using document.tsx
         server.middlewares.use(async (req, res, next) => {
           try {
             const url = req.originalUrl || req.url || "/"
@@ -103,7 +115,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
                 server,
                 url,
                 state.projectRoot,
-                () => resolveUserDocument(projectRoot, ssgOptions)
+                () => resolveUserDocument(projectRoot, renderOptions),
+                renderMode!
               )
               res.statusCode = status
               res.setHeader("Content-Type", "text/html")
@@ -111,9 +124,18 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
               return
             }
           } catch (e) {
-            console.error(e)
+            const error = e as Error
+            console.error(
+              ANSI.red(`[${renderMode?.toUpperCase()}] Middleware Error`),
+              `\n${ANSI.yellow("URL:")} ${req.url}`,
+              `\n${ANSI.yellow("Error:")} ${error.message}`
+            )
+            if (error.stack) {
+              console.error(ANSI.black_bright(error.stack))
+            }
+            // Let Vite handle the error
+            next(e)
           }
-          next()
         })
       }
     },
@@ -195,9 +217,13 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       }
     },
   } satisfies Plugin
-  return [
-    mainPlugin,
-    {
+
+  // Only include the SSG post-build plugin when SSG mode is enabled
+  // SSR mode doesn't need this plugin since it renders at request time
+  const plugins: Plugin[] = [mainPlugin]
+
+  if (opts.ssg) {
+    plugins.push({
       name: "vite-plugin-kiru:ssg",
       apply: "build",
       enforce: "post",
@@ -216,8 +242,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         })
         log(ANSI.cyan("[SSG]"), "SSG build complete!")
       },
-    } satisfies Plugin,
-  ]
+    } satisfies Plugin)
+  }
+
+  return plugins
 }
 
 // Export additional utilities

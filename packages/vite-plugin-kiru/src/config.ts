@@ -3,6 +3,7 @@ import type { UserConfig, ESBuildOptions, ResolvedConfig } from "vite"
 import type {
   KiruPluginOptions,
   SSGOptions,
+  SSROptions,
   FileLinkFormatter,
   SSGBuildOptions,
   SSGSitemapOptions,
@@ -41,6 +42,7 @@ export interface PluginState {
         build: Required<SSGBuildOptions>
       })
     | null
+  ssrOptions: Required<SSROptions> | null
   staticProps: Record<string, Record<string, Record<string, any>>>
 }
 
@@ -56,6 +58,15 @@ const defaultSSGOptions: Required<Omit<SSGOptions, "sitemap">> & {
   build: {
     maxConcurrentRenders: 100,
   },
+}
+
+const defaultSSROptions: Required<SSROptions> = {
+  baseUrl: "/",
+  dir: "src/pages",
+  document: "document.{tsx,jsx}",
+  page: "index.{tsx,jsx}",
+  layout: "layout.{tsx,jsx}",
+  transition: false,
 }
 
 /**
@@ -95,55 +106,99 @@ export function createPluginState(
     manifestPath: "vite-manifest.json",
     loggingEnabled: opts.loggingEnabled === true,
     ssgOptions: null,
+    ssrOptions: null,
   }
 
-  const { ssg } = opts
-  if (!ssg) return state
+  // Validate mutual exclusivity of SSG and SSR
+  if (opts.ssg && opts.ssr) {
+    throw new Error(
+      "[vite-plugin-kiru]: Cannot enable both SSG and SSR modes simultaneously"
+    )
+  }
 
-  if (ssg === true) {
+  const { ssg, ssr } = opts
+
+  // Handle SSG options
+  if (ssg) {
+    if (ssg === true) {
+      return {
+        ...state,
+        ssgOptions: defaultSSGOptions,
+      }
+    }
+    if (ssg.baseUrl && !ssg.baseUrl.startsWith("/")) {
+      throw new Error("[vite-plugin-kiru]: ssg.baseUrl must start with '/'")
+    }
+
+    const {
+      baseUrl,
+      dir,
+      document,
+      page,
+      layout,
+      transition,
+      build: { maxConcurrentRenders },
+    } = defaultSSGOptions
+
     return {
       ...state,
-      ssgOptions: defaultSSGOptions,
+      ssgOptions: {
+        ...ssg,
+        baseUrl: ssg.baseUrl ?? baseUrl,
+        dir: ssg.dir ?? dir,
+        document: ssg.document ?? document,
+        page: ssg.page ?? page,
+        layout: ssg.layout ?? layout,
+        transition: ssg.transition ?? transition,
+        sitemap: ssg.sitemap,
+        build: {
+          maxConcurrentRenders:
+            ssg.build?.maxConcurrentRenders ?? maxConcurrentRenders,
+        },
+      },
     }
   }
-  if (ssg.baseUrl && !ssg.baseUrl.startsWith("/")) {
-    throw new Error("[vite-plugin-kiru]: ssg.baseUrl must start with '/'")
-  }
 
-  const {
-    baseUrl,
-    dir,
-    document,
-    page,
-    layout,
-    transition,
-    build: { maxConcurrentRenders },
-  } = defaultSSGOptions
+  // Handle SSR options
+  if (ssr) {
+    if (ssr === true) {
+      return {
+        ...state,
+        ssrOptions: defaultSSROptions,
+      }
+    }
+    if (ssr.baseUrl && !ssr.baseUrl.startsWith("/")) {
+      throw new Error("[vite-plugin-kiru]: ssr.baseUrl must start with '/'")
+    }
 
-  return {
-    ...state,
-    ssgOptions: {
-      ...ssg,
-      baseUrl: ssg.baseUrl ?? baseUrl,
-      dir: ssg.dir ?? dir,
-      document: ssg.document ?? document,
-      page: ssg.page ?? page,
-      layout: ssg.layout ?? layout,
-      transition: ssg.transition ?? transition,
-      sitemap: ssg.sitemap,
-      build: {
-        maxConcurrentRenders:
-          ssg.build?.maxConcurrentRenders ?? maxConcurrentRenders,
+    const { baseUrl, dir, document, page, layout, transition } =
+      defaultSSROptions
+
+    return {
+      ...state,
+      ssrOptions: {
+        baseUrl: ssr.baseUrl ?? baseUrl,
+        dir: ssr.dir ?? dir,
+        document: ssr.document ?? document,
+        page: ssr.page ?? page,
+        layout: ssr.layout ?? layout,
+        transition: ssr.transition ?? transition,
       },
-    },
+    }
   }
+
+  return state
 }
 
 export function createViteConfig(
   config: UserConfig,
   opts: KiruPluginOptions
 ): UserConfig {
-  if (!opts.ssg) {
+  const hasSSG = !!opts.ssg
+  const hasSSR = !!opts.ssr
+
+  // If neither SSG nor SSR is enabled, return basic config
+  if (!hasSSG && !hasSSR) {
     return {
       ...config,
       esbuild: {
@@ -152,10 +207,12 @@ export function createViteConfig(
       },
     }
   }
+
   const isSsrBuild = config.build?.ssr
   const rollup = config.build?.rollupOptions ?? {}
   let input = rollup.input
 
+  // Set entry point based on build type
   if (!input) {
     input = isSsrBuild ? VIRTUAL_ENTRY_SERVER_ID : VIRTUAL_ENTRY_CLIENT_ID
   }
@@ -227,6 +284,7 @@ export function updatePluginState(
     dtHostScriptPath: state.dtHostScriptPath!,
     manifestPath: state.manifestPath!,
     ssgOptions: state.ssgOptions!,
+    ssrOptions: state.ssrOptions!,
     staticProps: {},
   } satisfies PluginState
 }

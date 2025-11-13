@@ -1,4 +1,4 @@
-import type { SSGOptions } from "./types.js"
+import type { SSGOptions, SSROptions } from "./types.js"
 import { resolveUserDocument } from "./utils.js"
 
 export const VIRTUAL_ROUTES_ID = "virtual:kiru:routes"
@@ -7,12 +7,13 @@ export const VIRTUAL_ENTRY_CLIENT_ID = "virtual:kiru:entry-client"
 
 export async function createVirtualModules(
   projectRoot: string,
-  ssgOptions: Required<SSGOptions>
+  options: Required<SSGOptions> | Required<SSROptions>,
+  mode: "ssg" | "ssr"
 ) {
-  const userDoc = resolveUserDocument(projectRoot, ssgOptions)
+  const userDoc = resolveUserDocument(projectRoot, options)
 
   function createRoutesModule(): string {
-    const { dir, baseUrl, page, layout, transition } = ssgOptions
+    const { dir, baseUrl, page, layout, transition } = options
     return `
 import { formatViteImportMap, normalizePrefixPath } from "kiru/router/utils"
 
@@ -29,6 +30,20 @@ export { dir, baseUrl, pages, layouts, transition }
   }
 
   function createEntryServerModule(): string {
+    if (mode === "ssr") {
+      return `
+import { render as kiruSSRRender } from "kiru/router/ssr"
+import Document from "${userDoc}"
+import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
+
+export async function render(url, ctx = {}) {
+  const { registerModule = () => {} } = ctx
+  return kiruSSRRender(url, { registerModule, Document, pages, layouts })
+}
+`
+    }
+
+    // SSG mode
     return `
 import {
   render as kiruStaticRender,

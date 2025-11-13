@@ -38,6 +38,10 @@
       "types": "./dist/router/ssg/index.d.ts",
       "default": "./dist/router/ssg/index.js"
     },
+    "./router/ssr": {
+      "types": "./dist/router/ssr/index.d.ts",
+      "default": "./dist/router/ssr/index.js"
+    },
     "./router/utils": {
       "types": "./dist/router/utils/index.d.ts",
       "default": "./dist/router/utils/index.js"

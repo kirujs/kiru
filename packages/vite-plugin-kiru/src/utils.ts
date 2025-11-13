@@ -2,7 +2,7 @@ import path from "node:path"
 import { globSync } from "glob"
 import type { PluginState } from "./config.js"
 import { ANSI } from "./ansi.js"
-import { SSGOptions } from "./types.js"
+import { SSGOptions, SSROptions } from "./types.js"
 
 export function createLogger(state: PluginState) {
   return (...data: any[]) => {
@@ -13,9 +13,9 @@ export function createLogger(state: PluginState) {
 
 export function resolveUserDocument(
   projectRoot: string,
-  ssgOptions: Required<SSGOptions>
+  options: { dir: string; document: string }
 ): string {
-  const { dir, document } = ssgOptions
+  const { dir, document } = options
   const fp = path.resolve(projectRoot, dir, document).replace(/\\/g, "/")
   const matches = globSync(fp)
   if (!matches.length) {
