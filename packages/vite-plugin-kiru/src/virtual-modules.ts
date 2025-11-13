@@ -38,8 +38,8 @@ import Document from "${userDoc}"
 import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
 
 export async function render(url, ctx) {
-  const { registerModule, registerPreloadedPageProps } = ctx
-  return kiruStaticRender(url, { registerModule, registerPreloadedPageProps, Document, pages, layouts })
+  const { registerModule, registerStaticProps } = ctx
+  return kiruStaticRender(url, { registerModule, registerStaticProps, Document, pages, layouts })
 }
 
 export async function generateStaticPaths() {

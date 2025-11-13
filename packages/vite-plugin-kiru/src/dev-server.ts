@@ -7,7 +7,7 @@ import type { ViteDevServer, ModuleNode } from "vite"
 
 interface RenderContext {
   registerModule: (moduleId: string) => void
-  registerPreloadedPageProps: (props: Record<string, unknown>) => void
+  registerStaticProps: (props: Record<string, unknown>) => void
 }
 
 export interface VirtualServerModuleRenderResult {
@@ -49,7 +49,7 @@ export async function handleSSR(
     registerModule: (moduleId: string) => {
       moduleIds.push(moduleId)
     },
-    registerPreloadedPageProps: () => {},
+    registerStaticProps: () => {},
   }
 
   const { status, body } = await mod.render(url, ctx)

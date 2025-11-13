@@ -19,7 +19,7 @@ interface VirtualServerModule {
 
 interface RenderContext {
   registerModule: (moduleId: string) => void
-  registerPreloadedPageProps: (props: Record<string, unknown>) => void
+  registerStaticProps: (props: Record<string, unknown>) => void
 }
 
 export async function generateStaticSite(
@@ -238,7 +238,7 @@ async function renderRoute(
     registerModule: (moduleId: string) => {
       moduleIds.push(moduleId)
     },
-    registerPreloadedPageProps: (props) => {
+    registerStaticProps: (props) => {
       ;(state.staticProps[srcFilePath] ??= {})[route] = props
     },
   }

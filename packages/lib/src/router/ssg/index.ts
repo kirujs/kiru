@@ -19,7 +19,7 @@ export interface RenderContext {
   layouts: FormattedViteImportMap
   Document: Kiru.FC
   registerModule: (moduleId: string) => void
-  registerPreloadedPageProps: (props: Record<string, unknown>) => void
+  registerStaticProps: (props: Record<string, unknown>) => void
 }
 
 export interface RenderResult {
@@ -113,7 +113,7 @@ export async function render(
         }
       } finally {
         clearTimeout(timeout)
-        ctx.registerPreloadedPageProps({ data: props.data, error: props.error })
+        ctx.registerStaticProps({ data: props.data, error: props.error })
       }
     }
   }
