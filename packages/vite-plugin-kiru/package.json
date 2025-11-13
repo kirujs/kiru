@@ -13,6 +13,16 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    }
+  },
   "peerDependencies": {
     "kiru": ">=0.51.8"
   },

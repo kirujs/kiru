@@ -197,6 +197,8 @@ export function createViteConfig(
   const hasSSG = !!opts.ssg
   const hasSSR = !!opts.ssr
 
+  console.log("createViteConfig", { hasSSG, hasSSR })
+
   // If neither SSG nor SSR is enabled, return basic config
   if (!hasSSG && !hasSSR) {
     return {
@@ -220,6 +222,14 @@ export function createViteConfig(
   const ssr = isSsrBuild === true ? true : config.build?.ssr
   const baseOut = config.build?.outDir ?? "dist"
   const desiredOutDir = isSsrBuild ? `${baseOut}/server` : `${baseOut}/client`
+
+  console.log("createViteConfig", {
+    isSsrBuild,
+    input,
+    ssr,
+    baseOut,
+    desiredOutDir,
+  })
 
   return {
     ...config,

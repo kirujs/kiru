@@ -4,7 +4,7 @@ import devServer from "@hono/vite-dev-server"
 
 export default defineConfig({
   plugins: [
-    kiru({ ssr: true }),
+    kiru({ ssr: true, loggingEnabled: true }),
     devServer({
       entry: "./src/server/hono-entry.ts",
       exclude: [

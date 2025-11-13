@@ -1,5 +1,6 @@
 import { Hono } from "hono"
 import { streamText } from "hono/streaming"
+import { renderPage } from "vite-plugin-kiru/server"
 
 const app = new Hono()
 
@@ -8,17 +9,7 @@ app.get("*", async (c, next) => {
   console.log("path", path)
 
   try {
-    // Import the render function from the virtual server entry
-    // In development, this is loaded via Vite's SSR module loader
-    // In production, this would be from the built server bundle
-    const { render } = await import("virtual:kiru:entry-server")
-
-    const { httpResponse } = await render(c.req.url, {
-      registerModule: (moduleId: string) => {
-        // Track modules for CSS collection
-        console.log("Module registered:", moduleId)
-      },
-    })
+    const { httpResponse } = await renderPage({ url: c.req.url })
     if (httpResponse === null) return next()
 
     console.log("httpResponse", path, httpResponse)

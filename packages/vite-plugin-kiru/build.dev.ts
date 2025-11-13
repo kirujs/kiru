@@ -3,13 +3,13 @@ import fs from "node:fs"
 
 await esbuild
   .context({
-    entryPoints: ["src/index.ts"],
+    entryPoints: ["src/index.ts", "src/server.ts"],
     bundle: true,
     platform: "node",
     target: "esnext",
     format: "esm",
-    outfile: "./dist/index.js",
-    external: ["kiru", "vite"],
+    outdir: "./dist",
+    external: ["kiru", "vite", "virtual:kiru:entry-server"],
     write: true,
     plugins: [
       {
@@ -18,6 +18,7 @@ await esbuild
           onEnd(() => {
             console.log("[vite-plugin-kiru]: Build complete!")
             fs.copyFileSync("./src/types.d.ts", "dist/index.d.ts")
+            fs.copyFileSync("./src/types.server.d.ts", "dist/server.d.ts")
           })
         },
       },

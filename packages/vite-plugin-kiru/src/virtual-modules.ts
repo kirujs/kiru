@@ -36,9 +36,8 @@ import { render as kiruSSRRender } from "kiru/router/ssr"
 import Document from "${userDoc}"
 import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
 
-export async function render(url, ctx = {}) {
-  const { registerModule = () => {} } = ctx
-  return kiruSSRRender(url, { registerModule, Document, pages, layouts })
+export async function render(url, ctx) {
+  return kiruSSRRender(url, { ...ctx, Document, pages, layouts })
 }
 `
     }
@@ -53,8 +52,7 @@ import Document from "${userDoc}"
 import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
 
 export async function render(url, ctx) {
-  const { registerModule, registerStaticProps } = ctx
-  return kiruStaticRender(url, { registerModule, registerStaticProps, Document, pages, layouts })
+  return kiruStaticRender(url, { ...ctx, Document, pages, layouts })
 }
 
 export async function generateStaticPaths() {

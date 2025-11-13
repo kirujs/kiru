@@ -21,6 +21,7 @@ import { createVirtualModules } from "./virtual-modules.js"
 
 import type { KiruPluginOptions, SSGOptions } from "./types.js"
 import { build, InlineConfig, type Plugin, type PluginOption } from "vite"
+import { VITE_DEV_SERVER_INSTANCE } from "./globals.js"
 
 export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   let state: PluginState
@@ -66,6 +67,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       )
     },
     configureServer(server) {
+      VITE_DEV_SERVER_INSTANCE.current = server
       if (state.isProduction || state.isBuild) return
       const {
         ssgOptions,
@@ -224,8 +226,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       apply: "build",
       enforce: "post",
       async closeBundle(error) {
-        if (error || this.environment.config.build.ssr || !state.ssgOptions)
-          return
+        if (error || this.environment.config.build.ssr) return
 
         log(ANSI.cyan("[SSG]"), "Starting SSG build...")
         await build({
@@ -237,6 +238,29 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           },
         })
         log(ANSI.cyan("[SSG]"), "SSG build complete!")
+      },
+    } satisfies Plugin)
+  } else if (opts.ssr) {
+    plugins.push({
+      name: "vite-plugin-kiru:ssr",
+      apply: "build",
+      enforce: "post",
+      async closeBundle(error) {
+        if (error || !this.environment.config.build.ssr) return
+
+        log(ANSI.cyan("[SSR]"), "Starting SSR build...")
+        await build({
+          ...inlineConfig,
+          configFile: false,
+          build: {
+            ...inlineConfig?.build,
+            ssr: true,
+            rollupOptions: {
+              input: "server/hono-entry.node.ts",
+            },
+          },
+        })
+        log(ANSI.cyan("[SSR]"), "SSR build complete!")
       },
     } satisfies Plugin)
   }
