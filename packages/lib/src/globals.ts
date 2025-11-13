@@ -13,5 +13,5 @@ const renderMode = {
 }
 
 const hydrationMode = {
-  current: "dynamic" as "static" | "dynamic",
+  current: "dynamic" as Kiru.HydrationMode,
 }

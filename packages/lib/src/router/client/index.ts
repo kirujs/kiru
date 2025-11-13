@@ -23,6 +23,7 @@ interface InitClientOptions {
   pages: FormattedViteImportMap
   layouts: FormattedViteImportMap
   transition: boolean
+  hydrationMode?: Kiru.HydrationMode
 }
 
 export async function initClient(options: InitClientOptions) {
@@ -39,7 +40,9 @@ export async function initClient(options: InitClientOptions) {
   }
 
   const app = createElement(FileRouter, { config })
-  hydrate(app, document.body, { hydrationMode: "static" })
+  hydrate(app, document.body, {
+    hydrationMode: options.hydrationMode ?? "static",
+  })
 
   if (__DEV__) {
     onLoadedDev()

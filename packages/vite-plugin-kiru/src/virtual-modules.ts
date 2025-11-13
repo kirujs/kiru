@@ -62,6 +62,15 @@ export async function generateStaticPaths() {
   }
 
   function createEntryClientModule(): string {
+    if (mode === "ssr") {
+      return `
+import { initClient } from "kiru/router/client"
+import { dir, baseUrl, pages, layouts, transition } from "${VIRTUAL_ROUTES_ID}"
+import "${userDoc}"
+
+initClient({ dir, baseUrl, pages, layouts, transition, hydrationMode: "dynamic" })
+`
+    }
     // todo: only include Document in dev mode, we should instead scan for included assets
     return `
 import { initClient } from "kiru/router/client"

@@ -176,6 +176,7 @@ declare global {
 
     interface StatefulPromise<T> extends Promise<T>, PromiseState<T> {}
 
+    type HydrationMode = "static" | "dynamic"
     type RenderMode = "dom" | "hydrate" | "string" | "stream"
 
     type StateSetter<T> = T | ((prev: T) => T)

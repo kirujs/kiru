@@ -4,15 +4,22 @@ import { renderPage } from "vite-plugin-kiru/server"
 
 const app = new Hono()
 
-app.get("*", async (c, next) => {
-  const path = c.req.path
-  console.log("path", path)
+const loadProducts = async () => {
+  // await new Promise((resolve) => setTimeout(resolve, 500))
+  const response = await fetch("https://dummyjson.com/products")
+  if (!response.ok) throw new Error(response.statusText)
+  return await response.json()
+}
 
+app.get("/api/products", async (c) => {
+  const products = await loadProducts()
+  return c.json(products)
+})
+
+app.get("*", async (c, next) => {
   try {
     const { httpResponse } = await renderPage({ url: c.req.url })
     if (httpResponse === null) return next()
-
-    console.log("httpResponse", path, httpResponse)
 
     const { html, headers, statusCode, stream } = httpResponse
 

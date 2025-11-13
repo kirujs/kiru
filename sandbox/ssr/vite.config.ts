@@ -17,6 +17,11 @@ export default defineConfig({
         /^\/node_modules\/.*/,
       ],
       injectClientScript: false,
+      /**
+       * This is necessary to prevent full hot reloads.
+       * As far as I can tell, server modules will still be replaced anyway.
+       */
+      handleHotUpdate: () => {},
     }),
   ],
 })

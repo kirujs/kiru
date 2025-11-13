@@ -10,7 +10,7 @@ interface HydrationAppContextOptions extends AppContextOptions {
    * - "dynamic": SSR with lazy promise hydration
    * @default "dynamic"
    */
-  hydrationMode?: "static" | "dynamic"
+  hydrationMode?: Kiru.HydrationMode
 }
 
 export function hydrate(
