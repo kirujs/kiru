@@ -36,6 +36,12 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
         >
           Streaming
         </Link>
+        <Link
+          to="/products"
+          className={state.pathname === "/products" ? "" : "underline"}
+        >
+          Products
+        </Link>
       </div>
       {children}
       <div className="text-center text-stone-200">

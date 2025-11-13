@@ -15,6 +15,7 @@ import { FormattedViteImportMap, PageModule } from "../types.internal.js"
 import { __DEV__ } from "../../env.js"
 import { FileRouterDataLoadError } from "../errors.js"
 import { renderToString } from "../../renderToString.js"
+import { renderToReadableStream } from "../../ssr/server.js"
 
 export interface SSRRenderContext {
   pages: FormattedViteImportMap
@@ -173,7 +174,7 @@ export async function render(
     },
   })
 
-  let pageOutletContent = renderToString(app)
+  let { immediate: pageOutletContent, stream } = renderToReadableStream(app)
   const hasHeadContent = pageOutletContent.includes("<kiru-head-content>")
   const hasHeadOutlet = documentShell.includes("<kiru-head-outlet>")
 
@@ -208,7 +209,7 @@ export async function render(
       html,
       statusCode,
       headers: [["Content-Type", "text/html"]],
-      // stream property can be added in the future for streaming support
+      stream,
     },
   }
 }
