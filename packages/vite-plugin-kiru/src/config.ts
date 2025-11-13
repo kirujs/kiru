@@ -22,6 +22,11 @@ export const defaultEsBuildOptions: ESBuildOptions = {
   include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
 }
 
+export type ResolvedSSGOptions = Required<Omit<SSGOptions, "sitemap">> & {
+  sitemap?: SSGSitemapOptions
+  build: Required<SSGBuildOptions>
+}
+
 export interface PluginState {
   isProduction: boolean
   isBuild: boolean
@@ -36,12 +41,7 @@ export interface PluginState {
   dtClientPathname: string
   dtHostScriptPath: string
   manifestPath: string
-  ssgOptions:
-    | (Required<Omit<SSGOptions, "sitemap">> & {
-        sitemap?: SSGSitemapOptions
-        build: Required<SSGBuildOptions>
-      })
-    | null
+  ssgOptions: ResolvedSSGOptions | null
   ssrOptions: Required<SSROptions> | null
   staticProps: Record<string, Record<string, Record<string, any>>>
 }
@@ -60,7 +60,7 @@ const defaultSSGOptions: Required<Omit<SSGOptions, "sitemap">> & {
   },
 }
 
-const defaultSSROptions: Required<SSROptions> = {
+const defaultSSROptions: Omit<Required<SSROptions>, "runtimeEntry"> = {
   baseUrl: "/",
   dir: "src/pages",
   document: "document.{tsx,jsx}",
@@ -143,14 +143,14 @@ export function createPluginState(
     return {
       ...state,
       ssgOptions: {
-        ...ssg,
-        baseUrl: ssg.baseUrl ?? baseUrl,
-        dir: ssg.dir ?? dir,
-        document: ssg.document ?? document,
-        page: ssg.page ?? page,
-        layout: ssg.layout ?? layout,
-        transition: ssg.transition ?? transition,
+        baseUrl,
+        dir,
+        document,
+        page,
+        layout,
+        transition,
         sitemap: ssg.sitemap,
+        ...ssg,
         build: {
           maxConcurrentRenders:
             ssg.build?.maxConcurrentRenders ?? maxConcurrentRenders,
@@ -161,12 +161,6 @@ export function createPluginState(
 
   // Handle SSR options
   if (ssr) {
-    if (ssr === true) {
-      return {
-        ...state,
-        ssrOptions: defaultSSROptions,
-      }
-    }
     if (ssr.baseUrl && !ssr.baseUrl.startsWith("/")) {
       throw new Error("[vite-plugin-kiru]: ssr.baseUrl must start with '/'")
     }
@@ -177,12 +171,13 @@ export function createPluginState(
     return {
       ...state,
       ssrOptions: {
-        baseUrl: ssr.baseUrl ?? baseUrl,
-        dir: ssr.dir ?? dir,
-        document: ssr.document ?? document,
-        page: ssr.page ?? page,
-        layout: ssr.layout ?? layout,
-        transition: ssr.transition ?? transition,
+        baseUrl,
+        dir,
+        document,
+        page,
+        layout,
+        transition,
+        ...ssr,
       },
     }
   }
@@ -196,8 +191,6 @@ export function createViteConfig(
 ): UserConfig {
   const hasSSG = !!opts.ssg
   const hasSSR = !!opts.ssr
-
-  console.log("createViteConfig", { hasSSG, hasSSR })
 
   // If neither SSG nor SSR is enabled, return basic config
   if (!hasSSG && !hasSSR) {
@@ -222,14 +215,6 @@ export function createViteConfig(
   const ssr = isSsrBuild === true ? true : config.build?.ssr
   const baseOut = config.build?.outDir ?? "dist"
   const desiredOutDir = isSsrBuild ? `${baseOut}/server` : `${baseOut}/client`
-
-  console.log("createViteConfig", {
-    isSsrBuild,
-    input,
-    ssr,
-    baseOut,
-    desiredOutDir,
-  })
 
   return {
     ...config,

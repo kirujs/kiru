@@ -135,6 +135,11 @@ export interface SSGOptions {
 
 export interface SSROptions {
   /**
+   * The path to the server entry file
+   * @example "src/server.ts"
+   */
+  runtimeEntry: string
+  /**
    * The base URL of the app
    * @default "/"
    */
@@ -240,7 +245,7 @@ export interface KiruPluginOptions {
    * }
    * ```
    */
-  ssr?: SSROptions | true
+  ssr?: SSROptions
 }
 
 export const defaultEsBuildOptions: ESBuildOptions

@@ -1,4 +1,5 @@
-import type { SSGOptions, SSROptions } from "./types.js"
+import { ResolvedSSGOptions } from "./config.js"
+import type { SSROptions } from "./types.js"
 import { resolveUserDocument } from "./utils.js"
 
 export const VIRTUAL_ROUTES_ID = "virtual:kiru:routes"
@@ -7,7 +8,7 @@ export const VIRTUAL_ENTRY_CLIENT_ID = "virtual:kiru:entry-client"
 
 export async function createVirtualModules(
   projectRoot: string,
-  options: Required<SSGOptions> | Required<SSROptions>,
+  options: ResolvedSSGOptions | Required<SSROptions>,
   mode: "ssg" | "ssr"
 ) {
   const userDoc = resolveUserDocument(projectRoot, options)

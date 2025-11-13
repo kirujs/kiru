@@ -246,7 +246,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       apply: "build",
       enforce: "post",
       async closeBundle(error) {
-        if (error || !this.environment.config.build.ssr) return
+        if (error || this.environment.config.build.ssr || !state.ssrOptions)
+          return
 
         log(ANSI.cyan("[SSR]"), "Starting SSR build...")
         await build({
@@ -256,7 +257,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             ...inlineConfig?.build,
             ssr: true,
             rollupOptions: {
-              input: "server/hono-entry.node.ts",
+              input: path.resolve(
+                state.projectRoot,
+                state.ssrOptions.runtimeEntry
+              ),
             },
           },
         })

@@ -2,7 +2,9 @@ import { ErrorBoundary, Suspense, usePromise } from "kiru"
 import type { AppType } from "@/server/hono-entry"
 import { hc } from "hono/client"
 
-const client = hc<AppType>("http://localhost:5173")
+const client = hc<AppType>(
+  import.meta.env.DEV ? "http://localhost:5173" : "http://localhost:3000"
+)
 
 export default function ProductsPage() {
   const products = usePromise(async ({ signal }) => {

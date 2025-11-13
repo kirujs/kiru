@@ -9,7 +9,12 @@ export default defineConfig({
     },
   },
   plugins: [
-    kiru({ ssr: true, loggingEnabled: true }),
+    kiru({
+      ssr: {
+        runtimeEntry: "./src/server/hono-entry.node.ts",
+      },
+      loggingEnabled: true,
+    }),
     devServer({
       entry: "./src/server/hono-entry.ts",
       exclude: [

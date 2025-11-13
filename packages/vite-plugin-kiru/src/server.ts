@@ -5,7 +5,6 @@ import { ServerRenderOptions, SSRRenderResult } from "./types.server"
 import { VIRTUAL_ENTRY_CLIENT_ID } from "./virtual-modules.js"
 import { resolveUserDocument } from "./utils"
 import { VITE_DEV_SERVER_INSTANCE } from "./globals"
-import { ANSI } from "./ansi"
 
 async function getClientAssets(
   clientOutDirAbs: string,
@@ -139,7 +138,6 @@ export async function renderPage(
   }
 
   const isDevelopment = process.env.NODE_ENV !== "production"
-  console.log(ANSI.cyan("[SSR]"), `isDevelopment: ${isDevelopment}`)
   let html = httpResponse.html
 
   if (isDevelopment) {
@@ -173,8 +171,6 @@ export async function renderPage(
       }
       scan(mod)
     }
-
-    console.log(ANSI.cyan("[SSR]"), `importedModules: ${importedModules.size}`)
 
     const localModules = Array.from(importedModules).filter((m) =>
       m.id?.startsWith(projectRoot)

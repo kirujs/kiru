@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "run:server": "cross-env NODE_ENV=production node ./dist/server/hono-entry.node.js"
   },
   "devDependencies": {
     "@hono/vite-dev-server": "^0.23.0",
