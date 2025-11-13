@@ -79,17 +79,7 @@ export class FileRouterController {
         this.invalidate(...paths)
       },
       get state() {
-        return {
-          ...__this.state,
-          get path() {
-            if (__DEV__) {
-              console.warn(
-                "[kiru/router]: `FileRouterContext.state.path` is deprecated. Use `FileRouterContext.state.pathname` instead."
-              )
-            }
-            return __this.state.pathname
-          },
-        }
+        return { ...__this.state }
       },
       navigate: this.navigate.bind(this),
       prefetchRouteModules: this.prefetchRouteModules.bind(this),
