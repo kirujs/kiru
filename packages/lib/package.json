@@ -34,9 +34,9 @@
       "types": "./dist/router/client/index.d.ts",
       "default": "./dist/router/client/index.js"
     },
-    "./router/server": {
-      "types": "./dist/router/server/index.d.ts",
-      "default": "./dist/router/server/index.js"
+    "./router/ssg": {
+      "types": "./dist/router/ssg/index.d.ts",
+      "default": "./dist/router/ssg/index.js"
     },
     "./router/utils": {
       "types": "./dist/router/utils/index.d.ts",

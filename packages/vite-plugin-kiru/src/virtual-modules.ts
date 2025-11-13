@@ -31,15 +31,15 @@ export { dir, baseUrl, pages, layouts, transition }
   function createEntryServerModule(): string {
     return `
 import {
-  render as kiruServerRender,
+  render as kiruStaticRender,
   generateStaticPaths as kiruServerGenerateStaticPaths
-} from "kiru/router/server"
+} from "kiru/router/ssg"
 import Document from "${userDoc}"
 import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
 
 export async function render(url, ctx) {
   const { registerModule, registerPreloadedPageProps } = ctx
-  return kiruServerRender(url, { registerModule, registerPreloadedPageProps, Document, pages, layouts })
+  return kiruStaticRender(url, { registerModule, registerPreloadedPageProps, Document, pages, layouts })
 }
 
 export async function generateStaticPaths() {
