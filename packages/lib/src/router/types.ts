@@ -1,6 +1,6 @@
-import { AsyncTaskState } from "../types.utils"
-import { FileRouterDataLoadError } from "./errors"
-import {
+import type { AsyncTaskState } from "../types.utils"
+import type { FileRouterDataLoadError } from "./errors"
+import type {
   DefaultComponentModule,
   FormattedViteImportMap,
   PageModule,
