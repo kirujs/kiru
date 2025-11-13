@@ -3,6 +3,11 @@ import kiru from "vite-plugin-kiru"
 import devServer from "@hono/vite-dev-server"
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": "./src",
+    },
+  },
   plugins: [
     kiru({ ssr: true, loggingEnabled: true }),
     devServer({

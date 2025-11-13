@@ -1,27 +1,13 @@
 import { ErrorBoundary, Suspense, usePromise } from "kiru"
+import type { AppType } from "@/server/hono-entry"
+import { hc } from "hono/client"
 
-interface ProductsResponse {
-  products: {
-    id: number
-    title: string
-    description: string
-    price: number
-    discountPercentage: number
-    rating: number
-    stock: number
-    brand: string
-    category: string
-    thumbnail: string
-    images: string[]
-  }[]
-}
+const client = hc<AppType>("http://localhost:5173")
 
 export default function ProductsPage() {
-  const products = usePromise<ProductsResponse>(async ({ signal }) => {
+  const products = usePromise(async ({ signal }) => {
     await new Promise((resolve) => setTimeout(resolve, 500))
-    const response = await fetch("http://localhost:5173/api/products", {
-      signal,
-    })
+    const response = await client.api.products.$get({ signal })
     if (!response.ok) throw new Error(response.statusText)
     return await response.json()
   }, [])
@@ -38,11 +24,13 @@ export default function ProductsPage() {
     >
       <Suspense data={products.data} fallback={<div>Loading...</div>}>
         {(data) => (
-          <ul>
-            {data.products.map((product) => (
-              <li key={product.id}>{product.title}</li>
-            ))}
-          </ul>
+          <>
+            <ul>
+              {data.products.map((product) => (
+                <li key={product.id}>{product.title}</li>
+              ))}
+            </ul>
+          </>
         )}
       </Suspense>
     </ErrorBoundary>
