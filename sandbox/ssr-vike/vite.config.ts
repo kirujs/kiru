@@ -1,12 +1,22 @@
+import path from "node:path"
 import { defineConfig } from "vite"
+import vike from "vike/plugin"
 import kiru from "vite-plugin-kiru"
+import tailwindcss from "@tailwindcss/vite"
 import devServer from "@hono/vite-dev-server"
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      $: path.join(__dirname, "src"),
+    },
+  },
   plugins: [
-    kiru({ devtools: true }),
+    vike(),
+    kiru(),
+    tailwindcss(),
     devServer({
-      entry: "./src/server/server.ts",
+      entry: "./src/server/hono-entry.ts",
       exclude: [
         /^\/@.+$/,
         /.*\.(ts|tsx)($|\?)/,

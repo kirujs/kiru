@@ -8,5 +8,6 @@ sandbox/*
 !sandbox/docs
 !sandbox/ssg
 !sandbox/ssr
+!sandbox/ssr-vike
 !sandbox/tauri
 !sandbox/shared
