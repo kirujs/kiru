@@ -288,7 +288,17 @@ export class FileRouterController {
       !("index" in historyState) ||
       typeof historyState.index !== "number"
     ) {
-      window.history.replaceState({ index: 0 }, "", window.location.href)
+      const offset = window.history.length - 1
+      this.historyIndex = offset
+      if (offset !== 0) {
+        scrollStack.save(Array.from({ length: offset }, () => [0, 0]))
+      }
+
+      window.history.replaceState(
+        { index: this.historyIndex },
+        "",
+        window.location.href
+      )
     } else {
       const { index } = historyState
       if (index > 0) {
@@ -560,6 +570,11 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       transition?: boolean
     }
   ) {
+    // if we've gone back, we need to update the scroll position
+    // it's possible that we might instead need to 'trim' the stack here to match our index
+    if (this.historyIndex < window.history.length - 1) {
+      scrollStack.replace(this.historyIndex, window.scrollX, window.scrollY)
+    }
     this.updateHistoryState(path, options)
     const url = new URL(path, "http://localhost")
     const { hash: nextHash, pathname: nextPath } = url
