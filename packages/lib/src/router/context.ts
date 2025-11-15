@@ -55,7 +55,15 @@ export interface FileRouterContextType {
   /**
    * Set the current query parameters
    */
-  setQuery: (query: RouteQuery) => void
+  setQuery: (
+    query: RouteQuery,
+    options?: { replace?: boolean }
+  ) => Promise<void>
+
+  /**
+   * Set the current hash
+   */
+  setHash: (hash: string, options?: { replace?: boolean }) => Promise<void>
 }
 
 export const RouterContext = createContext<FileRouterContextType>(null!)
