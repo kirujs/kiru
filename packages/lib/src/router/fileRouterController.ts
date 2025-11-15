@@ -168,10 +168,8 @@ export class FileRouterController {
           }
         },
         navigate: this.navigate.bind(this),
-        reload: async () => {
-          if (this.invalidate(this.state.pathname)) {
-            return
-          }
+        reload: () => {
+          this.invalidate(this.state.pathname)
           return this.loadRoute()
         },
         subscribe: (callback) => {
