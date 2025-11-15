@@ -565,15 +565,19 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       transition?: boolean
     }
   ) {
+    const url = new URL(path, "http://localhost")
+    const { hash: nextHash, pathname: nextPath } = url
+    const { hash: prevHash, pathname: prevPath } = this.state
+    if (nextHash === prevHash && nextPath === prevPath) {
+      return
+    }
+
     // if we've gone back, we need to update the scroll position
     // it's possible that we might instead need to 'trim' the stack here to match our index
     if (this.historyIndex < window.history.length - 1) {
       scrollStack.replace(this.historyIndex, window.scrollX, window.scrollY)
     }
     this.updateHistoryState(path, options)
-    const url = new URL(path, "http://localhost")
-    const { hash: nextHash, pathname: nextPath } = url
-    const { hash: prevHash, pathname: prevPath } = this.state
 
     this.loadRoute(
       void 0,
@@ -583,18 +587,12 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       if (nextHash !== prevHash) {
         window.dispatchEvent(new HashChangeEvent("hashchange"))
       }
-      if (nextHash !== prevHash || nextPath !== prevPath) {
-        nextIdle(() => {
-          let nextEl: HTMLElement | null = null
-          if (
-            nextHash &&
-            (nextEl = document.getElementById(nextHash.slice(1)))
-          ) {
-            nextEl.scrollIntoView()
-          } else {
-            window.scrollTo(0, 0)
-          }
-        })
+
+      let anchorEl
+      if (nextHash && (anchorEl = document.getElementById(nextHash.slice(1)))) {
+        anchorEl.scrollIntoView()
+      } else {
+        window.scrollTo(0, 0)
       }
     })
   }
