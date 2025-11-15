@@ -24,18 +24,11 @@ export interface FileRouterContextType {
    * // or invalidate based on folder path
    * invalidate("/users/[id]") // (invalidates /users/1, /users/2, etc.)
    */
-  invalidate(...paths: string[]): void
+  invalidate(...paths: string[]): Promise<void>
   /**
    * The current router state
    */
-  state: RouterState & {
-    /**
-     * The current route path
-     * @deprecated
-     * Use `router.state.pathname` instead
-     */
-    path: string
-  }
+  state: RouterState
 
   /**
    * Navigate to a new route, optionally replacing the current route
@@ -62,7 +55,15 @@ export interface FileRouterContextType {
   /**
    * Set the current query parameters
    */
-  setQuery: (query: RouteQuery) => void
+  setQuery: (
+    query: RouteQuery,
+    options?: { replace?: boolean }
+  ) => Promise<void>
+
+  /**
+   * Set the current hash
+   */
+  setHash: (hash: string, options?: { replace?: boolean }) => Promise<void>
 }
 
 export const RouterContext = createContext<FileRouterContextType>(null!)

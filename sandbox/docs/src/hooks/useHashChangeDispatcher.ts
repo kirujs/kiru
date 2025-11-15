@@ -1,7 +1,8 @@
 import { customEvents } from "$/custom-events"
 import { navEvent } from "$/state/navigationEvent"
 import { useEffect, useRef, useState } from "kiru"
-import { useFileRouter } from "kiru/router"
+import { useFileRouter, type FileRouterContextType } from "kiru/router"
+
 export const useHashChangeDispatcher = (sectionIds: string[]) => {
   const [currentSection, setCurrentSection] = useState<string>("")
   const router = useFileRouter()
@@ -65,7 +66,7 @@ export const useHashChangeDispatcher = (sectionIds: string[]) => {
       }
 
       setCurrentSection(sectionId)
-      dispatchHashChange(sectionId)
+      dispatchHashChange(sectionId, router)
     }
 
     // // Run on initial mount to handle the case when the page is loaded scrolled partway down
@@ -86,17 +87,10 @@ export const useHashChangeDispatcher = (sectionIds: string[]) => {
 }
 
 let timeout: number | undefined
-function dispatchHashChange(newHash: string) {
+function dispatchHashChange(newHash: string, router: FileRouterContextType) {
   clearTimeout(timeout)
   timeout = window.setTimeout(() => {
-    const hash = newHash ? `#${newHash}` : ""
-    if (hash !== "") {
-      window.history.replaceState(null, "", hash)
-    } else {
-      window.history.replaceState(null, "", window.location.href.split("#")[0])
-    }
-
-    // Dispatch a hashchange event
+    router.setHash(newHash, { replace: true })
     window.dispatchEvent(new customEvents.scrollHashChangeEvent())
   }, 50)
 }
