@@ -77,22 +77,20 @@ export class FileRouterController {
     }
     const __this = this
     this.contextValue = {
-      invalidate: (...paths: string[]) => {
-        this.invalidate(...paths)
+      invalidate: async (...paths: string[]) => {
+        if (this.invalidate(...paths)) {
+          return this.loadRoute(void 0, void 0, true)
+        }
       },
       get state() {
         return { ...__this.state }
       },
       navigate: this.navigate.bind(this),
       prefetchRouteModules: this.prefetchRouteModules.bind(this),
-      reload: (options?: ReloadOptions) => {
-        if (
-          (options?.invalidate ?? true) &&
+      reload: async (options?: ReloadOptions) => {
+        if (options?.invalidate ?? true) {
           this.invalidate(this.state.pathname)
-        ) {
-          return Promise.resolve() // invalidate triggered a reload
         }
-
         return this.loadRoute(void 0, void 0, options?.transition)
       },
       setQuery: this.setQuery.bind(this),
@@ -164,11 +162,15 @@ export class FileRouterController {
       }
       this.devtools = {
         getPages: () => this.pages,
-        invalidate: this.invalidate.bind(this),
+        invalidate: async (...paths: string[]) => {
+          if (this.invalidate(...paths)) {
+            return this.loadRoute()
+          }
+        },
         navigate: this.navigate.bind(this),
-        reload: () => {
+        reload: async () => {
           if (this.invalidate(this.state.pathname)) {
-            return Promise.resolve() // invalidate triggered a reload
+            return
           }
           return this.loadRoute()
         },
@@ -320,15 +322,13 @@ export class FileRouterController {
       scrollStack.replace(this.historyIndex, window.scrollX, window.scrollY)
 
       this.loadRoute().then(() => {
-        nextIdle(() => {
-          if (e.state != null) {
-            this.historyIndex = e.state.index
-            const offset = scrollStack.getItem(e.state.index)
-            if (offset !== undefined) {
-              window.scrollTo(...offset)
-            }
+        if (e.state != null) {
+          this.historyIndex = e.state.index
+          const offset = scrollStack.getItem(e.state.index)
+          if (offset !== undefined) {
+            window.scrollTo(...offset)
           }
-        })
+        }
       })
     })
   }
@@ -475,7 +475,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         }
       }
 
-      handleStateTransition(signal, enableTransition, () => {
+      return handleStateTransition(signal, enableTransition, () => {
         this.state = routerState
         this.currentPage.value = {
           component: page.default,
@@ -555,12 +555,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       paths
     )
 
-    if (shouldRefresh) {
-      // Refresh the current page to get fresh data
-      this.loadRoute()
-      return true
-    }
-    return false
+    return shouldRefresh
   }
 
   private async navigate(
@@ -683,13 +678,16 @@ function buildQueryString(
   return params.toString()
 }
 
-function handleStateTransition(
+async function handleStateTransition(
   signal: AbortSignal,
   enableTransition: boolean,
   callback: () => void
 ) {
   if (!enableTransition || typeof document.startViewTransition !== "function") {
-    return callback()
+    return new Promise<void>((resolve) => {
+      callback()
+      nextIdle(resolve)
+    })
   }
   const vt = document.startViewTransition(() => {
     callback()
@@ -697,6 +695,7 @@ function handleStateTransition(
   })
 
   signal.addEventListener("abort", () => vt.skipTransition())
+  await vt.ready
 }
 
 function validateRoutes(pageMap: FormattedViteImportMap) {
