@@ -295,7 +295,7 @@ export class FileRouterController {
       }
 
       window.history.replaceState(
-        { index: this.historyIndex },
+        { ...window.history.state, index: this.historyIndex },
         "",
         window.location.href
       )
@@ -570,11 +570,6 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       return
     }
 
-    // if we've gone back, we need to update the scroll position
-    // it's possible that we might instead need to 'trim' the stack here to match our index
-    if (this.historyIndex < window.history.length - 1) {
-      scrollStack.replace(this.historyIndex, window.scrollX, window.scrollY)
-    }
     this.updateHistoryState(path, options)
 
     this.loadRoute(
@@ -648,10 +643,25 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
   ) {
     if (options?.replace) {
       scrollStack.replace(this.historyIndex, window.scrollX, window.scrollY)
-      window.history.replaceState({ index: this.historyIndex }, "", path)
+      window.history.replaceState(
+        { ...window.history.state, index: this.historyIndex },
+        "",
+        path
+      )
     } else {
-      scrollStack.push(window.scrollX, window.scrollY)
-      window.history.pushState({ index: ++this.historyIndex }, "", path)
+      // if we've gone back and are now going forward, we need to
+      // truncate the scroll stack so it doesn't just permanently grow.
+      // this should keep it at the same length as the history stack.
+      const current = scrollStack.get()
+      if (this.historyIndex < window.history.length - 1) {
+        current.length = this.historyIndex
+      }
+      scrollStack.save([...current, [window.scrollX, window.scrollY]])
+      window.history.pushState(
+        { ...window.history.state, index: ++this.historyIndex },
+        "",
+        path
+      )
     }
   }
 }
