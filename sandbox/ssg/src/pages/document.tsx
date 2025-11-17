@@ -7,7 +7,7 @@ export default function Document() {
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Kiru SSG Sandbox</title>
+        <link rel="icon" type="image/svg+xml" href="/vite.svg" />
         <Head.Outlet />
       </head>
       <Body.Outlet />

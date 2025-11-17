@@ -92,6 +92,11 @@ export interface SSGSitemapOptions {
 
 export interface SSGOptions {
   /**
+   * Disable JavaScript support
+   * @default false
+   */
+  noJs?: boolean
+  /**
    * The base URL of the app
    * @default "/"
    */

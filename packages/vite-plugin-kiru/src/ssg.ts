@@ -44,7 +44,7 @@ export async function generateStaticSite(
   const paths = await mod.generateStaticPaths()
 
   const clientOutDirAbs = path.resolve(projectRoot, `${baseOutDir}/client`)
-  const { clientEntry } = await getClientAssets(clientOutDirAbs, manifestPath)
+  const { clientEntry } = getClientAssets(clientOutDirAbs, manifestPath)
 
   // load manifest once for all routes to avoid multiple reads?
   let manifest: Manifest | null = null
@@ -92,8 +92,10 @@ export async function generateStaticSite(
     )
   }
 
-  // Collect and append static props to client modules
-  await appendStaticPropsToClientModules(state, clientOutDirAbs, log)
+  if (!state.ssgOptions.noJs) {
+    // Collect and append static props to client modules
+    await appendStaticPropsToClientModules(state, clientOutDirAbs, log)
+  }
 
   // Generate sitemap if configured
   if (ssgOptions.sitemap?.domain) {
@@ -101,7 +103,10 @@ export async function generateStaticSite(
   }
 }
 
-async function getClientAssets(clientOutDirAbs: string, manifestPath: string) {
+function getClientAssets(
+  clientOutDirAbs: string,
+  manifestPath: string
+): { clientEntry: string } {
   let clientEntry: string | null = null
 
   try {
@@ -118,6 +123,9 @@ async function getClientAssets(clientOutDirAbs: string, manifestPath: string) {
 
   if (!clientEntry) {
     clientEntry = findClientEntry(clientOutDirAbs)
+  }
+  if (!clientEntry) {
+    throw new Error("Could not find client entry")
   }
 
   return { clientEntry }
@@ -220,7 +228,7 @@ async function renderRoute(
   mod: VirtualServerModule,
   route: string,
   srcFilePath: string,
-  clientEntry: string | null,
+  clientEntry: string,
   manifest: Manifest | null
 ): Promise<string> {
   const moduleIds: string[] = []
@@ -248,15 +256,13 @@ async function renderRoute(
   if (manifest) {
     cssLinks = collectCssForModules(manifest, moduleIds, projectRoot)
   }
+  html = html.replace("<head>", "<head>" + cssLinks)
 
-  if (clientEntry) {
-    const scriptTag = `<script type="module" src="/${clientEntry}"></script>`
-    const headInjected = cssLinks
-      ? html.replace("<head>", "<head>" + cssLinks)
-      : html
-    html = headInjected.includes("</body>")
-      ? headInjected.replace("</body>", scriptTag + "</body>")
-      : headInjected + scriptTag
+  if (!state.ssgOptions.noJs) {
+    html = html.replace(
+      "</body>",
+      `<script type="module" src="/${clientEntry}"></script></body>`
+    )
   }
 
   return html

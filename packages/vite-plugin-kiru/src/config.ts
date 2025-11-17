@@ -47,6 +47,7 @@ export interface PluginState {
 const defaultSSGOptions: Required<Omit<SSGOptions, "sitemap">> & {
   build: Required<SSGBuildOptions>
 } = {
+  noJs: false,
   baseUrl: "/",
   dir: "src/pages",
   document: "document.{tsx,jsx}",
@@ -118,19 +119,20 @@ export function createPluginState(
     layout,
     transition,
     build: { maxConcurrentRenders },
+    noJs,
   } = defaultSSGOptions
 
   return {
     ...state,
     ssgOptions: {
+      baseUrl,
+      dir,
+      document,
+      page,
+      layout,
+      transition,
+      noJs,
       ...ssg,
-      baseUrl: ssg.baseUrl ?? baseUrl,
-      dir: ssg.dir ?? dir,
-      document: ssg.document ?? document,
-      page: ssg.page ?? page,
-      layout: ssg.layout ?? layout,
-      transition: ssg.transition ?? transition,
-      sitemap: ssg.sitemap,
       build: {
         maxConcurrentRenders:
           ssg.build?.maxConcurrentRenders ?? maxConcurrentRenders,

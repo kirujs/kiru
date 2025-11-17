@@ -6,6 +6,7 @@ export default defineConfig({
     kiru({
       loggingEnabled: true,
       ssg: {
+        noJs: true,
         dir: "./src/pages",
         document: "document.tsx",
         page: "index.{tsx,jsx}",
