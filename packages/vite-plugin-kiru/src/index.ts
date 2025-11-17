@@ -1,6 +1,10 @@
 import path from "node:path"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
-import { prepareDevOnlyHooks, prepareHMR } from "./codegen/index.js"
+import {
+  prepareAutoDeps,
+  prepareDevOnlyHooks,
+  prepareHMR,
+} from "./codegen/index.js"
 import { ANSI } from "./ansi.js"
 import {
   createPluginState,
@@ -41,7 +45,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       if (state.ssgOptions) {
         virtualModules = await createVirtualModules(
           state.projectRoot,
-          state.ssgOptions
+          state.ssgOptions as Required<SSGOptions>
         )
       }
     },
@@ -103,7 +107,11 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
                 server,
                 url,
                 state.projectRoot,
-                () => resolveUserDocument(projectRoot, ssgOptions)
+                () =>
+                  resolveUserDocument(
+                    projectRoot,
+                    ssgOptions as Required<SSGOptions>
+                  )
               )
               res.statusCode = status
               res.setHeader("Content-Type", "text/html")
@@ -169,6 +177,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       }
 
       prepareDevOnlyHooks(ctx)
+
+      if (opts.experimental?.["useComputed-autodeps"]) {
+        prepareAutoDeps(ctx)
+      }
 
       if (!state.isProduction && !state.isBuild) {
         prepareHMR(ctx)

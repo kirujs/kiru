@@ -9,6 +9,9 @@ export default defineConfig({
   },
   plugins: [
     kiru({
+      experimental: {
+        "useComputed-autodeps": true,
+      },
       include: ["../shared/"],
       loggingEnabled: true,
     }),

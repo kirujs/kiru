@@ -1,7 +1,29 @@
-interface AstNodeId {
-  type: string
-  name: string
-}
+type AstNodeId =
+  | {
+      type: "Identifier"
+      name: string
+    }
+  | {
+      type: "ArrayPattern"
+      elements: {
+        type: "Identifier"
+        name: string
+      }[]
+    }
+  | {
+      type: "ObjectPattern"
+      properties: {
+        type: "Property"
+        key: {
+          type: "Identifier"
+          name: string
+        }
+        value: {
+          type: "Identifier"
+          name: string
+        }
+      }[]
+    }
 
 const types = [
   "BinaryExpression",
@@ -57,10 +79,11 @@ export interface AstNode {
   imported?: AstNode & { name: string }
   source?: AstNode & { value: string }
   key?: AstNode
-  value?: unknown
+  value?: AstNode
   shorthand?: boolean
   left?: AstNode
   right?: AstNode
+  params?: AstNode[]
 }
 
 export function findNode(
@@ -80,24 +103,24 @@ export function findNode(
   })
   return res
 }
-type VisitorCTX = {
+interface NodeVisitorCTX {
   stack: AstNode[]
   exit: () => never
   exitBranch: () => never
 }
-type VisitorNodeCallback = (
+export type NodeVisitorCallback = (
   node: AstNode,
-  ctx: VisitorCTX
+  ctx: NodeVisitorCTX
 ) => void | (() => void)
 
-type AstVisitor = {
-  [key in AstNode["type"]]?: VisitorNodeCallback
+type AstVisitorMap = {
+  [key in AstNode["type"]]?: NodeVisitorCallback
 } & {
-  "*"?: VisitorNodeCallback
+  "*"?: NodeVisitorCallback
 }
 
-export function walk(node: AstNode, visitor: AstVisitor) {
-  const ctx: VisitorCTX = {
+export function walk(node: AstNode, visitor: AstVisitorMap) {
+  const ctx: NodeVisitorCTX = {
     stack: [],
     exit: exitWalk,
     exitBranch: exitBranch,
@@ -123,7 +146,7 @@ const flushCallbacks = (callbacks: (() => void)[]) => {
   }
 }
 
-function walk_impl(node: AstNode, visitor: AstVisitor, ctx: VisitorCTX) {
+function walk_impl(node: AstNode, visitor: AstVisitorMap, ctx: NodeVisitorCTX) {
   const onExitCallbacks: (() => void)[] = []
   try {
     {
@@ -147,6 +170,7 @@ function walk_impl(node: AstNode, visitor: AstVisitor, ctx: VisitorCTX) {
     node.arguments,
     node.declarations,
     node.properties,
+    node.object,
     node.property,
     node.cases,
     node.body,

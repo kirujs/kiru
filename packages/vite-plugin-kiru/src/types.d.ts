@@ -152,6 +152,15 @@ export interface DevtoolsOptions {
 
 export interface KiruPluginOptions {
   /**
+   * Experimental features
+   */
+  experimental?: {
+    /**
+     * Enable automatic 'dependency array' generation for `useComputed` hooks
+     */
+    "useComputed-autodeps"?: boolean
+  }
+  /**
    * Whether the devtools should be injected into the build during development
    * @default true
    */

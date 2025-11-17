@@ -29,9 +29,10 @@ function TextDisplay({ text }: { text: Signal<string> }) {
   console.log("TextDisplay")
   const [suffix, setSuffix] = useState("")
   const textValue = useComputed(() => {
-    console.log("textValue compute")
+    window.console.log("textValue compute")
     return text.value + suffix
-  }, [suffix, text])
+  })
+  //}, [suffix, text])
 
   return (
     <>
