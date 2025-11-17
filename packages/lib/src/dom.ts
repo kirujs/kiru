@@ -80,9 +80,7 @@ function setDomRef(ref: Kiru.Ref<SomeDom | null>, value: SomeDom | null) {
   }
   if (Signal.isSignal(ref)) {
     ref.sneak(value)
-    ref.notify({
-      filter: (sub) => typeof sub === "function",
-    })
+    ref.notify()
     return
   }
   ;(ref as Kiru.MutableRefObject<SomeDom | null>).current = value
@@ -285,7 +283,7 @@ function setSignalProp(
 
   const setSigFromElement = (val: any) => {
     signal.sneak(val)
-    signal.notify({ filter: (sub) => sub !== signalUpdateCallback })
+    signal.notify((sub) => sub !== signalUpdateCallback)
   }
 
   let evtHandler: (evt: Event) => void
