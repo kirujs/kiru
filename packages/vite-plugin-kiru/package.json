@@ -26,7 +26,7 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "glob": "^11.0.3",
+    "glob": "^12.0.0",
     "magic-string": "^0.30.17",
     "mime": "^4.1.0",
     "vite": "^7.2.2"
