@@ -1,5 +1,5 @@
 import { $FRAGMENT } from "./constants.js"
-import { normalizeElementKey, normalizeElementRef } from "./utils/index.js"
+import { normalizeElementKey } from "./utils/index.js"
 
 export function createElement<T extends Kiru.VNode["type"]>(
   type: T,
@@ -10,7 +10,6 @@ export function createElement<T extends Kiru.VNode["type"]>(
     type = $FRAGMENT as T
   }
   const p = props === null ? {} : props
-  const ref = normalizeElementRef(type, p.ref)
   const key = normalizeElementKey(p.key)
 
   const len = children.length
@@ -23,7 +22,6 @@ export function createElement<T extends Kiru.VNode["type"]>(
   return {
     type,
     key,
-    ref,
     props: p,
   }
 }
@@ -38,7 +36,6 @@ export function Fragment({
   return {
     type: $FRAGMENT,
     key: normalizeElementKey(key),
-    ref: null,
     props: { children },
   }
 }

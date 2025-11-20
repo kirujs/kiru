@@ -156,16 +156,13 @@ declare global {
       }
     }
     interface RefObject<T> {
-      readonly current: T | null
-    }
-    interface MutableRefObject<T> {
       current: T
     }
     type RefCallback<T> = {
       bivarianceHack(instance: T | null): void
     }["bivarianceHack"]
 
-    type Ref<T> = RefCallback<T> | RefObject<T> | null | undefined
+    type Ref<T> = RefCallback<T> | RefObject<T>
 
     interface PromiseState<T> {
       id: string
@@ -190,10 +187,10 @@ declare global {
     interface Element {
       type: Function | ExoticSymbol | "#text" | (string & {})
       key: JSX.ElementKey | null
-      ref: Kiru.Ref<SomeDom | null> | null
       props: {
         [key: string]: any
         children?: unknown
+        ref?: Kiru.Ref<unknown>
       }
     }
 
@@ -226,7 +223,6 @@ declare global {
   interface VNodeSnapshot {
     props: Kiru.VNode["props"]
     key: Kiru.VNode["key"]
-    ref: Kiru.VNode["ref"]
     memoizedProps: Kiru.VNode["memoizedProps"]
     index: number
   }

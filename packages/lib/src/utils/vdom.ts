@@ -1,4 +1,3 @@
-import { Signal } from "../signals/base.js"
 import {
   FLAG_DELETION,
   $FRAGMENT,
@@ -34,7 +33,6 @@ export {
   findParentErrorBoundary,
   assertValidElementProps,
   normalizeElementKey,
-  normalizeElementRef,
 }
 
 function cloneElement(vNode: Kiru.VNode): Kiru.Element {
@@ -119,11 +117,10 @@ function commitSnapshot(vNode: Kiru.VNode): void {
   const {
     props: { children, ...props },
     key,
-    ref,
     memoizedProps,
     index,
   } = vNode
-  vNode.prev = { props, key, ref, memoizedProps, index }
+  vNode.prev = { props, key, memoizedProps, index }
   vNode.flags &= ~(FLAG_UPDATE | FLAG_PLACEMENT | FLAG_DELETION)
 }
 
@@ -196,23 +193,5 @@ function normalizeElementKey(thing: unknown): JSX.ElementKey | null {
   if (typeof thing === "string" || typeof thing === "number") {
     return thing
   }
-  return null
-}
-
-function normalizeElementRef(
-  type: Kiru.VNode["type"],
-  thing: unknown
-): Kiru.Ref<any> | null {
-  if (thing === undefined || typeof type !== "string") return null
-
-  if (
-    typeof thing === "function" ||
-    (typeof thing === "object" && !!thing && "current" in thing) ||
-    Signal.isSignal(thing)
-  ) {
-    // @ts-expect-error ('Function' warning)
-    return thing
-  }
-
   return null
 }

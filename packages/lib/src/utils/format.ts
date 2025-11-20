@@ -34,11 +34,14 @@ function encodeHtmlEntities(text: string): string {
     .replace(REGEX_SLASH, "&#47;")
 }
 
+const internalProps = new Set(["children", "ref", "key", "innerHTML"])
 const propFilters = {
-  internalProps: ["children", "innerHTML"],
+  isInternalProp: (
+    key: string
+  ): key is "children" | "ref" | "key" | "innerHTML" => internalProps.has(key),
   isEvent: (key: string) => key.startsWith("on"),
-  isProperty: (key: string) =>
-    !propFilters.internalProps.includes(key) && !propFilters.isEvent(key),
+  isStringRenderableProperty: (key: string) =>
+    !internalProps.has(key) && !propFilters.isEvent(key),
 }
 
 function propToHtmlAttr(key: string): string {
@@ -110,7 +113,7 @@ function propsToElementAttributes(props: Record<string, unknown>): string {
     if (!!val) attrs.push(`style="${stylePropToString(val)}"`)
   }
 
-  const keys = Object.keys(rest).filter(propFilters.isProperty)
+  const keys = Object.keys(rest).filter(propFilters.isStringRenderableProperty)
   for (let i = 0; i < keys.length; i++) {
     let k = keys[i]
     let val = unwrap(props[k])

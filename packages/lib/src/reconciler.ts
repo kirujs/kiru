@@ -220,7 +220,7 @@ function updateTextNode(
 }
 
 function updateNode(parent: VNode, oldChild: VNode | null, newChild: KElement) {
-  let { type, props, ref, key } = newChild
+  let { type, props, key } = newChild
   if (__DEV__) {
     if (typeof type === "function") {
       type = latest(type)
@@ -250,7 +250,7 @@ function updateNode(parent: VNode, oldChild: VNode | null, newChild: KElement) {
     oldChild.props = props
     return oldChild
   }
-  return createVNode(parent, type, props, ref, key)
+  return createVNode(parent, type, props, key)
 }
 
 function updateFragment(
@@ -281,7 +281,7 @@ function createChild(parent: VNode, child: unknown): VNode | null {
   }
 
   if (isElement(child)) {
-    return createVNode(parent, child.type, child.props, child.ref, child.key)
+    return createVNode(parent, child.type, child.props, child.key)
   }
 
   if (Array.isArray(child)) {
@@ -336,11 +336,11 @@ function updateFromMap(
       }
     }
 
-    return createVNode(parent, "#text", { nodeValue: child }, null, null, index)
+    return createVNode(parent, "#text", { nodeValue: child }, null, index)
   }
 
   if (isElement(child)) {
-    const { type, props, ref, key } = child
+    const { type, props, key } = child
     const oldChild = existingChildren.get(key === null ? index : key)
     if (oldChild?.type === type) {
       if (__DEV__) {
@@ -359,7 +359,7 @@ function updateFromMap(
       return oldChild
     }
 
-    return createVNode(parent, type, props, ref, key, index)
+    return createVNode(parent, type, props, key, index)
   }
 
   if (Array.isArray(child)) {
@@ -376,14 +376,7 @@ function updateFromMap(
       return oldChild
     }
 
-    return createVNode(
-      parent,
-      $FRAGMENT,
-      { children: child },
-      null,
-      null,
-      index
-    )
+    return createVNode(parent, $FRAGMENT, { children: child }, null, index)
   }
 
   return null
@@ -498,11 +491,10 @@ function createVNode(
   parent: VNode,
   type: VNode["type"],
   props: VNode["props"],
-  ref: VNode["ref"] = null,
   key: VNode["key"] = null,
   index = 0
 ): VNode {
-  const node = createBaseVNode(type, parent, props, ref, key, index)
+  const node = createBaseVNode(type, parent, props, key, index)
   node.flags |= FLAG_PLACEMENT
 
   if (typeof type === "function" && isMemoFn(type)) {

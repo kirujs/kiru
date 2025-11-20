@@ -4,6 +4,7 @@ import {
   propFilters,
   propToHtmlAttr,
   getVNodeAppContext,
+  setRef,
 } from "./utils/index.js"
 import {
   booleanAttributes,
@@ -73,18 +74,6 @@ function onAfterFlushDomChanges() {
   persistingFocus = false
 }
 
-function setDomRef(ref: Kiru.Ref<SomeDom | null>, value: SomeDom | null) {
-  if (typeof ref === "function") {
-    ref(value)
-    return
-  }
-  if (Signal.isSignal(ref)) {
-    ref.value = value
-    return
-  }
-  ;(ref as Kiru.MutableRefObject<SomeDom | null>).current = value
-}
-
 function createDom(vNode: DomVNode): SomeDom {
   const t = vNode.type
   const dom =
@@ -137,73 +126,83 @@ const vNodeToWrappedFocusEventHandlersMap = new WeakMap<
 >()
 
 function updateDom(vNode: DomVNode) {
-  const { dom, prev, props, cleanups, ref } = vNode
-  const prevProps: Record<string, any> = prev?.props ?? {}
-  const nextProps: Record<string, any> = props ?? {}
-  const keys = new Set([...Object.keys(prevProps), ...Object.keys(nextProps)])
+  const { dom, prev, props, cleanups } = vNode
+  const prevProps = prev?.props ?? {}
+  const nextProps = props ?? {}
   const isHydration = renderMode.current === "hydrate"
 
-  keys.forEach((key) => {
-    if (key === "children") return
-    const prev = prevProps[key],
-      next = nextProps[key]
+  // TEXT NODE SHORT-PATH
+  if (dom instanceof Text) {
+    const nextVal = nextProps.nodeValue
+    if (!Signal.isSignal(nextVal) && dom.nodeValue !== nextVal) {
+      dom.nodeValue = nextVal
+    }
+    return
+  }
+
+  const keys: string[] = []
+  for (const k in prevProps) keys.push(k)
+  for (const k in nextProps) {
+    if (!(k in prevProps)) keys.push(k)
+  }
+
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i]
+    const prevVal = prevProps[key]
+    const nextVal = nextProps[key]
 
     if (propFilters.isEvent(key)) {
-      if (prev !== next || renderMode.current === "hydrate") {
+      if (prevVal !== nextVal || isHydration) {
         const evtName = key.replace(EVENT_PREFIX_REGEX, "")
+        const isFocus = evtName === "focus" || evtName === "blur"
+        const wrappedMap = vNodeToWrappedFocusEventHandlersMap.get(vNode)
 
-        const isFocusEvent = evtName === "focus" || evtName === "blur"
         if (key in prevProps) {
           dom.removeEventListener(
             evtName,
-            isFocusEvent
-              ? vNodeToWrappedFocusEventHandlersMap.get(vNode)?.[evtName]
-              : prev
+            isFocus ? wrappedMap?.[evtName] : prevVal
           )
         }
+
         if (key in nextProps) {
           dom.addEventListener(
             evtName,
-            isFocusEvent ? wrapFocusEventHandler(vNode, evtName, next) : next
+            isFocus ? wrapFocusEventHandler(vNode, evtName, nextVal) : nextVal
           )
         }
       }
-      return
+      continue
     }
 
-    if (!(dom instanceof Text)) {
-      if (prev === next || (isHydration && dom.getAttribute(key) === next)) {
-        return
-      }
+    if (propFilters.isInternalProp(key) && key !== "innerHTML") {
+      continue
+    }
 
-      if (Signal.isSignal(prev) && cleanups) {
-        const v = cleanups[key]
-        v && (v(), delete cleanups[key])
-      }
-      if (Signal.isSignal(next)) {
-        return setSignalProp(vNode, dom, key, next, prev)
-      }
-      setProp(dom, key, next, prev)
-      return
+    if (prevVal === nextVal) {
+      continue
     }
-    if (Signal.isSignal(next)) {
-      // signal textNodes are handled via 'subTextNode'.
-      return
-    }
-    // text node
-    if (dom.nodeValue !== next) {
-      dom.nodeValue = next
-    }
-  })
 
-  const prevRef = prev?.ref
-  if (prevRef !== ref) {
-    if (prevRef) {
-      setDomRef(prevRef, null)
+    if (Signal.isSignal(prevVal) && cleanups) {
+      const disposer = cleanups[key]
+      if (disposer) {
+        disposer()
+        delete cleanups[key]
+      }
     }
-    if (ref) {
-      setDomRef(ref, dom)
+
+    if (Signal.isSignal(nextVal)) {
+      setSignalProp(vNode, dom, key, nextVal, prevVal)
+      continue
     }
+
+    setProp(dom, key, nextVal, prevVal)
+  }
+
+  const prevRef = prevProps.ref
+  const nextRef = nextProps.ref
+  if (prevRef !== nextRef) {
+    if (prevRef) setRef(prevRef, null)
+    if (nextRef) setRef(nextRef, dom)
   }
 }
 
@@ -245,6 +244,7 @@ function setSignalProp(
   const [modifier, attr] = key.split(":")
   if (modifier !== "bind") {
     cleanups[key] = signal.subscribe((value, prev) => {
+      if (value === prev) return
       setProp(dom, key, value, prev)
       if (__DEV__) {
         window.__kiru.profilingContext?.emit(
@@ -254,7 +254,11 @@ function setSignalProp(
       }
     })
 
-    return setProp(dom, key, signal.peek(), unwrap(prevValue))
+    const value = signal.peek()
+    const prev = unwrap(prevValue)
+    if (value === prev) return
+    setProp(dom, key, value, prev)
+    return
   }
 
   const evtName = bindAttrToEventMap[attr]
@@ -320,7 +324,10 @@ function setSignalProp(
     unsub()
   }
 
-  return setProp(dom, attr, signal.peek(), unwrap(prevValue))
+  const value = signal.peek()
+  const prev = unwrap(prevValue)
+  if (value === prev) return
+  setProp(dom, attr, value, prev)
 }
 
 function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
@@ -446,7 +453,6 @@ function setProp(
   value: unknown,
   prev: unknown
 ) {
-  if (value === prev) return
   switch (key) {
     case "style":
       return setStyleProp(element, value, prev)
@@ -683,7 +689,13 @@ function commitDeletion(vNode: VNode) {
     ctx = getVNodeAppContext(vNode)!
   }
   traverseApply(vNode, (node) => {
-    const { hooks, subs, cleanups, dom, ref } = node
+    const {
+      hooks,
+      subs,
+      cleanups,
+      dom,
+      props: { ref },
+    } = node
 
     subs?.forEach((unsub) => unsub())
     if (cleanups) Object.values(cleanups).forEach((c) => c())
@@ -697,9 +709,11 @@ function commitDeletion(vNode: VNode) {
     }
 
     if (dom) {
-      if (ref) setDomRef(ref, null)
       if (dom.isConnected && !(node.flags & FLAG_STATIC_DOM)) {
         dom.remove()
+      }
+      if (ref) {
+        setRef(ref, null)
       }
       delete node.dom
     }
