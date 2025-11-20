@@ -35,7 +35,7 @@ function encodeHtmlEntities(text: string): string {
 }
 
 const propFilters = {
-  internalProps: ["children", "ref", "key", "innerHTML"],
+  internalProps: ["children", "innerHTML"],
   isEvent: (key: string) => key.startsWith("on"),
   isProperty: (key: string) =>
     !propFilters.internalProps.includes(key) && !propFilters.isEvent(key),

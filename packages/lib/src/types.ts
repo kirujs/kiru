@@ -103,7 +103,7 @@ declare global {
 
     type Element =
       | Element[]
-      | Kiru.VNode
+      | Kiru.Element
       | PrimitiveChild
       | Kiru.Signal<PrimitiveChild>
 
@@ -187,25 +187,27 @@ declare global {
       | typeof $CONTEXT_PROVIDER
       | typeof $ERROR_BOUNDARY
 
-    interface VNode {
-      app?: AppContext
-      dom?: SomeDom
-      lastChildDom?: SomeDom
+    interface Element {
       type: Function | ExoticSymbol | "#text" | (string & {})
+      key: JSX.ElementKey | null
+      ref: Kiru.Ref<SomeDom | null> | null
       props: {
         [key: string]: any
         children?: unknown
-        key?: JSX.ElementKey
-        ref?: Kiru.Ref<unknown>
       }
+    }
+
+    interface VNode extends Element {
+      app?: AppContext
+      dom?: SomeDom
       index: number
       depth: number
+      flags: number
       parent: VNode | null
       child: VNode | null
       sibling: VNode | null
       prev: VNodeSnapshot | null
       deletions: VNode[] | null
-      flags: number
       hooks?: Hook<unknown>[]
       subs?: Set<Function>
       cleanups?: Record<string, Function>
@@ -223,6 +225,8 @@ declare global {
   }
   interface VNodeSnapshot {
     props: Kiru.VNode["props"]
+    key: Kiru.VNode["key"]
+    ref: Kiru.VNode["ref"]
     memoizedProps: Kiru.VNode["memoizedProps"]
     index: number
   }

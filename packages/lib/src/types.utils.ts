@@ -8,7 +8,7 @@ export type MaybeElement = SomeElement | undefined
 export type MaybeDom = SomeDom | undefined
 
 export interface FunctionVNode extends Kiru.VNode {
-  type: (...args: any) => JSX.Element
+  type: (props: Record<string, unknown>) => JSX.Element
 }
 
 export interface ElementVNode extends Kiru.VNode {

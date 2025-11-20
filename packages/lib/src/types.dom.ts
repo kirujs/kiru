@@ -352,6 +352,8 @@ type NoChildElementElement =
   | HTMLTrackElement
   | HTMLTextAreaElement
 
+type DomElement = Element
+
 declare global {
   namespace Kiru {
     type DOMEvent<E = Event, C = unknown, T = unknown> = Omit<
@@ -368,98 +370,96 @@ declare global {
       bivarianceHack(event: E): void
     }["bivarianceHack"]
 
-    interface BaseEvent<T extends Element = Element>
+    interface BaseEvent<T extends DomElement = DomElement>
       extends DOMEvent<Event, T> {}
 
-    interface AnimationEvent<T extends Element = Element>
+    interface AnimationEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeAnimationEvent, T> {}
 
-    interface ClipboardEvent<T extends Element = Element>
+    interface ClipboardEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeClipboardEvent, T> {}
 
-    interface CompositionEvent<T extends Element = Element>
+    interface CompositionEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeCompositionEvent, T> {}
 
-    interface DragEvent<T extends Element = Element>
+    interface DragEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeDragEvent, T> {}
 
-    interface FocusEvent<T extends Element = Element>
+    interface FocusEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeFocusEvent, T> {}
 
-    interface FormEvent<T extends Element = Element>
+    interface FormEvent<T extends DomElement = DomElement>
       extends DOMEvent<Event, T> {}
 
-    interface KeyboardEvent<T extends Element = Element>
+    interface KeyboardEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeKeyboardEvent, T> {}
 
-    interface MouseEvent<T extends Element = Element>
+    interface MouseEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeMouseEvent, T> {}
 
-    interface PointerEvent<T extends Element = Element>
+    interface PointerEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativePointerEvent, T> {}
 
-    interface SubmitEvent<T extends Element = Element>
+    interface SubmitEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeSubmitEvent, T> {}
 
-    interface TouchEvent<T extends Element = Element>
+    interface TouchEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeTouchEvent, T> {}
 
-    interface ToggleEvent<T extends Element = Element>
+    interface ToggleEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeToggleEvent, T> {}
 
-    interface TransitionEvent<T extends Element = Element>
+    interface TransitionEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeTransitionEvent, T> {}
 
-    interface UIEvent<T extends Element = Element>
+    interface UIEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeUIEvent, T> {}
 
-    interface WheelEvent<T extends Element = Element>
+    interface WheelEvent<T extends DomElement = DomElement>
       extends DOMEvent<NativeWheelEvent, T> {}
 
-    type BaseEventHandler<T extends Element = Element> = EventHandler<
+    type BaseEventHandler<T extends DomElement = DomElement> = EventHandler<
       BaseEvent<T>
     >
 
-    type ClipboardEventHandler<T extends Element = Element> = EventHandler<
-      ClipboardEvent<T>
-    >
-    type CompositionEventHandler<T extends Element = Element> = EventHandler<
-      CompositionEvent<T>
-    >
-    type DragEventHandler<T extends Element = Element> = EventHandler<
+    type ClipboardEventHandler<T extends DomElement = DomElement> =
+      EventHandler<ClipboardEvent<T>>
+    type CompositionEventHandler<T extends DomElement = DomElement> =
+      EventHandler<CompositionEvent<T>>
+    type DragEventHandler<T extends DomElement = DomElement> = EventHandler<
       DragEvent<T>
     >
-    type FocusEventHandler<T extends Element = Element> = EventHandler<
+    type FocusEventHandler<T extends DomElement = DomElement> = EventHandler<
       FocusEvent<T>
     >
-    type FormEventHandler<T extends Element = Element> = EventHandler<
+    type FormEventHandler<T extends DomElement = DomElement> = EventHandler<
       FormEvent<T>
     >
-    type KeyboardEventHandler<T extends Element = Element> = EventHandler<
+    type KeyboardEventHandler<T extends DomElement = DomElement> = EventHandler<
       KeyboardEvent<T>
     >
-    type MouseEventHandler<T extends Element = Element> = EventHandler<
+    type MouseEventHandler<T extends DomElement = DomElement> = EventHandler<
       MouseEvent<T>
     >
-    type TouchEventHandler<T extends Element = Element> = EventHandler<
+    type TouchEventHandler<T extends DomElement = DomElement> = EventHandler<
       TouchEvent<T>
     >
-    type PointerEventHandler<T extends Element = Element> = EventHandler<
+    type PointerEventHandler<T extends DomElement = DomElement> = EventHandler<
       PointerEvent<T>
     >
-    type UIEventHandler<T extends Element = Element> = EventHandler<UIEvent<T>>
-    type WheelEventHandler<T extends Element = Element> = EventHandler<
+    type UIEventHandler<T extends DomElement = DomElement> = EventHandler<
+      UIEvent<T>
+    >
+    type WheelEventHandler<T extends DomElement = DomElement> = EventHandler<
       WheelEvent<T>
     >
-    type AnimationEventHandler<T extends Element = Element> = EventHandler<
-      AnimationEvent<T>
-    >
-    type ToggleEventHandler<T extends Element = Element> = EventHandler<
+    type AnimationEventHandler<T extends DomElement = DomElement> =
+      EventHandler<AnimationEvent<T>>
+    type ToggleEventHandler<T extends DomElement = DomElement> = EventHandler<
       ToggleEvent<T>
     >
-    type TransitionEventHandler<T extends Element = Element> = EventHandler<
-      TransitionEvent<T>
-    >
+    type TransitionEventHandler<T extends DomElement = DomElement> =
+      EventHandler<TransitionEvent<T>>
 
     type CustomEventAttributes = {
       [Key in keyof Kiru.CustomEvents as `on:${Key}`]?: (
@@ -467,7 +467,7 @@ declare global {
       ) => void
     }
 
-    interface EventAttributes<T extends Element = Element>
+    interface EventAttributes<T extends DomElement = DomElement>
       extends CustomEventAttributes {
       // Clipboard Events
       oncopy?: ClipboardEventHandler<T> | undefined

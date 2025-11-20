@@ -79,10 +79,7 @@ function setDomRef(ref: Kiru.Ref<SomeDom | null>, value: SomeDom | null) {
     return
   }
   if (Signal.isSignal(ref)) {
-    ref.sneak(value)
-    ref.notify({
-      filter: (sub) => typeof sub === "function",
-    })
+    ref.value = value
     return
   }
   ;(ref as Kiru.MutableRefObject<SomeDom | null>).current = value
@@ -139,27 +136,17 @@ const vNodeToWrappedFocusEventHandlersMap = new WeakMap<
   WrappedFocusEventMap
 >()
 
-function updateDom(vNode: VNode) {
-  const dom = vNode.dom as SomeDom
-  const prevProps: Record<string, any> = vNode.prev?.props ?? {}
-  const nextProps: Record<string, any> = vNode.props ?? {}
+function updateDom(vNode: DomVNode) {
+  const { dom, prev, props, cleanups, ref } = vNode
+  const prevProps: Record<string, any> = prev?.props ?? {}
+  const nextProps: Record<string, any> = props ?? {}
   const keys = new Set([...Object.keys(prevProps), ...Object.keys(nextProps)])
   const isHydration = renderMode.current === "hydrate"
 
   keys.forEach((key) => {
+    if (key === "children") return
     const prev = prevProps[key],
       next = nextProps[key]
-    if (propFilters.internalProps.includes(key) && key !== "innerHTML") {
-      if (key === "ref" && prev !== next) {
-        if (prev) {
-          setDomRef(prev, null)
-        }
-        if (next) {
-          setDomRef(next, dom)
-        }
-      }
-      return
-    }
 
     if (propFilters.isEvent(key)) {
       if (prev !== next || renderMode.current === "hydrate") {
@@ -189,9 +176,9 @@ function updateDom(vNode: VNode) {
         return
       }
 
-      if (Signal.isSignal(prev) && vNode.cleanups) {
-        const v = vNode.cleanups[key]
-        v && (v(), delete vNode.cleanups[key])
+      if (Signal.isSignal(prev) && cleanups) {
+        const v = cleanups[key]
+        v && (v(), delete cleanups[key])
       }
       if (Signal.isSignal(next)) {
         return setSignalProp(vNode, dom, key, next, prev)
@@ -208,6 +195,16 @@ function updateDom(vNode: VNode) {
       dom.nodeValue = next
     }
   })
+
+  const prevRef = prev?.ref
+  if (prevRef !== ref) {
+    if (prevRef) {
+      setDomRef(prevRef, null)
+    }
+    if (ref) {
+      setDomRef(ref, dom)
+    }
+  }
 }
 
 function deriveSelectElementValue(dom: HTMLSelectElement) {
@@ -285,7 +282,7 @@ function setSignalProp(
 
   const setSigFromElement = (val: any) => {
     signal.sneak(val)
-    signal.notify({ filter: (sub) => sub !== signalUpdateCallback })
+    signal.notify((sub) => sub !== signalUpdateCallback)
   }
 
   let evtHandler: (evt: Event) => void
@@ -373,7 +370,7 @@ function hydrateDom(vNode: VNode) {
   }
   vNode.dom = dom
   if (vNode.type !== "#text" && !(vNode.flags & FLAG_STATIC_DOM)) {
-    updateDom(vNode)
+    updateDom(vNode as DomVNode)
     return
   }
   if (Signal.isSignal(vNode.props.nodeValue)) {
@@ -686,13 +683,7 @@ function commitDeletion(vNode: VNode) {
     ctx = getVNodeAppContext(vNode)!
   }
   traverseApply(vNode, (node) => {
-    const {
-      hooks,
-      subs,
-      cleanups,
-      dom,
-      props: { ref },
-    } = node
+    const { hooks, subs, cleanups, dom, ref } = node
 
     subs?.forEach((unsub) => unsub())
     if (cleanups) Object.values(cleanups).forEach((c) => c())
@@ -706,7 +697,7 @@ function commitDeletion(vNode: VNode) {
     }
 
     if (dom) {
-      if (ref) setDomRef(ref as Kiru.Ref<SomeDom>, null)
+      if (ref) setDomRef(ref, null)
       if (dom.isConnected && !(node.flags & FLAG_STATIC_DOM)) {
         dom.remove()
       }

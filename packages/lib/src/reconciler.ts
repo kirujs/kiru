@@ -1,19 +1,30 @@
-import { $FRAGMENT, FLAG_PLACEMENT, FLAG_UPDATE } from "./constants.js"
+import {
+  $FRAGMENT,
+  $MEMO,
+  FLAG_MEMO,
+  FLAG_PLACEMENT,
+  FLAG_UPDATE,
+} from "./constants.js"
 import {
   getVNodeAppContext,
+  isElement,
   isValidTextChild,
-  isVNode,
   latest,
 } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import { __DEV__ } from "./env.js"
-import { createElement, Fragment } from "./element.js"
 import type { AppContext } from "./appContext.js"
+import { isMemoFn } from "./components/memo.js"
+import { createVNode as createBaseVNode } from "./vNode.js"
 
 type VNode = Kiru.VNode
+type KElement = Kiru.Element
 let appCtx: AppContext
 
-export function reconcileChildren(parent: VNode, children: unknown) {
+export function reconcileChildren(
+  parent: VNode,
+  children: unknown
+): VNode | null {
   if (__DEV__) {
     appCtx = getVNodeAppContext(parent)!
   }
@@ -30,7 +41,7 @@ export function reconcileChildren(parent: VNode, children: unknown) {
   return reconcileSingleChild(parent, children)
 }
 
-function reconcileSingleChild(parent: VNode, child: unknown) {
+function reconcileSingleChild(parent: VNode, child: unknown): VNode | null {
   const oldChild = parent.child
   if (oldChild === null) {
     return createChild(parent, child)
@@ -52,9 +63,9 @@ function reconcileSingleChild(parent: VNode, child: unknown) {
     if (newNode !== null) {
       const prev = newNode.prev
       if (prev !== null) {
-        const key = prev.props.key
+        const key = prev.key
         // node persisted, remove it from the list so it doesn't get deleted
-        existingChildren.delete(key === undefined ? prev.index : key)
+        existingChildren.delete(key === null ? prev.index : key)
       }
       placeChild(newNode, 0, 0)
     }
@@ -134,9 +145,9 @@ function reconcileChildrenArray(parent: VNode, children: unknown[]) {
     if (newNode !== null) {
       const prev = newNode.prev
       if (prev !== null) {
-        const key = prev.props.key
+        const key = prev.key
         // node persisted, remove it from the list so it doesn't get deleted
-        existingChildren.delete(key === undefined ? prev.index : key)
+        existingChildren.delete(key === null ? prev.index : key)
       }
       lastPlacedIndex = placeChild(newNode, lastPlacedIndex, newIdx)
       if (prevNewChild === null) {
@@ -152,11 +163,15 @@ function reconcileChildrenArray(parent: VNode, children: unknown[]) {
   return resultingChild
 }
 
-function updateSlot(parent: VNode, oldChild: VNode | null, child: unknown) {
+function updateSlot(
+  parent: VNode,
+  oldChild: VNode | null,
+  child: unknown
+): VNode | null {
   // Update the node if the keys match, otherwise return null.
-  const key = oldChild?.props.key
+  const key = oldChild === null ? null : oldChild.key
   if (isValidTextChild(child)) {
-    if (key !== undefined) return null
+    if (key !== null) return null
     if (
       oldChild?.type === "#text" &&
       Signal.isSignal(oldChild.props.nodeValue)
@@ -169,12 +184,12 @@ function updateSlot(parent: VNode, oldChild: VNode | null, child: unknown) {
     if (!!oldChild && oldChild.props.nodeValue !== child) return null
     return updateTextNode(parent, oldChild, child)
   }
-  if (isVNode(child)) {
-    if (child.props.key !== key) return null
+  if (isElement(child)) {
+    if (child.key !== key) return null
     return updateNode(parent, oldChild, child)
   }
   if (Array.isArray(child)) {
-    if (key !== undefined) return null
+    if (key !== null) return null
     if (__DEV__) {
       markListChild(child)
     }
@@ -187,14 +202,9 @@ function updateTextNode(
   parent: VNode,
   oldChild: VNode | null,
   content: string | Signal<JSX.PrimitiveChild>
-) {
+): VNode {
   if (oldChild === null || oldChild.type !== "#text") {
-    if (__DEV__) {
-      dev_emitCreateNode()
-    }
-    const newChild = createElement("#text", { nodeValue: content })
-    setParent(newChild, parent)
-    return newChild
+    return createVNode(parent, "#text", { nodeValue: content })
   }
 
   if (__DEV__) {
@@ -209,44 +219,38 @@ function updateTextNode(
   return oldChild
 }
 
-function updateNode(parent: VNode, oldChild: VNode | null, newChild: VNode) {
-  let { type: nodeType, props: newProps } = newChild
+function updateNode(parent: VNode, oldChild: VNode | null, newChild: KElement) {
+  let { type, props, ref, key } = newChild
   if (__DEV__) {
-    if (typeof nodeType === "function") {
-      nodeType = latest(nodeType)
+    if (typeof type === "function") {
+      type = latest(type)
     }
   }
-  if (nodeType === $FRAGMENT) {
+  if (type === $FRAGMENT) {
     return updateFragment(
       parent,
       oldChild,
-      (newProps.children as VNode[]) || [],
-      newProps
+      (props.children as VNode[]) || [],
+      props
     )
   }
-  if (oldChild?.type === nodeType) {
+  if (oldChild?.type === type) {
     if (__DEV__) {
       dev_emitUpdateNode()
     }
     oldChild.index = 0
     oldChild.sibling = null
-    if (typeof nodeType === "string") {
-      if (propsChanged(oldChild.props, newProps)) {
+    if (typeof type === "string") {
+      if (propsChanged(oldChild.props, props)) {
         oldChild.flags |= FLAG_UPDATE
       }
     } else {
       oldChild.flags |= FLAG_UPDATE
     }
-    oldChild.props = newProps
-    oldChild.memoizedProps = newChild.memoizedProps
+    oldChild.props = props
     return oldChild
   }
-  if (__DEV__) {
-    dev_emitCreateNode()
-  }
-  const created = createElement(nodeType, newProps)
-  setParent(created, parent)
-  return created
+  return createVNode(parent, type, props, ref, key)
 }
 
 function updateFragment(
@@ -256,12 +260,7 @@ function updateFragment(
   newProps = {}
 ) {
   if (oldChild === null || oldChild.type !== $FRAGMENT) {
-    if (__DEV__) {
-      dev_emitCreateNode()
-    }
-    const el = createElement($FRAGMENT, { children, ...newProps })
-    setParent(el, parent)
-    return el
+    return createVNode(parent, $FRAGMENT, { children, ...newProps })
   }
   if (__DEV__) {
     dev_emitUpdateNode()
@@ -274,45 +273,22 @@ function updateFragment(
 
 function createChild(parent: VNode, child: unknown): VNode | null {
   if (isValidTextChild(child)) {
-    if (__DEV__) {
-      dev_emitCreateNode()
-    }
-    const el = createElement("#text", {
-      nodeValue: "" + child,
-    })
-    setParent(el, parent)
-    return el
+    return createVNode(parent, "#text", { nodeValue: "" + child })
   }
 
   if (Signal.isSignal(child)) {
-    if (__DEV__) {
-      dev_emitCreateNode()
-    }
-    const el = createElement("#text", {
-      nodeValue: child,
-    })
-    setParent(el, parent)
-    return el
+    return createVNode(parent, "#text", { nodeValue: child })
   }
 
-  if (isVNode(child)) {
-    if (__DEV__) {
-      dev_emitCreateNode()
-    }
-    const newNode = createElement(child.type, child.props)
-    setParent(newNode, parent)
-    newNode.flags |= FLAG_PLACEMENT
-    return newNode
+  if (isElement(child)) {
+    return createVNode(parent, child.type, child.props, child.ref, child.key)
   }
 
   if (Array.isArray(child)) {
     if (__DEV__) {
-      dev_emitCreateNode()
       markListChild(child)
     }
-    const el = Fragment({ children: child })
-    setParent(el, parent)
-    return el
+    return createVNode(parent, $FRAGMENT, { children: child })
   }
 
   return null
@@ -360,47 +336,30 @@ function updateFromMap(
       }
     }
 
-    if (__DEV__) {
-      dev_emitCreateNode()
-    }
-    const newChild = createElement("#text", {
-      nodeValue: child,
-    })
-    setParent(newChild, parent)
-    newChild.flags |= FLAG_PLACEMENT
-    newChild.index = index
-    return newChild
+    return createVNode(parent, "#text", { nodeValue: child }, null, null, index)
   }
 
-  if (isVNode(child)) {
-    const { type, props: newProps } = child
-    const key = newProps.key
-    const oldChild = existingChildren.get(key === undefined ? index : key)
+  if (isElement(child)) {
+    const { type, props, ref, key } = child
+    const oldChild = existingChildren.get(key === null ? index : key)
     if (oldChild?.type === type) {
       if (__DEV__) {
         dev_emitUpdateNode()
       }
       if (typeof type === "string") {
-        if (propsChanged(oldChild.props, newProps)) {
+        if (propsChanged(oldChild.props, props)) {
           oldChild.flags |= FLAG_UPDATE
         }
       } else {
         oldChild.flags |= FLAG_UPDATE
       }
-      oldChild.props = newProps
+      oldChild.props = props
       oldChild.sibling = null
       oldChild.index = index
       return oldChild
     }
 
-    if (__DEV__) {
-      dev_emitCreateNode()
-    }
-    const newChild = createElement(child.type, child.props)
-    setParent(newChild, parent)
-    newChild.flags |= FLAG_PLACEMENT
-    newChild.index = index
-    return newChild
+    return createVNode(parent, type, props, ref, key, index)
   }
 
   if (Array.isArray(child)) {
@@ -417,14 +376,14 @@ function updateFromMap(
       return oldChild
     }
 
-    if (__DEV__) {
-      dev_emitCreateNode()
-    }
-    const newChild = Fragment({ children: child })
-    setParent(newChild, parent)
-    newChild.flags |= FLAG_PLACEMENT
-    newChild.index = index
-    return newChild
+    return createVNode(
+      parent,
+      $FRAGMENT,
+      { children: child },
+      null,
+      null,
+      index
+    )
   }
 
   return null
@@ -441,19 +400,9 @@ function propsChanged(oldProps: VNode["props"], newProps: VNode["props"]) {
   return false
 }
 
-function setParent(child: VNode, parent: VNode) {
-  child.parent = parent
-  child.depth = parent.depth + 1
-}
-
 function dev_emitUpdateNode() {
   if (!("window" in globalThis)) return
   window.__kiru.profilingContext?.emit("updateNode", appCtx)
-}
-
-function dev_emitCreateNode() {
-  if (!("window" in globalThis)) return
-  window.__kiru.profilingContext?.emit("createNode", appCtx)
 }
 
 const $LIST_CHILD = Symbol("kiru:marked-list-child")
@@ -464,8 +413,8 @@ function markListChild(children: unknown[]) {
 function mapRemainingChildren(child: VNode | null) {
   const map: Map<JSX.ElementKey, VNode> = new Map()
   while (child) {
-    const key = child.props.key
-    map.set(key === undefined ? child.index : key, child)
+    const key = child.key
+    map.set(key === null ? child.index : key, child)
     child = child.sibling
   }
   return map
@@ -490,8 +439,8 @@ function checkForDuplicateKeys(parent: VNode, children: unknown[]) {
   const keys = new Set<string>()
   let warned = false
   for (const child of children) {
-    if (!isVNode(child)) continue
-    const key = child.props.key
+    if (!isElement(child)) continue
+    const key = child.key
     if (typeof key === "string") {
       if (!warned && keys.has(key)) {
         const fn = getNearestParentFcTag(parent)
@@ -509,9 +458,8 @@ function checkForMissingKeys(parent: VNode, children: unknown[]) {
   let hasKey = false
   let hasMissingKey = false
   for (const child of children) {
-    if (!isVNode(child)) continue
-    const key = child.props.key
-    if (typeof key === "string") {
+    if (!isElement(child)) continue
+    if (typeof child.key === "string") {
       hasKey = true
     } else {
       hasMissingKey = true
@@ -544,4 +492,26 @@ function getNearestParentFcTag(vNode: VNode) {
   const tag = `<${fn?.displayName || fn?.name || "Anonymous Function"} />`
   parentFcTagLookups.set(vNode, tag)
   return tag
+}
+
+function createVNode(
+  parent: VNode,
+  type: VNode["type"],
+  props: VNode["props"],
+  ref: VNode["ref"] = null,
+  key: VNode["key"] = null,
+  index = 0
+): VNode {
+  const node = createBaseVNode(type, parent, props, ref, key, index)
+  node.flags |= FLAG_PLACEMENT
+
+  if (typeof type === "function" && isMemoFn(type)) {
+    node.flags |= FLAG_MEMO
+    node.arePropsEqual = type[$MEMO].arePropsEqual
+  }
+
+  if (__DEV__ && "window" in globalThis) {
+    window.__kiru.profilingContext?.emit("createNode", appCtx)
+  }
+  return node
 }

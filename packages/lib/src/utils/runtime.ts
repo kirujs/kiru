@@ -1,7 +1,9 @@
 import { __DEV__ } from "../env.js"
 import { renderMode } from "../globals.js"
 
-export { latest, sideEffectsEnabled }
+export { noop, latest, sideEffectsEnabled }
+
+const noop = Object.freeze(() => {})
 
 /**
  * This is a no-op in production. It is used to get the latest

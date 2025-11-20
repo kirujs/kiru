@@ -15,7 +15,8 @@ function _arePropsEqual<T extends Record<string, unknown>>(
   return true
 }
 
-export type MemoFn = Function & {
+export interface MemoFn<T extends Record<string, unknown> = {}> {
+  (props: T): JSX.Element
   [$MEMO]: {
     arePropsEqual: (
       prevProps: Record<string, unknown>,
@@ -39,7 +40,7 @@ export function memo<T extends Record<string, unknown> = {}>(
   )
 }
 
-export function isMemoFn(fn: any): fn is MemoFn {
+export function isMemoFn(fn: Function & { [$MEMO]?: any }): fn is MemoFn {
   return (
     typeof fn === "function" && typeof fn[$MEMO]?.arePropsEqual === "function"
   )
