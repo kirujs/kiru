@@ -85,51 +85,63 @@ export default function SuspenseExample() {
             </div>
           }
         >
-          {(pdata) => (
-            <table className="w-full">
-              <tbody>
-                {pdata.products.map((product) => (
-                  <tr key={product.id}>
-                    <td>{product.id}</td>
-                    <td>{product.title}</td>
-                    <td>
-                      <img src={product.thumbnail} className="w-16 h-16" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Suspense>
-      </ErrorBoundary>
-
-      <ErrorBoundary
-        onError={(e) => console.error("Error rendering pagination", e)}
-        fallback={(error) => <div>123 {error.message}</div>}
-      >
-        <Suspense data={products.data} fallback={<div>Loading...</div>}>
-          {({ total }) => {
-            const skip = (page - 1) * pageSize
-            const disableNext = skip + pageSize >= total
+          {({ products, total }) => {
+            const numPages = Math.ceil(total / pageSize)
+            const disablePrev = page === 1
+            const disableNext = page === numPages
+            let start = Math.max(1, page - 5)
+            let end = Math.min(numPages, start + 9)
+            start = Math.max(1, end - 9)
 
             return (
-              <div className="flex justify-between">
-                <button
-                  disabled={page === 1}
-                  onclick={() => setPage((prev) => prev - 1)}
-                  className="p-2 rounded-md border disabled:opacity-50"
-                >
-                  Prev
-                </button>
-                <span>page: {page}</span>
-                <button
-                  disabled={disableNext}
-                  onclick={() => setPage((prev) => prev + 1)}
-                  className="p-2 rounded-md border disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
+              <>
+                <table className="w-full">
+                  <tbody>
+                    {products.map((product) => (
+                      <tr key={product.id}>
+                        <td>{product.id}</td>
+                        <td>{product.title}</td>
+                        <td>
+                          <img src={product.thumbnail} className="w-16 h-16" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <>
+                  <div className="flex justify-between items-center">
+                    <button
+                      disabled={disablePrev}
+                      onclick={() => setPage((prev) => prev - 1)}
+                      className="p-2 rounded-md border disabled:opacity-50"
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: end - start + 1 }, (_, idx) => {
+                      const i = start + idx
+                      return (
+                        <button
+                          key={i}
+                          disabled={i === page}
+                          onclick={() => setPage(i)}
+                          className={`p-2 rounded-md border disabled:opacity-90 ${
+                            i === page ? "bg-blue-500 text-white" : ""
+                          }`}
+                        >
+                          {i}
+                        </button>
+                      )
+                    })}
+                    <button
+                      disabled={disableNext}
+                      onclick={() => setPage((prev) => prev + 1)}
+                      className="p-2 rounded-md border disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </>
+              </>
             )
           }}
         </Suspense>
