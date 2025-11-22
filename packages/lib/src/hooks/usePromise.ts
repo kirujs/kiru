@@ -1,43 +1,36 @@
 import { PREFETCHED_DATA_EVENT } from "../constants.js"
 import { __DEV__ } from "../env.js"
 import { hydrationMode, renderMode } from "../globals.js"
-import { requestUpdate } from "../scheduler.js"
 import { Signal, useSignal } from "../signals/base.js"
 import { cleanupHook, depsRequireChange, useHook } from "./utils.js"
 import { useId } from "./useId.js"
 
 export { usePromise }
-export type { UsePromiseCallbackContext, UsePromiseState }
 
 const nodeToPromiseIndex = new WeakMap<Kiru.VNode, number>()
 
-interface UsePromiseCallbackContext {
-  signal: AbortSignal
-}
-
-interface UsePromiseState<T> {
-  data: Kiru.StatefulPromise<T>
+type UsePromiseResult<T> = Kiru.StatefulPromise<T> & {
   refresh: () => void
-  pending: Signal<boolean>
+  isPending: Signal<boolean>
 }
 
 function usePromise<T>(
-  callback: (ctx: UsePromiseCallbackContext) => Promise<T>,
+  callback: (signal: AbortSignal) => Promise<T>,
   deps: unknown[]
-): UsePromiseState<T> {
+): UsePromiseResult<T> {
   const id = useId()
-  const pending = useSignal(true)
+  const isPending = useSignal(true)
 
   return useHook(
     "usePromise",
     {} as {
-      promise: Kiru.StatefulPromise<T>
+      promise: UsePromiseResult<T>
       abortController?: AbortController
       deps?: unknown[]
     },
-    ({ hook, isInit, vNode }) => {
+    ({ hook, isInit, vNode, update }) => {
       if (isInit || depsRequireChange(deps, hook.deps)) {
-        pending.value = true
+        isPending.value = true
         hook.deps = deps
         cleanupHook(hook)
 
@@ -62,34 +55,32 @@ function usePromise<T>(
           promise = resolvePrefetchedPromise<T>(promiseId, controller.signal)
         } else {
           // dom / stream / (hydrate + static)
-          promise = callback({ signal: controller.signal })
+          promise = callback(controller.signal)
         }
 
         const state: Kiru.PromiseState<T> = { id: promiseId, state: "pending" }
-        const statefulPromise = (hook.promise = Object.assign(promise, state))
+        const statefulPromise: Kiru.StatefulPromise<T> = (hook.promise =
+          Object.assign(promise, state, {
+            isPending,
+            refresh: () => {
+              hook.deps = undefined
+              update()
+            },
+          }))
 
         statefulPromise
           .then((value) => {
             statefulPromise.state = "fulfilled"
             statefulPromise.value = value
+            isPending.value = false
           })
           .catch((error) => {
             statefulPromise.state = "rejected"
             statefulPromise.error =
               error instanceof Error ? error : new Error(error)
           })
-          .finally(() => {
-            pending.value = false
-          })
       }
-      return {
-        data: hook.promise,
-        refresh: () => {
-          hook.deps = undefined
-          requestUpdate(vNode)
-        },
-        pending,
-      }
+      return hook.promise
     }
   )
 }

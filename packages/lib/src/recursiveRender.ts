@@ -10,7 +10,7 @@ import {
 import { Signal } from "./signals/base.js"
 import { $ERROR_BOUNDARY, voidElements, $SUSPENSE_THROW } from "./constants.js"
 import { __DEV__ } from "./env.js"
-import { isSuspenseThrowValue } from "./components/suspense.js"
+import { isSuspenseThrowValue } from "./components/derive.js"
 import type { ErrorBoundaryNode } from "./types.utils"
 
 export interface RecursiveRenderContext {

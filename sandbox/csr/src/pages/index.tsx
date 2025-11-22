@@ -1,4 +1,5 @@
 import { Fragment, signal, useEffect, useVNode, watch } from "kiru"
+import SuspenseExample from "shared/src/SuspenseExample"
 
 const text = signal("Hello World!")
 
@@ -18,6 +19,7 @@ export default function HomePage() {
       <h1>Welcome Home!</h1>
       <p>This page is wrapped by the root layout only.</p>
       <p>You can see the navigation header and footer from the root layout.</p>
+      <SuspenseExample />
     </div>
   )
 }

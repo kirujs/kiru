@@ -1,4 +1,4 @@
-import { Suspense, usePromise } from "kiru"
+import { Derive, usePromise } from "kiru"
 
 interface ProductsResponse {
   products: {
@@ -17,7 +17,7 @@ interface ProductsResponse {
 }
 
 export function Page() {
-  const products = usePromise<ProductsResponse>(async ({ signal }) => {
+  const products = usePromise<ProductsResponse>(async (signal) => {
     await new Promise((resolve) => setTimeout(resolve, 500))
     const response = await fetch("https://dummyjson.com/products", { signal })
     if (!response.ok) throw new Error(response.statusText)
@@ -25,14 +25,14 @@ export function Page() {
   }, [])
 
   return (
-    <Suspense data={products.data} fallback={<div>Loading...</div>}>
-      {(data) => (
+    <Derive from={products} fallback={<div>Loading...</div>}>
+      {(isStale, data) => (
         <ul>
           {data.products.map((product) => (
             <li key={product.id}>{product.title}</li>
           ))}
         </ul>
       )}
-    </Suspense>
+    </Derive>
   )
 }

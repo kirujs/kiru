@@ -5,7 +5,7 @@ import type {
   FormattedViteImportMapEntry,
   DefaultComponentModule,
 } from "../../../lib/dist/router/types.internal"
-import { computed, Derive, signal, Suspense, useEffect, usePromise } from "kiru"
+import { computed, Derive, signal, useEffect, usePromise } from "kiru"
 import { ValueEditor } from "devtools-shared/src/ValueEditor"
 import {
   RefreshIcon,
@@ -339,11 +339,10 @@ function PageNavigationButton({
 
 function PageView({ page }: { page: string }) {
   const entries = fileRouterDevtools.getPages()
-  const entry = entries[page]
-  const modulePromise = usePromise(() => entry.load(), [page])
+  const modulePromise = usePromise(() => entries[page].load(), [page])
 
   return (
-    <Suspense data={modulePromise.data} fallback={<div>Loading...</div>}>
+    <Derive from={modulePromise} fallback={<div>Loading...</div>}>
       {({ default: fn, config }) => {
         const n = { type: fn } as any as Kiru.VNode
         return (
@@ -371,6 +370,6 @@ function PageView({ page }: { page: string }) {
           </div>
         )
       }}
-    </Suspense>
+    </Derive>
   )
 }

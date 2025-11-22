@@ -1,4 +1,4 @@
-import { ErrorBoundary, Suspense, usePromise, useState } from "kiru"
+import { ErrorBoundary, usePromise, useState, Derive } from "kiru"
 
 interface Product {
   id: number
@@ -20,6 +20,7 @@ async function loadProduct(
   page: number,
   pageSize: number
 ): Promise<ProductsSearchResponse> {
+  await new Promise((resolve) => setTimeout(resolve, 300))
   const skip = (page - 1) * pageSize
   const url = `https://dummyjson.com/products/search?q=${search}&skip=${skip}&limit=${pageSize}`
 
@@ -33,7 +34,7 @@ export default function SuspenseExample() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const products = usePromise(
-    ({ signal }) => loadProduct(signal, search, page, pageSize),
+    (signal) => loadProduct(signal, search, page, pageSize),
     [search, page, pageSize]
   )
 
@@ -50,7 +51,7 @@ export default function SuspenseExample() {
           }}
         />
         <select
-          disabled={products.pending}
+          disabled={products.isPending}
           className="p-2 rounded-md border disabled:opacity-50"
           value={pageSize.toString()}
           oninput={(e) => {
@@ -75,77 +76,90 @@ export default function SuspenseExample() {
           </>
         )}
       >
-        <Suspense
-          data={products.data}
-          fallback={
-            <div>
-              {search
-                ? `Loading products for "${search}"...`
-                : "Loading all products..."}
-            </div>
-          }
-        >
-          {({ products, total }) => {
-            const numPages = Math.ceil(total / pageSize)
-            const disablePrev = page === 1
-            const disableNext = page === numPages
-            let start = Math.max(1, page - 5)
-            let end = Math.min(numPages, start + 9)
-            start = Math.max(1, end - 9)
-
-            return (
-              <>
-                <table className="w-full">
-                  <tbody>
-                    {products.map((product) => (
-                      <tr key={product.id}>
-                        <td>{product.id}</td>
-                        <td>{product.title}</td>
-                        <td>
-                          <img src={product.thumbnail} className="w-16 h-16" />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <>
-                  <div className="flex justify-between items-center">
-                    <button
-                      disabled={disablePrev}
-                      onclick={() => setPage((prev) => prev - 1)}
-                      className="p-2 rounded-md border disabled:opacity-50"
-                    >
-                      Prev
-                    </button>
-                    {Array.from({ length: end - start + 1 }, (_, idx) => {
-                      const i = start + idx
-                      return (
-                        <button
-                          key={i}
-                          disabled={i === page}
-                          onclick={() => setPage(i)}
-                          className={`p-2 rounded-md border disabled:opacity-90 ${
-                            i === page ? "bg-blue-500 text-white" : ""
-                          }`}
-                        >
-                          {i}
-                        </button>
-                      )
-                    })}
-                    <button
-                      disabled={disableNext}
-                      onclick={() => setPage((prev) => prev + 1)}
-                      className="p-2 rounded-md border disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </>
-              </>
-            )
-          }}
-        </Suspense>
+        <Derive from={products} fallback={<div>Loading products...</div>}>
+          {(isStale, data) => (
+            <ProductsTable
+              {...data}
+              page={page}
+              setPage={setPage}
+              pageSize={pageSize}
+              isStale={isStale}
+            />
+          )}
+        </Derive>
       </ErrorBoundary>
+    </div>
+  )
+}
+
+interface ProductsTableProps extends ProductsSearchResponse {
+  page: number
+  setPage: (value: Kiru.StateSetter<number>) => void
+  pageSize: number
+  isStale?: boolean
+}
+
+function ProductsTable({
+  products,
+  total,
+  page,
+  pageSize,
+  setPage,
+  isStale,
+}: ProductsTableProps) {
+  const numPages = Math.ceil(total / pageSize)
+  const disablePrev = page === 1
+  const disableNext = page === numPages
+  let start = Math.max(1, page - 5)
+  let end = Math.min(numPages, start + 9)
+  start = Math.max(1, end - 9)
+
+  return (
+    <div className={`transition-opacity ${isStale ? "opacity-50" : ""}`}>
+      <table className="w-full">
+        <tbody>
+          {products.map((product) => (
+            <tr key={product.id}>
+              <td>{product.id}</td>
+              <td>{product.title}</td>
+              <td>
+                <img src={product.thumbnail} className="w-16 h-16" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="flex justify-between items-center">
+        <button
+          disabled={disablePrev}
+          onclick={() => setPage((prev) => prev - 1)}
+          className="p-2 rounded-md border disabled:opacity-50"
+        >
+          Prev
+        </button>
+        {Array.from({ length: end - start + 1 }, (_, idx) => {
+          const i = start + idx
+          return (
+            <button
+              key={i}
+              disabled={i === page}
+              onclick={() => setPage(i)}
+              className={`p-2 rounded-md border disabled:opacity-90 ${
+                i === page ? "bg-blue-500 text-white" : ""
+              }`}
+            >
+              {i}
+            </button>
+          )
+        })}
+        <button
+          disabled={disableNext}
+          onclick={() => setPage((prev) => prev + 1)}
+          className="p-2 rounded-md border disabled:opacity-50"
+        >
+          Next
+        </button>
+      </div>
     </div>
   )
 }
