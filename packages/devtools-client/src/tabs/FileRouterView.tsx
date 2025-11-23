@@ -339,14 +339,19 @@ function PageNavigationButton({
 
 function PageView({ page }: { page: string }) {
   const entries = fileRouterDevtools.getPages()
-  const modulePromise = usePromise(() => entries[page].load(), [page])
+  const entry = entries[page]
+  const modulePromise = usePromise(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    return await entry.load()
+  }, [page])
 
   return (
     <Derive from={modulePromise} fallback={<div>Loading...</div>}>
-      {({ default: fn, config }) => {
+      {(module, isStale) => {
+        const { default: fn, config } = module
         const n = { type: fn } as any as Kiru.VNode
         return (
-          <div>
+          <div className={`transition-opacity ${isStale ? "opacity-75" : ""}`}>
             <h2 className="flex justify-between items-center font-bold mb-2 pb-2 border-b-2 border-neutral-800">
               <div className="flex gap-2 items-center">
                 {`<${getNodeName(n)}>`}
