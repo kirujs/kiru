@@ -1,4 +1,5 @@
-import { Fragment, signal, useEffect, useVNode, watch } from "kiru"
+import { Fragment, signal, watch } from "kiru"
+import UsePromiseExample from "shared/src/UsePromiseExample"
 
 const text = signal("Hello World!")
 
@@ -7,10 +8,6 @@ watch(() => {
 })
 
 export default function HomePage() {
-  const n = useVNode()
-  useEffect(() => {
-    console.log(n)
-  }, [])
   return (
     <div>
       <input bind:value={text} />
@@ -18,6 +15,7 @@ export default function HomePage() {
       <h1>Welcome Home!</h1>
       <p>This page is wrapped by the root layout only.</p>
       <p>You can see the navigation header and footer from the root layout.</p>
+      <UsePromiseExample />
     </div>
   )
 }

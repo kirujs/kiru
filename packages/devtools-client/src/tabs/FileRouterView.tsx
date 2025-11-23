@@ -5,7 +5,7 @@ import type {
   FormattedViteImportMapEntry,
   DefaultComponentModule,
 } from "../../../lib/dist/router/types.internal"
-import { computed, Derive, signal, Suspense, useEffect, usePromise } from "kiru"
+import { computed, Derive, signal, useEffect, usePromise } from "kiru"
 import { ValueEditor } from "devtools-shared/src/ValueEditor"
 import {
   RefreshIcon,
@@ -175,11 +175,11 @@ export function FileRouterView() {
         <div className="flex-grow sticky pr-2 top-0 flex flex-col gap-2">
           <Filter value={filterValue} className="sticky top-0" />
           <div className="flex-grow flex flex-col gap-1 items-start">
-            <Derive from={[filteredRouteTree, selectedRoute, currentPage]}>
-              {(tree, selected, currentPage) => (
+            <Derive from={{ filteredRouteTree, selectedRoute, currentPage }}>
+              {({ filteredRouteTree, selectedRoute, currentPage }) => (
                 <RouteTreeNodes
-                  nodes={tree}
-                  selected={selected}
+                  nodes={filteredRouteTree}
+                  selected={selectedRoute}
                   currentPage={currentPage}
                   depth={0}
                 />
@@ -340,14 +340,18 @@ function PageNavigationButton({
 function PageView({ page }: { page: string }) {
   const entries = fileRouterDevtools.getPages()
   const entry = entries[page]
-  const modulePromise = usePromise(() => entry.load(), [page])
+  const modulePromise = usePromise(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    return await entry.load()
+  }, [page])
 
   return (
-    <Suspense data={modulePromise.data} fallback={<div>Loading...</div>}>
-      {({ default: fn, config }) => {
+    <Derive from={modulePromise} fallback={<div>Loading...</div>}>
+      {(module, isStale) => {
+        const { default: fn, config } = module
         const n = { type: fn } as any as Kiru.VNode
         return (
-          <div>
+          <div className={`transition-opacity ${isStale ? "opacity-75" : ""}`}>
             <h2 className="flex justify-between items-center font-bold mb-2 pb-2 border-b-2 border-neutral-800">
               <div className="flex gap-2 items-center">
                 {`<${getNodeName(n)}>`}
@@ -371,6 +375,6 @@ function PageView({ page }: { page: string }) {
           </div>
         )
       }}
-    </Suspense>
+    </Derive>
   )
 }

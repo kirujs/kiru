@@ -1,6 +1,6 @@
 export { ErrorBoundary, type ErrorBoundaryProps } from "./errorBoundary.js"
+export * from "./derive.js"
 export * from "./lazy.js"
 export { memo } from "./memo.js"
 export * from "./portal.js"
-export * from "./suspense.js"
 export * from "./transition.js"
