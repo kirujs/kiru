@@ -175,11 +175,11 @@ export function FileRouterView() {
         <div className="flex-grow sticky pr-2 top-0 flex flex-col gap-2">
           <Filter value={filterValue} className="sticky top-0" />
           <div className="flex-grow flex flex-col gap-1 items-start">
-            <Derive from={[filteredRouteTree, selectedRoute, currentPage]}>
-              {(tree, selected, currentPage) => (
+            <Derive from={{ filteredRouteTree, selectedRoute, currentPage }}>
+              {({ filteredRouteTree, selectedRoute, currentPage }) => (
                 <RouteTreeNodes
-                  nodes={tree}
-                  selected={selected}
+                  nodes={filteredRouteTree}
+                  selected={selectedRoute}
                   currentPage={currentPage}
                   depth={0}
                 />

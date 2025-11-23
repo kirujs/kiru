@@ -29,6 +29,12 @@ async function loadProduct(
   return request.json()
 }
 
+const loadingAll = (
+  <div>
+    <i>Loading products...</i>
+  </div>
+)
+
 export default function SuspenseExample() {
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
@@ -42,6 +48,7 @@ export default function SuspenseExample() {
     <div>
       <div className="flex justify-between">
         <input
+          autofocus
           placeholder="Search products"
           className="w-full p-2 rounded-md border"
           value={search}
@@ -76,16 +83,20 @@ export default function SuspenseExample() {
           </>
         )}
       >
-        <Derive from={products} fallback={<div>Loading products...</div>}>
-          {(isStale, data) => (
-            <ProductsTable
-              {...data}
-              page={page}
-              setPage={setPage}
-              pageSize={pageSize}
-              isStale={isStale}
-            />
-          )}
+        <Derive from={{ products }} fallback={loadingAll}>
+          {({ products }, isStale) => {
+            return (
+              <>
+                <ProductsTable
+                  {...products}
+                  page={page}
+                  setPage={setPage}
+                  pageSize={pageSize}
+                  isStale={isStale}
+                />
+              </>
+            )
+          }}
         </Derive>
       </ErrorBoundary>
     </div>
