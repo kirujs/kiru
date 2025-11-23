@@ -1,4 +1,4 @@
-import { PREFETCHED_DATA_EVENT } from "../constants.js"
+import { STREAMED_DATA_EVENT } from "../constants.js"
 import { __DEV__ } from "../env.js"
 import { hydrationMode, renderMode } from "../globals.js"
 import { Signal, useSignal } from "../signals/base.js"
@@ -52,7 +52,7 @@ function usePromise<T>(
         ) {
           // if we're hydrating and the hydration mode is not static,
           // we need to resolve the promise from cache/event
-          promise = resolvePrefetchedPromise<T>(promiseId, controller.signal)
+          promise = resolveDeferredPromise<T>(promiseId, controller.signal)
         } else {
           // dom / stream / (hydrate + static)
           promise = callback(controller.signal)
@@ -85,42 +85,42 @@ function usePromise<T>(
   )
 }
 
-interface PrefetchedPromiseEventDetail<T> {
+interface DeferredPromiseEventDetail<T> {
   id: string
   data?: T
   error?: string
 }
 
-function resolvePrefetchedPromise<T>(
+function resolveDeferredPromise<T>(
   id: string,
   signal: AbortSignal
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const prefetchCache: Map<string, { data?: T; error?: string }> = // @ts-ignore
-      (window[PREFETCHED_DATA_EVENT] ??= new Map())
+    const deferralCache: Map<string, { data?: T; error?: string }> = // @ts-ignore
+      (window[STREAMED_DATA_EVENT] ??= new Map())
 
-    const existing = prefetchCache.get(id)
+    const existing = deferralCache.get(id)
     if (existing) {
       const { data, error } = existing
-      prefetchCache.delete(id)
+      deferralCache.delete(id)
       if (error) return reject(error)
       return resolve(data!)
     }
 
     const onDataEvent = (event: Event) => {
-      const { detail } = event as CustomEvent<PrefetchedPromiseEventDetail<T>>
+      const { detail } = event as CustomEvent<DeferredPromiseEventDetail<T>>
       if (detail.id === id) {
-        prefetchCache.delete(id)
-        window.removeEventListener(PREFETCHED_DATA_EVENT, onDataEvent)
+        deferralCache.delete(id)
+        window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
         const { data, error } = detail
         if (error) return reject(error)
         resolve(data!)
       }
     }
 
-    window.addEventListener(PREFETCHED_DATA_EVENT, onDataEvent)
+    window.addEventListener(STREAMED_DATA_EVENT, onDataEvent)
     signal.addEventListener("abort", () => {
-      window.removeEventListener(PREFETCHED_DATA_EVENT, onDataEvent)
+      window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
       reject()
     })
   })

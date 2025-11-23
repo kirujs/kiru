@@ -1,4 +1,5 @@
-import { ErrorBoundary, usePromise, useState, Derive } from "kiru"
+import { ErrorBoundary, usePromise, Derive, useMemo } from "kiru"
+import { RouteQuery, useFileRouter } from "kiru/router"
 
 interface Product {
   id: number
@@ -14,13 +15,15 @@ interface ProductsSearchResponse {
   limit: number
 }
 
-async function loadProduct(
+async function loadProducts(
   signal: AbortSignal,
-  search: string,
-  page: number,
-  pageSize: number
+  query: RouteQuery
 ): Promise<ProductsSearchResponse> {
   await new Promise((resolve) => setTimeout(resolve, 300))
+  const page = parseSearchNumber(query.p, 1)
+  const pageSize = parseSearchNumber(query.s, 10)
+  const search = String(query.q || "")
+
   const skip = (page - 1) * pageSize
   const url = `https://dummyjson.com/products/search?q=${search}&skip=${skip}&limit=${pageSize}`
 
@@ -34,15 +37,19 @@ const loadingAll = (
     <i>Loading products...</i>
   </div>
 )
+export default function UsePromiseExample() {
+  const {
+    state: { query },
+    setQuery,
+  } = useFileRouter()
 
-export default function SuspenseExample() {
-  const [search, setSearch] = useState("")
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-  const products = usePromise(
-    (signal) => loadProduct(signal, search, page, pageSize),
-    [search, page, pageSize]
-  )
+  const initialQueryState = useMemo(() => {
+    const search = Array.isArray(query.q) ? query.q[0] : query.q
+    const pageSize = parseSearchNumber(query.s, 10).toString()
+    return { search, pageSize }
+  }, [])
+
+  const products = usePromise((signal) => loadProducts(signal, query), [query])
 
   return (
     <div>
@@ -51,21 +58,26 @@ export default function SuspenseExample() {
           autofocus
           placeholder="Search products"
           className="w-full p-2 rounded-md border"
-          value={search}
+          value={initialQueryState.search}
           oninput={(e) => {
-            setSearch(e.target.value)
-            setPage(1)
+            setQuery({ ...query, q: e.target.value, p: "1" }, { replace: true })
           }}
         />
         <select
           disabled={products.isPending}
           className="p-2 rounded-md border disabled:opacity-50"
-          value={pageSize.toString()}
+          value={initialQueryState.pageSize}
           oninput={(e) => {
             const nextSize = parseInt(e.currentTarget.value)
+            const pageSize = parseSearchNumber(query.s, 10)
+            const page = parseSearchNumber(query.p, 1)
             const currentOffset = (page - 1) * pageSize
-            setPageSize(nextSize)
-            setPage(Math.ceil((currentOffset + 1) / nextSize))
+            const nextPage = Math.ceil((currentOffset + 1) / nextSize) + ""
+
+            setQuery(
+              { ...query, s: e.currentTarget.value, p: nextPage },
+              { replace: true }
+            )
           }}
         >
           <option value="5">5</option>
@@ -83,20 +95,10 @@ export default function SuspenseExample() {
           </>
         )}
       >
-        <Derive from={{ products }} fallback={loadingAll}>
-          {({ products }, isStale) => {
-            return (
-              <>
-                <ProductsTable
-                  {...products}
-                  page={page}
-                  setPage={setPage}
-                  pageSize={pageSize}
-                  isStale={isStale}
-                />
-              </>
-            )
-          }}
+        <Derive from={products} fallback={loadingAll}>
+          {(products, isStale) => (
+            <ProductsTable {...products} isStale={isStale} />
+          )}
         </Derive>
       </ErrorBoundary>
     </div>
@@ -104,20 +106,16 @@ export default function SuspenseExample() {
 }
 
 interface ProductsTableProps extends ProductsSearchResponse {
-  page: number
-  setPage: (value: Kiru.StateSetter<number>) => void
-  pageSize: number
   isStale?: boolean
 }
 
-function ProductsTable({
-  products,
-  total,
-  page,
-  pageSize,
-  setPage,
-  isStale,
-}: ProductsTableProps) {
+function ProductsTable({ products, total, isStale }: ProductsTableProps) {
+  const {
+    state: { query },
+    setQuery,
+  } = useFileRouter()
+  const pageSize = parseSearchNumber(query.s, 10)
+  const page = parseSearchNumber(query.p, 1)
   const numPages = Math.ceil(total / pageSize)
   const disablePrev = page === 1
   const disableNext = page === numPages
@@ -125,9 +123,17 @@ function ProductsTable({
   let end = Math.min(numPages, start + 9)
   start = Math.max(1, end - 9)
 
+  const setPage = (value: Kiru.StateSetter<number>) => {
+    const page = parseSearchNumber(query.p, 1)
+    const next = typeof value === "function" ? value(page) : value
+    setQuery({ ...query, p: next + "" }, { replace: true })
+  }
+
   return (
-    <div className={`transition-opacity ${isStale ? "opacity-50" : ""}`}>
-      <table className="w-full">
+    <div>
+      <table
+        className={`w-full transition-opacity ${isStale ? "opacity-50" : ""}`}
+      >
         <tbody>
           {products.map((product) => (
             <tr key={product.id}>
@@ -173,4 +179,12 @@ function ProductsTable({
       </div>
     </div>
   )
+}
+
+function parseSearchNumber(
+  value: string | string[] | undefined,
+  fallback: number
+) {
+  const parsed = parseInt(String(value ?? fallback))
+  return isNaN(parsed) ? fallback : parsed
 }

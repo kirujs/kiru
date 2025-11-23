@@ -1,24 +1,25 @@
 import { node } from "../globals.js"
-import { $SUSPENSE_THROW } from "../constants.js"
+import { $STREAM_DATA } from "../constants.js"
 import { requestUpdate } from "../scheduler.js"
 import { useRef } from "../hooks/index.js"
 import { Signal } from "../signals/index.js"
 import { sideEffectsEnabled } from "../utils/index.js"
 import type { RecordHas } from "../types.utils"
+import { isStatefulPromise, StreamDataThrowValue } from "../utils/promise.js"
 
-type DeriveFromValue =
-  | Signal<unknown>
+export type Derivable =
+  | Kiru.Signal<unknown>
   | Kiru.StatefulPromise<unknown>
-  | Record<string, Signal<unknown> | Kiru.StatefulPromise<unknown>>
+  | Record<string, Kiru.Signal<unknown> | Kiru.StatefulPromise<unknown>>
 
-type InnerOf<T> = T extends Signal<infer V>
+type InnerOf<T> = T extends Kiru.Signal<infer V>
   ? V
   : T extends Kiru.StatefulPromise<infer P>
   ? P
   : never
 
-type UnwrapDerive<T extends DeriveFromValue> = T extends
-  | Signal<any>
+type UnwrapDerive<T extends Derivable> = T extends
+  | Kiru.Signal<unknown>
   | Kiru.StatefulPromise<any>
   ? InnerOf<T>
   : { [K in keyof T]: InnerOf<T[K]> }
@@ -31,12 +32,12 @@ type RecordHasPromise<T extends Record<string, any>> = RecordHas<
 type ChildFn<T> = (value: T) => JSX.Children
 type ChildFnWithStale<T> = (value: T, isStale: boolean) => JSX.Children
 
-type DeriveRenderMode = "swr" | "fallback"
+export type DeriveFallbackMode = "swr" | "fallback"
 
-type DeriveProps<
-  T extends DeriveFromValue,
-  Mode extends DeriveRenderMode = "fallback"
-> = {
+export interface DeriveProps<
+  T extends Derivable,
+  Mode extends DeriveFallbackMode = "fallback"
+> {
   from: T
   mode?: Mode
   children: T extends Kiru.StatefulPromise<infer U>
@@ -60,8 +61,8 @@ type DeriveProps<
 }
 
 export function Derive<
-  const T extends DeriveFromValue,
-  U extends DeriveRenderMode = "swr"
+  T extends Derivable,
+  U extends DeriveFallbackMode = "swr"
 >(props: DeriveProps<T, U>) {
   const { from, children, fallback, mode } = props
   const prevSuccess = useRef<UnwrapDerive<T> | null>(null)
@@ -90,11 +91,11 @@ export function Derive<
 
   if (!sideEffectsEnabled()) {
     throw {
-      [$SUSPENSE_THROW]: {
+      [$STREAM_DATA]: {
         fallback,
-        pending: Array.from(promises),
+        data: Array.from(promises),
       },
-    } satisfies SuspenseThrowValue
+    } satisfies StreamDataThrowValue
   }
 
   for (const p of promises) {
@@ -117,26 +118,4 @@ export function Derive<
 
   prevSuccess.current = value
   return (children as ChildFnWithStale<UnwrapDerive<T>>)(value, false)
-}
-
-interface SuspenseThrowValue {
-  [$SUSPENSE_THROW]: {
-    fallback?: JSX.Element
-    pending: Kiru.StatefulPromise<unknown>[]
-  }
-}
-
-/**
- * Returns true if the value was thrown by a Suspense component.
- */
-export function isSuspenseThrowValue(
-  value: unknown
-): value is SuspenseThrowValue {
-  return typeof value === "object" && !!value && $SUSPENSE_THROW in value
-}
-
-function isStatefulPromise(
-  thing: unknown
-): thing is Kiru.StatefulPromise<unknown> {
-  return thing instanceof Promise && "id" in thing && "state" in thing
 }

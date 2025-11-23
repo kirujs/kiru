@@ -7,19 +7,21 @@ import {
   assertValidElementProps,
   isPrimitiveChild,
 } from "./utils/index.js"
+import { isStreamDataThrowValue } from "./utils/promise.js"
 import { Signal } from "./signals/base.js"
-import { $ERROR_BOUNDARY, voidElements, $SUSPENSE_THROW } from "./constants.js"
+import { $ERROR_BOUNDARY, voidElements, $STREAM_DATA } from "./constants.js"
 import { __DEV__ } from "./env.js"
-import { isSuspenseThrowValue } from "./components/derive.js"
 import type { ErrorBoundaryNode } from "./types.utils"
 
-export interface RecursiveRenderContext {
+export interface HeadlessRenderContext {
   write(chunk: string): void
-  onPending?: (data: Kiru.StatefulPromise<unknown>[]) => void
+  onStreamData?: (data: Kiru.StatefulPromise<unknown>[]) => void
 }
 
-export function recursiveRender(
-  ctx: RecursiveRenderContext,
+export { render as headlessRender }
+
+function render(
+  ctx: HeadlessRenderContext,
   el: unknown,
   parent: Kiru.VNode | null,
   idx: number
@@ -34,7 +36,7 @@ export function recursiveRender(
     return ctx.write(el.toString())
   }
   if (el instanceof Array) {
-    return el.forEach((c, i) => recursiveRender(ctx, c, parent, i))
+    return el.forEach((c, i) => render(ctx, c, parent, i))
   }
   if (Signal.isSignal(el)) {
     const value = el.peek()
@@ -65,22 +67,22 @@ export function recursiveRender(
   if (isExoticType(type)) {
     if (type === $ERROR_BOUNDARY) {
       let boundaryBuffer = ""
-      const pending = new Set<Kiru.StatefulPromise<unknown>>()
-      const boundaryCtx: RecursiveRenderContext = {
+      const streamPromises = new Set<Kiru.StatefulPromise<unknown>>()
+      const boundaryCtx: HeadlessRenderContext = {
         write(chunk) {
           boundaryBuffer += chunk
         },
-        onPending(data) {
-          data.forEach((p) => pending.add(p))
+        onStreamData(data) {
+          data.forEach((p) => streamPromises.add(p))
         },
       }
       try {
-        recursiveRender(boundaryCtx, children, el, idx)
+        render(boundaryCtx, children, el, idx)
         // flush successful render
         ctx.write(boundaryBuffer)
-        ctx.onPending?.([...pending])
+        ctx.onStreamData?.([...streamPromises])
       } catch (error) {
-        if (isSuspenseThrowValue(error)) {
+        if (isStreamDataThrowValue(error)) {
           throw error
         }
         const e = error instanceof Error ? error : new Error(String(error))
@@ -88,12 +90,12 @@ export function recursiveRender(
         onError?.(e)
         const fallbackContent =
           typeof fallback === "function" ? fallback(e) : fallback
-        recursiveRender(ctx, fallbackContent, el, 0)
+        render(ctx, fallbackContent, el, 0)
       }
       return
     }
 
-    recursiveRender(ctx, children, el, idx)
+    render(ctx, children, el, idx)
     return
   }
 
@@ -102,13 +104,13 @@ export function recursiveRender(
       hookIndex.current = 0
       node.current = el
       const res = type(props)
-      recursiveRender(ctx, res, el, idx)
+      render(ctx, res, el, idx)
       return
     } catch (error) {
-      if (isSuspenseThrowValue(error)) {
-        const { fallback, pending } = error[$SUSPENSE_THROW]
-        ctx.onPending?.(pending)
-        return recursiveRender(ctx, fallback, el, 0)
+      if (isStreamDataThrowValue(error)) {
+        const { fallback, data } = error[$STREAM_DATA]
+        ctx.onStreamData?.(data)
+        return render(ctx, fallback, el, 0)
       }
       throw error
     } finally {
@@ -131,9 +133,9 @@ export function recursiveRender(
       )
     )
   } else if (Array.isArray(children)) {
-    children.forEach((c, i) => recursiveRender(ctx, c, el, i))
+    children.forEach((c, i) => render(ctx, c, el, i))
   } else {
-    recursiveRender(ctx, children, el, 0)
+    render(ctx, children, el, 0)
   }
   ctx.write(`</${type}>`)
 }
