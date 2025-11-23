@@ -6,6 +6,7 @@ import type { FileRouterController } from "./router/fileRouterController"
 import type { AppContext } from "./appContext"
 import type { Store } from "./store"
 import type { SWRCache } from "./swr"
+import type { requestUpdate } from "./index.js"
 
 export { createKiruGlobalContext, type GlobalKiruEvent, type KiruGlobalContext }
 
@@ -56,7 +57,7 @@ function createReactiveMap<V>(): ReactiveMap<V> {
 type Evt =
   | {
       name: "mount"
-      data?: undefined
+      data?: typeof requestUpdate
     }
   | {
       name: "unmount"
@@ -72,6 +73,10 @@ type Evt =
     }
 
 type GlobalKiruEvent = Evt["name"]
+
+interface SchedulerInterface {
+  requestUpdate: (vNode: Kiru.VNode) => void
+}
 
 interface KiruGlobalContext {
   readonly apps: AppContext[]
@@ -91,10 +96,15 @@ interface KiruGlobalContext {
   fileRouterInstance?: {
     current: FileRouterController | null
   }
+  getSchedulerInterface?: (app: AppContext) => SchedulerInterface | null
 }
 
 function createKiruGlobalContext(): KiruGlobalContext {
   const contexts = new Set<AppContext>()
+  const contextToSchedulerInterface = new WeakMap<
+    AppContext,
+    SchedulerInterface
+  >()
   const listeners = new Map<
     GlobalKiruEvent,
     Set<(ctx: AppContext, data?: Evt["data"]) => void>
@@ -134,14 +144,25 @@ function createKiruGlobalContext(): KiruGlobalContext {
   }
 
   // Initialize event listeners
-  on("mount", (ctx) => contexts.add(ctx))
-  on("unmount", (ctx) => contexts.delete(ctx))
+  on("mount", (ctx, requestUpdate) => {
+    contexts.add(ctx)
+    if (requestUpdate && typeof requestUpdate === "function") {
+      contextToSchedulerInterface.set(ctx, { requestUpdate })
+    }
+  })
+  on("unmount", (ctx) => {
+    contexts.delete(ctx)
+    contextToSchedulerInterface.delete(ctx)
+  })
 
   if (__DEV__) {
     globalContext.HMRContext = createHMRContext()
     globalContext.profilingContext = createProfilingContext()
     globalContext.stores = createReactiveMap()
     globalContext.fileRouterInstance = fileRouterInstance
+    globalContext.getSchedulerInterface = (app) => {
+      return contextToSchedulerInterface.get(app) ?? null
+    }
   }
 
   return globalContext

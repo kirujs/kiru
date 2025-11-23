@@ -1,4 +1,5 @@
 import {
+  assert,
   broadcastChannel,
   BroadcastChannelMessage,
   SelectedNodeView,
@@ -41,10 +42,7 @@ export function AppTabView() {
   useEffect(() => {
     const handleSelectNode = (e: MessageEvent<BroadcastChannelMessage>) => {
       if (e.data.type !== "select-node") return
-      if (!window.__devtoolsSelection) {
-        console.error("no selection ptr")
-        return
-      }
+      assert(window.__devtoolsSelection, "no selection ptr")
       const { app, node } = window.__devtoolsSelection
       window.__devtoolsSelection = null
       selectedApp.value = app

@@ -1,6 +1,6 @@
 import { FLAG_STATIC_DOM } from "./constants.js"
 import { __DEV__ } from "./env.js"
-import { renderRootSync } from "./scheduler.js"
+import { renderRootSync, requestUpdate } from "./scheduler.js"
 import { createVNode } from "./vNode.js"
 
 type VNode = Kiru.VNode
@@ -64,7 +64,7 @@ export function mount(
   }
 
   render(children)
-  window.__kiru.emit("mount", appContext)
+  window.__kiru.emit("mount", appContext, requestUpdate)
   if (__DEV__) {
     queueMicrotask(() => {
       window.dispatchEvent(new Event("kiru:ready"))

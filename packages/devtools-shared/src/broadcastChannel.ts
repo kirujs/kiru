@@ -8,16 +8,19 @@ declare global {
       node: Kiru.VNode
       app: AppContext
     } | null
+    __devtoolsNodeUpdatePtr: Kiru.VNode | null
   }
 }
 
 if ("window" in globalThis) {
   window.__devtoolsSelection ??= null
+  window.__devtoolsNodeUpdatePtr ??= null
 }
 
 export const BROADCAST_MSG_TYPES = {
   SET_INSPECT_ENABLED: "set-inspect-enabled",
   SELECT_NODE: "select-node",
+  UPDATE_NODE: "update-node",
   OPEN_EDITOR: "open-editor",
   READY: "ready",
 } as const
@@ -29,6 +32,9 @@ export type BroadcastChannelMessage =
     }
   | {
       type: typeof BROADCAST_MSG_TYPES.SELECT_NODE
+    }
+  | {
+      type: typeof BROADCAST_MSG_TYPES.UPDATE_NODE
     }
   | {
       type: typeof BROADCAST_MSG_TYPES.OPEN_EDITOR
