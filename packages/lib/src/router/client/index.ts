@@ -4,12 +4,17 @@ import { createElement, Fragment } from "../../element.js"
 import { hydrate } from "../../ssr/client.js"
 import { FileRouter } from "../fileRouter.js"
 import {
-  matchLayouts,
+  matchModules,
   matchRoute,
   match404Route,
   parseQuery,
 } from "../utils/index.js"
-import type { FormattedViteImportMap, PageModule } from "../types.internal"
+import type {
+  FormattedViteImportMap,
+  GuardModule,
+  PageModule,
+} from "../types.internal"
+import { resolveNavguard } from "../guard.js"
 import type { FileRouterConfig, FileRouterPreloadConfig } from "../types"
 import { fileRouterInstance, fileRouterRoute, routerCache } from "../globals.js"
 import { FileRouterController } from "../fileRouterController.js"
@@ -20,23 +25,27 @@ import { RouterCache } from "../cache.js"
 interface InitClientOptions {
   dir: string
   baseUrl: string
-  pages: FormattedViteImportMap
+  pages: FormattedViteImportMap<PageModule>
   layouts: FormattedViteImportMap
+  guards?: FormattedViteImportMap<GuardModule>
   transition: boolean
   hydrationMode?: Kiru.HydrationMode
 }
 
 export async function initClient(options: InitClientOptions) {
   routerCache.current = new RouterCache()
-  const { dir, baseUrl, pages, layouts, transition, hydrationMode } = options
+  const { dir, baseUrl, pages, layouts, guards, transition, hydrationMode } =
+    options
 
+  const preloaded = await preparePreloadConfig(options)
   const config: FileRouterConfig = {
     dir,
     baseUrl,
     pages,
     layouts,
+    guards,
     transition,
-    preloaded: await preparePreloadConfig(options),
+    preloaded,
   }
 
   const children = createElement(FileRouter, { config })
@@ -79,7 +88,35 @@ async function preparePreloadConfig(
     throw new Error(`No route defined (path: ${url.pathname}).`)
   }
 
-  const layoutEntries = matchLayouts(options.layouts, routeMatch.routeSegments)
+  const layoutEntries = matchModules(options.layouts, routeMatch.routeSegments)
+
+  // Load and run guards before loading page
+  let guardModules: GuardModule[] = []
+  if (options.guards) {
+    const guardEntries = matchModules(options.guards, routeMatch.routeSegments)
+    guardModules = await Promise.all(guardEntries.map((entry) => entry.load()))
+
+    // Run beforeEach guards
+    const beforeHooks = guardModules
+      .map((guardModule) => resolveNavguard(guardModule)?.beforeEach ?? null)
+      .filter((x) => x !== null)
+
+    const path = window.location.pathname
+    const fromPath = path // On initial load, from and to are the same
+
+    for (const hook of beforeHooks) {
+      const result = await hook(path, fromPath)
+
+      // If a string is returned, redirect to that path
+      if (typeof result === "string") {
+        // During hydration, redirect via window.location
+        window.location.href = result
+        // Return a promise that never resolves to prevent hydration
+        return new Promise(() => {})
+      }
+    }
+  }
+
   fileRouterInstance.current = new FileRouterController()
   fileRouterRoute.current = routeMatch.route
   const [page, ...layouts] = await Promise.all([
@@ -121,6 +158,7 @@ async function preparePreloadConfig(
   return {
     pages: options.pages,
     layouts: options.layouts,
+    guards: options.guards,
     page: page,
     pageProps: pageProps,
     pageLayouts: layouts,

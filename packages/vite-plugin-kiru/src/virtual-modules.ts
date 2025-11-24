@@ -14,19 +14,18 @@ export async function createVirtualModules(
   const userDoc = resolveUserDocument(projectRoot, options)
 
   function createRoutesModule(): string {
-    const { dir, baseUrl, page, layout, transition } = options
+    const { dir, baseUrl, page, layout, guard, transition } = options
     return `
 import { formatViteImportMap, normalizePrefixPath } from "kiru/router/utils"
 
 const dir = normalizePrefixPath("${dir}")
 const baseUrl = normalizePrefixPath("${baseUrl}")
-const pagesMap = import.meta.glob(["/**/${page}"])
-const layoutsMap = import.meta.glob(["/**/${layout}"])
-const pages = formatViteImportMap(pagesMap, dir, baseUrl)
-const layouts = formatViteImportMap(layoutsMap, dir, baseUrl)
+const pages = formatViteImportMap(import.meta.glob(["/**/${page}"]), dir, baseUrl)
+const layouts = formatViteImportMap(import.meta.glob(["/**/${layout}"]), dir, baseUrl)
+const guards = formatViteImportMap(import.meta.glob(["/**/${guard}"]), dir, baseUrl)
 const transition = ${transition}
 
-export { dir, baseUrl, pages, layouts, transition }
+export { dir, baseUrl, pages, layouts, guards, transition }
 `
   }
 
@@ -35,10 +34,10 @@ export { dir, baseUrl, pages, layouts, transition }
       return `
 import { render as kiruSSRRender } from "kiru/router/ssr"
 import Document from "${userDoc}"
-import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
+import * as routes from "${VIRTUAL_ROUTES_ID}"
 
 export async function render(url, ctx) {
-  return kiruSSRRender(url, { ...ctx, Document, pages, layouts })
+  return kiruSSRRender(url, { ...ctx, ...routes, Document })
 }
 `
     }
@@ -50,10 +49,10 @@ import {
   generateStaticPaths as kiruServerGenerateStaticPaths
 } from "kiru/router/ssg"
 import Document from "${userDoc}"
-import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
+import * as routes from "${VIRTUAL_ROUTES_ID}"
 
 export async function render(url, ctx) {
-  return kiruStaticRender(url, { ...ctx, Document, pages, layouts })
+  return kiruStaticRender(url, { ...ctx, ...routes, Document })
 }
 
 export async function generateStaticPaths() {
@@ -66,19 +65,19 @@ export async function generateStaticPaths() {
     if (mode === "ssr") {
       return `
 import { initClient } from "kiru/router/client"
-import { dir, baseUrl, pages, layouts, transition } from "${VIRTUAL_ROUTES_ID}"
+import * as routes from "${VIRTUAL_ROUTES_ID}"
 import "${userDoc}"
 
-initClient({ dir, baseUrl, pages, layouts, transition, hydrationMode: "dynamic" })
+initClient({ ...routes, hydrationMode: "dynamic" })
 `
     }
     // todo: only include Document in dev mode, we should instead scan for included assets
     return `
 import { initClient } from "kiru/router/client"
-import { dir, baseUrl, pages, layouts, transition } from "${VIRTUAL_ROUTES_ID}"
+import * as routes from "${VIRTUAL_ROUTES_ID}"
 import "${userDoc}"
 
-initClient({ dir, baseUrl, pages, layouts, transition })
+initClient({ ...routes })
 `
   }
 

@@ -17,12 +17,14 @@ import type {
   CurrentPage,
   DevtoolsInterface,
   FormattedViteImportMap,
+  GuardModule,
   PageModule,
   ViteImportMap,
 } from "./types.internal.js"
+import { resolveNavguard } from "./guard.js"
 import {
   formatViteImportMap,
-  matchLayouts,
+  matchModules,
   matchRoute,
   match404Route,
   normalizePrefixPath,
@@ -55,6 +57,7 @@ export class FileRouterController {
   private historyIndex: number
   private layouts: FormattedViteImportMap
   private pages: FormattedViteImportMap<PageModule>
+  private guards: FormattedViteImportMap<GuardModule>
   private pageRouteToConfig?: Map<string, PageConfig>
   private state: RouterState
 
@@ -68,6 +71,7 @@ export class FileRouterController {
     this.historyIndex = 0
     this.layouts = {}
     this.pages = {}
+    this.guards = {}
     this.state = {
       pathname: window.location.pathname,
       hash: window.location.hash,
@@ -187,6 +191,7 @@ export class FileRouterController {
     const {
       pages,
       layouts,
+      guards,
       dir = "/pages",
       baseUrl = "/",
       transition,
@@ -202,6 +207,7 @@ export class FileRouterController {
       const {
         pages,
         layouts,
+        guards,
         page,
         pageProps,
         pageLayouts,
@@ -226,6 +232,8 @@ export class FileRouterController {
       this.currentLayouts.value = pageLayouts.map((l) => l.default)
       this.pages = pages
       this.layouts = layouts
+      this.guards = (guards ??
+        {}) as unknown as FormattedViteImportMap<GuardModule>
       if (__DEV__) {
         if (page.config) {
           this.dev_onPageConfigDefined!(route, page.config)
@@ -273,6 +281,14 @@ export class FileRouterController {
         normalizedDir,
         normalizedBaseUrl
       )
+      this.guards = !guards
+        ? {}
+        : (formatViteImportMap(
+            guards as ViteImportMap,
+            normalizedDir,
+            normalizedBaseUrl
+          ) as unknown as FormattedViteImportMap<GuardModule>)
+
       if (__DEV__) {
         validateRoutes(this.pages)
       }
@@ -381,10 +397,37 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
 
       const { route, pageEntry, params, routeSegments } = routeMatch
 
+      // Apply beforeEach guards before loading route
+      const fromPath = this.state.pathname
+      const guardEntries = matchModules(
+        this.guards as unknown as FormattedViteImportMap,
+        routeSegments
+      )
+      const guardModules = await Promise.all(
+        guardEntries.map(
+          (entry) => entry.load() as unknown as Promise<GuardModule>
+        )
+      )
+
+      const redirectPath = await this.runBeforeEachGuards(
+        guardModules,
+        path,
+        fromPath
+      )
+
+      // If redirect was requested, navigate to that path instead
+      if (redirectPath !== null) {
+        this.state.pathname = path
+        return this.navigate(redirectPath, {
+          replace: true,
+          transition: enableTransition,
+        })
+      }
+
       fileRouterRoute.current = route
       const pagePromise = pageEntry.load()
 
-      const layoutPromises = matchLayouts(this.layouts, routeSegments).map(
+      const layoutPromises = matchModules(this.layouts, routeSegments).map(
         (layoutEntry) => layoutEntry.load()
       )
 
@@ -484,6 +527,10 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         this.currentLayouts.value = layouts
           .filter((m) => typeof m.default === "function")
           .map((m) => m.default)
+
+        nextIdle(() => {
+          this.runAfterEachGuards(guardModules, path, fromPath)
+        })
       })
     } catch (error) {
       console.error("[kiru/router]: Failed to load route component:", error)
@@ -590,6 +637,43 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
     })
   }
 
+  private async runBeforeEachGuards(
+    guardModules: GuardModule[],
+    path: string,
+    fromPath: string
+  ): Promise<string | null> {
+    const beforeHooks = guardModules
+      .map((guardModule) => resolveNavguard(guardModule)?.beforeEach ?? null)
+      .filter((x) => x !== null)
+
+    // Apply beforeEach hooks - if any returns a string, redirect to it
+    for (const hook of beforeHooks) {
+      const result = await hook(path, fromPath)
+
+      // If a string is returned, redirect to that path
+      if (typeof result === "string") {
+        return result
+      }
+    }
+
+    // All hooks passed, continue navigation
+    return null
+  }
+
+  private async runAfterEachGuards(
+    guardModules: GuardModule[],
+    path: string,
+    fromPath: string
+  ) {
+    const afterHooks = guardModules
+      .map((guardModule) => resolveNavguard(guardModule)?.afterEach ?? null)
+      .filter((x) => x !== null)
+
+    for (const hook of afterHooks) {
+      await hook(path, fromPath)
+    }
+  }
+
   private async prefetchRouteModules(path: string) {
     const url = new URL(path, "http://localhost")
     try {
@@ -603,7 +687,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       const { pageEntry, route } = routeMatch
       fileRouterRoute.current = route
       const pagePromise = pageEntry.load()
-      const layoutPromises = matchLayouts(this.layouts, route.split("/")).map(
+      const layoutPromises = matchModules(this.layouts, route.split("/")).map(
         (layoutEntry) => layoutEntry.load()
       )
       await Promise.all([pagePromise, ...layoutPromises])

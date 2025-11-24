@@ -1,22 +1,26 @@
 import { createElement, Fragment } from "../../element.js"
-
 import {
-  matchLayouts,
+  matchModules,
   matchRoute,
   match404Route,
   parseQuery,
   wrapWithLayouts,
 } from "../utils/index.js"
 import { RouterContext } from "../context.js"
-import type { PageConfig, PageProps, RouterState } from "../types.js"
-import { FormattedViteImportMap, PageModule } from "../types.internal.js"
 import { __DEV__ } from "../../env.js"
 import { FileRouterDataLoadError } from "../errors.js"
 import { renderToString } from "../../renderToString.js"
+import type { PageConfig, PageProps, RouterState } from "../types.js"
+import type {
+  FormattedViteImportMap,
+  GuardModule,
+  PageModule,
+} from "../types.internal.js"
 
 export interface RenderContext {
-  pages: FormattedViteImportMap
+  pages: FormattedViteImportMap<PageModule>
   layouts: FormattedViteImportMap
+  guards: FormattedViteImportMap<GuardModule>
   Document: Kiru.FC
   registerModule: (moduleId: string) => void
   registerStaticProps: (props: Record<string, unknown>) => void
@@ -64,7 +68,7 @@ export async function render(
 
   const { pageEntry, routeSegments, params } = routeMatch
   const is404Route = routeMatch.routeSegments.includes("404")
-  const layoutEntries = matchLayouts(ctx.layouts, routeSegments)
+  const layoutEntries = matchModules(ctx.layouts, routeSegments)
 
   ;[pageEntry, ...layoutEntries].forEach((e) => {
     ctx.registerModule(e.filePath)

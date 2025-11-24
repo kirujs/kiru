@@ -1,6 +1,7 @@
 import { createElement } from "../../element.js"
 import { __DEV__ } from "../../env.js"
 import type {
+  DefaultComponentModule,
   FormattedViteImportMap,
   RouteMatch,
   ViteImportMap,
@@ -10,7 +11,7 @@ export {
   formatViteImportMap,
   matchRoute,
   match404Route,
-  matchLayouts,
+  matchModules,
   normalizePrefixPath,
   parseQuery,
   wrapWithLayouts,
@@ -177,20 +178,20 @@ function match404Route(
   return null
 }
 
-function matchLayouts(
-  layouts: FormattedViteImportMap,
+function matchModules<T = DefaultComponentModule>(
+  modules: FormattedViteImportMap<T>,
   routeSegments: string[]
 ) {
   return ["/", ...routeSegments].reduce((acc, _, i) => {
-    const layoutPath = "/" + routeSegments.slice(0, i).join("/")
-    const layout = layouts[layoutPath]
+    const modulePath = "/" + routeSegments.slice(0, i).join("/")
+    const module = modules[modulePath]
 
-    if (!layout) {
+    if (!module) {
       return acc
     }
 
-    return [...acc, layout]
-  }, [] as FormattedViteImportMap[string][])
+    return [...acc, module]
+  }, [] as FormattedViteImportMap<T>[string][])
 }
 
 function normalizePrefixPath(path: string) {

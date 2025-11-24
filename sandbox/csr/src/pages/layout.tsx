@@ -10,6 +10,8 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
           <Link to="/about">About</Link>
           <Link to="/users">Users</Link>
           <Link to="/blog">Blog</Link>
+          <Link to="/protected">Protected</Link>
+          <Link to="/login">Login</Link>
         </nav>
       </header>
       <main>{children}</main>

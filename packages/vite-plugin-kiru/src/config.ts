@@ -54,6 +54,7 @@ const defaultSSGOptions: Required<Omit<SSGOptions, "sitemap">> & {
   document: "document.{tsx,jsx}",
   page: "index.{tsx,jsx}",
   layout: "layout.{tsx,jsx}",
+  guard: "guard.{ts,js}",
   transition: false,
   build: {
     maxConcurrentRenders: 100,
@@ -66,6 +67,7 @@ const defaultSSROptions: Omit<Required<SSROptions>, "runtimeEntry"> = {
   document: "document.{tsx,jsx}",
   page: "index.{tsx,jsx}",
   layout: "layout.{tsx,jsx}",
+  guard: "guard.{ts,js}",
   transition: false,
 }
 
@@ -136,6 +138,7 @@ export function createPluginState(
       document,
       page,
       layout,
+      guard,
       transition,
       build: { maxConcurrentRenders },
     } = defaultSSGOptions
@@ -148,6 +151,7 @@ export function createPluginState(
         document,
         page,
         layout,
+        guard,
         transition,
         sitemap: ssg.sitemap,
         ...ssg,
@@ -165,7 +169,7 @@ export function createPluginState(
       throw new Error("[vite-plugin-kiru]: ssr.baseUrl must start with '/'")
     }
 
-    const { baseUrl, dir, document, page, layout, transition } =
+    const { baseUrl, dir, document, page, layout, guard, transition } =
       defaultSSROptions
 
     return {
@@ -176,6 +180,7 @@ export function createPluginState(
         document,
         page,
         layout,
+        guard,
         transition,
         ...ssr,
       },
