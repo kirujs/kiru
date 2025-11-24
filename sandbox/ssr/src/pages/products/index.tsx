@@ -1,11 +1,5 @@
-import { ErrorBoundary, Suspense, usePromise } from "kiru"
-import type { AppType } from "@/server/hono-entry"
-import { hc } from "hono/client"
 import { definePageConfig, Link, PageProps } from "kiru/router"
-
-const client = hc<AppType>(
-  import.meta.env.DEV ? "http://localhost:5173" : "http://localhost:3000"
-)
+import { client } from "@/api"
 
 export const config = definePageConfig({
   loader: {
@@ -21,19 +15,33 @@ export const config = definePageConfig({
   },
 })
 
-export default function ProductsPage({ data }: PageProps<typeof config>) {
+export default function ProductsPage({
+  data,
+  loading,
+}: PageProps<typeof config>) {
+  if (loading) {
+    console.log("loading")
+    return <p>Loading...</p>
+  }
   return (
     data && (
-      <>
-        <ul>
-          {data.products.map((product) => (
-            <li key={product.id}>
-              <Link to={`/products/${product.id}`}>{product.title}</Link>
-              <img src={product.thumbnail} />
-            </li>
-          ))}
-        </ul>
-      </>
+      <ul>
+        {data.products.map((product) => (
+          <li key={product.id} className="w-[420px]">
+            <Link
+              to={`/products/${product.id}`}
+              style={`width:420px; display:block; view-transition-name: product-title-${product.id}`}
+            >
+              {product.title}
+            </Link>
+            <img
+              src={product.thumbnail}
+              alt={product.title}
+              style={`height:300px; view-transition-name: product-image-${product.id}`}
+            />
+          </li>
+        ))}
+      </ul>
     )
   )
 }

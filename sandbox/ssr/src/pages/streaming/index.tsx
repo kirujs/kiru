@@ -1,9 +1,14 @@
-import { useSignal } from "kiru"
+import { Derive, usePromise, useSignal } from "kiru"
 import { Head } from "kiru/router"
+import { client } from "@/api"
 
 export default function StreamingPage() {
   const count = useSignal(0)
-  const serverTime = new Date().toISOString()
+  const products = usePromise(async (signal) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    const res = await client.api.products.$get({}, { init: { signal } })
+    return res.json()
+  }, [])
 
   return (
     <>
@@ -13,14 +18,20 @@ export default function StreamingPage() {
       <div className="flex flex-col gap-8 justify-center items-center">
         <h2 className="text-2xl font-bold">Streaming Response Demo</h2>
         <div className="max-w-2xl text-center space-y-4">
-          <p>
-            This page demonstrates SSR with client-side hydration. The initial
-            HTML is rendered on the server, then JavaScript takes over for
-            interactivity.
-          </p>
+          <p>This page demonstrates SSR with streamed data from the server.</p>
           <div className="bg-neutral-50/10 rounded p-4">
-            <p className="font-semibold">Server Render Time:</p>
-            <p className="text-sm text-neutral-300">{serverTime}</p>
+            <p className="font-semibold">Products:</p>
+            <p className="text-sm text-neutral-300">
+              <Derive from={products} fallback="Loading...">
+                {(data, isStale) => (
+                  <ul className={isStale ? "opacity-50" : ""}>
+                    {data.products.map((product) => (
+                      <li key={product.id}>{product.title}</li>
+                    ))}
+                  </ul>
+                )}
+              </Derive>
+            </p>
           </div>
           <div className="bg-neutral-50/10 rounded p-4">
             <p className="font-semibold">Interactive Counter (Client-side):</p>
@@ -32,7 +43,8 @@ export default function StreamingPage() {
               Count: {count}
             </button>
             <p className="text-sm text-neutral-400 mt-2">
-              This button works after hydration completes
+              Hydration completes immediately, so this button is interactive
+              before our streamed content is even rendered.
             </p>
           </div>
         </div>

@@ -143,7 +143,7 @@ export async function renderPage(
   if (isDevelopment) {
     // In development, Vite handles CSS via the client entry script
     // We just need to inject the client script with the virtual module path
-    const scriptTag = `<script type="module" src="/@id/${VIRTUAL_ENTRY_CLIENT_ID}"></script>`
+    const scriptTag = `<script type="module" src="/@id/${VIRTUAL_ENTRY_CLIENT_ID}" async></script>`
     html = html.includes("</body>")
       ? html.replace("</body>", scriptTag + "</body>")
       : html + scriptTag
@@ -201,7 +201,7 @@ export async function renderPage(
 
     // Inject client script
     if (clientEntry) {
-      const scriptTag = `<script type="module" src="/${clientEntry}"></script>`
+      const scriptTag = `<script type="module" src="/${clientEntry}" async></script>`
       html = html.includes("</body>")
         ? html.replace("</body>", scriptTag + "</body>")
         : html + scriptTag

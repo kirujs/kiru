@@ -2,7 +2,6 @@ import path from "node:path"
 import { globSync } from "glob"
 import type { PluginState } from "./config.js"
 import { ANSI } from "./ansi.js"
-import { SSGOptions, SSROptions } from "./types.js"
 
 export function createLogger(state: PluginState) {
   return (...data: any[]) => {

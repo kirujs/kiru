@@ -1,7 +1,6 @@
 import path from "path"
-import { type Readable } from "stream"
+import type { Readable } from "stream"
 import { createElement, Fragment } from "../../element.js"
-
 import {
   matchLayouts,
   matchRoute,
@@ -13,7 +12,6 @@ import { RouterContext } from "../context.js"
 import type { PageConfig, PageProps, RouterState } from "../types.js"
 import { FormattedViteImportMap, PageModule } from "../types.internal.js"
 import { __DEV__ } from "../../env.js"
-import { FileRouterDataLoadError } from "../errors.js"
 import { renderToString } from "../../renderToString.js"
 import { renderToReadableStream } from "../../ssr/server.js"
 
@@ -28,7 +26,7 @@ export interface SSRHttpResponse {
   html: string
   statusCode: number
   headers: Array<[string, string]>
-  stream?: Readable
+  stream: Readable | null
 }
 
 export interface SSRRenderResult {
@@ -71,6 +69,7 @@ export async function render(
             statusCode: 404,
             headers: [["Content-Type", "text/html"]],
             html: "<!doctype html><html><head><title>Not Found</title></head><body><h1>404</h1></body></html>",
+            stream: null,
           },
         }
       }
@@ -84,6 +83,7 @@ export async function render(
           ],
           ...notFoundResponse,
           statusCode: 404,
+          stream: null,
         },
       }
     }
@@ -109,37 +109,12 @@ export async function render(
   const config = page.config ?? {}
   const abortController = new AbortController()
 
-  // Handle data loading for SSR
+  // PageConfig loaders don't run on the server
   if (config.loader) {
-    // In SSR, we always load data at request time (even for "static" mode)
-    const routerState: RouterState = {
-      pathname: u.pathname,
-      hash: "",
-      params,
-      query,
-      signal: abortController.signal,
-    }
-    const timeout = setTimeout(() => {
-      abortController.abort(
-        "[kiru/router]: Page data loading timed out after 10 seconds"
-      )
-    }, 10000)
-
-    try {
-      const data = await config.loader.load(routerState)
-      props = {
-        data,
-        error: null,
-        loading: false,
-      }
-    } catch (error) {
-      props = {
-        error: new FileRouterDataLoadError(error),
-        loading: false,
-        data: null,
-      }
-    } finally {
-      clearTimeout(timeout)
+    props = {
+      data: null,
+      error: null,
+      loading: true,
     }
   }
 
@@ -201,14 +176,14 @@ export async function render(
   const [prePageOutlet, postPageOutlet] =
     documentShell.split("<kiru-body-outlet>")
 
-  const html = `<!doctype html>${prePageOutlet}<body>${pageOutletContent}</body>${postPageOutlet}`
+  const html = `<!DOCTYPE html>${prePageOutlet}<body>${pageOutletContent}</body>${postPageOutlet}`
   const statusCode = is404Route ? 404 : 200
 
   return {
     httpResponse: {
       html,
       statusCode,
-      headers: [["Content-Type", "text/html"]],
+      headers: [["Content-Type", "text/html;charset=utf-8"]],
       stream,
     },
   }

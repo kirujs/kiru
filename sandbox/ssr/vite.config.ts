@@ -1,3 +1,4 @@
+import path from "path"
 import { defineConfig } from "vite"
 import kiru from "vite-plugin-kiru"
 import devServer from "@hono/vite-dev-server"
@@ -5,13 +6,14 @@ import devServer from "@hono/vite-dev-server"
 export default defineConfig({
   resolve: {
     alias: {
-      "@": "./src",
+      "@": path.resolve(__dirname, "src"),
     },
   },
   plugins: [
     kiru({
       ssr: {
         runtimeEntry: "./src/server/hono-entry.node.ts",
+        transition: true,
       },
       loggingEnabled: true,
     }),

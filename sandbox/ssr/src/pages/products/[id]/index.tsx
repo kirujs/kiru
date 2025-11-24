@@ -1,11 +1,5 @@
-import { ErrorBoundary, Suspense, usePromise } from "kiru"
-import type { AppType } from "@/server/hono-entry"
-import { hc } from "hono/client"
 import { definePageConfig, PageProps, useFileRouter } from "kiru/router"
-
-const client = hc<AppType>(
-  import.meta.env.DEV ? "http://localhost:5173" : "http://localhost:3000"
-)
+import { client } from "@/api"
 
 export const config = definePageConfig({
   loader: {
@@ -24,15 +18,28 @@ export const config = definePageConfig({
   },
 })
 
-export default function ProductPage({ data }: PageProps<typeof config>) {
+export default function ProductPage({
+  data,
+  loading,
+}: PageProps<typeof config>) {
   const router = useFileRouter()
+  const id = router.state.params.id
+  if (loading) return <p>Loading...</p>
   return (
     data && (
-      <div>
-        <h1>Product {router.state.params.id}</h1>
-        <p>{data.title}</p>
+      <div className="w-[420px]">
+        <h1>Product {id}</h1>
+        <p
+          style={`width:420px; display:block; view-transition-name: product-title-${id}`}
+        >
+          {data.title}
+        </p>
         <p>{data.description}</p>
-        <img src={data.thumbnail} alt={data.title} />
+        <img
+          src={data.thumbnail}
+          alt={data.title}
+          style={`height:300px; view-transition-name: product-image-${id}`}
+        />
       </div>
     )
   )

@@ -3,8 +3,7 @@ import { Head } from "kiru/router"
 
 export default function DynamicPage() {
   const { state } = useFileRouter()
-  const id = state.params.id || "unknown"
-  const serverTime = new Date().toISOString()
+  const id = state.params.id
 
   return (
     <>
@@ -17,10 +16,6 @@ export default function DynamicPage() {
           <div className="bg-neutral-50/10 rounded p-4">
             <p className="font-semibold">Route Parameter:</p>
             <p className="text-xl text-blue-400">{id}</p>
-          </div>
-          <div className="bg-neutral-50/10 rounded p-4">
-            <p className="font-semibold">Server Render Time:</p>
-            <p className="text-sm text-neutral-300">{serverTime}</p>
           </div>
           <p className="text-sm text-neutral-400">
             Try visiting /dynamic/123 or /dynamic/hello to see different IDs
