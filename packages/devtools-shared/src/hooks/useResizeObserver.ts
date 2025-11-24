@@ -5,7 +5,7 @@ const isSupported =
   "window" in globalThis && "ResizeObserver" in globalThis.window
 
 export const useResizeObserver = (
-  ref: Kiru.MutableRefObject<Element | null>,
+  ref: Kiru.RefObject<Element | null>,
   callback: ResizeObserverCallback,
   options: ResizeObserverOptions | undefined = undefined
 ) => {

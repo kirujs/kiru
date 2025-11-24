@@ -4,5 +4,3 @@ export * from "./format.js"
 export * from "./runtime.js"
 export * from "./vdom.js"
 export * from "./generateId.js"
-
-export const noop = Object.freeze(() => {})

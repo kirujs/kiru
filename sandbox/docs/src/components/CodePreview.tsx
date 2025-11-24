@@ -3,7 +3,7 @@ import { isLinkActive } from "$/utils"
 import { Portal, Transition, useCallback, useRef, useState } from "kiru"
 import { Link, useFileRouter } from "kiru/router"
 
-function clearTimeoutRef(timeoutRef: Kiru.MutableRefObject<number>) {
+function clearTimeoutRef(timeoutRef: Kiru.RefObject<number>) {
   if (timeoutRef.current !== -1) {
     window.clearTimeout(timeoutRef.current)
     timeoutRef.current = -1

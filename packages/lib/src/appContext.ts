@@ -1,7 +1,7 @@
 import { FLAG_STATIC_DOM } from "./constants.js"
-import { createElement } from "./element.js"
 import { __DEV__ } from "./env.js"
-import { renderRootSync } from "./scheduler.js"
+import { renderRootSync, requestUpdate } from "./scheduler.js"
+import { createVNode } from "./vNode.js"
 
 type VNode = Kiru.VNode
 
@@ -34,19 +34,11 @@ export function mount(
       )
     }
   }
-  const rootNode = createElement(container.nodeName.toLowerCase(), {})
-  if (__DEV__) {
-    container.__kiruNode = rootNode
-  }
-
-  rootNode.dom = container
-  rootNode.flags |= FLAG_STATIC_DOM
-
+  const rootNode = createRootNode(container)
   const id = appId++
-  const name = options?.name ?? `App-${id}`
   const appContext: AppContext = {
     id,
-    name,
+    name: options?.name ?? `App-${id}`,
     rootNode,
     render,
     unmount,
@@ -72,7 +64,7 @@ export function mount(
   }
 
   render(children)
-  window.__kiru.emit("mount", appContext)
+  window.__kiru.emit("mount", appContext, requestUpdate)
   if (__DEV__) {
     queueMicrotask(() => {
       window.dispatchEvent(new Event("kiru:ready"))
@@ -80,4 +72,14 @@ export function mount(
   }
 
   return appContext
+}
+
+function createRootNode(container: HTMLElement): Kiru.VNode {
+  const node = createVNode(container.nodeName.toLowerCase())
+  node.flags |= FLAG_STATIC_DOM
+  node.dom = container
+  if (__DEV__) {
+    container.__kiruNode = node
+  }
+  return node
 }

@@ -12,9 +12,6 @@ export const scrollStack = {
     const scrollStack = this.get()
     return scrollStack[index]
   },
-  push(x: number, y: number): void {
-    this.save([...this.get(), [x, y]])
-  },
   replace(index: number, x: number, y: number): void {
     const scrollStack = this.get()
     scrollStack[index] = [x, y]

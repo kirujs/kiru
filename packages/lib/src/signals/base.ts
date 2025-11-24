@@ -125,16 +125,16 @@ export class Signal<T> {
     return () => this.$subs!.delete(cb)
   }
 
-  notify(options?: { filter?: (sub: Function | Kiru.VNode) => boolean }) {
+  notify(filter?: (sub: SignalSubscriber) => boolean) {
     if (__DEV__) {
       return signalSubsMap.get(this.$id)?.forEach((sub) => {
-        if (options?.filter && !options.filter(sub)) return
+        if (filter && !filter(sub)) return
         const { $value, $prevValue } = latest(this)
         return sub($value, $prevValue)
       })
     }
     this.$subs!.forEach((sub) => {
-      if (options?.filter && !options.filter(sub)) return
+      if (filter && !filter(sub)) return
       return sub(this.$value, this.$prevValue)
     })
   }

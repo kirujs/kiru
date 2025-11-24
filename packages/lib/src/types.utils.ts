@@ -8,7 +8,7 @@ export type MaybeElement = SomeElement | undefined
 export type MaybeDom = SomeDom | undefined
 
 export interface FunctionVNode extends Kiru.VNode {
-  type: (...args: any) => JSX.Element
+  type: (props: Record<string, unknown>) => JSX.Element
 }
 
 export interface ElementVNode extends Kiru.VNode {
@@ -65,3 +65,13 @@ export type AsyncTaskState<T, E extends Error = Error> =
 export type Guard<T, K extends keyof T> = {
   [P in K]: T[P]
 }
+
+export type ArrayHas<T extends any[], U> =
+  // does the union of element types intersect U?
+  Extract<T[number], U> extends never ? false : true
+
+export type RecordHas<T extends Record<string, any>, U> = [
+  Extract<T[keyof T], U>
+] extends [never]
+  ? false
+  : true

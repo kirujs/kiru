@@ -8,9 +8,9 @@ import { useHook } from "./utils.js"
  *
  * @see https://kirujs.dev/docs/hooks/useRef
  */
-export function useRef<T>(initialValue: T): Kiru.MutableRefObject<T>
+export function useRef<T>(initialValue: T): Kiru.RefObject<T>
 export function useRef<T>(initialValue: T | null): Kiru.RefObject<T>
-export function useRef<T = undefined>(): Kiru.MutableRefObject<T | undefined>
+export function useRef<T = undefined>(): Kiru.RefObject<T | undefined>
 export function useRef<T>(initialValue?: T | null) {
   if (!sideEffectsEnabled()) return { current: initialValue }
   return useHook(

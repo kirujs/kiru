@@ -7,10 +7,10 @@ export {
   $HMR_ACCEPT,
   $MEMO,
   $ERROR_BOUNDARY,
-  $SUSPENSE_THROW,
+  $STREAM_DATA,
   $DEV_FILE_LINK,
   CONSECUTIVE_DIRTY_LIMIT,
-  PREFETCHED_DATA_EVENT,
+  STREAMED_DATA_EVENT,
   EVENT_PREFIX_REGEX,
   FLAG_UPDATE,
   FLAG_PLACEMENT,
@@ -31,11 +31,11 @@ const $KIRU_ERROR = Symbol.for("kiru.error")
 const $HMR_ACCEPT = Symbol.for("kiru.hmrAccept")
 const $MEMO = Symbol.for("kiru.memo")
 const $ERROR_BOUNDARY = Symbol.for("kiru.errorBoundary")
-const $SUSPENSE_THROW = Symbol.for("kiru.suspenseThrow")
+const $STREAM_DATA = Symbol.for("kiru.streamData")
 const $DEV_FILE_LINK = Symbol.for("kiru.devFileLink")
 
 const CONSECUTIVE_DIRTY_LIMIT = 50
-const PREFETCHED_DATA_EVENT = "kiru:prefetched"
+const STREAMED_DATA_EVENT = "kiru:deferred"
 
 const FLAG_UPDATE = 1 << 1
 const FLAG_PLACEMENT = 1 << 2

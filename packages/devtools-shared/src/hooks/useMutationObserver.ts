@@ -4,7 +4,7 @@ import { sideEffectsEnabled } from "kiru/utils"
 const isSupported =
   "window" in globalThis && "MutationObserver" in globalThis.window
 export const useMutationObserver = (
-  ref: Kiru.MutableRefObject<Element | null>,
+  ref: Kiru.RefObject<Element | null>,
   callback: MutationCallback,
   options: MutationObserverInit | undefined = undefined
 ) => {

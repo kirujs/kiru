@@ -1,6 +1,6 @@
 import { __DEV__ } from "../env.js"
 import { $HMR_ACCEPT } from "../constants.js"
-import { useHook } from "../hooks/utils.js"
+import { depsRequireChange, useHook } from "../hooks/utils.js"
 import { latest } from "../utils/index.js"
 import { effectQueue, signalSubsMap } from "./globals.js"
 import { executeWithTracking } from "./effect.js"
@@ -69,6 +69,16 @@ export class ComputedSignal<T> extends Signal<T> {
     Signal.dispose(signal)
   }
 
+  static updateGetter<T>(signal: ComputedSignal<T>, getter: (prev?: T) => T) {
+    const $computed = latest(signal)
+    $computed.$getter = getter
+    $computed.$isDirty = true
+
+    ComputedSignal.run($computed)
+    if (Object.is($computed.$value, $computed.$prevValue)) return
+    $computed.notify()
+  }
+
   private static stop<T>(computed: ComputedSignal<T>) {
     const { $id, $unsubs } = latest(computed)
 
@@ -103,20 +113,35 @@ export class ComputedSignal<T> extends Signal<T> {
   }
 }
 
-export const computed = <T>(
+export function computed<T>(
   getter: (prev?: T) => T,
   displayName?: string
-): ComputedSignal<T> => {
+): ComputedSignal<T> {
   return new ComputedSignal(getter, displayName)
 }
 
-export const useComputed = <T>(
+export function useComputed<T>(
   getter: (prev?: T) => T,
   displayName?: string
-) => {
+): ComputedSignal<T>
+
+export function useComputed<T>(
+  getter: (prev?: T) => T,
+  deps?: unknown[],
+  displayName?: string
+): ComputedSignal<T>
+
+export function useComputed<T>(
+  getter: (prev?: T) => T,
+  depsOrDisplayName?: string | unknown[],
+  displayName?: string
+) {
   return useHook(
     "useComputedSignal",
-    { signal: null! as ComputedSignal<T> },
+    {
+      signal: null! as ComputedSignal<T>,
+      deps: void 0 as unknown[] | undefined,
+    },
     ({ hook, isInit, isHMR }) => {
       if (__DEV__) {
         hook.dev = {
@@ -134,8 +159,20 @@ export const useComputed = <T>(
         }
       }
       if (isInit) {
+        if (typeof depsOrDisplayName === "string") {
+          displayName = depsOrDisplayName
+          depsOrDisplayName = void 0
+        }
+        hook.deps = depsOrDisplayName
         hook.cleanup = () => ComputedSignal.dispose(hook.signal)
         hook.signal = computed(getter, displayName)
+      } else if (
+        hook.deps &&
+        typeof depsOrDisplayName !== "string" &&
+        depsRequireChange(hook.deps, depsOrDisplayName)
+      ) {
+        hook.deps = depsOrDisplayName
+        ComputedSignal.updateGetter(hook.signal, getter)
       }
 
       return hook.signal

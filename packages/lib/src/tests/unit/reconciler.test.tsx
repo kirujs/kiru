@@ -5,6 +5,7 @@ import * as kiru from "../../index.js"
 import { shuffle } from "./utils.js"
 import { commitSnapshot } from "../../utils/index.js"
 import { FLAG_PLACEMENT } from "../../constants.js"
+import { createVNode } from "../../vNode.js"
 
 const commitChildren = (node: Kiru.VNode) => {
   let n = node.child
@@ -17,7 +18,8 @@ const commitChildren = (node: Kiru.VNode) => {
 describe("reconciler", () => {
   it("correctly handles correctly handles 'mapRemainingChildren' phase when dealing with array children", () => {
     const items = "abcdefghijklmnopqrstuvwxyz".split("")
-    const node = kiru.createElement("div")
+
+    const node = createVNode("div")
     node.child = reconcileChildren(node, [
       items.map((i) => <div key={i}>{i}</div>),
     ])!
@@ -47,7 +49,7 @@ describe("reconciler", () => {
   })
   it("correctly handles reordered Array children with keys", () => {
     const items = "abcdefghijklmnopqrstuvwxyz".split("")
-    const node = kiru.createElement("div")
+    const node = createVNode("div")
     node.child = reconcileChildren(node, [
       items.map((i) => <div key={i}>{i}</div>),
     ])
@@ -65,7 +67,7 @@ describe("reconciler", () => {
 
       while (c) {
         assert.strictEqual(
-          c.props.key,
+          c.key,
           items[i],
           `[${opName}]: key for ${i}th child should be ${items[i]}`
         )
@@ -139,7 +141,7 @@ describe("reconciler", () => {
 
     try {
       // Create a parent node
-      const node = kiru.createElement("div")
+      const node = createVNode("div")
 
       // Create children with duplicate keys
       const children = [
@@ -182,7 +184,7 @@ describe("reconciler", () => {
     }
 
     try {
-      const node = kiru.createElement("div")
+      const node = createVNode("div")
 
       // Test 1: Regular array with duplicate keys should warn
       const arrayWithDuplicates = [
@@ -218,7 +220,7 @@ describe("reconciler", () => {
     }
 
     try {
-      const node = kiru.createElement("div")
+      const node = createVNode("div")
 
       // Mix of keyed and non-keyed children in array context
       const children = [
@@ -250,7 +252,7 @@ describe("reconciler", () => {
 
     try {
       // Create a parent node
-      const node = kiru.createElement("div")
+      const node = createVNode("div")
 
       // Simulate individual JSX children (not an array) - like the user's second example
       // <div><p key="a"></p><button>...</button></div>
@@ -275,24 +277,23 @@ describe("reconciler", () => {
       warnings.push(msg)
     }
 
-    try {
-      const NamedComponent = () => {
-        return (
-          <div>
-            <div key="duplicate">first</div>
-            <div key="duplicate">second</div>
-          </div>
-        )
-      }
-      NamedComponent.displayName = "MyTestComponent"
+    const NamedComponent = () => {
+      return (
+        <div>
+          <div key="duplicate">first</div>
+          <div key="duplicate">second</div>
+        </div>
+      )
+    }
+    NamedComponent.displayName = "MyTestComponent"
 
+    try {
       // Create parent component node
-      const parentNode = kiru.createElement(NamedComponent)
+      const parentNode = createVNode(NamedComponent)
 
       // Set up parent-child relationship
-      const childNode = kiru.createElement("div")
-      childNode.parent = parentNode
-      childNode.type = NamedComponent
+      const childNode = createVNode("div", parentNode)
+      // childNode.type = NamedComponent
 
       // Create children with duplicate keys
       const children = [

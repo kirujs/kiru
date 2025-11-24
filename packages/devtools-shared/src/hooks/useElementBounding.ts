@@ -10,7 +10,7 @@ type UseElementBoundingOptions = {
 }
 
 export const useElementBounding = (
-  ref: Kiru.MutableRefObject<Element | null>,
+  ref: Kiru.RefObject<Element | null>,
   options: UseElementBoundingOptions = {
     windowScroll: true,
     windowResize: true,

@@ -1,10 +1,11 @@
-import { AppContext, useEffect, useRequestUpdate, requestUpdate } from "kiru"
+import { AppContext, useEffect, useRequestUpdate } from "kiru"
 import { isVNodeDeleted } from "kiru/utils"
 import { applyObjectChangeFromKeys, getNodeName } from "./utils"
 import { NodeDataSection } from "./NodeDataSection"
 import { ValueEditor } from "./ValueEditor"
 import { RefreshIcon } from "./icons"
 import { FileLink } from "./FileLink"
+import { broadcastChannel } from "./broadcastChannel"
 
 type SelectedNodeViewProps = {
   selectedApp: AppContext
@@ -36,8 +37,14 @@ export function SelectedNodeView({
   }, [])
 
   const refresh = () => {
-    if (!selectedNode) return
-    requestUpdate(selectedNode)
+    const w = window.opener
+    if (!selectedNode || !w) {
+      console.error("invalid refresh state", { w, selectedNode })
+      return
+    }
+    w.__devtoolsNodeUpdatePtr = selectedNode
+    broadcastChannel.send({ type: "update-node" })
+    console.debug("[kiru]: sent refresh message", selectedNode)
   }
 
   const nodeProps = { ...selectedNode.props } as Record<string, any>

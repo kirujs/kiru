@@ -1,9 +1,11 @@
 import { createElement, mount } from "kiru"
+import { getVNodeAppContext } from "kiru/utils"
 import App from "./App"
 // @ts-expect-error
 import tailwindCssKiruDevToolCssInline from "inline:./style.css"
 import { popup } from "./store"
-import { broadcastChannel } from "devtools-shared"
+import { broadcastChannel, assert } from "devtools-shared"
+
 if ("window" in globalThis) {
   function init() {
     const pageRoot = document.createElement("kiru-devtools")
@@ -29,8 +31,25 @@ if ("window" in globalThis) {
     window.addEventListener("beforeunload", handleMainWindowClose)
 
     broadcastChannel.addEventListener((msg) => {
-      if (msg.data.type === "open-editor") {
-        window.open(msg.data.fileLink)
+      switch (msg.data.type) {
+        case "update-node": {
+          const n = window.__devtoolsNodeUpdatePtr
+          assert(n, "failed to get node ptr")
+
+          const app = getVNodeAppContext(n)
+          assert(app, "failed to get app context")
+
+          const s = window.__kiru.getSchedulerInterface!(app)
+          assert(s, "failed to get scheduler interface")
+
+          s.requestUpdate(n)
+          window.__devtoolsNodeUpdatePtr = null
+          break
+        }
+        case "open-editor": {
+          window.open(msg.data.fileLink)
+          break
+        }
       }
     })
   }

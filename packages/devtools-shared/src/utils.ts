@@ -1,6 +1,12 @@
 import type { AppContext } from "kiru"
 import { $DEV_FILE_LINK } from "../../lib/dist/constants.js"
 
+export function assert(value: unknown, message: string): asserts value {
+  if (!value) {
+    throw new Error(message)
+  }
+}
+
 export function className(...classes: (string | false | undefined)[]) {
   return classes.filter(Boolean).join(" ")
 }

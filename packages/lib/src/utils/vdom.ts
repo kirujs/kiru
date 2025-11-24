@@ -1,4 +1,3 @@
-import { Signal } from "../signals/base.js"
 import {
   FLAG_DELETION,
   $FRAGMENT,
@@ -12,10 +11,12 @@ import { KiruError } from "../error.js"
 import { node } from "../globals.js"
 import type { AppContext } from "../appContext.js"
 import type { ErrorBoundaryNode } from "../types.utils.js"
+import { isMemoFn } from "../components/memo.js"
 
 export {
-  cloneVNode,
+  cloneElement,
   isVNodeDeleted,
+  isElement,
   isVNode,
   isValidTextChild,
   isExoticType,
@@ -31,17 +32,16 @@ export {
   findParent,
   findParentErrorBoundary,
   assertValidElementProps,
-  isValidElementKeyProp,
-  isValidElementRefProp,
+  normalizeElementKey,
 }
 
-function cloneVNode(vNode: Kiru.VNode): Kiru.VNode {
+function cloneElement(vNode: Kiru.VNode): Kiru.Element {
   const children = vNode.props.children
   let clonedChildren: unknown
   if (isVNode(children)) {
-    clonedChildren = cloneVNode(children)
+    clonedChildren = cloneElement(children)
   } else if (Array.isArray(children)) {
-    clonedChildren = children.map((c) => (isVNode(c) ? cloneVNode(c) : c))
+    clonedChildren = children.map((c) => (isVNode(c) ? cloneElement(c) : c))
   }
 
   return createElement(vNode.type, { ...vNode.props, children: clonedChildren })
@@ -52,6 +52,10 @@ function isVNodeDeleted(vNode: Kiru.VNode): boolean {
 }
 
 function isVNode(thing: unknown): thing is Kiru.VNode {
+  return typeof thing === "object" && thing !== null && "type" in thing
+}
+
+function isElement(thing: unknown): thing is Kiru.Element {
   return typeof thing === "object" && thing !== null && "type" in thing
 }
 
@@ -84,11 +88,7 @@ function isLazy(vNode: Kiru.VNode): boolean {
 }
 
 function isMemo(vNode: Kiru.VNode): boolean {
-  return (
-    typeof vNode.type === "function" &&
-    "displayName" in vNode.type &&
-    vNode.type.displayName === "Kiru.memo"
-  )
+  return typeof vNode.type === "function" && isMemoFn(vNode.type)
 }
 
 function isContextProvider(
@@ -116,10 +116,11 @@ function getVNodeAppContext(vNode: Kiru.VNode): AppContext | null {
 function commitSnapshot(vNode: Kiru.VNode): void {
   const {
     props: { children, ...props },
+    key,
     memoizedProps,
     index,
   } = vNode
-  vNode.prev = { props, memoizedProps, index }
+  vNode.prev = { props, key, memoizedProps, index }
   vNode.flags &= ~(FLAG_UPDATE | FLAG_PLACEMENT | FLAG_DELETION)
 }
 
@@ -187,14 +188,10 @@ function assertValidElementProps(vNode: Kiru.VNode) {
   }
 }
 
-function isValidElementKeyProp(thing: unknown): thing is string | number {
-  return typeof thing === "string" || typeof thing === "number"
-}
-
-function isValidElementRefProp(thing: unknown): thing is Kiru.Ref<any> {
-  return (
-    typeof thing === "function" ||
-    (typeof thing === "object" && !!thing && "current" in thing) ||
-    Signal.isSignal(thing)
-  )
+function normalizeElementKey(thing: unknown): JSX.ElementKey | null {
+  if (thing === undefined) return null
+  if (typeof thing === "string" || typeof thing === "number") {
+    return thing
+  }
+  return null
 }
