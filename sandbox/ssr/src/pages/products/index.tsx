@@ -4,7 +4,7 @@ import { client } from "@/api"
 export const config = definePageConfig({
   loader: {
     load: async ({ signal }) => {
-      const response = await client.api.products.$get({ signal })
+      const response = await client.api.products.$get({}, { init: { signal } })
       if (!response.ok) throw new Error(response.statusText)
       return await response.json()
     },

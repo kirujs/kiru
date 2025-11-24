@@ -1,6 +1,7 @@
+import { useContext } from "../hooks/index.js"
+import { sideEffectsEnabled } from "../utils/runtime.js"
 import { createContext } from "../context.js"
 import { __DEV__ } from "../env.js"
-import { useContext } from "../hooks/index.js"
 import type { RouteQuery, RouterState } from "./types.js"
 
 export interface ReloadOptions {
@@ -73,4 +74,27 @@ if (__DEV__) {
 
 export function useFileRouter(): FileRouterContextType {
   return useContext(RouterContext)
+}
+
+export const RequestContext = createContext<Kiru.RequestContext>(null!)
+let clientRequestData: Kiru.RequestContext | null = null
+
+function useClientRequestData(): Kiru.RequestContext {
+  if (clientRequestData === null) {
+    const script = document.querySelector("[k-request-context]")
+    if (!script) {
+      throw new Error(
+        "[kiru/router]: unable to parse request context from document"
+      )
+    }
+    clientRequestData = JSON.parse(script.innerHTML)
+  }
+  return clientRequestData as Kiru.RequestContext
+}
+
+export function useRequestContext() {
+  if (sideEffectsEnabled()) {
+    return useClientRequestData()
+  }
+  return useContext(RequestContext)
 }

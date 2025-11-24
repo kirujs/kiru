@@ -11,6 +11,7 @@ export interface SSRRenderResult {
 
 export interface ServerRenderOptions {
   url: string
+  context: Kiru.RequestContext
 }
 
 export declare function renderPage(

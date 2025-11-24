@@ -1,7 +1,11 @@
 import { createElement } from "../element.js"
 import { __DEV__ } from "../env.js"
 
-export { useFileRouter, type FileRouterContextType } from "./context.js"
+export {
+  useRequestContext,
+  useFileRouter,
+  type FileRouterContextType,
+} from "./context.js"
 export * from "./errors.js"
 export { FileRouter, type FileRouterProps } from "./fileRouter.js"
 export * from "./link.js"

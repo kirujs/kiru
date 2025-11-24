@@ -1,5 +1,8 @@
 import path from "path"
-import { createElement, Fragment } from "../../element.js"
+import { createElement } from "../../element.js"
+import { __DEV__ } from "../../env.js"
+import { renderToString } from "../../renderToString.js"
+import { renderToReadableStream } from "../../ssr/server.js"
 import {
   matchLayouts,
   matchRoute,
@@ -7,17 +10,15 @@ import {
   parseQuery,
   wrapWithLayouts,
 } from "../utils/index.js"
-import { RouterContext } from "../context.js"
+import { RouterContext, RequestContext } from "../context.js"
 import type { PageConfig, PageProps, RouterState } from "../types.js"
-import { FormattedViteImportMap, PageModule } from "../types.internal.js"
-import { __DEV__ } from "../../env.js"
-import { renderToString } from "../../renderToString.js"
-import { renderToReadableStream } from "../../ssr/server.js"
+import type { FormattedViteImportMap, PageModule } from "../types.internal.js"
 
 export interface SSRRenderContext {
   pages: FormattedViteImportMap
   layouts: FormattedViteImportMap
   Document: Kiru.FC
+  userContext: Kiru.RequestContext
   registerModule: (moduleId: string) => void
 }
 
@@ -137,7 +138,10 @@ export async function render(
   }
 
   const app = createElement(RouterContext.Provider, {
-    children: Fragment({ children }),
+    children: createElement(RequestContext.Provider, {
+      children,
+      value: ctx.userContext,
+    }),
     value: {
       state: {
         params,

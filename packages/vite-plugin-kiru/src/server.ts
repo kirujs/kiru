@@ -126,6 +126,7 @@ export async function renderPage(
   moduleIds.push(documentModule)
 
   const { httpResponse } = await render(options.url, {
+    userContext: options.context,
     registerModule: (moduleId: string) => {
       moduleIds.push(moduleId)
     },
@@ -207,6 +208,12 @@ export async function renderPage(
         : html + scriptTag
     }
   }
+
+  const contextString = JSON.stringify(options.context)
+  html = html.replace(
+    "</head>",
+    `<script type="application/json" k-request-context>${contextString}</script></head>`
+  )
 
   return {
     httpResponse: {

@@ -1,6 +1,6 @@
 // initClient({ dir, baseUrl, pages, layouts })
 
-import { createElement } from "../../element.js"
+import { createElement, Fragment } from "../../element.js"
 import { hydrate } from "../../ssr/client.js"
 import { FileRouter } from "../fileRouter.js"
 import {
@@ -28,7 +28,7 @@ interface InitClientOptions {
 
 export async function initClient(options: InitClientOptions) {
   routerCache.current = new RouterCache()
-  const { dir, baseUrl, pages, layouts, transition } = options
+  const { dir, baseUrl, pages, layouts, transition, hydrationMode } = options
 
   const config: FileRouterConfig = {
     dir,
@@ -39,9 +39,17 @@ export async function initClient(options: InitClientOptions) {
     preloaded: await preparePreloadConfig(options),
   }
 
-  const app = createElement(FileRouter, { config })
+  const children = createElement(FileRouter, { config })
+  /**
+   * With SSR, we need to wrap the app in a fragment to mirror the
+   * structure created on the server because it wraps the app
+   * with RequestContext.Provider. Not needed on client because
+   * we parse it from the document.
+   */
+  const app = hydrationMode === "dynamic" ? Fragment({ children }) : children
+
   hydrate(app, document.body, {
-    hydrationMode: options.hydrationMode ?? "static",
+    hydrationMode: hydrationMode ?? "static",
   })
 
   if (__DEV__) {

@@ -46,7 +46,7 @@ function setRef<T>(ref: Kiru.Ref<T>, value: T): void {
 }
 
 /**
- * Returns false if called during "stream" or "string" render modes.
+ * Returns true if called during 'dom' or 'hydrate' mode.
  */
 function sideEffectsEnabled(): boolean {
   return renderMode.current === "dom" || renderMode.current === "hydrate"

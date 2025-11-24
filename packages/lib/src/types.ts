@@ -117,6 +117,8 @@ declare global {
     }
   }
   namespace Kiru {
+    interface RequestContext {}
+
     interface CustomEvents {}
 
     interface ProviderProps<T> {

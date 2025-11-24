@@ -33,7 +33,8 @@
     "kiru-devtools-host": "workspace:^",
     "rollup": "^4.46.2",
     "tsx": "^4.20.3",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "kiru": "workspace:^"
   },
   "dependencies": {
     "glob": "^12.0.0",
