@@ -59,10 +59,8 @@ const app = new Hono()
         )
 
         await res.write(html)
-        // write lazy content as it resolves
         if (stream) {
-          stream.on("data", (chunk) => res.write(chunk))
-          await new Promise((resolve) => stream.on("end", resolve))
+          return res.pipe(stream)
         }
       })
     } catch (error) {

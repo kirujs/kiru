@@ -1,6 +1,5 @@
 import { Fragment } from "../element.js"
 import { renderMode } from "../globals.js"
-import { Readable } from "stream"
 import { STREAMED_DATA_EVENT } from "../constants.js"
 import { __DEV__ } from "../env.js"
 import { headlessRender, HeadlessRenderContext } from "../recursiveRender.js"
@@ -23,12 +22,11 @@ d.currentScript.remove()
 
 export function renderToReadableStream(element: JSX.Element): {
   immediate: string
-  stream: Readable | null
+  stream: ReadableStream | null
 } {
-  const stream = new Readable({ read() {} })
-  const rootNode = Fragment({ children: element })
   const streamPromises = new Set<Kiru.StatefulPromise<unknown>>()
-  const pendingWritePromises: Promise<void>[] = []
+  const dataPromises: Promise<string>[] = []
+  let stream: ReadableStream | null = null
 
   let immediate = ""
 
@@ -39,33 +37,34 @@ export function renderToReadableStream(element: JSX.Element): {
         if (streamPromises.has(promise)) continue
         streamPromises.add(promise)
 
-        const writePromise = promise
+        const dataPromise = promise
           .then(() => ({ data: promise.value }))
           .catch(() => ({ error: promise.error?.message }))
-          .then((value) => {
-            const content = JSON.stringify(value)
-            stream.push(
+          .then(
+            (value, content = JSON.stringify(value)) =>
               `<script id="${promise.id}" k-data type="application/json">${content}</script>`
-            )
-          })
-
-        pendingWritePromises.push(writePromise)
+          )
+        dataPromises.push(dataPromise)
       }
     },
   }
 
   const prev = renderMode.current
   renderMode.current = "stream"
-  headlessRender(ctx, rootNode, null, 0)
+  headlessRender(ctx, Fragment({ children: element }), null, 0)
   renderMode.current = prev
 
-  if (pendingWritePromises.length > 0) {
-    Promise.all(pendingWritePromises).then(() => {
-      stream.push(STREAMED_DATA_SETUP)
-      stream.push(null)
+  if (dataPromises.length > 0) {
+    stream = new ReadableStream({
+      async pull(controller) {
+        for await (const chunk of dataPromises) {
+          controller.enqueue(chunk)
+        }
+        controller.enqueue(STREAMED_DATA_SETUP)
+        controller.close()
+      },
     })
-    return { immediate, stream }
   }
 
-  return { immediate, stream: null }
+  return { immediate, stream }
 }

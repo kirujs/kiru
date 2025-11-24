@@ -1,10 +1,8 @@
-import type { Readable } from "stream"
-
 export interface SSRHttpResponse {
   html: string
   statusCode: number
   headers: Array<[string, string]>
-  stream: Readable | null
+  stream: ReadableStream | null
 }
 
 export interface SSRRenderResult {

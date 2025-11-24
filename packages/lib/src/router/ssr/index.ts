@@ -1,5 +1,4 @@
 import path from "path"
-import type { Readable } from "stream"
 import { createElement, Fragment } from "../../element.js"
 import {
   matchLayouts,
@@ -26,7 +25,7 @@ export interface SSRHttpResponse {
   html: string
   statusCode: number
   headers: Array<[string, string]>
-  stream: Readable | null
+  stream: ReadableStream | null
 }
 
 export interface SSRRenderResult {
