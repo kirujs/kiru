@@ -4,7 +4,7 @@ import { __DEV__ } from "../../env.js"
 import { renderToString } from "../../renderToString.js"
 import { renderToReadableStream } from "../../ssr/server.js"
 import {
-  matchLayouts,
+  matchModules,
   matchRoute,
   match404Route,
   parseQuery,
@@ -12,7 +12,7 @@ import {
 } from "../utils/index.js"
 import { RouterContext, RequestContext } from "../context.js"
 import type { PageConfig, PageProps, RouterState } from "../types.js"
-import type { FormattedViteImportMap, PageModule } from "../types.internal.js"
+import type { FormattedViteImportMap } from "../types.internal.js"
 
 export interface SSRRenderContext {
   pages: FormattedViteImportMap
@@ -91,7 +91,7 @@ export async function render(
 
   const { pageEntry, routeSegments, params } = routeMatch
   const is404Route = routeMatch.routeSegments.includes("404")
-  const layoutEntries = matchLayouts(ctx.layouts, routeSegments)
+  const layoutEntries = matchModules(ctx.layouts, routeSegments)
 
   // Register all modules for CSS collection
   ;[pageEntry, ...layoutEntries].forEach((e) => {
@@ -99,7 +99,7 @@ export async function render(
   })
 
   const [page, ...layouts] = await Promise.all([
-    pageEntry.load() as unknown as Promise<PageModule>,
+    pageEntry.load(),
     ...layoutEntries.map((layoutEntry) => layoutEntry.load()),
   ])
 
