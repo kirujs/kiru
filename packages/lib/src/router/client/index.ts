@@ -74,7 +74,10 @@ export async function initClient(options: InitClientOptions) {
   const app =
     hydrationMode === "static"
       ? children
-      : createElement(RequestContext.Provider, { value: ctx, children })
+      : createElement(RequestContext.Provider, {
+          value: requestContext.current,
+          children,
+        })
 
   hydrate(app, document.body, { hydrationMode })
 
