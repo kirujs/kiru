@@ -1,8 +1,10 @@
 import { createElement } from "../../element.js"
 import { __DEV__ } from "../../env.js"
+import { resolveNavguard } from "../guard.js"
 import type {
   DefaultComponentModule,
   FormattedViteImportMap,
+  GuardModule,
   RouteMatch,
   ViteImportMap,
 } from "../types.internal"
@@ -15,6 +17,8 @@ export {
   normalizePrefixPath,
   parseQuery,
   wrapWithLayouts,
+  runBeforeEachGuards,
+  runAfterEachGuards,
 }
 
 function formatViteImportMap(
@@ -239,4 +243,41 @@ function wrapWithLayouts(
     (children, Layout) => createElement(Layout, { children }),
     createElement(page, props)
   )
+}
+
+async function runBeforeEachGuards(
+  guardModules: GuardModule[],
+  path: string,
+  fromPath: string
+): Promise<string | null> {
+  const beforeHooks = guardModules
+    .map((guardModule) => resolveNavguard(guardModule)?.beforeEach)
+    .filter((x) => typeof x === "function")
+
+  // Apply beforeEach hooks - if any returns a string, redirect to it
+  for (const hook of beforeHooks) {
+    const result = await hook(path, fromPath)
+
+    // If a string is returned, redirect to that path
+    if (typeof result === "string") {
+      return result
+    }
+  }
+
+  // All hooks passed, continue navigation
+  return null
+}
+
+async function runAfterEachGuards(
+  guardModules: GuardModule[],
+  path: string,
+  fromPath: string
+): Promise<void> {
+  const afterHooks = guardModules
+    .map((guardModule) => resolveNavguard(guardModule)?.afterEach)
+    .filter((x) => typeof x === "function")
+
+  for (const hook of afterHooks) {
+    await hook(path, fromPath)
+  }
 }

@@ -43,7 +43,7 @@ export interface FileRouterConfig {
    */
   layouts: Record<string, unknown>
   /**
-   * The import map to use for nav guards
+   * The import map to use for loading nav guards
    * @example
    * ```tsx
    * <FileRouter config={{ guards: import.meta.glob("/∗∗/guard.{ts,js}"), ... }} />

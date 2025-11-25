@@ -8,6 +8,7 @@ import {
   matchRoute,
   match404Route,
   parseQuery,
+  runBeforeEachGuards,
 } from "../utils/index.js"
 import type {
   FormattedViteImportMap,
@@ -34,10 +35,21 @@ interface InitClientOptions {
 
 export async function initClient(options: InitClientOptions) {
   routerCache.current = new RouterCache()
-  const { dir, baseUrl, pages, layouts, guards, transition, hydrationMode } =
-    options
+  const {
+    dir,
+    baseUrl,
+    pages,
+    layouts,
+    guards,
+    transition,
+    hydrationMode = "static",
+  } = options
 
-  const preloaded = await preparePreloadConfig(options)
+  const preloaded = await preparePreloadConfig(
+    options,
+    false,
+    hydrationMode === "dynamic"
+  )
   const config: FileRouterConfig = {
     dir,
     baseUrl,
@@ -56,10 +68,7 @@ export async function initClient(options: InitClientOptions) {
    * we parse it from the document.
    */
   const app = hydrationMode === "dynamic" ? Fragment({ children }) : children
-
-  hydrate(app, document.body, {
-    hydrationMode: hydrationMode ?? "static",
-  })
+  hydrate(app, document.body, { hydrationMode })
 
   if (__DEV__) {
     onLoadedDev()
@@ -68,7 +77,8 @@ export async function initClient(options: InitClientOptions) {
 
 async function preparePreloadConfig(
   options: InitClientOptions,
-  isStatic404 = false
+  isStatic404 = false,
+  isSSR = false
 ): Promise<FileRouterPreloadConfig> {
   let pageProps = {}
   let cacheData: null | { value: unknown } = null
@@ -96,24 +106,12 @@ async function preparePreloadConfig(
     const guardEntries = matchModules(options.guards, routeMatch.routeSegments)
     guardModules = await Promise.all(guardEntries.map((entry) => entry.load()))
 
-    // Run beforeEach guards
-    const beforeHooks = guardModules
-      .map((guardModule) => resolveNavguard(guardModule)?.beforeEach ?? null)
-      .filter((x) => x !== null)
-
     const path = window.location.pathname
     const fromPath = path // On initial load, from and to are the same
 
-    for (const hook of beforeHooks) {
-      const result = await hook(path, fromPath)
-
-      // If a string is returned, redirect to that path
-      if (typeof result === "string") {
-        // During hydration, redirect via window.location
-        window.location.href = result
-        // Return a promise that never resolves to prevent hydration
-        return new Promise(() => {})
-      }
+    const redirectPath = await runBeforeEachGuards(guardModules, path, fromPath)
+    if (redirectPath !== null) {
+      window.location.href = redirectPath
     }
   }
 

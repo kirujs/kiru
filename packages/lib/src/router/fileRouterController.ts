@@ -21,7 +21,6 @@ import type {
   PageModule,
   ViteImportMap,
 } from "./types.internal.js"
-import { resolveNavguard } from "./guard.js"
 import {
   formatViteImportMap,
   matchModules,
@@ -30,6 +29,8 @@ import {
   normalizePrefixPath,
   parseQuery,
   wrapWithLayouts,
+  runAfterEachGuards,
+  runBeforeEachGuards,
 } from "./utils/index.js"
 import { RouterCache, type CacheKey } from "./cache.js"
 import { scrollStack } from "./scrollStack.js"
@@ -409,7 +410,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         )
       )
 
-      const redirectPath = await this.runBeforeEachGuards(
+      const redirectPath = await runBeforeEachGuards(
         guardModules,
         path,
         fromPath
@@ -529,7 +530,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
           .map((m) => m.default)
 
         nextIdle(() => {
-          this.runAfterEachGuards(guardModules, path, fromPath)
+          runAfterEachGuards(guardModules, path, fromPath)
         })
       })
     } catch (error) {
@@ -635,43 +636,6 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         window.scrollTo(0, 0)
       }
     })
-  }
-
-  private async runBeforeEachGuards(
-    guardModules: GuardModule[],
-    path: string,
-    fromPath: string
-  ): Promise<string | null> {
-    const beforeHooks = guardModules
-      .map((guardModule) => resolveNavguard(guardModule)?.beforeEach ?? null)
-      .filter((x) => x !== null)
-
-    // Apply beforeEach hooks - if any returns a string, redirect to it
-    for (const hook of beforeHooks) {
-      const result = await hook(path, fromPath)
-
-      // If a string is returned, redirect to that path
-      if (typeof result === "string") {
-        return result
-      }
-    }
-
-    // All hooks passed, continue navigation
-    return null
-  }
-
-  private async runAfterEachGuards(
-    guardModules: GuardModule[],
-    path: string,
-    fromPath: string
-  ) {
-    const afterHooks = guardModules
-      .map((guardModule) => resolveNavguard(guardModule)?.afterEach ?? null)
-      .filter((x) => x !== null)
-
-    for (const hook of afterHooks) {
-      await hook(path, fromPath)
-    }
   }
 
   private async prefetchRouteModules(path: string) {

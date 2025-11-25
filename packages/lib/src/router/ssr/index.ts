@@ -9,14 +9,21 @@ import {
   match404Route,
   parseQuery,
   wrapWithLayouts,
+  runBeforeEachGuards,
+  runAfterEachGuards,
 } from "../utils/index.js"
 import { RouterContext, RequestContext } from "../context.js"
 import type { PageConfig, PageProps, RouterState } from "../types.js"
-import type { FormattedViteImportMap } from "../types.internal.js"
+import type {
+  FormattedViteImportMap,
+  GuardModule,
+  PageModule,
+} from "../types.internal.js"
 
 export interface SSRRenderContext {
-  pages: FormattedViteImportMap
+  pages: FormattedViteImportMap<PageModule>
   layouts: FormattedViteImportMap
+  guards: FormattedViteImportMap<GuardModule>
   Document: Kiru.FC
   userContext: Kiru.RequestContext
   registerModule: (moduleId: string) => void
@@ -88,9 +95,31 @@ export async function render(
       }
     }
   }
-
   const { pageEntry, routeSegments, params } = routeMatch
   const is404Route = routeMatch.routeSegments.includes("404")
+
+  const guardEntries = matchModules(ctx.guards, routeSegments)
+  const guardModules = await Promise.all(
+    guardEntries.map((entry) => entry.load() as unknown as Promise<GuardModule>)
+  )
+
+  const redirectPath = await runBeforeEachGuards(
+    guardModules,
+    u.pathname,
+    u.pathname
+  )
+
+  if (redirectPath !== null) {
+    return {
+      httpResponse: {
+        statusCode: 302,
+        headers: [["Location", redirectPath]],
+        html: "",
+        stream: null,
+      },
+    }
+  }
+
   const layoutEntries = matchModules(ctx.layouts, routeSegments)
 
   // Register all modules for CSS collection
@@ -181,6 +210,10 @@ export async function render(
 
   const html = `<!DOCTYPE html>${prePageOutlet}<body>${pageOutletContent}</body>${postPageOutlet}`
   const statusCode = is404Route ? 404 : 200
+
+  queueMicrotask(() => {
+    runAfterEachGuards(guardModules, u.pathname, u.pathname)
+  })
 
   return {
     httpResponse: {

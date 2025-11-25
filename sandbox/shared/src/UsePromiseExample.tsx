@@ -1,4 +1,4 @@
-import { ErrorBoundary, usePromise, Derive, useMemo } from "kiru"
+import { ErrorBoundary, usePromise, Derive, useCallback } from "kiru"
 import { RouteQuery, useFileRouter } from "kiru/router"
 
 interface Product {
@@ -43,13 +43,30 @@ export default function UsePromiseExample() {
     setQuery,
   } = useFileRouter()
 
-  const initialQueryState = useMemo(() => {
-    const search = Array.isArray(query.q) ? query.q[0] : query.q
-    const pageSize = parseSearchNumber(query.s, 10).toString()
-    return { search, pageSize }
-  }, [])
-
+  const search = Array.isArray(query.q) ? query.q[0] : query.q
+  const pageSize = parseSearchNumber(query.s, 10).toString()
   const products = usePromise((signal) => loadProducts(signal, query), [query])
+
+  const handleSearchChanged = useCallback(
+    (e: Kiru.FormEvent<HTMLInputElement>) => {
+      setQuery({ ...query, q: e.target.value, p: "1" }, { replace: true })
+    },
+    [query]
+  )
+
+  const handlePageSizeChanged = useCallback(
+    (e: Kiru.FormEvent<HTMLSelectElement>) => {
+      const nextSize = parseInt(e.target.value)
+      const pageSize = parseSearchNumber(query.s, 10)
+      const page = parseSearchNumber(query.p, 1)
+
+      const currentOffset = (page - 1) * pageSize
+      const nextPage = Math.ceil((currentOffset + 1) / nextSize) + ""
+
+      setQuery({ ...query, s: e.target.value, p: nextPage }, { replace: true })
+    },
+    [query]
+  )
 
   return (
     <div>
@@ -58,27 +75,14 @@ export default function UsePromiseExample() {
           autofocus
           placeholder="Search products"
           className="w-full p-2 rounded-md border"
-          value={initialQueryState.search}
-          oninput={(e) => {
-            setQuery({ ...query, q: e.target.value, p: "1" }, { replace: true })
-          }}
+          value={search}
+          oninput={handleSearchChanged}
         />
         <select
           disabled={products.isPending}
           className="p-2 rounded-md border disabled:opacity-50"
-          value={initialQueryState.pageSize}
-          oninput={(e) => {
-            const nextSize = parseInt(e.currentTarget.value)
-            const pageSize = parseSearchNumber(query.s, 10)
-            const page = parseSearchNumber(query.p, 1)
-            const currentOffset = (page - 1) * pageSize
-            const nextPage = Math.ceil((currentOffset + 1) / nextSize) + ""
-
-            setQuery(
-              { ...query, s: e.currentTarget.value, p: nextPage },
-              { replace: true }
-            )
-          }}
+          value={pageSize}
+          oninput={handlePageSizeChanged}
         >
           <option value="5">5</option>
           <option value="10">10</option>
