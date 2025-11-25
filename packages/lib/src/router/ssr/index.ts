@@ -1,5 +1,5 @@
 import path from "path"
-import { createElement } from "../../element.js"
+import { createElement, Fragment } from "../../element.js"
 import { __DEV__ } from "../../env.js"
 import { renderToString } from "../../renderToString.js"
 import { renderToReadableStream } from "../../ssr/server.js"
@@ -103,11 +103,9 @@ export async function render(
     guardEntries.map((entry) => entry.load() as unknown as Promise<GuardModule>)
   )
 
-  const redirectPath = await runBeforeEachGuards(
-    guardModules,
-    u.pathname,
-    u.pathname
-  )
+  const redirectPath = await runBeforeEachGuards(guardModules, u.pathname, {
+    ...ctx.userContext,
+  })
 
   if (redirectPath !== null) {
     return {
@@ -147,14 +145,6 @@ export async function render(
     }
   }
 
-  const children = wrapWithLayouts(
-    layouts
-      .map((layout) => layout.default)
-      .filter((l) => typeof l === "function"),
-    page.default,
-    props
-  )
-
   let documentShell = renderToString(createElement(ctx.Document))
 
   if (
@@ -166,19 +156,30 @@ export async function render(
     )
   }
 
+  const children = wrapWithLayouts(
+    layouts
+      .map((layout) => layout.default)
+      .filter((l) => typeof l === "function"),
+    page.default,
+    props
+  )
+
+  const routerContextValue = {
+    state: {
+      params,
+      query,
+      pathname: u.pathname,
+      hash: "",
+      signal: abortController.signal,
+    } satisfies RouterState,
+  }
+
   const app = createElement(RouterContext.Provider, {
     children: createElement(RequestContext.Provider, {
-      children,
+      children: Fragment({ children }),
       value: ctx.userContext,
     }),
-    value: {
-      state: {
-        params,
-        query,
-        pathname: u.pathname,
-        signal: abortController.signal,
-      } as RouterState,
-    },
+    value: routerContextValue,
   })
 
   let { immediate: pageOutletContent, stream } = renderToReadableStream(app)

@@ -1,6 +1,4 @@
-// initClient({ dir, baseUrl, pages, layouts })
-
-import { createElement, Fragment } from "../../element.js"
+import { createElement } from "../../element.js"
 import { hydrate } from "../../ssr/client.js"
 import { FileRouter } from "../fileRouter.js"
 import {
@@ -9,19 +7,25 @@ import {
   match404Route,
   parseQuery,
   runBeforeEachGuards,
+  runAfterEachGuards,
 } from "../utils/index.js"
 import type {
   FormattedViteImportMap,
   GuardModule,
   PageModule,
 } from "../types.internal"
-import { resolveNavguard } from "../guard.js"
 import type { FileRouterConfig, FileRouterPreloadConfig } from "../types"
-import { fileRouterInstance, fileRouterRoute, routerCache } from "../globals.js"
+import {
+  fileRouterInstance,
+  fileRouterRoute,
+  requestContext,
+  routerCache,
+} from "../globals.js"
 import { FileRouterController } from "../fileRouterController.js"
 import { FileRouterDataLoadError } from "../errors.js"
 import { __DEV__ } from "../../env.js"
 import { RouterCache } from "../cache.js"
+import { RequestContext } from "../context.js"
 
 interface InitClientOptions {
   dir: string
@@ -45,6 +49,12 @@ export async function initClient(options: InitClientOptions) {
     hydrationMode = "static",
   } = options
 
+  try {
+    requestContext.current = JSON.parse(
+      document.querySelector("[k-request-context]")!.innerHTML
+    )
+  } catch {}
+
   const preloaded = await preparePreloadConfig(
     options,
     false,
@@ -61,13 +71,11 @@ export async function initClient(options: InitClientOptions) {
   }
 
   const children = createElement(FileRouter, { config })
-  /**
-   * With SSR, we need to wrap the app in a fragment to mirror the
-   * structure created on the server because it wraps the app
-   * with RequestContext.Provider. Not needed on client because
-   * we parse it from the document.
-   */
-  const app = hydrationMode === "dynamic" ? Fragment({ children }) : children
+  const app =
+    hydrationMode === "static"
+      ? children
+      : createElement(RequestContext.Provider, { value: ctx, children })
+
   hydrate(app, document.body, { hydrationMode })
 
   if (__DEV__) {
@@ -78,7 +86,7 @@ export async function initClient(options: InitClientOptions) {
 async function preparePreloadConfig(
   options: InitClientOptions,
   isStatic404 = false,
-  isSSR = false
+  _isSSR = false
 ): Promise<FileRouterPreloadConfig> {
   let pageProps = {}
   let cacheData: null | { value: unknown } = null
@@ -101,15 +109,15 @@ async function preparePreloadConfig(
   const layoutEntries = matchModules(options.layouts, routeMatch.routeSegments)
 
   // Load and run guards before loading page
+  // if SSR, do we even need to do this?
   let guardModules: GuardModule[] = []
   if (options.guards) {
     const guardEntries = matchModules(options.guards, routeMatch.routeSegments)
     guardModules = await Promise.all(guardEntries.map((entry) => entry.load()))
 
-    const path = window.location.pathname
-    const fromPath = path // On initial load, from and to are the same
-
-    const redirectPath = await runBeforeEachGuards(guardModules, path, fromPath)
+    const redirectPath = await runBeforeEachGuards(guardModules, url.pathname, {
+      ...requestContext.current,
+    })
     if (redirectPath !== null) {
       window.location.href = redirectPath
     }
@@ -122,6 +130,8 @@ async function preparePreloadConfig(
     ...layoutEntries.map((e) => e.load()),
   ])
   fileRouterRoute.current = null
+
+  const query = parseQuery(window.location.search)
 
   // Check if page has static props pre-loaded at build time
   if (page.__KIRU_STATIC_PROPS__) {
@@ -146,12 +156,16 @@ async function preparePreloadConfig(
       const cacheKey = {
         path: window.location.pathname,
         params: routeMatch.params,
-        query: parseQuery(url.search),
+        query,
       }
 
       cacheData = routerCache.current!.get(cacheKey, loader.cache)
     }
   }
+
+  window.__kiru.on("mount", () => {
+    runAfterEachGuards(guardModules, url.pathname, "")
+  })
 
   return {
     pages: options.pages,
@@ -161,7 +175,7 @@ async function preparePreloadConfig(
     pageProps: pageProps,
     pageLayouts: layouts,
     params: routeMatch.params,
-    query: parseQuery(url.search),
+    query: query,
     route: routeMatch.route,
     cacheData,
   }

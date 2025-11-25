@@ -1,0 +1,9 @@
+@reference "../global.css";
+
+form {
+  @apply flex flex-col gap-2;
+}
+
+form input {
+  @apply bg-neutral-50/10 rounded px-4 py-2;
+}

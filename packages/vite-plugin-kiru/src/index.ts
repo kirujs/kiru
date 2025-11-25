@@ -97,30 +97,30 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
 
             const filePath = path.join(state.baseOutDir, "client", url)
             const extName = path.extname(filePath)
-            if (extName && extName !== ".html") {
-              return next()
-            }
-
             const accept = req.headers["accept"] || ""
-            if (
+
+            const shouldHandle =
               typeof accept === "string" &&
               accept.includes("text/html") &&
               !url.startsWith("/node_modules/") &&
               !url.startsWith("/@") &&
               !url.startsWith(dtHostScriptPath) &&
-              !url.startsWith(dtClientPathname)
-            ) {
-              const { status, html } = await handleSSR(
-                server,
-                url,
-                state.projectRoot,
-                () => resolveUserDocument(projectRoot, ssgOptions)
-              )
-              res.statusCode = status
-              res.setHeader("Content-Type", "text/html")
-              res.end(html)
-              return
+              !url.startsWith(dtClientPathname) &&
+              (extName === ".html" || !extName)
+
+            if (!shouldHandle) {
+              return next()
             }
+
+            const { status, html } = await handleSSR(
+              server,
+              url,
+              state.projectRoot,
+              () => resolveUserDocument(projectRoot, ssgOptions)
+            )
+            res.statusCode = status
+            res.setHeader("Content-Type", "text/html")
+            res.end(html)
           } catch (e) {
             const error = e as Error
             console.error(

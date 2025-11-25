@@ -22,7 +22,9 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.5",
+    "@hono/zod-validator": "^0.7.5",
     "hono": "^4.10.3",
-    "kiru": "workspace:^"
+    "kiru": "workspace:^",
+    "zod": "^4.1.13"
   }
 }

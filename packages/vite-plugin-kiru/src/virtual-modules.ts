@@ -32,12 +32,12 @@ export { dir, baseUrl, pages, layouts, guards, transition }
   function createEntryServerModule(): string {
     if (mode === "ssr") {
       return `
-import { render as kiruSSRRender } from "kiru/router/ssr"
+import { render as kiruServerRender } from "kiru/router/ssr"
 import Document from "${userDoc}"
 import * as routes from "${VIRTUAL_ROUTES_ID}"
 
 export async function render(url, ctx) {
-  return kiruSSRRender(url, { ...ctx, ...routes, Document })
+  return kiruServerRender(url, { ...ctx, ...routes, Document })
 }
 `
     }
@@ -46,7 +46,7 @@ export async function render(url, ctx) {
     return `
 import {
   render as kiruStaticRender,
-  generateStaticPaths as kiruServerGenerateStaticPaths
+  generateStaticPaths as kiruGenerateStaticPaths
 } from "kiru/router/ssg"
 import Document from "${userDoc}"
 import * as routes from "${VIRTUAL_ROUTES_ID}"
@@ -56,7 +56,7 @@ export async function render(url, ctx) {
 }
 
 export async function generateStaticPaths() {
-  return kiruServerGenerateStaticPaths(pages)
+  return kiruGenerateStaticPaths(routes.pages)
 }
 `
   }

@@ -1,5 +1,5 @@
 import { Derive, usePromise, useSignal } from "kiru"
-import { Head, useRequestContext } from "kiru/router"
+import { Head } from "kiru/router"
 import { client } from "@/api"
 
 export default function StreamingPage() {
@@ -9,9 +9,6 @@ export default function StreamingPage() {
     const res = await client.api.products.$get({}, { init: { signal } })
     return res.json()
   }, [])
-
-  const x = useRequestContext()
-  console.log(x.test)
 
   return (
     <>

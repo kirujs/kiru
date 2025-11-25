@@ -4,7 +4,12 @@ import { __DEV__ } from "../env.js"
 import { flushSync, nextIdle } from "../scheduler.js"
 import { ReloadOptions, type FileRouterContextType } from "./context.js"
 import { FileRouterDataLoadError } from "./errors.js"
-import { fileRouterInstance, fileRouterRoute, routerCache } from "./globals.js"
+import {
+  fileRouterInstance,
+  fileRouterRoute,
+  requestContext,
+  routerCache,
+} from "./globals.js"
 import type {
   FileRouterConfig,
   PageConfig,
@@ -410,11 +415,9 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         )
       )
 
-      const redirectPath = await runBeforeEachGuards(
-        guardModules,
-        path,
-        fromPath
-      )
+      const redirectPath = await runBeforeEachGuards(guardModules, path, {
+        ...requestContext.current,
+      })
 
       // If redirect was requested, navigate to that path instead
       if (redirectPath !== null) {

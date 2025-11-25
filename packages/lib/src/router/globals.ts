@@ -12,3 +12,7 @@ export const fileRouterRoute = {
 export const routerCache = {
   current: null as RouterCache | null,
 }
+
+export const requestContext = {
+  current: {} as Kiru.RequestContext,
+}

@@ -1,4 +1,5 @@
-import { Link, useFileRouter } from "kiru/router"
+import { Link, useFileRouter, useRequestContext } from "kiru/router"
+import { client } from "@/api"
 
 export default function RootLayout({ children }: { children: JSX.Children }) {
   const { state } = useFileRouter()
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
         >
           Products
         </Link>
+        <AuthLinks />
       </div>
       {children}
       <div className="text-center text-stone-200">
@@ -58,5 +60,45 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
         </div>
       </div>
     </div>
+  )
+}
+
+function AuthLinks() {
+  const { state } = useFileRouter()
+  const { user } = useRequestContext()
+
+  if (!user) {
+    return (
+      <Link
+        to="/login"
+        className={state.pathname === "/login" ? "" : "underline"}
+      >
+        Login
+      </Link>
+    )
+  }
+
+  return (
+    <>
+      <Link
+        to="/protected"
+        className={state.pathname === "/protected" ? "" : "underline"}
+      >
+        Protected
+      </Link>
+      <Link
+        prefetchJs={false}
+        to="/logout"
+        onclick={(e) => {
+          e.preventDefault()
+          client.api.auth.logout.$get().then((res) => {
+            window.location.href = res.url
+          })
+        }}
+        className={state.pathname === "/logout" ? "" : "underline"}
+      >
+        Logout
+      </Link>
+    </>
   )
 }

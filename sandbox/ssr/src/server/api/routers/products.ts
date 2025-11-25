@@ -29,11 +29,11 @@ const loadProduct = async (id: number): Promise<Product> => {
   return response.json()
 }
 
-export const apiRouter = new Hono()
-  .get("/products", async (c) => {
+export default new Hono()
+  .get("/", async (c) => {
     return c.json(await loadProducts())
   })
-  .get("/products/:id", async (c) => {
+  .get("/:id", async (c) => {
     const id = Number(c.req.param("id"))
     return c.json(await loadProduct(id))
   })
