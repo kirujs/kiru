@@ -1,15 +1,10 @@
+import { NavigationHook } from "./types"
 import { GuardModule } from "./types.internal"
 
-export type GuardBeforeEach = (
-  context: Kiru.RequestContext,
-  to: string,
-  from: string
-) => void | string | Promise<void | string>
-export type GuardAfterEach = (
-  context: Kiru.RequestContext,
-  to: string,
-  from: string
-) => void | Promise<void>
+export type GuardBeforeEach = NavigationHook<
+  void | string | Promise<void | string>
+>
+export type GuardAfterEach = NavigationHook<void | Promise<void>>
 
 export interface NavGuard {
   beforeEach: GuardBeforeEach

@@ -8,6 +8,7 @@ import {
   parseQuery,
   runBeforeEachGuards,
   runAfterEachGuards,
+  runBeforeEnterHooks,
 } from "../utils/index.js"
 import type {
   FormattedViteImportMap,
@@ -135,6 +136,23 @@ async function preparePreloadConfig(
     ...layoutEntries.map((e) => e.load()),
   ])
   fileRouterRoute.current = null
+
+  const onBeforeEnter = page.config?.hooks?.onBeforeEnter
+  if (onBeforeEnter) {
+    const asArray = Array.isArray(onBeforeEnter)
+      ? onBeforeEnter
+      : [onBeforeEnter]
+    const redirectPath = await runBeforeEnterHooks(
+      asArray,
+      { ...requestContext.current },
+      url.pathname
+    )
+    if (redirectPath) {
+      window.location.href = redirectPath
+      // @ts-ignore
+      return
+    }
+  }
 
   const query = parseQuery(window.location.search)
 

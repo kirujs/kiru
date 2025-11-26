@@ -36,6 +36,8 @@ import {
   wrapWithLayouts,
   runAfterEachGuards,
   runBeforeEachGuards,
+  runBeforeEnterHooks,
+  runBeforeLeaveHooks,
 } from "./utils/index.js"
 import { RouterCache, type CacheKey } from "./cache.js"
 import { scrollStack } from "./scrollStack.js"
@@ -337,10 +339,31 @@ export class FileRouterController {
       window.history.scrollRestoration = "auto"
     })
 
+    let ignorePopState = false
+
     window.addEventListener("popstate", (e) => {
       e.preventDefault()
-      scrollStack.replace(this.historyIndex, window.scrollX, window.scrollY)
 
+      if (
+        !ignorePopState &&
+        this.onBeforeLeave(window.location.pathname) === false
+      ) {
+        ignorePopState = true
+        if (e.state !== null) {
+          if (e.state.index > this.historyIndex) {
+            window.history.go(-1)
+          } else if (e.state.index < this.historyIndex) {
+            window.history.go(1)
+          }
+        }
+        return
+      }
+      if (ignorePopState) {
+        ignorePopState = false
+        return
+      }
+
+      scrollStack.replace(this.historyIndex, window.scrollX, window.scrollY)
       this.loadRoute().then(() => {
         if (e.state != null) {
           this.historyIndex = e.state.index
@@ -351,6 +374,34 @@ export class FileRouterController {
         }
       })
     })
+  }
+
+  private onBeforeLeave(to: string) {
+    const currentPage = this.currentPage.peek()
+    if (!currentPage) {
+      return true
+    }
+
+    let config = currentPage.config ?? ({} as PageConfig)
+    if (__DEV__) {
+      if (this.pageRouteToConfig?.has(currentPage.route)) {
+        config = this.pageRouteToConfig.get(currentPage.route)!
+      }
+    }
+
+    const onBeforeLeave = config.hooks?.onBeforeLeave
+    if (onBeforeLeave) {
+      const asArray = Array.isArray(onBeforeLeave)
+        ? onBeforeLeave
+        : [onBeforeLeave]
+      return runBeforeLeaveHooks(
+        asArray,
+        { ...requestContext.current },
+        to,
+        this.state.pathname
+      )
+    }
+    return true
   }
 
   public getChildren() {
@@ -468,7 +519,26 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         }
       }
 
-      const { loader } = config
+      const { loader, hooks } = config
+
+      if (hooks?.onBeforeEnter) {
+        const asArray = Array.isArray(hooks.onBeforeEnter)
+          ? hooks.onBeforeEnter
+          : [hooks.onBeforeEnter]
+        const redirectPath = await runBeforeEnterHooks(
+          asArray,
+          requestContext,
+          path,
+          fromPath
+        )
+        if (redirectPath) {
+          this.state.pathname = path
+          return this.navigate(redirectPath, {
+            replace: true,
+            transition: enableTransition,
+          })
+        }
+      }
 
       if (loader) {
         if (loader.mode !== "static" || __DEV__) {
@@ -560,7 +630,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
 
     // Load data from loader (cache check is now done earlier in loadRoute)
     loader
-      .load(routerState)
+      .load({ ...routerState, context: { ...requestContext.current } })
       .then(
         (data) => {
           // Cache the data if caching is enabled
@@ -629,6 +699,9 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       return
     }
 
+    if (this.onBeforeLeave(prevPath) === false) {
+      return
+    }
     this.updateHistoryState(path, options)
 
     this.loadRoute(

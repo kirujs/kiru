@@ -103,7 +103,10 @@ export async function render(
       }, 10000)
 
       try {
-        const data = await config.loader.load(routerState)
+        const data = await config.loader.load({
+          ...routerState,
+          context: {},
+        })
         props = {
           data,
           error: null,

@@ -8,6 +8,7 @@ import type {
   RouteMatch,
   ViteImportMap,
 } from "../types.internal"
+import { OnBeforeEnterHook, OnBeforeLeaveHook } from "../types.js"
 
 export {
   formatViteImportMap,
@@ -17,6 +18,8 @@ export {
   normalizePrefixPath,
   parseQuery,
   wrapWithLayouts,
+  runBeforeLeaveHooks,
+  runBeforeEnterHooks,
   runBeforeEachGuards,
   runAfterEachGuards,
 }
@@ -245,6 +248,36 @@ function wrapWithLayouts(
   )
 }
 
+function runBeforeLeaveHooks(
+  hooks: OnBeforeLeaveHook[],
+  context: Kiru.RequestContext,
+  to: string,
+  from: string = to
+): false | void {
+  for (const hook of hooks) {
+    const res = hook(context, to, from)
+    if (res === false) {
+      return false
+    }
+  }
+}
+
+async function runBeforeEnterHooks(
+  hooks: OnBeforeEnterHook[],
+  context: Kiru.RequestContext,
+  to: string,
+  from: string = to
+) {
+  for (const hook of hooks) {
+    const result = await hook(context, to, from)
+    if (typeof result === "string") {
+      return result
+    }
+  }
+
+  return null
+}
+
 async function runBeforeEachGuards(
   guardModules: GuardModule[],
   context: Kiru.RequestContext,
@@ -255,16 +288,7 @@ async function runBeforeEachGuards(
     .map((guardModule) => resolveNavguard(guardModule)?.beforeEach)
     .filter((x) => typeof x === "function")
 
-  // Apply beforeEach hooks - if any returns a string, redirect to it
-  for (const hook of beforeHooks) {
-    const result = await hook(context, to, from)
-    if (typeof result === "string") {
-      return result
-    }
-  }
-
-  // All hooks passed, continue navigation
-  return null
+  return runBeforeEnterHooks(beforeHooks, context, to, from)
 }
 
 async function runAfterEachGuards(

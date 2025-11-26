@@ -108,18 +108,34 @@ export interface RouterState {
   signal: AbortSignal
 }
 
-type PageDataLoaderContext = RouterState & {}
-
 export interface PageDataLoaderCacheConfig {
   type: "memory" | "localStorage" | "sessionStorage"
   ttl: number
+}
+
+interface LoaderContext extends RouterState {
+  /**
+   * The request context - in SSR, this is the data from the server
+   * that's passed to the `renderPage` function
+   * @example
+   * ```ts
+   * // server.ts
+   * renderPage({ url, context: { test: 123 } })
+   *
+   * // page.tsx
+   * loader: {
+   *   load: ({ context }) => context.test
+   * }
+   * ```
+   */
+  context: Kiru.RequestContext
 }
 
 export type PageDataLoaderConfig<T = unknown> = {
   /**
    * The function to load the page data
    */
-  load: (context: PageDataLoaderContext) => Promise<T>
+  load: (context: LoaderContext) => Promise<T>
 } & (
   | {
       /**
@@ -159,6 +175,22 @@ export type PageDataLoaderConfig<T = unknown> = {
     }
 )
 
+export type NavigationHook<T> = (
+  context: Kiru.RequestContext,
+  to: string,
+  from: string
+) => T
+
+export type OnBeforeEnterHook = NavigationHook<
+  string | void | Promise<string | void>
+>
+export type OnBeforeLeaveHook = NavigationHook<false | void>
+
+interface PageContextHooks {
+  onBeforeEnter?: OnBeforeEnterHook | OnBeforeEnterHook[]
+  onBeforeLeave?: OnBeforeLeaveHook | OnBeforeLeaveHook[]
+}
+
 export interface PageConfig<T = unknown> {
   /**
    * The loader configuration for this page
@@ -169,6 +201,8 @@ export interface PageConfig<T = unknown> {
    * returned, a page will be generated
    */
   generateStaticParams?: () => RouteParams[] | Promise<RouteParams[]>
+
+  hooks?: PageContextHooks
 }
 
 export type PageProps<T extends PageConfig<any>> = T extends PageConfig<infer U>

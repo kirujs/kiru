@@ -11,6 +11,7 @@ import {
   wrapWithLayouts,
   runBeforeEachGuards,
   runAfterEachGuards,
+  runBeforeEnterHooks,
 } from "../utils/index.js"
 import { RouterContext, RequestContext } from "../context.js"
 import type { PageConfig, PageProps, RouterState } from "../types.js"
@@ -110,14 +111,7 @@ export async function render(
   )
 
   if (redirectPath !== null) {
-    return {
-      httpResponse: {
-        statusCode: 302,
-        headers: [["Location", redirectPath]],
-        html: "",
-        stream: null,
-      },
-    }
+    return createRedirectResult(redirectPath)
   }
 
   const layoutEntries = matchModules(ctx.layouts, routeSegments)
@@ -131,6 +125,21 @@ export async function render(
     pageEntry.load(),
     ...layoutEntries.map((layoutEntry) => layoutEntry.load()),
   ])
+
+  const onBeforeEnter = page.config?.hooks?.onBeforeEnter
+  if (onBeforeEnter) {
+    const asArray = Array.isArray(onBeforeEnter)
+      ? onBeforeEnter
+      : [onBeforeEnter]
+    const redirectPath = await runBeforeEnterHooks(
+      asArray,
+      { ...ctx.userContext },
+      u.pathname
+    )
+    if (redirectPath) {
+      return createRedirectResult(redirectPath)
+    }
+  }
 
   const query = parseQuery(u.search)
 
@@ -224,6 +233,17 @@ export async function render(
       statusCode,
       headers: [["Content-Type", "text/html;charset=utf-8"]],
       stream,
+    },
+  }
+}
+
+function createRedirectResult(to: string): SSRRenderResult {
+  return {
+    httpResponse: {
+      statusCode: 302,
+      headers: [["Location", to]],
+      html: "",
+      stream: null,
     },
   }
 }
