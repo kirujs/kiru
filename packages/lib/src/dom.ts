@@ -97,33 +97,21 @@ function createTextNode(vNode: VNode): Text {
   return textNode
 }
 
-function wrapFocusEventHandler(
-  vNode: VNode,
-  evtName: "focus" | "blur",
-  callback: (event: FocusEvent) => void
-) {
-  const wrappedHandlers = vNodeToWrappedFocusEventHandlersMap.get(vNode) ?? {}
-  const handler = (wrappedHandlers[evtName] = (event: FocusEvent) => {
+function wrapFocusEventHandler(callback: (event: FocusEvent) => void) {
+  return (event: FocusEvent) => {
     if (persistingFocus) {
       event.preventDefault()
       event.stopPropagation()
       return
     }
     callback(event)
-  })
-  vNodeToWrappedFocusEventHandlersMap.set(vNode, wrappedHandlers)
-  return handler
+  }
 }
 
-type WrappedFocusEventMap = {
-  focus?: (event: FocusEvent) => void
-  blur?: (event: FocusEvent) => void
+interface VNodeEventListenerObjects {
+  [key: string]: EventListenerObject
 }
-
-const vNodeToWrappedFocusEventHandlersMap = new WeakMap<
-  VNode,
-  WrappedFocusEventMap
->()
+const eventListenerObjects = new WeakMap<VNode, VNodeEventListenerObjects>()
 
 function updateDom(vNode: DomVNode) {
   const { dom, prev, props, cleanups } = vNode
@@ -146,30 +134,39 @@ function updateDom(vNode: DomVNode) {
     if (!(k in prevProps)) keys.push(k)
   }
 
+  let events: VNodeEventListenerObjects | undefined
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i]
     const prevVal = prevProps[key]
     const nextVal = nextProps[key]
 
     if (propFilters.isEvent(key)) {
+      events ??= eventListenerObjects.get(vNode)
+      if (!events) eventListenerObjects.set(vNode, (events = {}))
+
       if (prevVal !== nextVal || isHydration) {
         const evtName = key.replace(EVENT_PREFIX_REGEX, "")
-        const isFocus = evtName === "focus" || evtName === "blur"
-        const wrappedMap = vNodeToWrappedFocusEventHandlersMap.get(vNode)
+        const evtListenerObj = events[evtName]
 
-        if (key in prevProps) {
-          dom.removeEventListener(
-            evtName,
-            isFocus ? wrappedMap?.[evtName] : prevVal
-          )
+        if (!nextVal) {
+          if (evtListenerObj) {
+            dom.removeEventListener(evtName, evtListenerObj)
+            delete events[evtName]
+          }
+          continue
         }
 
-        if (key in nextProps) {
-          dom.addEventListener(
-            evtName,
-            isFocus ? wrapFocusEventHandler(vNode, evtName, nextVal) : nextVal
-          )
+        let handleEvent = nextVal.bind(void 0)
+        if (evtName === "focus" || evtName === "blur") {
+          handleEvent = wrapFocusEventHandler(handleEvent)
         }
+
+        if (evtListenerObj) {
+          evtListenerObj.handleEvent = handleEvent
+          continue
+        }
+
+        dom.addEventListener(evtName, (events[evtName] = { handleEvent }))
       }
       continue
     }
