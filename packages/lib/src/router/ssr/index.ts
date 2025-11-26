@@ -3,6 +3,7 @@ import { createElement, Fragment } from "../../element.js"
 import { __DEV__ } from "../../env.js"
 import { renderToString } from "../../renderToString.js"
 import { renderToReadableStream } from "../../ssr/server.js"
+import { toArray } from "../../utils/format.js"
 import {
   matchModules,
   matchRoute,
@@ -128,11 +129,8 @@ export async function render(
 
   const onBeforeEnter = page.config?.hooks?.onBeforeEnter
   if (onBeforeEnter) {
-    const asArray = Array.isArray(onBeforeEnter)
-      ? onBeforeEnter
-      : [onBeforeEnter]
     const redirectPath = await runBeforeEnterHooks(
-      asArray,
+      toArray(onBeforeEnter),
       { ...ctx.userContext },
       u.pathname
     )

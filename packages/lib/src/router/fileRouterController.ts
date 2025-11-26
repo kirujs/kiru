@@ -2,6 +2,7 @@ import { Signal } from "../signals/base.js"
 import { watch } from "../signals/watch.js"
 import { __DEV__ } from "../env.js"
 import { flushSync, nextIdle } from "../scheduler.js"
+import { toArray } from "../utils/format.js"
 import { ReloadOptions, type FileRouterContextType } from "./context.js"
 import { FileRouterDataLoadError } from "./errors.js"
 import {
@@ -391,11 +392,8 @@ export class FileRouterController {
 
     const onBeforeLeave = config.hooks?.onBeforeLeave
     if (onBeforeLeave) {
-      const asArray = Array.isArray(onBeforeLeave)
-        ? onBeforeLeave
-        : [onBeforeLeave]
       return runBeforeLeaveHooks(
-        asArray,
+        toArray(onBeforeLeave),
         { ...requestContext.current },
         to,
         this.state.pathname
@@ -522,11 +520,8 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       const { loader, hooks } = config
 
       if (hooks?.onBeforeEnter) {
-        const asArray = Array.isArray(hooks.onBeforeEnter)
-          ? hooks.onBeforeEnter
-          : [hooks.onBeforeEnter]
         const redirectPath = await runBeforeEnterHooks(
-          asArray,
+          toArray(hooks.onBeforeEnter),
           requestContext,
           path,
           fromPath

@@ -1,5 +1,5 @@
 import { Signal } from "../signals/base.js"
-import { isValidTextChild, isVNode } from "../utils/index.js"
+import { isValidTextChild, isVNode, toArray } from "../utils/index.js"
 import { createElement } from "../element.js"
 import { __DEV__ } from "../env.js"
 import { KiruError } from "../error.js"
@@ -12,7 +12,7 @@ const validHeadChildren = ["title", "base", "link", "meta", "style", "script"]
 function HeadContent({ children }: { children: JSX.Children }): JSX.Element {
   if (__DEV__) {
     const n = node.current!
-    const asArray = Array.isArray(children) ? children : [children]
+    const asArray = toArray(children)
     const invalidNodes = asArray.filter(
       (c) =>
         !isVNode(c) ||
@@ -29,16 +29,14 @@ function HeadContent({ children }: { children: JSX.Children }): JSX.Element {
     }
   }
   if ("window" in globalThis) {
-    const asArray = Array.isArray(children) ? children : [children]
-    const titleNode = asArray.find(
+    const c = toArray(children)
+    const titleNode = c.find(
       (c) => isVNode(c) && c.type === "title"
     ) as Kiru.VNode
 
     if (titleNode) {
       const props = titleNode.props
-      const titleChildren = Array.isArray(props.children)
-        ? props.children
-        : [props.children]
+      const titleChildren = toArray(props.children)
 
       document.title = titleChildren
         .map((c) => (Signal.isSignal(c) ? c.value : c))

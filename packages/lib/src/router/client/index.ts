@@ -1,6 +1,7 @@
 import { createElement } from "../../element.js"
 import { hydrate } from "../../ssr/client.js"
 import { FileRouter } from "../fileRouter.js"
+import { toArray } from "../../utils/format.js"
 import {
   matchModules,
   matchRoute,
@@ -139,11 +140,8 @@ async function preparePreloadConfig(
 
   const onBeforeEnter = page.config?.hooks?.onBeforeEnter
   if (onBeforeEnter) {
-    const asArray = Array.isArray(onBeforeEnter)
-      ? onBeforeEnter
-      : [onBeforeEnter]
     const redirectPath = await runBeforeEnterHooks(
-      asArray,
+      toArray(onBeforeEnter),
       { ...requestContext.current },
       url.pathname
     )

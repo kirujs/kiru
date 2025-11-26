@@ -2,6 +2,7 @@ import { unwrap } from "../signals/utils.js"
 import { booleanAttributes, snakeCaseAttributes } from "../constants.js"
 
 export {
+  toArray,
   className,
   encodeHtmlEntities,
   propFilters,
@@ -19,6 +20,10 @@ const REGEX_SQT = /'/g
 const REGEX_DBLQT = /"/g
 const REGEX_SLASH = /\//g
 const REGEX_ALPHA_UPPER = /[A-Z]/g
+
+function toArray<T>(value: T | T[]): T[] {
+  return Array.isArray(value) ? value : [value]
+}
 
 function className(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(" ")
