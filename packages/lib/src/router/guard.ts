@@ -1,5 +1,5 @@
-import { NavigationHook } from "./types"
-import { GuardModule } from "./types.internal"
+import type { NavigationHook } from "./types"
+import type { GuardModule } from "./types.internal"
 
 export type GuardBeforeEach = NavigationHook<
   void | string | Promise<void | string>

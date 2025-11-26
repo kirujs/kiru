@@ -781,13 +781,15 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         path
       )
     } else {
+      const current = scrollStack.get()
+
       // if we've gone back and are now going forward, we need to
       // truncate the scroll stack so it doesn't just permanently grow.
       // this should keep it at the same length as the history stack.
-      const current = scrollStack.get()
       if (this.historyIndex < window.history.length - 1) {
         current.length = this.historyIndex
       }
+
       scrollStack.save([...current, [window.scrollX, window.scrollY]])
       window.history.pushState(
         { ...window.history.state, index: ++this.historyIndex },
