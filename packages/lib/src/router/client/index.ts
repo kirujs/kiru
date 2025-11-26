@@ -118,9 +118,11 @@ async function preparePreloadConfig(
     const guardEntries = matchModules(options.guards, routeMatch.routeSegments)
     guardModules = await Promise.all(guardEntries.map((entry) => entry.load()))
 
-    const redirectPath = await runBeforeEachGuards(guardModules, url.pathname, {
-      ...requestContext.current,
-    })
+    const redirectPath = await runBeforeEachGuards(
+      guardModules,
+      { ...requestContext.current },
+      url.pathname
+    )
     if (redirectPath !== null) {
       window.location.href = redirectPath
     }
@@ -167,7 +169,11 @@ async function preparePreloadConfig(
   }
 
   window.__kiru.on("mount", () => {
-    runAfterEachGuards(guardModules, url.pathname, "")
+    runAfterEachGuards(
+      guardModules,
+      { ...requestContext.current },
+      url.pathname
+    )
   })
 
   return {

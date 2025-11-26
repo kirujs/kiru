@@ -103,9 +103,11 @@ export async function render(
     guardEntries.map((entry) => entry.load() as unknown as Promise<GuardModule>)
   )
 
-  const redirectPath = await runBeforeEachGuards(guardModules, u.pathname, {
-    ...ctx.userContext,
-  })
+  const redirectPath = await runBeforeEachGuards(
+    guardModules,
+    { ...ctx.userContext },
+    u.pathname
+  )
 
   if (redirectPath !== null) {
     return {
@@ -213,7 +215,7 @@ export async function render(
   const statusCode = is404Route ? 404 : 200
 
   queueMicrotask(() => {
-    runAfterEachGuards(guardModules, u.pathname, u.pathname)
+    runAfterEachGuards(guardModules, { ...ctx.userContext }, u.pathname)
   })
 
   return {

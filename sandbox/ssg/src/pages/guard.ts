@@ -1,7 +1,7 @@
 import { createNavGuard } from "kiru/router"
 import { userId } from "../state/user.js"
 
-export const guard = createNavGuard().beforeEach((to) => {
+export const guard = createNavGuard().beforeEach((_, to) => {
   console.log("beforeEach", to)
   if (to === "/protected" && userId.value === null) {
     return "/login"

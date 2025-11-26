@@ -247,8 +247,9 @@ function wrapWithLayouts(
 
 async function runBeforeEachGuards(
   guardModules: GuardModule[],
-  path: string,
-  context: Kiru.RequestContext
+  context: Kiru.RequestContext,
+  to: string,
+  from: string = to
 ): Promise<string | null> {
   const beforeHooks = guardModules
     .map((guardModule) => resolveNavguard(guardModule)?.beforeEach)
@@ -256,9 +257,7 @@ async function runBeforeEachGuards(
 
   // Apply beforeEach hooks - if any returns a string, redirect to it
   for (const hook of beforeHooks) {
-    const result = await hook(path, context)
-
-    // If a string is returned, redirect to that path
+    const result = await hook(context, to, from)
     if (typeof result === "string") {
       return result
     }
@@ -270,14 +269,15 @@ async function runBeforeEachGuards(
 
 async function runAfterEachGuards(
   guardModules: GuardModule[],
-  path: string,
-  fromPath: string
+  context: Kiru.RequestContext,
+  to: string,
+  from: string = to
 ): Promise<void> {
   const afterHooks = guardModules
     .map((guardModule) => resolveNavguard(guardModule)?.afterEach)
     .filter((x) => typeof x === "function")
 
   for (const hook of afterHooks) {
-    await hook(path, fromPath)
+    await hook(context, to, from)
   }
 }

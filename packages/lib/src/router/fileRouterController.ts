@@ -404,7 +404,6 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       const { route, pageEntry, params, routeSegments } = routeMatch
 
       // Apply beforeEach guards before loading route
-      const fromPath = this.state.pathname
       const guardEntries = matchModules(
         this.guards as unknown as FormattedViteImportMap,
         routeSegments
@@ -415,9 +414,13 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         )
       )
 
-      const redirectPath = await runBeforeEachGuards(guardModules, path, {
-        ...requestContext.current,
-      })
+      const fromPath = this.state.pathname
+      const redirectPath = await runBeforeEachGuards(
+        guardModules,
+        { ...requestContext.current },
+        path,
+        fromPath
+      )
 
       // If redirect was requested, navigate to that path instead
       if (redirectPath !== null) {
@@ -533,7 +536,12 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
           .map((m) => m.default)
 
         nextIdle(() => {
-          runAfterEachGuards(guardModules, path, fromPath)
+          runAfterEachGuards(
+            guardModules,
+            { ...requestContext.current },
+            path,
+            fromPath
+          )
         })
       })
     } catch (error) {

@@ -1,13 +1,13 @@
 import { createNavGuard, GuardBeforeEach } from "kiru/router"
 import { userId } from "../state/user"
 
-const redirectFromProtected: GuardBeforeEach = (to) => {
+const redirectFromProtected: GuardBeforeEach = (_, to) => {
   if (to === "/protected" && userId.value === null) {
     return "/login"
   }
 }
 
-const redirectFromLogin: GuardBeforeEach = (to) => {
+const redirectFromLogin: GuardBeforeEach = (_, to) => {
   if (to === "/login" && userId.value !== null) {
     return "/"
   }
@@ -15,4 +15,4 @@ const redirectFromLogin: GuardBeforeEach = (to) => {
 
 export const guard = createNavGuard()
   .beforeEach(redirectFromProtected, redirectFromLogin)
-  .afterEach((to, from) => console.log("afterEach", to, from))
+  .afterEach((_, to, from) => console.log("afterEach", to, from))

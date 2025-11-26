@@ -1,10 +1,15 @@
 import { GuardModule } from "./types.internal"
 
 export type GuardBeforeEach = (
-  path: string,
-  context: Kiru.RequestContext
+  context: Kiru.RequestContext,
+  to: string,
+  from: string
 ) => void | string | Promise<void | string>
-export type GuardAfterEach = (to: string, from: string) => void | Promise<void>
+export type GuardAfterEach = (
+  context: Kiru.RequestContext,
+  to: string,
+  from: string
+) => void | Promise<void>
 
 export interface NavGuard {
   beforeEach: GuardBeforeEach
@@ -29,25 +34,32 @@ export interface NavGuardBuilder {
   get [$NAVGUARD_INTERNAL](): NavGuard
 }
 
-export function createNavGuard(): NavGuardBuilder {
-  const beforeEach: GuardBeforeEach[] = []
-  const afterEach: GuardAfterEach[] = []
-  const guard: NavGuard = {
-    beforeEach: async (path, ctx) => {
+function createNavGuard_impl(
+  beforeEach: GuardBeforeEach[],
+  afterEach: GuardAfterEach[]
+): NavGuard {
+  return {
+    beforeEach: async (ctx, to, from) => {
       for (const fn of beforeEach) {
-        const res = await fn(path, ctx)
+        const res = await fn(ctx, to, from)
         if (typeof res === "string") {
           return res
         }
       }
       return
     },
-    afterEach: async (to, from) => {
+    afterEach: async (ctx, to, from) => {
       for (const fn of afterEach) {
-        await fn(to, from)
+        await fn(ctx, to, from)
       }
     },
   }
+}
+
+export function createNavGuard(): NavGuardBuilder {
+  const beforeEach: GuardBeforeEach[] = []
+  const afterEach: GuardAfterEach[] = []
+  const guard = createNavGuard_impl(beforeEach, afterEach)
 
   return {
     beforeEach(...fns: GuardBeforeEach[]) {

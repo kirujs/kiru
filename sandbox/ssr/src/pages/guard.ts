@@ -1,13 +1,11 @@
 import { createNavGuard } from "kiru/router"
 
-export const guard = createNavGuard().beforeEach((path, context) => {
-  const { user } = context
-
-  if (path === "/protected" && user === null) {
-    return `/login?redirect=${encodeURIComponent(path)}`
+export const guard = createNavGuard().beforeEach(({ user }, to) => {
+  if (to === "/protected" && user === null) {
+    return `/login?redirect=${encodeURIComponent(to)}`
   }
 
-  if (path === "/login" && user !== null) {
+  if (to === "/login" && user !== null) {
     return "/"
   }
 })
