@@ -361,8 +361,8 @@ declare global {
       E,
       "target" | "currentTarget"
     > & {
-      target: C extends NoChildEventsElement ? EventTarget & C : EventTarget & T
-      currentTarget: EventTarget & C
+      target: C extends NoChildEventsElement ? C : T
+      currentTarget: C
     }
 
     type EventHandler<E extends DOMEvent> = {
