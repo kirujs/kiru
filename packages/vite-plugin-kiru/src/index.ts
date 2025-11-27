@@ -24,7 +24,10 @@ import {
 
 import type { KiruPluginOptions, SSGOptions } from "./types.js"
 import { build, InlineConfig, type Plugin, type PluginOption } from "vite"
-import { KIRU_SERVER_ENTRY, VITE_DEV_SERVER_INSTANCE } from "./globals.js"
+import {
+  KIRU_SERVER_ENTRY_MODULE,
+  VITE_DEV_SERVER_INSTANCE,
+} from "./globals.js"
 
 export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   let state: PluginState
@@ -152,7 +155,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
          */
         queueMicrotask(() => {
           server.ssrLoadModule(VIRTUAL_ENTRY_SERVER_ID).then((mod) => {
-            KIRU_SERVER_ENTRY.current =
+            KIRU_SERVER_ENTRY_MODULE.current =
               mod as typeof import("virtual:kiru:entry-server")
           })
         })
