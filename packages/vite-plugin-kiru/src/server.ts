@@ -2,8 +2,14 @@ import path from "node:path"
 import fs from "node:fs"
 import type { Manifest, ModuleNode } from "vite"
 import { ServerRenderOptions, SSRRenderResult } from "./types.server"
-import { VIRTUAL_ENTRY_CLIENT_ID } from "./virtual-modules.js"
-import { VITE_DEV_SERVER_INSTANCE } from "./globals"
+import {
+  VIRTUAL_ENTRY_CLIENT_ID,
+  VIRTUAL_ENTRY_SERVER_ID,
+} from "./virtual-modules.js"
+import {
+  awaitServerRendererInitialized_Dev,
+  VITE_DEV_SERVER_INSTANCE,
+} from "./globals"
 
 async function getClientAssets(
   clientOutDirAbs: string,
@@ -108,10 +114,73 @@ function collectCssForModules(
   return ""
 }
 
+async function resolveServerRenderer(): Promise<
+  typeof import("virtual:kiru:entry-server")
+> {
+  if (process.env.NODE_ENV !== "production") {
+    return awaitServerRendererInitialized_Dev()
+  }
+  return loadServerRenderer_Production()
+}
+
+async function loadServerRenderer_Production(): Promise<
+  typeof import("virtual:kiru:entry-server")
+> {
+  const projectRoot = process.cwd().replace(/\\/g, "/")
+  const serverOutDirAbs = path.resolve(projectRoot, "dist/server")
+  const manifestPath = path.resolve(serverOutDirAbs, "vite-manifest.json")
+
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error(
+      `Server manifest not found at ${manifestPath}. Make sure the SSR build has been completed.`
+    )
+  }
+
+  const manifest = JSON.parse(
+    fs.readFileSync(manifestPath, "utf-8")
+  ) as Manifest
+
+  // Find the virtual entry server module in the manifest
+  // It should be keyed as "__virtual_kiru_entry-server-{hash}.js"
+  const virtualEntryServerModule = Object.values(manifest).find(
+    (value) => value.src === VIRTUAL_ENTRY_SERVER_ID
+  )
+
+  if (!virtualEntryServerModule) {
+    throw new Error(
+      "Virtual entry server module not found in manifest. Make sure the SSR build has been completed."
+    )
+  }
+
+  const entryServerFile = virtualEntryServerModule.file
+  const entryServerPath = path.resolve(serverOutDirAbs, entryServerFile)
+
+  if (!fs.existsSync(entryServerPath)) {
+    throw new Error(
+      `Virtual entry server module file not found at ${entryServerPath}`
+    )
+  }
+
+  // Import from the bundled file
+  // Use file:// URL for ESM import
+  const fileUrl = `file://${entryServerPath.replace(/\\/g, "/")}`
+  const module = await import(/* @vite-ignore */ fileUrl)
+
+  if (!module.render || !module.documentModuleId) {
+    throw new Error(
+      "Virtual entry server module does not export render and documentModuleId"
+    )
+  }
+  return {
+    render: module.render,
+    documentModuleId: module.documentModuleId,
+  }
+}
+
 export async function renderPage(
   options: ServerRenderOptions
 ): Promise<SSRRenderResult> {
-  const { render, documentModuleId } = await import("virtual:kiru:entry-server")
+  const { render, documentModuleId } = await resolveServerRenderer()
 
   // Track modules for CSS collection
   const moduleIds = [documentModuleId]

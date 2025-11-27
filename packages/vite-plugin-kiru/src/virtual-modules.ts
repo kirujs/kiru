@@ -30,13 +30,15 @@ export { dir, baseUrl, pages, layouts, guards, transition }
   }
 
   function createEntryServerModule(): string {
+    const documentModuleId = userDoc.substring(projectRoot.length)
+
     if (mode === "ssr") {
       return `
 import { render as kiruServerRender } from "kiru/router/ssr"
 import Document from "${userDoc}"
 import * as config from "${VIRTUAL_CONFIG_ID}"
 
-export const documentModuleId = "${userDoc.substring(projectRoot.length)}"
+export const documentModuleId = "${documentModuleId}"
 
 export async function render(url, ctx) {
   return kiruServerRender(url, { ...ctx, ...config, Document })
@@ -53,7 +55,7 @@ import {
 import Document from "${userDoc}"
 import * as config from "${VIRTUAL_CONFIG_ID}"
 
-export const documentModuleId = "${userDoc.substring(projectRoot.length)}"
+export const documentModuleId = "${documentModuleId}"
 
 export async function render(url, ctx) {
   return kiruStaticRender(url, { ...ctx, ...config, Document })

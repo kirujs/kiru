@@ -17,11 +17,14 @@ import {
   resolveUserDocument,
   shouldTransformFile,
 } from "./utils.js"
-import { createVirtualModules } from "./virtual-modules.js"
+import {
+  createVirtualModules,
+  VIRTUAL_ENTRY_SERVER_ID,
+} from "./virtual-modules.js"
 
 import type { KiruPluginOptions, SSGOptions } from "./types.js"
 import { build, InlineConfig, type Plugin, type PluginOption } from "vite"
-import { VITE_DEV_SERVER_INSTANCE } from "./globals.js"
+import { KIRU_SERVER_ENTRY, VITE_DEV_SERVER_INSTANCE } from "./globals.js"
 
 export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   let state: PluginState
@@ -66,11 +69,12 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         createPreviewMiddleware(state.projectRoot, state.baseOutDir)
       )
     },
-    configureServer(server) {
+    async configureServer(server) {
       VITE_DEV_SERVER_INSTANCE.current = server
       if (state.isProduction || state.isBuild) return
       const {
         ssgOptions,
+        ssrOptions,
         devtoolsEnabled,
         dtClientPathname,
         dtHostScriptPath,
@@ -134,6 +138,23 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             // Let Vite handle the error
             next(e)
           }
+        })
+      } else if (ssrOptions) {
+        /**
+         * (vite 7.2.2 - revise in future)
+         * if we try to immediately load the server entry module, it will throw an error:
+         * [vite] (ssr) Error when evaluating SSR module virtual:kiru:entry-server:
+         * Cannot read properties of undefined (reading 'get')
+         * Plugin: vite:css-post
+         *
+         * assuming this is because vite's css transformer plugin is not yet loaded?
+         * wrapping in a queueMicrotask seems to be a workaround.
+         */
+        queueMicrotask(() => {
+          server.ssrLoadModule(VIRTUAL_ENTRY_SERVER_ID).then((mod) => {
+            KIRU_SERVER_ENTRY.current =
+              mod as typeof import("virtual:kiru:entry-server")
+          })
         })
       }
     },
@@ -257,10 +278,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             ...inlineConfig?.build,
             ssr: true,
             rollupOptions: {
-              input: path.resolve(
-                state.projectRoot,
-                state.ssrOptions.runtimeEntry
-              ),
+              input: [
+                path.resolve(state.projectRoot, state.ssrOptions.runtimeEntry),
+                VIRTUAL_ENTRY_SERVER_ID,
+              ],
             },
           },
         })
