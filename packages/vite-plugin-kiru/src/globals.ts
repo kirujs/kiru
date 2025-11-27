@@ -45,8 +45,10 @@ export async function getServerEntryModule(): Promise<ServerEntryModule> {
     return Promise.resolve(KIRU_SERVER_ENTRY_MODULE.current)
   }
   if (process.env.NODE_ENV !== "production") {
+    // gets set in dev mode by the plugin
     return getServerEntryModule_Dev()
   }
+  // load server entry module via import()
   return getServerEntryModule_Production()
 }
 
@@ -107,15 +109,13 @@ async function getServerEntryModule_Production(): Promise<ServerEntryModule> {
   // Import from the bundled file
   // Use file:// URL for ESM import
   const fileUrl = `file://${entryServerPath.replace(/\\/g, "/")}`
-  const module = await import(/* @vite-ignore */ fileUrl)
+  const { render, documentModuleId } = await import(/* @vite-ignore */ fileUrl)
 
-  if (!module.render || !module.documentModuleId) {
+  if (typeof render !== "function" || typeof documentModuleId !== "string") {
     throw new Error(
       "Virtual entry server module does not export render and documentModuleId"
     )
   }
-  return {
-    render: module.render,
-    documentModuleId: module.documentModuleId,
-  }
+
+  return (KIRU_SERVER_ENTRY_MODULE.current = { render, documentModuleId })
 }
