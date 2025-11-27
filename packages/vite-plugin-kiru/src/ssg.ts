@@ -8,6 +8,7 @@ import type { SSGOptions } from "./types.js"
 import type { Manifest } from "vite"
 import type { PluginState } from "./config.js"
 import type { VirtualSSGServerModuleRenderResult } from "./dev-server.js"
+import { VIRTUAL_ENTRY_CLIENT_ID } from "./virtual-modules.js"
 
 interface VirtualServerModule {
   render: (
@@ -108,7 +109,7 @@ async function getClientAssets(clientOutDirAbs: string, manifestPath: string) {
     const clientManifestPath = path.resolve(clientOutDirAbs, manifestPath)
     if (fs.existsSync(clientManifestPath)) {
       const manifest = JSON.parse(fs.readFileSync(clientManifestPath, "utf-8"))
-      const clientEntryKey = "virtual:kiru:entry-client"
+      const clientEntryKey = VIRTUAL_ENTRY_CLIENT_ID
 
       if (manifest[clientEntryKey]?.file) {
         clientEntry = manifest[clientEntryKey].file
@@ -143,7 +144,7 @@ function collectCssForModules(
   }
 
   // Include entry client CSS which contains document-level styles
-  const entryClientKey = "virtual:kiru:entry-client"
+  const entryClientKey = VIRTUAL_ENTRY_CLIENT_ID
   if (manifest[entryClientKey] && !seen.has(entryClientKey)) {
     collectCss(entryClientKey)
   }
@@ -235,10 +236,10 @@ async function renderRoute(
   moduleIds.push(documentModuleId)
 
   const ctx: RenderContext = {
-    registerModule: (moduleId: string) => {
+    registerModule(moduleId) {
       moduleIds.push(moduleId)
     },
-    registerStaticProps: (props) => {
+    registerStaticProps(props) {
       ;(state.staticProps[srcFilePath] ??= {})[route] = props
     },
   }
@@ -464,7 +465,7 @@ async function appendStaticPropsToClientModules(
       "entries"
     )
 
-    const clientEntryChunk = manifest["virtual:kiru:entry-client"]
+    const clientEntryChunk = manifest[VIRTUAL_ENTRY_CLIENT_ID]
     if (!clientEntryChunk) {
       throw new Error("Client entry chunk not found in manifest")
     }

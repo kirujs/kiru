@@ -2,7 +2,7 @@ import { ResolvedSSGOptions } from "./config.js"
 import type { SSROptions } from "./types.js"
 import { resolveUserDocument } from "./utils.js"
 
-export const VIRTUAL_ROUTES_ID = "virtual:kiru:routes"
+export const VIRTUAL_CONFIG_ID = "virtual:kiru:config"
 export const VIRTUAL_ENTRY_SERVER_ID = "virtual:kiru:entry-server"
 export const VIRTUAL_ENTRY_CLIENT_ID = "virtual:kiru:entry-client"
 
@@ -13,7 +13,7 @@ export async function createVirtualModules(
 ) {
   const userDoc = resolveUserDocument(projectRoot, options)
 
-  function createRoutesModule(): string {
+  function createConfigModule(): string {
     const { dir, baseUrl, page, layout, guard, transition } = options
     return `
 import { formatViteImportMap, normalizePrefixPath } from "kiru/router/utils"
@@ -34,10 +34,12 @@ export { dir, baseUrl, pages, layouts, guards, transition }
       return `
 import { render as kiruServerRender } from "kiru/router/ssr"
 import Document from "${userDoc}"
-import * as routes from "${VIRTUAL_ROUTES_ID}"
+import * as config from "${VIRTUAL_CONFIG_ID}"
+
+export const documentModuleId = "${userDoc.substring(projectRoot.length)}"
 
 export async function render(url, ctx) {
-  return kiruServerRender(url, { ...ctx, ...routes, Document })
+  return kiruServerRender(url, { ...ctx, ...config, Document })
 }
 `
     }
@@ -49,14 +51,16 @@ import {
   generateStaticPaths as kiruGenerateStaticPaths
 } from "kiru/router/ssg"
 import Document from "${userDoc}"
-import * as routes from "${VIRTUAL_ROUTES_ID}"
+import * as config from "${VIRTUAL_CONFIG_ID}"
+
+export const documentModuleId = "${userDoc.substring(projectRoot.length)}"
 
 export async function render(url, ctx) {
-  return kiruStaticRender(url, { ...ctx, ...routes, Document })
+  return kiruStaticRender(url, { ...ctx, ...config, Document })
 }
 
 export async function generateStaticPaths() {
-  return kiruGenerateStaticPaths(routes.pages)
+  return kiruGenerateStaticPaths(config.pages)
 }
 `
   }
@@ -65,24 +69,24 @@ export async function generateStaticPaths() {
     if (mode === "ssr") {
       return `
 import { initClient } from "kiru/router/client"
-import * as routes from "${VIRTUAL_ROUTES_ID}"
+import * as config from "${VIRTUAL_CONFIG_ID}"
 import "${userDoc}"
 
-initClient({ ...routes, hydrationMode: "dynamic" })
+initClient({ ...config, hydrationMode: "dynamic" })
 `
     }
     // todo: only include Document in dev mode, we should instead scan for included assets
     return `
 import { initClient } from "kiru/router/client"
-import * as routes from "${VIRTUAL_ROUTES_ID}"
+import * as config from "${VIRTUAL_CONFIG_ID}"
 import "${userDoc}"
 
-initClient({ ...routes })
+initClient({ ...config })
 `
   }
 
   return {
-    [VIRTUAL_ROUTES_ID]: createRoutesModule,
+    [VIRTUAL_CONFIG_ID]: createConfigModule,
     [VIRTUAL_ENTRY_SERVER_ID]: createEntryServerModule,
     [VIRTUAL_ENTRY_CLIENT_ID]: createEntryClientModule,
   }

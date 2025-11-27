@@ -3,7 +3,6 @@ import fs from "node:fs"
 import type { Manifest, ModuleNode } from "vite"
 import { ServerRenderOptions, SSRRenderResult } from "./types.server"
 import { VIRTUAL_ENTRY_CLIENT_ID } from "./virtual-modules.js"
-import { resolveUserDocument } from "./utils"
 import { VITE_DEV_SERVER_INSTANCE } from "./globals"
 
 async function getClientAssets(
@@ -20,10 +19,9 @@ async function getClientAssets(
         fs.readFileSync(clientManifestPath, "utf-8")
       ) as Manifest
       manifest = parsedManifest
-      const clientEntryKey = "virtual:kiru:entry-client"
 
-      if (parsedManifest[clientEntryKey]?.file) {
-        clientEntry = parsedManifest[clientEntryKey].file
+      if (parsedManifest[VIRTUAL_ENTRY_CLIENT_ID]?.file) {
+        clientEntry = parsedManifest[VIRTUAL_ENTRY_CLIENT_ID].file
       }
     }
   } catch {}
@@ -54,7 +52,7 @@ function collectCssForModules(
   }
 
   // Include entry client CSS which contains document-level styles
-  const entryClientKey = "virtual:kiru:entry-client"
+  const entryClientKey = VIRTUAL_ENTRY_CLIENT_ID
   if (manifestRef[entryClientKey] && !seen.has(entryClientKey)) {
     collectCss(entryClientKey)
   }
@@ -113,21 +111,15 @@ function collectCssForModules(
 export async function renderPage(
   options: ServerRenderOptions
 ): Promise<SSRRenderResult> {
-  const { render } = await import("virtual:kiru:entry-server")
+  const { render, documentModuleId } = await import("virtual:kiru:entry-server")
 
   // Track modules for CSS collection
-  const moduleIds: string[] = []
+  const moduleIds = [documentModuleId]
   const projectRoot = process.cwd().replace(/\\/g, "/")
-
-  const documentModule = resolveUserDocument(projectRoot, {
-    dir: "src/pages",
-    document: "document.tsx",
-  }).substring(projectRoot.length)
-  moduleIds.push(documentModule)
 
   const { httpResponse } = await render(options.url, {
     userContext: options.context,
-    registerModule: (moduleId: string) => {
+    registerModule(moduleId) {
       moduleIds.push(moduleId)
     },
   })
