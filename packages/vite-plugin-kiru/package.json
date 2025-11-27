@@ -1,6 +1,6 @@
 {
   "name": "vite-plugin-kiru",
-  "version": "0.32.0-preview.0",
+  "version": "0.32.0-preview.1",
   "description": "",
   "main": "dist/index.js",
   "type": "module",
