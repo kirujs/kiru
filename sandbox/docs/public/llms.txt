@@ -471,7 +471,7 @@ export default function UserPage() {
 ```tsx
 export const config = definePageConfig({
   loader: {
-    mode: "static",  // Pre-render at build time
+    static: true,  // Pre-render at build time
     load: async ({ params }) => {
       const res = await fetch(`https://api.example.com/posts/${params.id}`)
       return await res.json()

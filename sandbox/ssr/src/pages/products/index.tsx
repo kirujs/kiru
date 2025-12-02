@@ -1,35 +1,16 @@
-import {
-  definePageConfig,
-  Link,
-  PageProps,
-  useRequestContext,
-} from "kiru/router"
+import { definePageConfig, Link, PageProps } from "kiru/router"
 import { client } from "@/api"
-
-let someData: Record<string, any> | null = null
 
 export const config = definePageConfig({
   loader: {
-    load: async ({ signal }) => {
+    load: async ({ signal, context: { user } }) => {
       const response = await client.api.products.$get({}, { init: { signal } })
       if (!response.ok) throw new Error(response.statusText)
-      return await response.json()
+      return response.json()
     },
     cache: {
       type: "memory",
       ttl: 1000 * 60 * 5,
-    },
-  },
-  hooks: {
-    onBeforeLeave: () => {
-      console.log("onBeforeLeave")
-      if (someData && Object.keys(someData).length) {
-        const answer = window.confirm(
-          "Do you really want to leave? you have unsaved changes!"
-        )
-        if (!answer) return false
-        someData = null
-      }
     },
   },
 })
@@ -38,19 +19,13 @@ export default function ProductsPage({
   data,
   loading,
 }: PageProps<typeof config>) {
-  const x = useRequestContext()
-  x.user
   if (loading) {
-    console.log("loading")
     return <p>Loading...</p>
   }
+
   return (
     data && (
-      <ul
-        onclick={() => {
-          someData = { test: true }
-        }}
-      >
+      <ul>
         {data.products.map((product) => (
           <li key={product.id} className="w-[420px]">
             <Link

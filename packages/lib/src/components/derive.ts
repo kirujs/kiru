@@ -7,6 +7,8 @@ import { sideEffectsEnabled } from "../utils/index.js"
 import type { RecordHas } from "../types.utils"
 import { isStatefulPromise, StreamDataThrowValue } from "../utils/promise.js"
 
+const $NO_VALUE = Symbol("no value")
+
 export type Derivable =
   | Kiru.Signal<unknown>
   | Kiru.StatefulPromise<unknown>
@@ -65,7 +67,7 @@ export function Derive<
   U extends DeriveFallbackMode = "swr"
 >(props: DeriveProps<T, U>) {
   const { from, children, fallback, mode } = props
-  const prevSuccess = useRef<UnwrapDerive<T> | null>(null)
+  const prevSuccess = useRef<UnwrapDerive<T> | typeof $NO_VALUE>($NO_VALUE)
 
   const promises = new Set<Kiru.StatefulPromise<any>>()
   let value: UnwrapDerive<T>
@@ -103,10 +105,11 @@ export function Derive<
       throw p.error
     }
     if (p.state === "pending") {
+      console.log("derive - pending", mode, prevSuccess.current)
       const nodeRef = node.current!
       Promise.allSettled(promises).then(() => requestUpdate(nodeRef))
 
-      if (mode !== "fallback" && prevSuccess.current) {
+      if (mode !== "fallback" && prevSuccess.current !== $NO_VALUE) {
         return (children as ChildFnWithStale<UnwrapDerive<T>>)(
           prevSuccess.current,
           true
@@ -117,5 +120,6 @@ export function Derive<
   }
 
   prevSuccess.current = value
+  console.log("derive - resolved", mode, prevSuccess.current)
   return (children as ChildFnWithStale<UnwrapDerive<T>>)(value, false)
 }

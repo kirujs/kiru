@@ -17,19 +17,24 @@ import ExamplePagesIndexTs from "./example.pages-index.ts.md"
 import ExamplePagesIdIndex from "./example.pages-[id]-index.md"
 import ExamplePagesIdIndexTs from "./example.pages-[id]-index.ts.md"
 
-
 <Head.Content>
   <title>Kiru - FileRouter</title>
-  <meta name="keywords" content="filerouter, router, route, link, useFileRouter, SSG, static site generation" />
-  <meta name="description" content="Learn how to use FileRouter in Kiru for file-based routing in SPAs and SSG with automatic route generation, layouts, dynamic routes, client-side navigation, and static site generation." />
+  <meta
+    name="keywords"
+    content="filerouter, router, route, link, useFileRouter, SSG, static site generation"
+  />
+  <meta
+    name="description"
+    content="Learn how to use FileRouter in Kiru for file-based routing in SPAs and SSG with automatic route generation, layouts, dynamic routes, client-side navigation, and static site generation."
+  />
 </Head.Content>
 
 # FileRouter
 
-The <CodePreview data={fileRouterTypePreview} /> provides a powerful file-based routing system for 
-single-page applications (SPA) and static site generation (SSG). It automatically generates routes 
-based on your file structure, enabling you to create pages and layouts using conventional file naming 
-patterns. With built-in SSG support, you can pre-render pages at build time for optimal performance 
+The <CodePreview data={fileRouterTypePreview} /> provides a powerful file-based routing system for
+single-page applications (SPA) and static site generation (SSG). It automatically generates routes
+based on your file structure, enabling you to create pages and layouts using conventional file naming
+patterns. With built-in SSG support, you can pre-render pages at build time for optimal performance
 and SEO.
 
 <DocsSection id="general-usage" title="General Usage">
@@ -39,8 +44,7 @@ To get started with FileRouter, choose a mode and follow the setup below:
 
 <SettingUp />
 
-
-Kiru's FileRouter follows a convention-over-configuration approach, where your file structure directly 
+Kiru's FileRouter follows a convention-over-configuration approach, where your file structure directly
 maps to your application's routes.
 
 </DocsSection>
@@ -77,8 +81,8 @@ Layouts are nested, so a route will be wrapped by all matching layouts from root
 
 <DocsSection id="data-loading" title="Data Loading">
 
-FileRouter provides built-in support for loading data asynchronously using the 
-`definePageConfig` function. This is useful for fetching 
+FileRouter provides built-in support for loading data asynchronously using the
+`definePageConfig` function. This is useful for fetching
 data from APIs, databases, or any async source.
 
 ### Basic Data Loading
@@ -86,10 +90,15 @@ data from APIs, databases, or any async source.
 Export a `config` object from your page component using `definePageConfig`:
 
 <CopyInnerText>
-{siteCodeLang.value === "js" ? <ExamplePagesIndex /> : <ExamplePagesIndexTs />}
+  {siteCodeLang.value === "js" ? (
+    <ExamplePagesIndex />
+  ) : (
+    <ExamplePagesIndexTs />
+  )}
 </CopyInnerText>
 
 The `loader.load` function receives a context object with:
+
 - **signal**: An `AbortSignal` for canceling requests
 - **params**: Route parameters (for dynamic routes)
 - **query**: URL query parameters
@@ -97,7 +106,7 @@ The `loader.load` function receives a context object with:
 
 ### Caching for non-static loaders
 
-Caching is available when the loader runs in `client` mode (default). Use the `cache` option to control where and how long results are stored. 
+Caching is available when the loader runs in `client` mode (default). Use the `cache` option to control where and how long results are stored.
 Cached values are re-used across navigations until the TTL expires or the route is `invalidated`.
 
 <CopyInnerText>
@@ -130,14 +139,15 @@ You can invalidate a route by calling the `invalidate` method on the <CodePrevie
 import { useFileRouter } from "kiru/router"
 
 function MyComponent() {
-  const router = useFileRouter()
-  router.invalidate("/")
+const router = useFileRouter()
+router.invalidate("/")
 }
-```
+
+````
 </CopyInnerText>
 
 <CalloutBlock>
-  Caching is ignored for `mode: "static"` loaders since data is baked into the build output.
+  Caching is ignored for `static` loaders since data is baked into the build output.
 </CalloutBlock>
 
 ### Accessing Loaded Data
@@ -149,7 +159,7 @@ Your page component receives the loaded data through <CodePreview data={pageProp
 - **error**: Error object if loading failed (or `null`)
 
 <CalloutBlock>
-  The loader function is called both on the client (for client-side navigation) and 
+  The loader function is called both on the client (for client-side navigation) and
   on the server (for SSG). Make sure your loader is safe to run both environments.
 </CalloutBlock>
 
@@ -165,7 +175,7 @@ For dynamic routes, access route parameters in your loader:
 
 <DocsSection id="static-site-generation" title="Static Site Generation (SSG)">
 
-FileRouter includes built-in support for Static Site Generation (SSG), allowing you to 
+FileRouter includes built-in support for Static Site Generation (SSG), allowing you to
 pre-render pages at build time. SSG provides several benefits:
 
 - **Performance**: Pages are pre-rendered as static HTML, serving instantly
@@ -179,12 +189,12 @@ When you build your application with SSG enabled:
 
 1. **Discovery**: Kiru automatically discovers all routes from your file structure
 2. **Pre-rendering**: Each route is rendered to static HTML at build time
-3. **Data Loading**: Loaders with `mode: "static"` are executed during build to fetch data
+3. **Data Loading**: Loaders with `static:true` are executed during build to fetch data
 4. **Output**: Static HTML files are generated in the `dist/client` directory
 
 ### Dynamic Routes with SSG
 
-For dynamic routes (e.g., `pages/posts/[id]/index.tsx`), you need to provide a way to 
+For dynamic routes (e.g., `pages/posts/[id]/index.tsx`), you need to provide a way to
 generate all possible route parameters at build time. This is typically done by:
 
 1. Fetching a list of all possible IDs from your data source
@@ -199,7 +209,7 @@ import { definePageConfig } from "kiru/router"
 
 export const config = definePageConfig({
   loader: {
-    mode: "static", // bake data into the page at build time
+    statuc: true, // bake data into the page at build time
     load: async ({ params }) => {
       const res = await fetch(`https://example.com/posts/${params.id}`)
       if (!res.ok) throw new Error(res.statusText)
@@ -212,21 +222,23 @@ export const config = definePageConfig({
     return posts.map((p) => ({ id: p.id }))
   },
 })
-```
+````
+
 </CopyInnerText>
 
 <CalloutBlock variant="info">
-  During SSG, your loader functions that have `mode: "static"` will be called for each route that needs to be 
-  pre-rendered. Make sure your data fetching logic can handle being called multiple 
-  times during the build process. When fetching data from a rate-limited API, 
-  use the `ssg.build.maxConcurrentRenders` plugin option to limit the number of concurrent requests during the build process.
+  During SSG, your loader functions that have `static: true` will be called for
+  each route that needs to be pre-rendered. Make sure your data fetching logic
+  can handle being called multiple times during the build process. When fetching
+  data from a rate-limited API, use the `ssg.build.maxConcurrentRenders` plugin
+  option to limit the number of concurrent requests during the build process.
 </CalloutBlock>
 
 </DocsSection>
 
 <DocsSection id="navigation" title="Navigation">
 
-FileRouter provides the <CodePreview data={linkTypePreview} /> component for client-side 
+FileRouter provides the <CodePreview data={linkTypePreview} /> component for client-side
 navigation. It's a drop-in replacement for anchor tags that provides:
 
 - **Client-side navigation**: No full page reloads
@@ -238,22 +250,23 @@ navigation. It's a drop-in replacement for anchor tags that provides:
 import { Link } from "kiru/router"
 
 function Navigation() {
-  return (
-    <nav>
-      <Link to="/">Home</Link>
-      <Link to="/about">About</Link>
-      <Link to="/docs/getting-started">Getting Started</Link>
-    </nav>
-  )
-}
-```
+return (
+
+<nav>
+  <Link to="/">Home</Link>
+  <Link to="/about">About</Link>
+  <Link to="/docs/getting-started">Getting Started</Link>
+</nav>
+) }
+
+````
 </CopyInnerText>
 
 </DocsSection>
 
 <DocsSection id="layouts" title="Layouts">
 
-Layouts allow you to wrap multiple routes with shared UI. They're automatically detected 
+Layouts allow you to wrap multiple routes with shared UI. They're automatically detected
 and applied based on your file structure.
 
 ### Creating a Layout
@@ -272,7 +285,7 @@ Layouts are nested automatically. For example:
 - `pages/docs/layout.tsx` → Wraps all `/docs/*` routes (nested inside root layout)
 - `pages/docs/api/layout.tsx` → Wraps all `/docs/api/*` routes (nested inside both)
 
-This allows you to create a hierarchy of layouts, with each level adding its own UI 
+This allows you to create a hierarchy of layouts, with each level adding its own UI
 elements while preserving the parent layouts.
 
 </DocsSection>
@@ -301,7 +314,8 @@ export default function NotFound() {
     </div>
   )
 }
-```
+````
+
 </CopyInnerText>
 
 Scoped 404 for a docs subtree:
@@ -321,14 +335,16 @@ export default function DocsNotFound() {
 </CopyInnerText>
 
 <CalloutBlock>
-  In CSR deployments without a top-level `404` page, deep links will load the app shell and you should display a client-side 404 when no route matches. In SSG builds, ensure `pages/404/index.tsx` exists so a static 404 is emitted.
- </CalloutBlock>
+  In CSR deployments without a top-level `404` page, deep links will load the
+  app shell and you should display a client-side 404 when no route matches. In
+  SSG builds, ensure `pages/404/index.tsx` exists so a static 404 is emitted.
+</CalloutBlock>
 
 </DocsSection>
 
 <DocsSection id="useFileRouter" title="useFileRouter">
 
-The <CodePreview data={useFileRouterTypePreview} /> hook provides access to the router 
+The <CodePreview data={useFileRouterTypePreview} /> hook provides access to the router
 instance and current route state:
 
 <CopyInnerText>
@@ -336,17 +352,18 @@ instance and current route state:
 import { useFileRouter } from "kiru/router"
 
 function MyComponent() {
-  const router = useFileRouter()
-  const { pathname, params, query } = router.state
-  
-  return (
-    <div>
-      <p>Current path: {pathname}</p>
-      <p>Route params: {JSON.stringify(params)}</p>
-      <p>Query params: {JSON.stringify(query)}</p>
-    </div>
-  )
-}
+const router = useFileRouter()
+const { pathname, params, query } = router.state
+
+return (
+
+<div>
+  <p>Current path: {pathname}</p>
+  <p>Route params: {JSON.stringify(params)}</p>
+  <p>Query params: {JSON.stringify(query)}</p>
+</div>
+) }
+
 ```
 </CopyInnerText>
 
@@ -366,3 +383,4 @@ The router state includes:
 - **invalidate(...paths: string[])**: Invalidate one or more routes. This is useful for invalidating the cache for a specific route.
 
 </DocsSection>
+```

@@ -1,0 +1,1 @@
+export const PAGE_DATA_PROMISE_ID = "__KIRU_PAGE_DATA__"

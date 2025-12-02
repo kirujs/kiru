@@ -21,7 +21,7 @@ export const config = definePageConfig({
       if (!response.ok) throw new Error(response.statusText)
       return (await response.json()) as FetchUsersResponse
     },
-    mode: "static",
+    static: true,
   },
   generateStaticParams: async () => {
     const response = await fetch("https://dummyjson.com/users?select=id")

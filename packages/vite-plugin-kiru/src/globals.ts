@@ -4,45 +4,34 @@ import { VIRTUAL_ENTRY_SERVER_ID } from "./virtual-modules.js"
 import type { ViteDevServer, Manifest } from "vite"
 
 type ServerEntryModule = typeof import("virtual:kiru:entry-server")
-interface Global {
+interface KiruGlobal {
   viteDevServer: ViteDevServer | null
   serverEntryModule: ServerEntryModule | null
+  rpcSecret: string | null
 }
 
-const $KIRU_HEADLESS_GLOBAL = Symbol.for("kiru.headlessGlobal")
+const $KIRU_SERVER_GLOBAL = Symbol.for("kiru.serverGlobal")
 
 // @ts-ignore
-const global: Global = (globalThis[$KIRU_HEADLESS_GLOBAL] ??= {
+export const KIRU_SERVER_GLOBAL: KiruGlobal = (globalThis[
+  $KIRU_SERVER_GLOBAL
+] ??= {
   viteDevServer: null,
   server: null,
+  rpcSecret: null,
 })
 
-export const VITE_DEV_SERVER_INSTANCE = {
-  get current() {
-    return global.viteDevServer
-  },
-  set current(server) {
-    global.viteDevServer = server
-  },
-}
-
 let entryServerResolvers: ((serverEntry: ServerEntryModule) => void)[] = []
-export const KIRU_SERVER_ENTRY_MODULE = {
-  get current() {
-    return global.serverEntryModule
-  },
-  set current(server) {
-    global.serverEntryModule = server
-    if (server) {
-      entryServerResolvers.forEach((fn) => fn(server))
-      entryServerResolvers = []
-    }
-  },
+
+export function setServerEntryModule(server: ServerEntryModule) {
+  KIRU_SERVER_GLOBAL.serverEntryModule = server
+  entryServerResolvers.forEach((fn) => fn(server))
+  entryServerResolvers.length = 0
 }
 
 export async function getServerEntryModule(): Promise<ServerEntryModule> {
-  if (KIRU_SERVER_ENTRY_MODULE.current) {
-    return Promise.resolve(KIRU_SERVER_ENTRY_MODULE.current)
+  if (KIRU_SERVER_GLOBAL.serverEntryModule) {
+    return Promise.resolve(KIRU_SERVER_GLOBAL.serverEntryModule)
   }
   if (process.env.NODE_ENV !== "production") {
     // gets set in dev mode by the plugin
@@ -109,13 +98,7 @@ async function getServerEntryModule_Production(): Promise<ServerEntryModule> {
   // Import from the bundled file
   // Use file:// URL for ESM import
   const fileUrl = `file://${entryServerPath.replace(/\\/g, "/")}`
-  const { render, documentModuleId } = await import(/* @vite-ignore */ fileUrl)
+  const mod = await import(/* @vite-ignore */ fileUrl)
 
-  if (typeof render !== "function" || typeof documentModuleId !== "string") {
-    throw new Error(
-      "Virtual entry server module does not export render and documentModuleId"
-    )
-  }
-
-  return (KIRU_SERVER_ENTRY_MODULE.current = { render, documentModuleId })
+  return (KIRU_SERVER_GLOBAL.serverEntryModule = mod)
 }

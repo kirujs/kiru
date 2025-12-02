@@ -144,36 +144,55 @@ export interface SSROptions {
    * @example "src/server.ts"
    */
   runtimeEntry: string
+
+  /**
+   * The secret to use for server function RPCs.
+   * If not specified, one will be generated automatically.
+   */
+  secret?: string
+
   /**
    * The base URL of the app
    * @default "/"
    */
   baseUrl?: string
+
   /**
    * The directory of the app
    * @default "src/pages"
    */
   dir?: string
+
   /**
    * The name of the document component
    * @default "document.{tsx,jsx}"
    */
   document?: string
+
   /**
    * The filename of page components to search for
    * @default "index.{tsx,jsx}"
    */
   page?: string
+
+  /**
+   * The filename of 'remote' files for server function RPCs
+   * @default "remote.{ts,js}"
+   */
+  remote?: string
+
   /**
    * The filename of layout components to search for
    * @default "layout.{tsx,jsx}"
    */
   layout?: string
+
   /**
    * The filename of guard files to search for
    * @default "guard.{ts,js}"
    */
   guard?: string
+
   /**
    * Enable transitions for all routes and loading states
    * @default false

@@ -1,9 +1,12 @@
-import { STREAMED_DATA_EVENT } from "../constants.js"
 import { __DEV__ } from "../env.js"
 import { hydrationMode, renderMode } from "../globals.js"
 import { Signal, useSignal } from "../signals/base.js"
 import { cleanupHook, depsRequireChange, useHook } from "./utils.js"
 import { useId } from "./useId.js"
+import {
+  createStatefulPromise,
+  resolveStreamedPromise,
+} from "../utils/promise.js"
 
 export { usePromise }
 
@@ -35,7 +38,7 @@ function usePromise<T>(
         cleanupHook(hook)
 
         const controller = (hook.abortController = new AbortController())
-        hook.cleanup = () => controller.abort()
+        hook.cleanup = () => controller.abort("aborted")
 
         const index = nodeToPromiseIndex.get(vNode) ?? 0
         nodeToPromiseIndex.set(vNode, index + 1)
@@ -52,76 +55,28 @@ function usePromise<T>(
         ) {
           // if we're hydrating and the hydration mode is not static,
           // we need to resolve the promise from cache/event
-          promise = resolveDeferredPromise<T>(promiseId, controller.signal)
+          promise = resolveStreamedPromise<T>(promiseId, controller.signal)
         } else {
           // dom / stream / (hydrate + static)
           promise = callback(controller.signal)
         }
 
-        const state: Kiru.PromiseState<T> = { id: promiseId, state: "pending" }
-        const statefulPromise: Kiru.StatefulPromise<T> = (hook.promise =
-          Object.assign(promise, state, {
+        const p = (hook.promise = Object.assign(
+          createStatefulPromise(promiseId, promise),
+          {
             isPending,
             refresh: () => {
-              hook.deps = undefined
+              delete hook.deps
               update()
             },
-          }))
+          }
+        ))
 
-        statefulPromise
-          .then((value) => {
-            statefulPromise.state = "fulfilled"
-            statefulPromise.value = value
-            isPending.value = false
-          })
-          .catch((error) => {
-            statefulPromise.state = "rejected"
-            statefulPromise.error =
-              error instanceof Error ? error : new Error(error)
-          })
+        p.finally(() => {
+          isPending.value = false
+        })
       }
       return hook.promise
     }
   )
-}
-
-interface DeferredPromiseEventDetail<T> {
-  id: string
-  data?: T
-  error?: string
-}
-
-function resolveDeferredPromise<T>(
-  id: string,
-  signal: AbortSignal
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const deferralCache: Map<string, { data?: T; error?: string }> = // @ts-ignore
-      (window[STREAMED_DATA_EVENT] ??= new Map())
-
-    const existing = deferralCache.get(id)
-    if (existing) {
-      const { data, error } = existing
-      deferralCache.delete(id)
-      if (error) return reject(error)
-      return resolve(data!)
-    }
-
-    const onDataEvent = (event: Event) => {
-      const { detail } = event as CustomEvent<DeferredPromiseEventDetail<T>>
-      if (detail.id === id) {
-        deferralCache.delete(id)
-        window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
-        const { data, error } = detail
-        if (error) return reject(error)
-        resolve(data!)
-      }
-    }
-
-    window.addEventListener(STREAMED_DATA_EVENT, onDataEvent)
-    signal.addEventListener("abort", () => {
-      window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
-      reject()
-    })
-  })
 }

@@ -1,9 +1,17 @@
 import path from "node:path"
 import fs from "node:fs"
+import { AsyncLocalStorage } from "node:async_hooks"
 import type { Manifest, ModuleNode } from "vite"
-import { ServerRenderOptions, SSRRenderResult } from "./types.server"
+import {
+  ServerActionResponse,
+  ServerRenderOptions,
+  SSRRenderResult,
+} from "./types.server"
 import { VIRTUAL_ENTRY_CLIENT_ID } from "./virtual-modules.js"
-import { getServerEntryModule, VITE_DEV_SERVER_INSTANCE } from "./globals"
+import { getServerEntryModule, KIRU_SERVER_GLOBAL } from "./globals"
+import { makeKiruContextToken, unwrapKiruToken } from "./token"
+
+const als = new AsyncLocalStorage()
 
 async function getClientAssets(
   clientOutDirAbs: string,
@@ -111,11 +119,14 @@ function collectCssForModules(
 export async function renderPage(
   options: ServerRenderOptions
 ): Promise<SSRRenderResult> {
-  const { render, documentModuleId } = await getServerEntryModule()
+  const { render, documentModuleId, remoteFunctionSecret } =
+    await getServerEntryModule()
 
   // Track modules for CSS collection
   const moduleIds = [documentModuleId]
   const projectRoot = process.cwd().replace(/\\/g, "/")
+
+  als.enterWith(options.context)
 
   const { httpResponse } = await render(options.url, {
     userContext: options.context,
@@ -155,7 +166,7 @@ export async function renderPage(
 
     for (const id of moduleIds) {
       const p = path.join(projectRoot, id).replace(/\\/g, "/")
-      const mod = VITE_DEV_SERVER_INSTANCE.current!.moduleGraph.getModuleById(p)
+      const mod = KIRU_SERVER_GLOBAL.viteDevServer!.moduleGraph.getModuleById(p)
       if (!mod) {
         console.error(`Module not found: ${p}`)
         continue
@@ -204,6 +215,14 @@ export async function renderPage(
     "</head>",
     `<script type="application/json" k-request-context>${contextString}</script></head>`
   )
+  const token = makeKiruContextToken(
+    options.context as Record<string, unknown>,
+    remoteFunctionSecret
+  )
+  html = html.replace(
+    "</head>",
+    `<script type="application/json" k-request-token>${token}</script></head>`
+  )
 
   return {
     httpResponse: {
@@ -211,4 +230,63 @@ export async function renderPage(
       html,
     },
   }
+}
+
+export async function getServerActionResponse(
+  request: Request
+): Promise<ServerActionResponse> {
+  let action: (...args: any[]) => unknown
+  let actionArgs = []
+  let context: Record<string, unknown>
+  try {
+    let strToken
+    if (
+      request.method !== "POST" ||
+      request.headers.get("Content-Type") !== "application/json" ||
+      !(strToken = request.headers.get("x-kiru-token"))
+    ) {
+      return { httpResponse: null }
+    }
+
+    const server = await getServerEntryModule()
+    const allActions = server.getServerActions()
+
+    const ctx = unwrapKiruToken(strToken, server.remoteFunctionSecret)
+    if (!ctx) {
+      throw new Error("Invalid token")
+    }
+
+    const { fp, name, args } = await request.json()
+
+    const fileActions = allActions.get(fp)
+    const actionFn = fileActions?.[name]
+    if (typeof actionFn !== "function" || !Array.isArray(args)) {
+      return { httpResponse: { body: null, statusCode: 400 } }
+    }
+
+    action = actionFn
+    actionArgs = args
+    context = ctx
+  } catch (error) {
+    return { httpResponse: { body: null, statusCode: 500 } }
+  }
+
+  const alsContext = { ...context }
+
+  return new Promise(async (resolve) => {
+    als.run(alsContext, async () => {
+      try {
+        const result = await action(...actionArgs)
+        resolve({
+          httpResponse: { body: JSON.stringify(result), statusCode: 200 },
+        })
+      } catch {
+        return resolve({ httpResponse: { body: null, statusCode: 500 } })
+      }
+    })
+  })
+}
+
+export function getRequestContext(): Kiru.RequestContext {
+  return als.getStore() as Kiru.RequestContext
 }

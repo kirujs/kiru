@@ -86,7 +86,7 @@ export async function render(
   const abortController = new AbortController()
 
   if (config.loader) {
-    if (config.loader.mode !== "static" || __DEV__) {
+    if (!config.loader.static || __DEV__) {
       props = { loading: true, data: null, error: null }
     } else {
       const routerState: RouterState = {

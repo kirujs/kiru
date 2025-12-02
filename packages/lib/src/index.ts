@@ -16,5 +16,5 @@ export * from "./store.js"
 
 // @ts-ignore
 if ("window" in globalThis && !globalThis.__KIRU_DEVTOOLS__) {
-  globalThis.window.__kiru ??= createKiruGlobalContext()
+  window.__kiru ??= createKiruGlobalContext()
 }

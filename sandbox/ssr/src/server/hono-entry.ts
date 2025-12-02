@@ -1,7 +1,8 @@
 import { Hono } from "hono"
 import { streamText } from "hono/streaming"
-import { renderPage } from "vite-plugin-kiru/server"
+import { renderPage, getServerActionResponse } from "vite-plugin-kiru/server"
 import apiRouter, { authCookieParserMiddleware } from "./api"
+import { createMiddleware } from "hono/factory"
 import type { User } from "./services/user"
 
 declare global {
@@ -12,8 +13,22 @@ declare global {
   }
 }
 
+const kiruServerActions = createMiddleware(async (c, next) => {
+  const { httpResponse } = await getServerActionResponse(c.req.raw)
+  if (httpResponse === null) {
+    return next()
+  }
+
+  const { body, statusCode } = httpResponse
+  if (statusCode !== 200) {
+    return c.status(statusCode)
+  }
+  return c.json(body, statusCode)
+})
+
 const app = new Hono()
   .route("/api", apiRouter)
+  .use(kiruServerActions)
   .get("*", authCookieParserMiddleware, async (c, next) => {
     try {
       const { httpResponse } = await renderPage({
@@ -28,11 +43,10 @@ const app = new Hono()
 
       return streamText(c, async (res) => {
         c.status(statusCode as any)
-        headers.forEach(([name, value]: [string, string]) =>
-          c.header(name, value)
-        )
+        headers.forEach(([k, v]: [string, string]) => c.header(k, v))
 
         await res.write(html)
+
         if (stream) {
           return res.pipe(stream)
         }

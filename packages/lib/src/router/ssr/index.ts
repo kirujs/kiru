@@ -21,6 +21,8 @@ import type {
   GuardModule,
   PageModule,
 } from "../types.internal.js"
+import { createStatefulPromise } from "../../utils/promise.js"
+import { PAGE_DATA_PROMISE_ID } from "../constants.js"
 
 export interface SSRRenderContext {
   pages: FormattedViteImportMap<PageModule>
@@ -48,14 +50,11 @@ export async function render(
 ): Promise<SSRRenderResult> {
   const extName = path.extname(url)
   if (extName && extName.length > 0) {
-    return {
-      httpResponse: null,
-    }
+    return { httpResponse: null }
   } else if (url.startsWith("/@")) {
-    return {
-      httpResponse: null,
-    }
+    return { httpResponse: null }
   }
+
   const u = new URL(url, "http://localhost")
   const pathSegments = u.pathname.split("/").filter(Boolean)
   let routeMatch = matchRoute(ctx.pages, pathSegments)
@@ -134,23 +133,8 @@ export async function render(
       { ...ctx.userContext },
       u.pathname
     )
-    if (redirectPath) {
+    if (redirectPath !== null) {
       return createRedirectResult(redirectPath)
-    }
-  }
-
-  const query = parseQuery(u.search)
-
-  let props = {} as PageProps<PageConfig>
-  const config = page.config ?? {}
-  const abortController = new AbortController()
-
-  // PageConfig loaders don't run on the server
-  if (config.loader) {
-    props = {
-      data: null,
-      error: null,
-      loading: true,
     }
   }
 
@@ -165,6 +149,34 @@ export async function render(
     )
   }
 
+  const query = parseQuery(u.search)
+
+  let props = {} as PageProps<PageConfig>
+  const config = page.config ?? {}
+  const abortSignal = new AbortController().signal
+
+  const routerState: RouterState = {
+    params,
+    query,
+    pathname: u.pathname,
+    hash: "",
+    signal: abortSignal,
+  }
+
+  let pageDataPromise: Kiru.StatefulPromise<unknown> | null = null
+  if (config.loader && !config.loader.static) {
+    props = {
+      data: null,
+      error: null,
+      loading: true,
+    }
+    const promise = config.loader.load({
+      ...routerState,
+      context: { ...ctx.userContext },
+    })
+    pageDataPromise = createStatefulPromise(PAGE_DATA_PROMISE_ID, promise)
+  }
+
   const children = wrapWithLayouts(
     layouts
       .map((layout) => layout.default)
@@ -173,25 +185,18 @@ export async function render(
     props
   )
 
-  const routerContextValue = {
-    state: {
-      params,
-      query,
-      pathname: u.pathname,
-      hash: "",
-      signal: abortController.signal,
-    } satisfies RouterState,
-  }
-
   const app = createElement(RouterContext.Provider, {
     children: createElement(RequestContext.Provider, {
       children: Fragment({ children }),
       value: ctx.userContext,
     }),
-    value: routerContextValue,
+    value: { state: routerState },
   })
 
-  let { immediate: pageOutletContent, stream } = renderToReadableStream(app)
+  let { immediate: pageOutletContent, stream } = renderToReadableStream(app, {
+    data: pageDataPromise ? [pageDataPromise] : [],
+  })
+
   const hasHeadContent = pageOutletContent.includes("<kiru-head-content>")
   const hasHeadOutlet = documentShell.includes("<kiru-head-outlet>")
 

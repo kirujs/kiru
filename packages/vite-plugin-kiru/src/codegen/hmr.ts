@@ -22,11 +22,15 @@ if (import.meta.hot && "window" in globalThis) {
 }
 `
 export function prepareHMR(ctx: TransformCTX) {
-  const { code, ast, fileLinkFormatter, filePath } = ctx
+  const { code, ast, fileLinkFormatter, id: filePath } = ctx
 
   try {
-    const hotVars = findHotVars(code, ast.body as AstNode[], filePath)
-    if (hotVars.size === 0 && !code.hasChanged()) return
+    const { hotVars, didWrite } = findHotVars(
+      code,
+      ast.body as AstNode[],
+      filePath
+    )
+    if (hotVars.size === 0 && !didWrite) return
 
     code.prepend(`
 if (import.meta.hot && "window" in globalThis) {
@@ -108,12 +112,9 @@ const allowedHotVarParentStacks: Array<AstNode["type"][]> = [
   ["ExportNamedDeclaration", "VariableDeclaration", "VariableDeclarator"],
 ]
 
-function findHotVars(
-  code: MagicString,
-  bodyNodes: AstNode[],
-  _id: string
-): Set<HotVarDesc> {
+function findHotVars(code: MagicString, bodyNodes: AstNode[], _id: string) {
   const hotVars = new Set<HotVarDesc>()
+  let didWrite = false
 
   const aliasHandlers = [
     "createStore",
@@ -155,6 +156,7 @@ function findHotVars(
             ctx.stack[0].type === "ExpressionStatement"
           ) {
             code.appendRight(node.start, UNNAMED_WATCH_PREAMBLE)
+            didWrite = true
             return ctx.exit()
           }
 
@@ -208,7 +210,10 @@ function findHotVars(
     }
   }
 
-  return hotVars
+  return {
+    hotVars,
+    didWrite,
+  }
 }
 
 function addHotVarDesc(node: AstNode, names: Set<HotVarDesc>, type: string) {

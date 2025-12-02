@@ -61,11 +61,21 @@ const defaultSSGOptions: Required<Omit<SSGOptions, "sitemap">> & {
   },
 }
 
+function generateRemoteFunctionTokenSecret() {
+  const secret = []
+  for (let i = 0; i < 32; i++) {
+    secret.push(String.fromCharCode(Math.floor(Math.random() * 256)))
+  }
+  return secret.join("")
+}
+
 const defaultSSROptions: Omit<Required<SSROptions>, "runtimeEntry"> = {
+  secret: generateRemoteFunctionTokenSecret(),
   baseUrl: "/",
   dir: "src/pages",
   document: "document.{tsx,jsx}",
   page: "index.{tsx,jsx}",
+  remote: "remote.{ts,js}",
   layout: "layout.{tsx,jsx}",
   guard: "guard.{ts,js}",
   transition: false,
@@ -169,8 +179,17 @@ export function createPluginState(
       throw new Error("[vite-plugin-kiru]: ssr.baseUrl must start with '/'")
     }
 
-    const { baseUrl, dir, document, page, layout, guard, transition } =
-      defaultSSROptions
+    const {
+      baseUrl,
+      dir,
+      document,
+      page,
+      remote,
+      layout,
+      guard,
+      transition,
+      secret,
+    } = defaultSSROptions
 
     return {
       ...state,
@@ -179,9 +198,11 @@ export function createPluginState(
         dir,
         document,
         page,
+        remote,
         layout,
         guard,
         transition,
+        secret,
         ...ssr,
       },
     }

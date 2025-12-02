@@ -699,7 +699,11 @@ function commitDeletion(vNode: VNode) {
 
     subs?.forEach((unsub) => unsub())
     if (cleanups) Object.values(cleanups).forEach((c) => c())
-    while (hooks?.length) hooks.pop()!.cleanup?.()
+    while (hooks?.length) {
+      try {
+        hooks.pop()!.cleanup?.()
+      } catch {}
+    }
 
     if (__DEV__) {
       window.__kiru.profilingContext?.emit("removeNode", ctx)

@@ -1,6 +1,11 @@
 import path from "node:path"
+import { minimatch } from "minimatch"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
-import { prepareDevOnlyHooks, prepareHMR } from "./codegen/index.js"
+import {
+  prepareDevOnlyHooks,
+  prepareHMR,
+  prepareRemoteFunctions,
+} from "./codegen/index.js"
 import { ANSI } from "./ansi.js"
 import {
   createPluginState,
@@ -18,16 +23,14 @@ import {
   shouldTransformFile,
 } from "./utils.js"
 import {
-  createVirtualModules,
+  createVirtualModules_SSG,
+  createVirtualModules_SSR,
   VIRTUAL_ENTRY_SERVER_ID,
 } from "./virtual-modules.js"
 
 import type { KiruPluginOptions, SSGOptions } from "./types.js"
 import { build, InlineConfig, type Plugin, type PluginOption } from "vite"
-import {
-  KIRU_SERVER_ENTRY_MODULE,
-  VITE_DEV_SERVER_INSTANCE,
-} from "./globals.js"
+import { KIRU_SERVER_GLOBAL, setServerEntryModule } from "./globals.js"
 
 export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   let state: PluginState
@@ -46,16 +49,14 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       state = updatePluginState(initialState, config, opts)
       log = createLogger(state)
       if (state.ssrOptions) {
-        virtualModules = await createVirtualModules(
+        virtualModules = createVirtualModules_SSR(
           state.projectRoot,
-          state.ssrOptions,
-          "ssr"
+          state.ssrOptions
         )
       } else if (state.ssgOptions) {
-        virtualModules = await createVirtualModules(
+        virtualModules = createVirtualModules_SSG(
           state.projectRoot,
-          state.ssgOptions,
-          "ssg"
+          state.ssgOptions
         )
       }
     },
@@ -73,7 +74,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       )
     },
     async configureServer(server) {
-      VITE_DEV_SERVER_INSTANCE.current = server
+      KIRU_SERVER_GLOBAL.viteDevServer = server
       if (state.isProduction || state.isBuild) return
       const {
         ssgOptions,
@@ -154,10 +155,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
          * wrapping in a queueMicrotask seems to be a workaround.
          */
         queueMicrotask(() => {
-          server.ssrLoadModule(VIRTUAL_ENTRY_SERVER_ID).then((mod) => {
-            KIRU_SERVER_ENTRY_MODULE.current =
-              mod as typeof import("virtual:kiru:entry-server")
-          })
+          server
+            .ssrLoadModule(VIRTUAL_ENTRY_SERVER_ID)
+            // @ts-expect-error
+            .then(setServerEntryModule)
         })
       }
     },
@@ -199,7 +200,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         return { code: src }
       }
 
-      log(`Processing ${ANSI.black(id)}`)
+      const filePath = id.replace(state.projectRoot, "")
+      log(`Processing ${ANSI.black(filePath)}`)
 
       const ast = this.parse(src)
       const code = new MagicString(src)
@@ -207,12 +209,28 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         code,
         ast,
         isBuild: state.isBuild,
+        isServer: this.environment.name === "ssr",
         fileLinkFormatter: state.fileLinkFormatter,
-        filePath: id,
+        id,
+        filePath,
         log,
       }
 
       prepareDevOnlyHooks(ctx)
+
+      if (state.ssrOptions) {
+        const {
+          projectRoot,
+          ssrOptions: { dir, remote },
+        } = state
+        const actionsMatchPattern = path
+          .join(projectRoot, dir, "**", remote)
+          .replace(/\\/g, "/")
+
+        if (minimatch(id, actionsMatchPattern)) {
+          prepareRemoteFunctions(ctx)
+        }
+      }
 
       if (!state.isProduction && !state.isBuild) {
         prepareHMR(ctx)

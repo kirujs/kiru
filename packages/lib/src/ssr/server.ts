@@ -20,33 +20,29 @@ d.currentScript.remove()
 </script>
 `.replace(/\s+/g, " ")
 
-export function renderToReadableStream(element: JSX.Element): {
+interface RenderToReadableStreamConfig {
+  /**
+   * Include additional data to stream - must be resolved on the client manually.
+   */
+  data?: Kiru.StatefulPromise<unknown>[]
+}
+
+export function renderToReadableStream(
+  element: JSX.Element,
+  config: RenderToReadableStreamConfig = {}
+): {
   immediate: string
   stream: ReadableStream | null
 } {
-  const streamPromises = new Set<Kiru.StatefulPromise<unknown>>()
-  const dataPromises: Promise<string>[] = []
-  let stream: ReadableStream | null = null
+  const streamData = createStreamDataHandler()
+  if (config.data) {
+    streamData.enqueue(config.data)
+  }
 
   let immediate = ""
-
   const ctx: HeadlessRenderContext = {
     write: (chunk) => (immediate += chunk),
-    onStreamData(data) {
-      for (const promise of data) {
-        if (streamPromises.has(promise)) continue
-        streamPromises.add(promise)
-
-        const dataPromise = promise
-          .then(() => ({ data: promise.value }))
-          .catch(() => ({ error: promise.error?.message }))
-          .then(
-            (value, content = JSON.stringify(value)) =>
-              `<script id="${promise.id}" k-data type="application/json">${content}</script>`
-          )
-        dataPromises.push(dataPromise)
-      }
-    },
+    onStreamData: streamData.enqueue,
   }
 
   const prev = renderMode.current
@@ -54,10 +50,11 @@ export function renderToReadableStream(element: JSX.Element): {
   headlessRender(ctx, Fragment({ children: element }), null, 0)
   renderMode.current = prev
 
-  if (dataPromises.length > 0) {
+  let stream: ReadableStream | null = null
+  if (streamData.chunks.length > 0) {
     stream = new ReadableStream({
       async pull(controller) {
-        for await (const chunk of dataPromises) {
+        for await (const chunk of streamData.chunks) {
           controller.enqueue(chunk)
         }
         controller.enqueue(STREAMED_DATA_SETUP)
@@ -67,4 +64,33 @@ export function renderToReadableStream(element: JSX.Element): {
   }
 
   return { immediate, stream }
+}
+
+interface StreamDataHandler {
+  enqueue: NonNullable<HeadlessRenderContext["onStreamData"]>
+  chunks: Promise<string>[]
+}
+
+function createStreamDataHandler(): StreamDataHandler {
+  const seen = new Set<Kiru.StatefulPromise<unknown>>()
+  const chunks: Promise<string>[] = []
+
+  return {
+    chunks,
+    enqueue: (items) => {
+      for (const item of items) {
+        if (seen.has(item)) continue
+        seen.add(item)
+
+        const chunk = item
+          .then(() => ({ data: item.value }))
+          .catch(() => ({ error: item.error?.message }))
+          .then(
+            (value, content = JSON.stringify(value)) =>
+              `<script id="${item.id}" k-data type="application/json">${content}</script>`
+          )
+        chunks.push(chunk)
+      }
+    },
+  }
 }

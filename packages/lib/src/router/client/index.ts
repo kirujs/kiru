@@ -2,6 +2,7 @@ import { createElement } from "../../element.js"
 import { hydrate } from "../../ssr/client.js"
 import { FileRouter } from "../fileRouter.js"
 import { toArray } from "../../utils/format.js"
+import { resolveStreamedPromise } from "../../utils/promise.js"
 import {
   matchModules,
   matchRoute,
@@ -28,6 +29,8 @@ import { FileRouterDataLoadError } from "../errors.js"
 import { __DEV__ } from "../../env.js"
 import { RouterCache } from "../cache.js"
 import { RequestContext } from "../context.js"
+import { PAGE_DATA_PROMISE_ID } from "../constants.js"
+import { AsyncTaskState } from "../../types.js"
 
 interface InitClientOptions {
   dir: string
@@ -73,6 +76,7 @@ export async function initClient(options: InitClientOptions) {
   }
 
   const children = createElement(FileRouter, { config })
+
   const app =
     hydrationMode === "static"
       ? children
@@ -91,7 +95,7 @@ export async function initClient(options: InitClientOptions) {
 async function preparePreloadConfig(
   options: InitClientOptions,
   isStatic404 = false,
-  _isSSR = false
+  isSSR = false
 ): Promise<FileRouterPreloadConfig> {
   let pageProps = {}
   let cacheData: null | { value: unknown } = null
@@ -145,7 +149,7 @@ async function preparePreloadConfig(
       { ...requestContext.current },
       url.pathname
     )
-    if (redirectPath) {
+    if (redirectPath !== null) {
       window.location.href = redirectPath
       // @ts-ignore
       return
@@ -153,6 +157,10 @@ async function preparePreloadConfig(
   }
 
   const query = parseQuery(window.location.search)
+
+  let pagePropsPromise:
+    | Promise<AsyncTaskState<unknown, FileRouterDataLoadError>>
+    | undefined
 
   // Check if page has static props pre-loaded at build time
   if (page.__KIRU_STATIC_PROPS__) {
@@ -172,8 +180,11 @@ async function preparePreloadConfig(
     pageProps = { loading: true, data: null, error: null }
 
     const loader = page.config.loader
-    // Check cache first if caching is enabled
-    if (loader.mode !== "static" && loader.cache) {
+    if (isSSR) {
+      pagePropsPromise = resolveStreamedPromise(PAGE_DATA_PROMISE_ID)
+        .then((data) => ({ data, error: null, loading: false } as const))
+        .catch((error) => ({ data: null, error, loading: false } as const))
+    } else if (!loader.static && loader.cache) {
       const cacheKey = {
         path: window.location.pathname,
         params: routeMatch.params,
@@ -198,6 +209,7 @@ async function preparePreloadConfig(
     guards: options.guards,
     page: page,
     pageProps: pageProps,
+    pagePropsPromise,
     pageLayouts: layouts,
     params: routeMatch.params,
     query: query,

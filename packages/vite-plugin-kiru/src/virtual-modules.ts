@@ -6,15 +6,15 @@ export const VIRTUAL_CONFIG_ID = "virtual:kiru:config"
 export const VIRTUAL_ENTRY_SERVER_ID = "virtual:kiru:entry-server"
 export const VIRTUAL_ENTRY_CLIENT_ID = "virtual:kiru:entry-client"
 
-export async function createVirtualModules(
+export function createVirtualModules_SSG(
   projectRoot: string,
-  options: ResolvedSSGOptions | Required<SSROptions>,
-  mode: "ssg" | "ssr"
+  options: ResolvedSSGOptions
 ) {
   const userDoc = resolveUserDocument(projectRoot, options)
+  const documentModuleId = userDoc.substring(projectRoot.length)
+  const { dir, baseUrl, page, layout, guard, transition } = options
 
-  function createConfigModule(): string {
-    const { dir, baseUrl, page, layout, guard, transition } = options
+  function createConfigModule() {
     return `
 import { formatViteImportMap, normalizePrefixPath } from "kiru/router/utils"
 
@@ -29,24 +29,7 @@ export { dir, baseUrl, pages, layouts, guards, transition }
 `
   }
 
-  function createEntryServerModule(): string {
-    const documentModuleId = userDoc.substring(projectRoot.length)
-
-    if (mode === "ssr") {
-      return `
-import { render as kiruServerRender } from "kiru/router/ssr"
-import Document from "${userDoc}"
-import * as config from "${VIRTUAL_CONFIG_ID}"
-
-export const documentModuleId = "${documentModuleId}"
-
-export async function render(url, ctx) {
-  return kiruServerRender(url, { ...ctx, ...config, Document })
-}
-`
-    }
-
-    // SSG mode
+  function createEntryServerModule() {
     return `
 import {
   render as kiruStaticRender,
@@ -67,23 +50,99 @@ export async function generateStaticPaths() {
 `
   }
 
-  function createEntryClientModule(): string {
-    if (mode === "ssr") {
-      return `
-import { initClient } from "kiru/router/client"
-import * as config from "${VIRTUAL_CONFIG_ID}"
-import "${userDoc}"
-
-initClient({ ...config, hydrationMode: "dynamic" })
-`
-    }
-    // todo: only include Document in dev mode, we should instead scan for included assets
+  function createEntryClientModule() {
     return `
 import { initClient } from "kiru/router/client"
 import * as config from "${VIRTUAL_CONFIG_ID}"
 import "${userDoc}"
 
 initClient({ ...config })
+`
+  }
+
+  return {
+    [VIRTUAL_CONFIG_ID]: createConfigModule,
+    [VIRTUAL_ENTRY_SERVER_ID]: createEntryServerModule,
+    [VIRTUAL_ENTRY_CLIENT_ID]: createEntryClientModule,
+  }
+}
+
+export function createVirtualModules_SSR(
+  projectRoot: string,
+  options: Required<SSROptions>
+) {
+  const userDoc = resolveUserDocument(projectRoot, options)
+  const documentModuleId = userDoc.substring(projectRoot.length)
+  const { dir, baseUrl, page, layout, guard, transition, secret } = options
+
+  function createConfigModule() {
+    return `
+import { formatViteImportMap, normalizePrefixPath } from "kiru/router/utils"
+
+const dir = normalizePrefixPath("${dir}")
+const baseUrl = normalizePrefixPath("${baseUrl}")
+const pages = formatViteImportMap(import.meta.glob(["/**/${page}"]), dir, baseUrl)
+const layouts = formatViteImportMap(import.meta.glob(["/**/${layout}"]), dir, baseUrl)
+const guards = formatViteImportMap(import.meta.glob(["/**/${guard}"]), dir, baseUrl)
+const transition = ${transition}
+const $actions = new Map()
+
+let token
+if ("window" in globalThis) {
+  try {
+    token = document.querySelector("[k-request-token]").innerHTML
+    console.log("token", token)  
+  } catch {}
+}
+
+globalThis.__kiru_serverActions ??= {
+  register: (fp, actionsMap) => $actions.set(fp, actionsMap),
+  dispatch: async (fp, name, ...args) => {   
+    const response = await fetch("/kiru_action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-kiru-token": token },
+      body: JSON.stringify({ fp, name, args })
+    })
+    switch (response.status) {
+      case 404:
+        throw new Error("Action not found")
+      case 500:
+        throw new Error("Action failed")        
+    }
+    return response.json()
+  }
+}
+
+export { dir, baseUrl, pages, $actions, layouts, guards, transition }
+`
+  }
+
+  function createEntryServerModule() {
+    return `
+import { render as kiruServerRender } from "kiru/router/ssr"
+import Document from "${userDoc}"
+import * as config from "${VIRTUAL_CONFIG_ID}"
+
+export const remoteFunctionSecret = "${secret}"
+export const documentModuleId = "${documentModuleId}"
+
+export async function render(url, ctx) {
+  return kiruServerRender(url, { ...ctx, ...config, Document })
+}
+
+export function getServerActions() {
+  return config.$actions
+}
+`
+  }
+
+  function createEntryClientModule() {
+    return `
+import { initClient } from "kiru/router/client"
+import * as config from "${VIRTUAL_CONFIG_ID}"
+import "${userDoc}"
+
+initClient({ ...config, hydrationMode: "dynamic" })
 `
   }
 

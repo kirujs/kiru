@@ -1,5 +1,6 @@
 declare module "virtual:kiru:entry-server" {
   export const documentModuleId: string
+  export const remoteFunctionSecret: string
   export const render: (
     url: string,
     options: {
@@ -7,6 +8,8 @@ declare module "virtual:kiru:entry-server" {
       registerModule: (moduleId: string) => void
     }
   ) => Promise<{ httpResponse: SSRHttpResponse | null }>
+
+  export const getServerActions: () => Map<string, any>
 }
 
 declare module "virtual:kiru:config" {

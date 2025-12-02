@@ -13,6 +13,7 @@ export interface FileRouterPreloadConfig {
   guards?: FormattedViteImportMap<GuardModule>
   page: PageModule
   pageProps: Record<string, unknown>
+  pagePropsPromise?: Promise<AsyncTaskState<unknown, FileRouterDataLoadError>>
   pageLayouts: DefaultComponentModule[]
   params: RouteParams
   query: RouteQuery
@@ -139,13 +140,9 @@ export type PageDataLoaderConfig<T = unknown> = {
 } & (
   | {
       /**
-       * The mode to use for the page data loader
-       * @default "client"
-       * @description
-       * - **static**: The page data is loaded at build time and never updated
-       * - **client**: The page data is loaded upon navigation and updated on subsequent navigations
+       * Indicates that the page data should only be loaded at build time
        */
-      mode?: "client"
+      static?: false
       /**
        * Enable transitions when swapping between "load", "error" and "data" states
        */
@@ -165,13 +162,9 @@ export type PageDataLoaderConfig<T = unknown> = {
     }
   | {
       /**
-       * The mode to use for the page data loader
-       * @default "client"
-       * @description
-       * - **static**: The page data is loaded at build time and never updated
-       * - **client**: The page data is loaded upon navigation and updated on subsequent navigations
+       * Indicates that the page data should only be loaded at build time
        */
-      mode: "static"
+      static: true
     }
 )
 

@@ -18,7 +18,9 @@ export type TransformCTX = {
   ast: ProgramNode
   fileLinkFormatter: FileLinkFormatter
   isBuild: boolean
-  filePath: string
+  isServer: boolean
+  id: string // the absolute path
+  filePath: string // path relative to project root
 }
 
 export function createAliasHandler(name: string, namespace = "kiru") {
