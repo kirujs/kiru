@@ -25,12 +25,13 @@ export function isStatefulPromise(
   return thing instanceof Promise && "id" in thing && "state" in thing
 }
 
-export function createStatefulPromise<T>(
+export function createStatefulPromise<T, U extends Record<string, unknown>>(
   id: string,
-  promise: Promise<T>
-): Kiru.StatefulPromise<T> {
+  promise: Promise<T>,
+  extra: U = {} as U
+): Kiru.StatefulPromise<T> & U {
   const state: Kiru.PromiseState<T> = { id, state: "pending" }
-  const p = Object.assign(promise, state)
+  const p = Object.assign(promise, state, extra)
   p.then((value) => {
     p.state = "fulfilled"
     p.value = value

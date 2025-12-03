@@ -6,7 +6,7 @@ export default function ProtectedPage() {
 
   return (
     <ErrorBoundary fallback={(e) => <p>error: {String(e)}</p>}>
-      <button onclick={() => increment().then(() => countPromise.refresh())}>
+      <button onclick={() => countPromise.refresh(() => increment())}>
         Increment
         <Derive from={countPromise} fallback={<span>Loading...</span>}>
           {(count, isStale) => (
