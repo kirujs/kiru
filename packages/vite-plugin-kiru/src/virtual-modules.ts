@@ -91,24 +91,18 @@ let token
 if ("window" in globalThis) {
   try {
     token = document.querySelector("[k-request-token]").innerHTML
-    console.log("token", token)  
   } catch {}
 }
 
 globalThis.__kiru_serverActions ??= {
   register: (fp, actionsMap) => $actions.set(fp, actionsMap),
   dispatch: async (fp, name, ...args) => {   
-    const response = await fetch("/kiru_action", {
+    const response = await fetch(\`/kiru_action?f=\${fp}&n=\${name}\`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-kiru-token": token },
-      body: JSON.stringify({ fp, name, args })
+      body: JSON.stringify(args)
     })
-    switch (response.status) {
-      case 404:
-        throw new Error("Action not found")
-      case 500:
-        throw new Error("Action failed")        
-    }
+    if (!response.ok) throw new Error("Action failed")
     return response.json()
   }
 }

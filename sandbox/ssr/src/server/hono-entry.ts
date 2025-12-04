@@ -20,9 +20,6 @@ const kiruServerActions = createMiddleware(async (c, next) => {
   }
 
   const { body, statusCode } = httpResponse
-  if (statusCode !== 200) {
-    return c.status(statusCode)
-  }
   return c.json(body, statusCode)
 })
 

@@ -34,9 +34,11 @@ function usePromise<T>(
       deps?: unknown[]
       refresh: (mutator?: PromiseMutator) => void
       promiseId: string
+      epoch: number
     },
     ({ hook, isInit, vNode, update }) => {
       if (isInit) {
+        hook.epoch = 0
         hook.cleanup = () => hook.abortController?.abort("aborted")
 
         const index = nodeToPromiseIndex.get(vNode) ?? 0
@@ -44,21 +46,23 @@ function usePromise<T>(
         const promiseId = (hook.promiseId = `${vNodeId}:data:${index}`)
 
         const refresh = (hook.refresh = (mutator?: PromiseMutator) => {
-          delete hook.deps
           if (typeof mutator !== "function") {
+            delete hook.deps
             return update()
           }
 
+          const epoch = ++hook.epoch
           hook.cleanup!()
           const signal = (hook.abortController = new AbortController()).signal
-          const promise = Promise.resolve(mutator(signal)).then(() =>
+          const promise = Promise.try(mutator, signal).then(() =>
             callback(signal)
           )
-          const p = (hook.promise = createStatefulPromise(promiseId, promise, {
-            isPending,
-            refresh,
-          }))
-          p.finally(() => (isPending.value = false))
+          hook.promise = createStatefulPromise(
+            promiseId,
+            promise,
+            { isPending, refresh },
+            () => epoch === hook.epoch && (isPending.value = false)
+          )
 
           isPending.value = true
           update()
@@ -89,11 +93,13 @@ function usePromise<T>(
           promise = callback(signal)
         }
 
-        const p = (hook.promise = createStatefulPromise(promiseId, promise, {
-          isPending,
-          refresh,
-        }))
-        p.finally(() => (isPending.value = false))
+        const epoch = ++hook.epoch
+        hook.promise = createStatefulPromise(
+          promiseId,
+          promise,
+          { isPending, refresh },
+          () => epoch === hook.epoch && (isPending.value = false)
+        )
       }
       return hook.promise
     }

@@ -38,7 +38,7 @@ export type DeriveFallbackMode = "swr" | "fallback"
 
 export interface DeriveProps<
   T extends Derivable,
-  Mode extends DeriveFallbackMode = "fallback"
+  Mode extends DeriveFallbackMode = "swr"
 > {
   from: T
   mode?: Mode
@@ -105,7 +105,6 @@ export function Derive<
       throw p.error
     }
     if (p.state === "pending") {
-      console.log("derive - pending", mode, prevSuccess.current)
       const nodeRef = node.current!
       Promise.allSettled(promises).then(() => requestUpdate(nodeRef))
 

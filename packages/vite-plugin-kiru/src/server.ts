@@ -11,7 +11,7 @@ import { VIRTUAL_ENTRY_CLIENT_ID } from "./virtual-modules.js"
 import { getServerEntryModule, KIRU_SERVER_GLOBAL } from "./globals"
 import { makeKiruContextToken, unwrapKiruToken } from "./token"
 
-const als = new AsyncLocalStorage()
+const als = new AsyncLocalStorage<Kiru.RequestContext>()
 
 async function getClientAssets(
   clientOutDirAbs: string,
@@ -239,11 +239,14 @@ export async function getServerActionResponse(
   let actionArgs = []
   let context: Record<string, unknown>
   try {
-    let strToken
+    let strToken, fileName, actionName
+    const searchParams = new URL(request.url).searchParams
     if (
       request.method !== "POST" ||
       request.headers.get("Content-Type") !== "application/json" ||
-      !(strToken = request.headers.get("x-kiru-token"))
+      !(strToken = request.headers.get("x-kiru-token")) ||
+      !(fileName = searchParams.get("f")) ||
+      !(actionName = searchParams.get("n"))
     ) {
       return { httpResponse: null }
     }
@@ -253,40 +256,50 @@ export async function getServerActionResponse(
 
     const ctx = unwrapKiruToken(strToken, server.remoteFunctionSecret)
     if (!ctx) {
-      throw new Error("Invalid token")
+      return createBadActionResponse()
     }
 
-    const { fp, name, args } = await request.json()
+    const args = await request.json()
 
-    const fileActions = allActions.get(fp)
-    const actionFn = fileActions?.[name]
+    const fileActions = allActions.get(fileName)
+    const actionFn = fileActions[actionName]
     if (typeof actionFn !== "function" || !Array.isArray(args)) {
-      return { httpResponse: { body: null, statusCode: 400 } }
+      return createBadActionResponse()
     }
 
     action = actionFn
     actionArgs = args
     context = ctx
-  } catch (error) {
-    return { httpResponse: { body: null, statusCode: 500 } }
+  } catch {
+    return createBadActionResponse()
   }
 
-  const alsContext = { ...context }
-
   return new Promise(async (resolve) => {
-    als.run(alsContext, async () => {
+    als.run({ ...context }, async () => {
       try {
         const result = await action(...actionArgs)
         resolve({
           httpResponse: { body: JSON.stringify(result), statusCode: 200 },
         })
       } catch {
-        return resolve({ httpResponse: { body: null, statusCode: 500 } })
+        resolve(createBadActionResponse())
       }
     })
   })
 }
 
+function createBadActionResponse(): ServerActionResponse {
+  return {
+    httpResponse: { body: null, statusCode: 500 },
+  }
+}
+
 export function getRequestContext(): Kiru.RequestContext {
-  return als.getStore() as Kiru.RequestContext
+  const ctx = als.getStore()
+  if (ctx === undefined) {
+    throw new Error(
+      "[vite-plugin-kiru]: Invalid `getRequestContext` invocation."
+    )
+  }
+  return ctx
 }

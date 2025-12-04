@@ -28,17 +28,21 @@ export function isStatefulPromise(
 export function createStatefulPromise<T, U extends Record<string, unknown>>(
   id: string,
   promise: Promise<T>,
-  extra: U = {} as U
+  extra: U = {} as U,
+  _finally: null | (() => void) = null
 ): Kiru.StatefulPromise<T> & U {
   const state: Kiru.PromiseState<T> = { id, state: "pending" }
   const p = Object.assign(promise, state, extra)
-  p.then((value) => {
-    p.state = "fulfilled"
-    p.value = value
-  }).catch((error) => {
-    p.state = "rejected"
-    p.error = error instanceof Error ? error : new Error(error)
-  })
+  p.then(
+    (value) => {
+      p.state = "fulfilled"
+      p.value = value
+    },
+    (error) => {
+      p.state = "rejected"
+      p.error = error instanceof Error ? error : new Error(String(error))
+    }
+  ).finally(_finally)
 
   return p
 }

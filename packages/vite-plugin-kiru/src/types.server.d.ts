@@ -29,14 +29,6 @@ export type ServerActionHttpResponse =
     }
   | {
       body: null
-      statusCode: 404
-    }
-  | {
-      body: null
-      statusCode: 400
-    }
-  | {
-      body: null
       statusCode: 500
     }
 
