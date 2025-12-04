@@ -51,12 +51,12 @@ function usePromise<T>(
             return update()
           }
 
-          const epoch = ++hook.epoch
           hook.cleanup!()
           const signal = (hook.abortController = new AbortController()).signal
           const promise = Promise.try(mutator, signal).then(() =>
             callback(signal)
           )
+          const epoch = ++hook.epoch
           hook.promise = createStatefulPromise(
             promiseId,
             promise,
