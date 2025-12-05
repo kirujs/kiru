@@ -7,6 +7,7 @@ type ServerEntryModule = typeof import("virtual:kiru:entry-server")
 interface KiruGlobal {
   viteDevServer: ViteDevServer | null
   serverEntryModule: ServerEntryModule | null
+  serverEntryResolvers: ((serverEntry: ServerEntryModule) => void)[]
   rpcSecret: string | null
   route: string | null
 }
@@ -19,16 +20,15 @@ export const KIRU_SERVER_GLOBAL: KiruGlobal = (globalThis[
 ] ??= {
   viteDevServer: null,
   server: null,
+  serverEntryResolvers: [],
   rpcSecret: null,
   route: null,
 })
 
-let entryServerResolvers: ((serverEntry: ServerEntryModule) => void)[] = []
-
 export function setServerEntryModule(server: ServerEntryModule) {
   KIRU_SERVER_GLOBAL.serverEntryModule = server
-  entryServerResolvers.forEach((fn) => fn(server))
-  entryServerResolvers.length = 0
+  KIRU_SERVER_GLOBAL.serverEntryResolvers.forEach((fn) => fn(server))
+  KIRU_SERVER_GLOBAL.serverEntryResolvers.length = 0
 }
 
 export async function getServerEntryModule(): Promise<ServerEntryModule> {
@@ -50,12 +50,13 @@ async function getServerEntryModule_Dev(): Promise<ServerEntryModule> {
       resolve(server)
     }
 
-    entryServerResolvers.push(resolveWrapper)
+    KIRU_SERVER_GLOBAL.serverEntryResolvers.push(resolveWrapper)
 
     const timeout = setTimeout(() => {
-      entryServerResolvers = entryServerResolvers.filter(
-        (r) => r !== resolveWrapper
-      )
+      KIRU_SERVER_GLOBAL.serverEntryResolvers =
+        KIRU_SERVER_GLOBAL.serverEntryResolvers.filter(
+          (r) => r !== resolveWrapper
+        )
       reject(new Error("Failed to acquire server renderer. Seek help!"))
     }, 10_000)
   })

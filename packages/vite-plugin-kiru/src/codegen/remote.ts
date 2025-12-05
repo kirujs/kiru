@@ -27,12 +27,12 @@ function server_performServerActionRegistrations(
   matches: FunctionMatch[],
   code: MagicString
 ) {
-  code.append(`const __$kiru_serverActions = {};\n`)
+  code.append(`const __$a__ = {};\n`)
   for (const { name } of matches) {
-    code.append(`__$kiru_serverActions["${name}"] = ${name};\n`)
+    code.append(`__$a__["${name}"] = ${name};\n`)
   }
   code.append(
-    `globalThis.__kiru_serverActions.register("${KIRU_SERVER_GLOBAL.route}", __$kiru_serverActions);\n`
+    `globalThis.__kiru_serverActions.register("${KIRU_SERVER_GLOBAL.route}", __$a__);\n`
   )
 }
 
