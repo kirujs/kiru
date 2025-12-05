@@ -629,7 +629,6 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
           .map((m) => m.default)
 
         nextIdle(() => {
-          onPaint?.()
           runAfterEachGuards(
             guardModules,
             { ...requestContext.current },
@@ -642,7 +641,9 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
               routerState,
               enableTransition,
               tId
-            )
+            ).then(() => signal.aborted || onPaint?.())
+          } else {
+            onPaint?.()
           }
         })
       })
@@ -661,7 +662,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
     const { loader } = config
 
     // Load data from loader (cache check is now done earlier in loadRoute)
-    loader
+    return loader
       .load({ ...routerState, context: { ...requestContext.current } })
       .then(
         (data) => {
@@ -694,7 +695,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         const transition =
           (!loader.static && loader.transition) ?? enableTransition
 
-        handleStateTransition(
+        return handleStateTransition(
           transition,
           id,
           () => (this.currentPageProps.value = state)
