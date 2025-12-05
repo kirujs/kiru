@@ -8,6 +8,7 @@ interface KiruGlobal {
   viteDevServer: ViteDevServer | null
   serverEntryModule: ServerEntryModule | null
   rpcSecret: string | null
+  route: string | null
 }
 
 const $KIRU_SERVER_GLOBAL = Symbol.for("kiru.serverGlobal")
@@ -19,6 +20,7 @@ export const KIRU_SERVER_GLOBAL: KiruGlobal = (globalThis[
   viteDevServer: null,
   server: null,
   rpcSecret: null,
+  route: null,
 })
 
 let entryServerResolvers: ((serverEntry: ServerEntryModule) => void)[] = []

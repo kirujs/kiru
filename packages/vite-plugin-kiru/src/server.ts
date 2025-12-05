@@ -238,17 +238,26 @@ export async function getServerActionResponse(
   let action: (...args: any[]) => unknown
   let actionArgs = []
   let context: Record<string, unknown>
+  const { searchParams } = new URL(request.url)
+
   try {
-    let strToken, fileName, actionName
-    const searchParams = new URL(request.url).searchParams
+    let strToken, actionId, referrerUrl
     if (
       request.method !== "POST" ||
       request.headers.get("Content-Type") !== "application/json" ||
       !(strToken = request.headers.get("x-kiru-token")) ||
-      !(fileName = searchParams.get("f")) ||
-      !(actionName = searchParams.get("n"))
+      !(referrerUrl = request.headers.get("Referer")) ||
+      !(actionId = searchParams.get("action"))
     ) {
       return { httpResponse: null }
+    }
+
+    const [fileName, actionName] = actionId.split(".")
+    // attempt to ensure only the corresponding page's actions are executed
+    // todo: check navagent etc to be more sure that this is a request from a browser.
+    const referrerPath = new URL(referrerUrl).pathname
+    if (referrerPath !== fileName) {
+      return createBadActionResponse()
     }
 
     const server = await getServerEntryModule()
@@ -259,10 +268,9 @@ export async function getServerActionResponse(
       return createBadActionResponse()
     }
 
-    const args = await request.json()
-
     const fileActions = allActions.get(fileName)
     const actionFn = fileActions[actionName]
+    const args = await request.json()
     if (typeof actionFn !== "function" || !Array.isArray(args)) {
       return createBadActionResponse()
     }
@@ -279,7 +287,10 @@ export async function getServerActionResponse(
       try {
         const result = await action(...actionArgs)
         resolve({
-          httpResponse: { body: JSON.stringify(result), statusCode: 200 },
+          httpResponse: {
+            body: JSON.stringify(result),
+            statusCode: 200,
+          },
         })
       } catch {
         resolve(createBadActionResponse())

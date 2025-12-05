@@ -119,6 +119,5 @@ export function Derive<
   }
 
   prevSuccess.current = value
-  console.log("derive - resolved", mode, prevSuccess.current)
   return (children as ChildFnWithStale<UnwrapDerive<T>>)(value, false)
 }

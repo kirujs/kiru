@@ -1,8 +1,9 @@
-import { Derive, ErrorBoundary, usePromise } from "kiru"
-import { getCount, increment } from "./remote"
+import { Derive, ErrorBoundary, usePromise, useSignal } from "kiru"
+import { double, getCount, increment } from "./remote"
 
 export default function ProtectedPage() {
   const count = usePromise(() => getCount(), [])
+  const num = useSignal(0)
 
   return (
     <ErrorBoundary
@@ -13,6 +14,12 @@ export default function ProtectedPage() {
         </>
       )}
     >
+      <div>
+        <input type="number" bind:value={num} />
+        <button onclick={() => double(num.value).then((n) => (num.value = n))}>
+          Double it!
+        </button>
+      </div>
       <button onclick={() => count.refresh(() => increment())}>
         Increment
         <Derive from={count} fallback={<span>Loading...</span>}>

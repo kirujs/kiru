@@ -90,20 +90,22 @@ const $actions = new Map()
 let token
 if ("window" in globalThis) {
   try {
-    token = document.querySelector("[k-request-token]").innerHTML
+    const s = document.querySelector("[k-request-token]")
+    token = s.innerHTML
+    s.remove()
   } catch {}
 }
 
 globalThis.__kiru_serverActions ??= {
   register: (fp, actionsMap) => $actions.set(fp, actionsMap),
-  dispatch: async (fp, name, ...args) => {   
-    const response = await fetch(\`/kiru_action?f=\${fp}&n=\${name}\`, {
+  dispatch: async (id, ...args) => {   
+    const r = await fetch(\`/?action=\${id}\`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-kiru-token": token },
       body: JSON.stringify(args)
     })
-    if (!response.ok) throw new Error("Action failed")
-    return response.json()
+    if (!r.ok) throw new Error("Action failed")
+    return r.json()
   }
 }
 

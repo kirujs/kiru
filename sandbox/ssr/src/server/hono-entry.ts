@@ -20,7 +20,7 @@ const kiruServerActions = createMiddleware(async (c, next) => {
   }
 
   const { body, statusCode } = httpResponse
-  return c.json(body, statusCode)
+  return c.text(body ?? "", statusCode)
 })
 
 const app = new Hono()

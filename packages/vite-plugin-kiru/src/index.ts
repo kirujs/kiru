@@ -228,7 +228,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           .replace(/\\/g, "/")
 
         if (minimatch(id, actionsMatchPattern)) {
+          const route = getRouteFromFilePath(id, projectRoot, dir)
+          KIRU_SERVER_GLOBAL.route = route
           prepareRemoteFunctions(ctx)
+          KIRU_SERVER_GLOBAL.route = null
         }
       }
 
@@ -319,3 +322,13 @@ export { defaultEsBuildOptions } from "./config.js"
 
 // @ts-ignore
 export function onHMR(callback: () => void) {}
+
+function getRouteFromFilePath(
+  filePath: string,
+  projectRoot: string,
+  dir: string
+) {
+  const pref = path.join(projectRoot, dir).replace(/\\/g, "/")
+  const lastSlash = filePath.lastIndexOf("/")
+  return filePath.slice(pref.length, lastSlash)
+}
