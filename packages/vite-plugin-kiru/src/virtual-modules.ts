@@ -73,7 +73,8 @@ export function createVirtualModules_SSR(
 ) {
   const userDoc = resolveUserDocument(projectRoot, options)
   const documentModuleId = userDoc.substring(projectRoot.length)
-  const { dir, baseUrl, page, layout, guard, transition, secret } = options
+  const { dir, baseUrl, page, layout, guard, remote, transition, secret } =
+    options
 
   function createConfigModule() {
     return `
@@ -84,8 +85,9 @@ const baseUrl = normalizePrefixPath("${baseUrl}")
 const pages = formatViteImportMap(import.meta.glob(["/**/${page}"]), dir, baseUrl)
 const layouts = formatViteImportMap(import.meta.glob(["/**/${layout}"]), dir, baseUrl)
 const guards = formatViteImportMap(import.meta.glob(["/**/${guard}"]), dir, baseUrl)
+const remotes = formatViteImportMap(import.meta.glob(["/**/${remote}"]), dir, baseUrl)
 const transition = ${transition}
-const $actions = new Map()
+const actions = new Map()
 
 let token
 if ("window" in globalThis) {
@@ -97,7 +99,10 @@ if ("window" in globalThis) {
 }
 
 globalThis.__kiru_serverActions ??= {
-  register: (fp, actionsMap) => $actions.set(fp, actionsMap),
+  register: (fp, actionsMap) => {
+    actions.set(fp, actionsMap)
+    console.log("[create-kiru]: Registered actions for", fp, actionsMap)
+  },
   dispatch: async (id, ...args) => {   
     const r = await fetch(\`/?action=\${id}\`, {
       method: "POST",
@@ -109,7 +114,7 @@ globalThis.__kiru_serverActions ??= {
   }
 }
 
-export { dir, baseUrl, pages, $actions, layouts, guards, transition }
+export { dir, baseUrl, pages, actions, layouts, guards, remotes, transition }
 `
   }
 
@@ -126,9 +131,7 @@ export async function render(url, ctx) {
   return kiruServerRender(url, { ...ctx, ...config, Document })
 }
 
-export function getServerActions() {
-  return config.$actions
-}
+export { config }
 `
   }
 

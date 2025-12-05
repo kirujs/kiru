@@ -75,6 +75,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
     async configureServer(server) {
       KIRU_SERVER_GLOBAL.viteDevServer = server
+      KIRU_SERVER_GLOBAL.pluginState = state
       if (state.isProduction || state.isBuild) return
       const {
         ssgOptions,

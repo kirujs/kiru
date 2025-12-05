@@ -1,29 +1,80 @@
 import path from "node:path"
+import { globSync } from "glob"
 import fs from "node:fs"
 import { VIRTUAL_ENTRY_SERVER_ID } from "./virtual-modules.js"
 import type { ViteDevServer, Manifest } from "vite"
+import { PluginState } from "./config.js"
 
 type ServerEntryModule = typeof import("virtual:kiru:entry-server")
 interface KiruGlobal {
   viteDevServer: ViteDevServer | null
+  pluginState: PluginState | null
   serverEntryModule: ServerEntryModule | null
   serverEntryResolvers: ((serverEntry: ServerEntryModule) => void)[]
   rpcSecret: string | null
   route: string | null
+  loadedRemoteModules: Map<string, Promise<void>>
 }
 
 const $KIRU_SERVER_GLOBAL = Symbol.for("kiru.serverGlobal")
+const projectRoot = process.cwd().replace(/\\/g, "/")
+const serverOutDirAbs = path.resolve(projectRoot, "dist/server")
+const manifestPath = path.resolve(serverOutDirAbs, "vite-manifest.json")
 
 // @ts-ignore
 export const KIRU_SERVER_GLOBAL: KiruGlobal = (globalThis[
   $KIRU_SERVER_GLOBAL
 ] ??= {
   viteDevServer: null,
-  server: null,
+  pluginState: null,
+  serverEntryModule: null,
   serverEntryResolvers: [],
   rpcSecret: null,
   route: null,
-})
+  loadedRemoteModules: new Map(),
+} satisfies KiruGlobal)
+
+/**
+ * Loads
+ */
+export async function loadRouteRemoteModule(route: string): Promise<void> {
+  if (KIRU_SERVER_GLOBAL.loadedRemoteModules.has(route)) {
+    return KIRU_SERVER_GLOBAL.loadedRemoteModules.get(route)!
+  }
+  // route might be something like /protected
+  // we need to use config options to determine 'remote' filename and resolve it.
+  if (KIRU_SERVER_GLOBAL.pluginState && KIRU_SERVER_GLOBAL.viteDevServer) {
+    const { ssrOptions } = KIRU_SERVER_GLOBAL.pluginState
+    const { dir, remote } = ssrOptions!
+    const remoteFiles = globSync(`${dir}/**/${remote}`, { cwd: projectRoot })
+
+    for (const file of remoteFiles) {
+      const r = file
+        .replace(/\\/g, "/")
+        .substring(dir.length, file.lastIndexOf("/"))
+      if (r === route) {
+        const promise: Promise<any> =
+          KIRU_SERVER_GLOBAL.viteDevServer.ssrLoadModule(file)
+        KIRU_SERVER_GLOBAL.loadedRemoteModules.set(route, promise)
+        return promise
+      }
+    }
+    // todo: warn if we've ended up here?
+    // might be a request that pointed to a module that no longer exists.
+    return
+  }
+
+  const {
+    config: { remotes },
+  } = await getServerEntryModule()
+  if (route in remotes) {
+    const promise: Promise<any> = remotes[route].load()
+    KIRU_SERVER_GLOBAL.loadedRemoteModules.set(route, promise)
+    return promise
+  }
+
+  throw new Error(`Remote functions route not found: ${route}`)
+}
 
 export function setServerEntryModule(server: ServerEntryModule) {
   KIRU_SERVER_GLOBAL.serverEntryModule = server
@@ -63,10 +114,6 @@ async function getServerEntryModule_Dev(): Promise<ServerEntryModule> {
 }
 
 async function getServerEntryModule_Production(): Promise<ServerEntryModule> {
-  const projectRoot = process.cwd().replace(/\\/g, "/")
-  const serverOutDirAbs = path.resolve(projectRoot, "dist/server")
-  const manifestPath = path.resolve(serverOutDirAbs, "vite-manifest.json")
-
   if (!fs.existsSync(manifestPath)) {
     throw new Error(
       `Server manifest not found at ${manifestPath}. Make sure the SSR build has been completed.`

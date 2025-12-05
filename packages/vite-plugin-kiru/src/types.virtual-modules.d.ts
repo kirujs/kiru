@@ -1,3 +1,16 @@
+interface FormattedViteImportMapEntry {
+  filePath: string
+  load: () => Promise<unknown>
+  params: string[]
+  route: string
+  segments: string[]
+  specificity: number
+}
+
+interface FormattedViteImportMap {
+  [key: string]: FormattedViteImportMapEntry
+}
+
 declare module "virtual:kiru:entry-server" {
   export const documentModuleId: string
   export const remoteFunctionSecret: string
@@ -9,7 +22,10 @@ declare module "virtual:kiru:entry-server" {
     }
   ) => Promise<{ httpResponse: SSRHttpResponse | null }>
 
-  export const getServerActions: () => Map<string, any>
+  export const config: {
+    actions: Map<string, any>
+    remotes: FormattedViteImportMap
+  }
 }
 
 declare module "virtual:kiru:config" {

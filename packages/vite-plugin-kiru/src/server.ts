@@ -8,7 +8,11 @@ import {
   SSRRenderResult,
 } from "./types.server"
 import { VIRTUAL_ENTRY_CLIENT_ID } from "./virtual-modules.js"
-import { getServerEntryModule, KIRU_SERVER_GLOBAL } from "./globals"
+import {
+  loadRouteRemoteModule,
+  getServerEntryModule,
+  KIRU_SERVER_GLOBAL,
+} from "./globals"
 import { makeKiruContextToken, unwrapKiruToken } from "./token"
 
 const als = new AsyncLocalStorage<Kiru.RequestContext>()
@@ -241,34 +245,30 @@ export async function getServerActionResponse(
   const { searchParams } = new URL(request.url)
 
   try {
-    let strToken, actionId, referrerUrl
+    let strToken, actionId
     if (
       request.method !== "POST" ||
       request.headers.get("Content-Type") !== "application/json" ||
       !(strToken = request.headers.get("x-kiru-token")) ||
-      !(referrerUrl = request.headers.get("Referer")) ||
       !(actionId = searchParams.get("action"))
     ) {
       return { httpResponse: null }
     }
 
-    const [fileName, actionName] = actionId.split(".")
-    // attempt to ensure only the corresponding page's actions are executed
-    // todo: check navagent etc to be more sure that this is a request from a browser.
-    const referrerPath = new URL(referrerUrl).pathname
-    if (referrerPath !== fileName) {
-      return createBadActionResponse()
-    }
+    const [route, actionName] = actionId.split(".")
+    await loadRouteRemoteModule(route)
 
-    const server = await getServerEntryModule()
-    const allActions = server.getServerActions()
+    const {
+      config: { actions },
+      remoteFunctionSecret,
+    } = await getServerEntryModule()
 
-    const ctx = unwrapKiruToken(strToken, server.remoteFunctionSecret)
+    const ctx = unwrapKiruToken(strToken, remoteFunctionSecret)
     if (!ctx) {
       return createBadActionResponse()
     }
 
-    const fileActions = allActions.get(fileName)
+    const fileActions = actions.get(route)
     const actionFn = fileActions[actionName]
     const args = await request.json()
     if (typeof actionFn !== "function" || !Array.isArray(args)) {
@@ -278,8 +278,8 @@ export async function getServerActionResponse(
     action = actionFn
     actionArgs = args
     context = ctx
-  } catch {
-    //console.error("[vite-plugin-kiru]: getServerActionResponse error", e)
+  } catch (e) {
+    console.error("[vite-plugin-kiru]: getServerActionResponse error", e)
     return createBadActionResponse()
   }
 
@@ -293,8 +293,8 @@ export async function getServerActionResponse(
             statusCode: 200,
           },
         })
-      } catch {
-        //console.error("[vite-plugin-kiru]: getServerActionResponse error", e)
+      } catch (e) {
+        console.error("[vite-plugin-kiru]: getServerActionResponse error", e)
         resolve(createBadActionResponse())
       }
     })
