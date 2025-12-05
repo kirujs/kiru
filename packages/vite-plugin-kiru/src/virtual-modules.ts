@@ -99,10 +99,7 @@ if ("window" in globalThis) {
 }
 
 globalThis.__kiru_serverActions ??= {
-  register: (fp, actionsMap) => {
-    actions.set(fp, actionsMap)
-    console.log("[create-kiru]: Registered actions for", fp, actionsMap)
-  },
+  register: (id, a) => actions.set(id, a),
   dispatch: async (id, ...args) => {   
     const r = await fetch(\`/?action=\${id}\`, {
       method: "POST",

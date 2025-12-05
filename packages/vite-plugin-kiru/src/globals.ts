@@ -1,19 +1,15 @@
 import path from "node:path"
-import { globSync } from "glob"
 import fs from "node:fs"
 import { VIRTUAL_ENTRY_SERVER_ID } from "./virtual-modules.js"
 import type { ViteDevServer, Manifest } from "vite"
-import { PluginState } from "./config.js"
 
 type ServerEntryModule = typeof import("virtual:kiru:entry-server")
 interface KiruGlobal {
   viteDevServer: ViteDevServer | null
-  pluginState: PluginState | null
   serverEntryModule: ServerEntryModule | null
   serverEntryResolvers: ((serverEntry: ServerEntryModule) => void)[]
-  rpcSecret: string | null
   route: string | null
-  loadedRemoteModules: Map<string, Promise<void>>
+  loadedRemoteModules: Map<string, Promise<unknown>>
 }
 
 const $KIRU_SERVER_GLOBAL = Symbol.for("kiru.serverGlobal")
@@ -22,54 +18,30 @@ const serverOutDirAbs = path.resolve(projectRoot, "dist/server")
 const manifestPath = path.resolve(serverOutDirAbs, "vite-manifest.json")
 
 // @ts-ignore
-export const KIRU_SERVER_GLOBAL: KiruGlobal = (globalThis[
-  $KIRU_SERVER_GLOBAL
-] ??= {
+const global: KiruGlobal = (globalThis[$KIRU_SERVER_GLOBAL] ??= {
   viteDevServer: null,
-  pluginState: null,
   serverEntryModule: null,
   serverEntryResolvers: [],
-  rpcSecret: null,
   route: null,
   loadedRemoteModules: new Map(),
 } satisfies KiruGlobal)
 
+export { global as KIRU_SERVER_GLOBAL }
+
 /**
  * Loads
  */
-export async function loadRouteRemoteModule(route: string): Promise<void> {
-  if (KIRU_SERVER_GLOBAL.loadedRemoteModules.has(route)) {
-    return KIRU_SERVER_GLOBAL.loadedRemoteModules.get(route)!
-  }
-  // route might be something like /protected
-  // we need to use config options to determine 'remote' filename and resolve it.
-  if (KIRU_SERVER_GLOBAL.pluginState && KIRU_SERVER_GLOBAL.viteDevServer) {
-    const { ssrOptions } = KIRU_SERVER_GLOBAL.pluginState
-    const { dir, remote } = ssrOptions!
-    const remoteFiles = globSync(`${dir}/**/${remote}`, { cwd: projectRoot })
-
-    for (const file of remoteFiles) {
-      const r = file
-        .replace(/\\/g, "/")
-        .substring(dir.length, file.lastIndexOf("/"))
-      if (r === route) {
-        const promise: Promise<any> =
-          KIRU_SERVER_GLOBAL.viteDevServer.ssrLoadModule(file)
-        KIRU_SERVER_GLOBAL.loadedRemoteModules.set(route, promise)
-        return promise
-      }
-    }
-    // todo: warn if we've ended up here?
-    // might be a request that pointed to a module that no longer exists.
-    return
+export async function loadRouteRemoteModule(route: string): Promise<unknown> {
+  if (global.loadedRemoteModules.has(route)) {
+    return global.loadedRemoteModules.get(route)!
   }
 
   const {
     config: { remotes },
   } = await getServerEntryModule()
   if (route in remotes) {
-    const promise: Promise<any> = remotes[route].load()
-    KIRU_SERVER_GLOBAL.loadedRemoteModules.set(route, promise)
+    const promise = remotes[route].load()
+    global.loadedRemoteModules.set(route, promise)
     return promise
   }
 
@@ -77,14 +49,14 @@ export async function loadRouteRemoteModule(route: string): Promise<void> {
 }
 
 export function setServerEntryModule(server: ServerEntryModule) {
-  KIRU_SERVER_GLOBAL.serverEntryModule = server
-  KIRU_SERVER_GLOBAL.serverEntryResolvers.forEach((fn) => fn(server))
-  KIRU_SERVER_GLOBAL.serverEntryResolvers.length = 0
+  global.serverEntryModule = server
+  global.serverEntryResolvers.forEach((fn) => fn(server))
+  global.serverEntryResolvers.length = 0
 }
 
 export async function getServerEntryModule(): Promise<ServerEntryModule> {
-  if (KIRU_SERVER_GLOBAL.serverEntryModule) {
-    return Promise.resolve(KIRU_SERVER_GLOBAL.serverEntryModule)
+  if (global.serverEntryModule) {
+    return Promise.resolve(global.serverEntryModule)
   }
   if (process.env.NODE_ENV !== "production") {
     // gets set in dev mode by the plugin
@@ -101,13 +73,12 @@ async function getServerEntryModule_Dev(): Promise<ServerEntryModule> {
       resolve(server)
     }
 
-    KIRU_SERVER_GLOBAL.serverEntryResolvers.push(resolveWrapper)
+    global.serverEntryResolvers.push(resolveWrapper)
 
     const timeout = setTimeout(() => {
-      KIRU_SERVER_GLOBAL.serverEntryResolvers =
-        KIRU_SERVER_GLOBAL.serverEntryResolvers.filter(
-          (r) => r !== resolveWrapper
-        )
+      global.serverEntryResolvers = global.serverEntryResolvers.filter(
+        (r) => r !== resolveWrapper
+      )
       reject(new Error("Failed to acquire server renderer. Seek help!"))
     }, 10_000)
   })
@@ -150,5 +121,5 @@ async function getServerEntryModule_Production(): Promise<ServerEntryModule> {
   const fileUrl = `file://${entryServerPath.replace(/\\/g, "/")}`
   const mod = await import(/* @vite-ignore */ fileUrl)
 
-  return (KIRU_SERVER_GLOBAL.serverEntryModule = mod)
+  return (global.serverEntryModule = mod)
 }

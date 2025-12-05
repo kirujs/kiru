@@ -3,6 +3,7 @@ import { streamText } from "hono/streaming"
 import { renderPage, getServerActionResponse } from "vite-plugin-kiru/server"
 import apiRouter, { authCookieParserMiddleware } from "./api"
 import { createMiddleware } from "hono/factory"
+import { HTTPException } from "hono/http-exception"
 import type { User } from "./services/user"
 
 declare global {
@@ -20,7 +21,11 @@ const kiruServerActions = createMiddleware(async (c, next) => {
   }
 
   const { body, statusCode } = httpResponse
-  return c.text(body ?? "", statusCode)
+  if (statusCode !== 200) {
+    throw new HTTPException(statusCode)
+  }
+
+  return c.text(body)
 })
 
 const app = new Hono()

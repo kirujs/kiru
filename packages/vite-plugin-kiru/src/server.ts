@@ -278,8 +278,7 @@ export async function getServerActionResponse(
     action = actionFn
     actionArgs = args
     context = ctx
-  } catch (e) {
-    console.error("[vite-plugin-kiru]: getServerActionResponse error", e)
+  } catch {
     return createBadActionResponse()
   }
 
@@ -293,8 +292,7 @@ export async function getServerActionResponse(
             statusCode: 200,
           },
         })
-      } catch (e) {
-        console.error("[vite-plugin-kiru]: getServerActionResponse error", e)
+      } catch {
         resolve(createBadActionResponse())
       }
     })
