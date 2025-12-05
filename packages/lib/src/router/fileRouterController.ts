@@ -47,6 +47,19 @@ interface PageConfigWithLoader<T = unknown> extends PageConfig {
   loader: PageDataLoaderConfig<T>
 }
 
+interface LoadRouteOptions {
+  path?: string
+  transition?: boolean
+  isStatic404?: boolean
+  onPaint?: () => void
+}
+
+let transitionId = 0
+let currentTransition = null as null | {
+  transition: ViewTransition
+  id: number
+}
+
 export class FileRouterController {
   public contextValue: FileRouterContextType
   public devtools?: DevtoolsInterface
@@ -92,7 +105,7 @@ export class FileRouterController {
     this.contextValue = {
       invalidate: async (...paths: string[]) => {
         if (this.invalidate(...paths)) {
-          return this.loadRoute(void 0, void 0, true)
+          return this.loadRoute()
         }
       },
       get state() {
@@ -104,7 +117,7 @@ export class FileRouterController {
         if (options?.invalidate ?? true) {
           this.invalidate(this.state.pathname)
         }
-        return this.loadRoute(void 0, void 0, options?.transition)
+        return this.loadRoute({ transition: options?.transition })
       },
       setQuery: this.setQuery.bind(this),
       setHash: this.setHash.bind(this),
@@ -146,9 +159,11 @@ export class FileRouterController {
               error: null,
               loading: false,
             }
-            handleStateTransition(this.state.signal, transition, () => {
-              this.currentPageProps.value = props
-            })
+            handleStateTransition(
+              transition,
+              transitionId,
+              () => (this.currentPageProps.value = props)
+            )
           } else {
             // No cached data - show loading state and load data
             const props = {
@@ -157,9 +172,11 @@ export class FileRouterController {
               data: null,
               error: null,
             }
-            handleStateTransition(this.state.signal, transition, () => {
-              this.currentPageProps.value = props
-            })
+            handleStateTransition(
+              transition,
+              transitionId,
+              () => (this.currentPageProps.value = props)
+            )
 
             this.loadRouteData(
               config as PageConfigWithLoader,
@@ -282,13 +299,12 @@ export class FileRouterController {
         pagePropsPromise.then(({ data, error }) => {
           if (this.state !== prevState) return
 
-          handleStateTransition(this.state.signal, transition, () => {
-            this.currentPageProps.value = {
-              loading: false,
-              data,
-              error,
-            }
-          })
+          handleStateTransition(
+            transition,
+            transitionId,
+            () =>
+              (this.currentPageProps.value = { loading: false, data, error })
+          )
         })
       } else if (
         loader &&
@@ -298,7 +314,7 @@ export class FileRouterController {
           this.loadRouteData(page.config as PageConfigWithLoader, this.state)
         } else {
           nextIdle(() => {
-            handleStateTransition(this.state.signal, transition, () => {
+            handleStateTransition(transition, transitionId, () => {
               this.currentPageProps.value = {
                 data: cacheData.value,
                 error: null,
@@ -371,15 +387,21 @@ export class FileRouterController {
       }
 
       scrollStack.replace(this.historyIndex, window.scrollX, window.scrollY)
-      this.loadRoute().then(() => {
-        if (e.state != null) {
+
+      // prep 'on painted' callback for scroll-to-offset action
+      // this will fire once the page has rendered but before (loader?) kicks off.
+      let onPaint
+      if (e.state != null) {
+        onPaint = () => {
           this.historyIndex = e.state.index
           const offset = scrollStack.getItem(e.state.index)
           if (offset !== undefined) {
             window.scrollTo(...offset)
           }
         }
-      })
+      }
+
+      this.loadRoute({ onPaint })
     })
   }
 
@@ -428,12 +450,14 @@ export class FileRouterController {
     fileRouterInstance.current = null
   }
 
-  private async loadRoute(
-    path: string = window.location.pathname,
-    props: Record<string, unknown> = {},
-    enableTransition = this.enableTransitions,
-    isStatic404 = false
-  ): Promise<void> {
+  private async loadRoute(options?: LoadRouteOptions): Promise<void> {
+    const {
+      transition: enableTransition = this.enableTransitions,
+      isStatic404 = false,
+      path = window.location.pathname,
+      onPaint,
+    } = options ?? {}
+
     this.abortController?.abort()
     const signal = (this.abortController = new AbortController()).signal
 
@@ -541,6 +565,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         }
       }
 
+      let props: Record<string, unknown> = {}
       if (!!loader) {
         props = {
           data: null,
@@ -553,7 +578,11 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         const staticProps = page.__KIRU_STATIC_PROPS__?.[path]
         if (!staticProps) {
           // 404
-          return this.loadRoute(path, props, enableTransition, true)
+          return this.loadRoute({
+            path,
+            transition: enableTransition,
+            isStatic404: true,
+          })
         }
         const { data, error } = staticProps
         props = error
@@ -584,7 +613,10 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         }
       }
 
-      return await handleStateTransition(signal, enableTransition, () => {
+      // loader transition must use the same id as page transition in order to prevent skipping it.
+      let tId = transitionId++
+
+      return await handleStateTransition(enableTransition, tId, () => {
         this.state = routerState
         this.currentPage.value = {
           component: page.default,
@@ -597,6 +629,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
           .map((m) => m.default)
 
         nextIdle(() => {
+          onPaint?.()
           runAfterEachGuards(
             guardModules,
             { ...requestContext.current },
@@ -607,7 +640,8 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
             this.loadRouteData(
               config as PageConfigWithLoader,
               routerState,
-              enableTransition
+              enableTransition,
+              tId
             )
           }
         })
@@ -621,7 +655,8 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
   private async loadRouteData(
     config: PageConfigWithLoader,
     routerState: RouterState,
-    enableTransition = this.enableTransitions
+    enableTransition = this.enableTransitions,
+    id = transitionId
   ) {
     const { loader } = config
 
@@ -659,9 +694,11 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         const transition =
           (!loader.static && loader.transition) ?? enableTransition
 
-        handleStateTransition(routerState.signal, transition, () => {
-          this.currentPageProps.value = state
-        })
+        handleStateTransition(
+          transition,
+          id,
+          () => (this.currentPageProps.value = state)
+        )
       })
   }
 
@@ -689,20 +726,17 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
     const url = new URL(path, "http://localhost")
     const { hash: nextHash, pathname: nextPath } = url
     const { hash: prevHash, pathname: prevPath } = this.state
-    if (nextHash === prevHash && nextPath === prevPath) {
+    if (
+      (nextHash === prevHash && nextPath === prevPath) ||
+      this.onBeforeLeave(prevPath) === false
+    ) {
       return
     }
 
-    if (this.onBeforeLeave(prevPath) === false) {
-      return
-    }
     this.updateHistoryState(path, options)
 
-    this.loadRoute(
-      void 0,
-      void 0,
-      options?.transition ?? this.enableTransitions
-    ).then(() => {
+    const transition = options?.transition ?? this.enableTransitions
+    this.loadRoute({ transition }).then(() => {
       if (nextHash !== prevHash) {
         window.dispatchEvent(new HashChangeEvent("hashchange"))
       }
@@ -812,25 +846,33 @@ function buildQueryString(
   return params.toString()
 }
 
-let currentTransition: ViewTransition | null = null
 async function handleStateTransition(
-  signal: AbortSignal,
   enableTransition: boolean,
+  id: number,
   callback: () => void
 ) {
+  if (currentTransition) {
+    const { id: currentId, transition } = currentTransition
+    // for cross-page navigations, we skip any existing transitions.
+    // otherwise (eg. loaders), we wait for the existing transition to finish
+    if (id !== currentId) {
+      transition.skipTransition()
+    }
+    await transition.finished
+  }
   if (!enableTransition || typeof document.startViewTransition !== "function") {
     return new Promise<void>((resolve) => {
       callback()
       nextIdle(resolve)
     })
   }
-  currentTransition?.skipTransition()
-  const vt = (currentTransition = document.startViewTransition(() => {
+  const transition = document.startViewTransition(() => {
     callback()
     flushSync()
-  }))
-  signal.addEventListener("abort", () => vt.skipTransition())
-  await vt.ready
+  })
+  currentTransition = { id, transition }
+  await transition.finished
+  currentTransition = null
 }
 
 function validateRoutes(pageMap: FormattedViteImportMap) {
