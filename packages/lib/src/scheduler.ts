@@ -52,10 +52,27 @@ let postEffects: Array<Function> = []
 let animationFrameHandle = -1
 
 /**
- * Runs a function after any existing work has been completed,
- * or immediately if the scheduler is already idle.
+ * Defers work until the scheduler becomes idle.
+ *
+ * This works in two modes:
+ *  - `await nextIdle()` resolves once idle, allowing async/await usage.
+ *  - `nextIdle(fn)` schedules a callback to run when idle.
+ *
+ * Callbacks are executed before promises resolve,
+ * and multiple calls queue until the scheduler becomes idle.
  */
-export function nextIdle(fn: () => void) {
+export function nextIdle(): Promise<void>
+
+/**
+ * Schedules `fn` to run once the scheduler becomes idle.
+ * If already idle, `fn` executes immediately.
+ */
+export function nextIdle<T extends () => void>(fn: T): void
+
+export function nextIdle(fn?: () => void): void | Promise<void> {
+  if (!fn) {
+    return new Promise<void>(nextIdle)
+  }
   if (isRunningOrQueued) {
     nextIdleEffects.push(fn)
     return
