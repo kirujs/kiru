@@ -1,4 +1,5 @@
 import path from "node:path"
+import { randomBytes } from "node:crypto"
 import type { UserConfig, ESBuildOptions, ResolvedConfig } from "vite"
 import type {
   KiruPluginOptions,
@@ -61,16 +62,8 @@ const defaultSSGOptions: Required<Omit<SSGOptions, "sitemap">> & {
   },
 }
 
-function generateRemoteFunctionTokenSecret() {
-  const secret = []
-  for (let i = 0; i < 32; i++) {
-    secret.push(String.fromCharCode(Math.floor(Math.random() * 256)))
-  }
-  return secret.join("")
-}
-
 const defaultSSROptions: Omit<Required<SSROptions>, "runtimeEntry"> = {
-  secret: generateRemoteFunctionTokenSecret(),
+  secret: randomBytes(64).toString("base64url"),
   baseUrl: "/",
   dir: "src/pages",
   document: "document.{tsx,jsx}",
