@@ -147,6 +147,10 @@ export async function renderPage(
   let html = httpResponse.html
 
   if (isDevelopment) {
+    html = await KIRU_SERVER_GLOBAL.viteDevServer!.transformIndexHtml(
+      options.url,
+      html
+    )
     // In development, Vite handles CSS via the client entry script
     // We just need to inject the client script with the virtual module path
     const scriptTag = `<script type="module" src="/@id/${VIRTUAL_ENTRY_CLIENT_ID}" async></script>`
