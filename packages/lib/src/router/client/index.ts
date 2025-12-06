@@ -28,7 +28,6 @@ import { FileRouterController } from "../fileRouterController.js"
 import { FileRouterDataLoadError } from "../errors.js"
 import { __DEV__ } from "../../env.js"
 import { RouterCache } from "../cache.js"
-import { RequestContext } from "../context.js"
 import { PAGE_DATA_PROMISE_ID } from "../constants.js"
 import { AsyncTaskState } from "../../types.js"
 
@@ -54,17 +53,16 @@ export async function initClient(options: InitClientOptions) {
     hydrationMode = "static",
   } = options
 
-  try {
-    requestContext.current = JSON.parse(
-      document.querySelector("[k-request-context]")!.innerHTML
-    )
-  } catch {}
+  const isSSR = hydrationMode === "dynamic"
+  if (isSSR) {
+    try {
+      requestContext.current = JSON.parse(
+        document.querySelector("[k-request-context]")!.innerHTML
+      )
+    } catch {}
+  }
 
-  const preloaded = await preparePreloadConfig(
-    options,
-    false,
-    hydrationMode === "dynamic"
-  )
+  const preloaded = await preparePreloadConfig(options, isSSR, false)
   const config: FileRouterConfig = {
     dir,
     baseUrl,
@@ -75,17 +73,9 @@ export async function initClient(options: InitClientOptions) {
     preloaded,
   }
 
-  const children = createElement(FileRouter, { config })
-
-  const app =
-    hydrationMode === "static"
-      ? children
-      : createElement(RequestContext.Provider, {
-          value: requestContext.current,
-          children,
-        })
-
-  hydrate(app, document.body, { hydrationMode })
+  hydrate(createElement(FileRouter, { config }), document.body, {
+    hydrationMode,
+  })
 
   if (__DEV__) {
     onLoadedDev()
@@ -94,8 +84,8 @@ export async function initClient(options: InitClientOptions) {
 
 async function preparePreloadConfig(
   options: InitClientOptions,
-  isStatic404 = false,
-  isSSR = false
+  isSSR: boolean,
+  isStatic404 = false
 ): Promise<FileRouterPreloadConfig> {
   let pageProps = {}
   let cacheData: null | { value: unknown } = null
@@ -166,7 +156,7 @@ async function preparePreloadConfig(
   if (page.__KIRU_STATIC_PROPS__) {
     const staticProps = page.__KIRU_STATIC_PROPS__[window.location.pathname]
     if (!staticProps) {
-      return preparePreloadConfig(options, true)
+      return preparePreloadConfig(options, isSSR, true)
     }
 
     pageProps = staticProps.error

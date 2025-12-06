@@ -144,16 +144,16 @@ export async function render(
     )
   }
 
+  const routerState = {
+    params,
+    query,
+    pathname: u.pathname,
+    signal: abortController.signal,
+  } as RouterState
+
   const app = createElement(RouterContext.Provider, {
     children: Fragment({ children }),
-    value: {
-      state: {
-        params,
-        query,
-        pathname: u.pathname,
-        signal: abortController.signal, // Server-side signal (not abortable)
-      } as RouterState,
-    },
+    value: { state: routerState, context: {} },
   })
 
   let pageOutletContent = renderToString(app)

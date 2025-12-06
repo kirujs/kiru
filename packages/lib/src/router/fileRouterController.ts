@@ -103,6 +103,9 @@ export class FileRouterController {
     }
     const __this = this
     this.contextValue = {
+      get context() {
+        return { ...requestContext.current }
+      },
       invalidate: async (...paths: string[]) => {
         if (this.invalidate(...paths)) {
           return this.loadRoute()

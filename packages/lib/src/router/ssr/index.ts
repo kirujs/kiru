@@ -14,7 +14,7 @@ import {
   runAfterEachGuards,
   runBeforeEnterHooks,
 } from "../utils/index.js"
-import { RouterContext, RequestContext } from "../context.js"
+import { RouterContext } from "../context.js"
 import type { PageConfig, PageProps, RouterState } from "../types.js"
 import type {
   FormattedViteImportMap,
@@ -186,11 +186,8 @@ export async function render(
   )
 
   const app = createElement(RouterContext.Provider, {
-    children: createElement(RequestContext.Provider, {
-      children: Fragment({ children }),
-      value: ctx.userContext,
-    }),
-    value: { state: routerState },
+    children: Fragment({ children }),
+    value: { state: routerState, context: ctx.userContext },
   })
 
   let { immediate: pageOutletContent, stream } = renderToReadableStream(app, {

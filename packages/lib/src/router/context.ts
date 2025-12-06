@@ -18,6 +18,10 @@ export interface ReloadOptions {
 
 export interface FileRouterContextType {
   /**
+   * The current request context - an empty object if not SSR mode
+   */
+  context: Kiru.RequestContext
+  /**
    * Invalidate cached loader data for the given paths
    * @example
    * invalidate("/users", "/posts", "/users/1")
@@ -75,8 +79,7 @@ export function useFileRouter(): FileRouterContextType {
   return useContext(RouterContext)
 }
 
-export const RequestContext = createContext<Kiru.RequestContext>({})
-
-export function useRequestContext() {
-  return useContext(RequestContext)
+export function useRequestContext(): Kiru.RequestContext {
+  const { context } = useContext(RouterContext)
+  return context
 }
