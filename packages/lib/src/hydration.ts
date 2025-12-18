@@ -4,42 +4,37 @@ export const hydrationStack = {
   parentStack: [] as Array<SomeDom>,
   childIdxStack: [] as Array<number>,
   eventDeferrals: new Map<Element, Array<() => void>>(),
-  parent: function () {
+  parent() {
     return this.parentStack[this.parentStack.length - 1]
   },
-  clear: function () {
+  clear() {
     this.parentStack.length = 0
     this.childIdxStack.length = 0
   },
-  pop: function () {
+  pop() {
     this.parentStack.pop()
     this.childIdxStack.pop()
   },
-  push: function (el: SomeDom) {
+  push(el: SomeDom) {
     this.parentStack.push(el)
     this.childIdxStack.push(0)
   },
-  currentChild: function () {
+  currentChild(): MaybeDom {
     return this.parentStack[this.parentStack.length - 1].childNodes[
       this.childIdxStack[this.childIdxStack.length - 1]
-    ]
-  },
-  nextChild: function () {
-    return this.parentStack[this.parentStack.length - 1].childNodes[
-      this.childIdxStack[this.childIdxStack.length - 1]++
     ] as MaybeDom
   },
-  bumpChildIndex: function () {
+  bumpChildIndex() {
     this.childIdxStack[this.childIdxStack.length - 1]++
   },
-  captureEvents: function (element: Element) {
+  captureEvents(element: Element) {
     toggleEvtListeners(element, true)
     this.eventDeferrals.set(element, [])
   },
-  resetEvents: function (element: Element) {
+  resetEvents(element: Element) {
     this.eventDeferrals.delete(element)
   },
-  releaseEvents: function (element: Element) {
+  releaseEvents(element: Element) {
     toggleEvtListeners(element, false)
     const events = this.eventDeferrals.get(element)
     while (events?.length) events.shift()!()

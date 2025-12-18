@@ -87,10 +87,14 @@ function createDom(vNode: DomVNode): SomeDom {
 }
 function createTextNode(vNode: VNode): Text {
   const { nodeValue } = vNode.props
-  if (!Signal.isSignal(nodeValue)) {
-    return document.createTextNode(nodeValue)
+  if (Signal.isSignal(nodeValue)) {
+    return createSignalTextNode(vNode, nodeValue)
   }
 
+  return document.createTextNode(nodeValue)
+}
+
+function createSignalTextNode(vNode: VNode, nodeValue: Signal<string>): Text {
   const value = nodeValue.peek() ?? ""
   const textNode = document.createTextNode(value)
   subTextNode(vNode, textNode, nodeValue)
@@ -340,21 +344,40 @@ function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
   })
 }
 
-function tryHydrateNullableSignalChild(vNode: VNode): MaybeDom {
-  if (vNode.type !== "#text" || !Signal.isSignal(vNode.props.nodeValue)) {
-    return
-  }
-  const value = unwrap(vNode.props.nodeValue)
+/**
+ * Creates and inserts an empty signal-bound text node into
+ * the dom tree if the signal value is null or undefined.
+ */
+function tryHydrateNullableSignalChild(
+  vNode: VNode,
+  currentChild: MaybeDom
+): MaybeDom {
+  const sig = vNode.props.nodeValue
+  if (!Signal.isSignal(sig)) return
+
+  const value = unwrap(sig)
   if (value !== null && value !== undefined) {
     return
   }
-  const dom = createTextNode(vNode)
-  hydrationStack.parent().appendChild(dom)
+  const dom = createSignalTextNode(vNode, sig)
+
+  if (currentChild) {
+    currentChild.before(dom)
+  } else {
+    hydrationStack.parent().appendChild(dom)
+  }
+
   return dom
 }
 
 function hydrateDom(vNode: VNode) {
-  const dom = hydrationStack.nextChild() ?? tryHydrateNullableSignalChild(vNode)
+  const currentChild = hydrationStack.currentChild()
+  const dom =
+    (vNode.type === "#text" &&
+      tryHydrateNullableSignalChild(vNode, currentChild)) ||
+    currentChild
+
+  hydrationStack.bumpChildIndex()
 
   if (!dom) {
     throw new KiruError({
