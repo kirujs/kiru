@@ -32,26 +32,21 @@ export class ComputedSignal<T> extends Signal<T> {
         destroy: () => {},
       } satisfies HMRAccept<ComputedSignal<T>>
     }
-    Signal.configure(this, () => {
-      if (!this.$isDirty) return
-      if (__DEV__) {
-        /**
-         * This is a safeguard for dev-mode only, where a 'read' on an
-         * already-disposed signal during HMR update => `dom.setSignalProp`
-         * would throw due to invalid subs-map access.
-         *
-         * Perhaps in future we could handle this better by carrying over
-         * the previous signal's ID and not disposing it / deleting the
-         * map entry.
-         */
-        if (this.$isDisposed) return
-      }
-      ComputedSignal.run(this)
-    })
   }
 
   get value() {
+    this.ensureNotDirty()
     return super.value
+  }
+
+  toString() {
+    this.ensureNotDirty()
+    return super.toString()
+  }
+
+  peek() {
+    this.ensureNotDirty()
+    return super.peek()
   }
 
   // @ts-expect-error
@@ -110,6 +105,23 @@ export class ComputedSignal<T> extends Signal<T> {
     })
     $computed.sneak(value)
     $computed.$isDirty = false
+  }
+
+  private ensureNotDirty() {
+    if (!this.$isDirty) return
+    if (__DEV__) {
+      /**
+       * This is a safeguard for dev-mode only, where a 'read' on an
+       * already-disposed signal during HMR update => `dom.setSignalProp`
+       * would throw due to invalid subs-map access.
+       *
+       * Perhaps in future we could handle this better by carrying over
+       * the previous signal's ID and not disposing it / deleting the
+       * map entry.
+       */
+      if (this.$isDisposed) return
+    }
+    ComputedSignal.run(this)
   }
 }
 
