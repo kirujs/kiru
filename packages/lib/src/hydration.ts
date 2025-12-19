@@ -1,62 +1,31 @@
 import type { MaybeDom, SomeDom } from "./types.utils"
 
+const parents: SomeDom[] = []
+const childIdx: number[] = []
+
 export const hydrationStack = {
-  parentStack: [] as Array<SomeDom>,
-  childIdxStack: [] as Array<number>,
-  eventDeferrals: new Map<Element, Array<() => void>>(),
-  parent() {
-    return this.parentStack[this.parentStack.length - 1]
+  bumpChildIndex() {
+    childIdx[childIdx.length - 1]++
+  },
+  getCurrentChild(): MaybeDom {
+    const idx = childIdx[childIdx.length - 1]
+    // @ts-expect-error TODO: We're ignoring the possibility of encountering comment or cdata nodes.
+    // Not really a problem for now since we don't render those but should be checked anyway.
+    return this.getCurrentParent().childNodes[idx]
+  },
+  getCurrentParent() {
+    return parents[parents.length - 1]
   },
   clear() {
-    this.parentStack.length = 0
-    this.childIdxStack.length = 0
+    parents.length = 0
+    childIdx.length = 0
   },
   pop() {
-    this.parentStack.pop()
-    this.childIdxStack.pop()
+    parents.pop()
+    childIdx.pop()
   },
   push(el: SomeDom) {
-    this.parentStack.push(el)
-    this.childIdxStack.push(0)
+    parents.push(el)
+    childIdx.push(0)
   },
-  currentChild(): MaybeDom {
-    return this.parentStack[this.parentStack.length - 1].childNodes[
-      this.childIdxStack[this.childIdxStack.length - 1]
-    ] as MaybeDom
-  },
-  bumpChildIndex() {
-    this.childIdxStack[this.childIdxStack.length - 1]++
-  },
-  captureEvents(element: Element) {
-    toggleEvtListeners(element, true)
-    this.eventDeferrals.set(element, [])
-  },
-  resetEvents(element: Element) {
-    this.eventDeferrals.delete(element)
-  },
-  releaseEvents(element: Element) {
-    toggleEvtListeners(element, false)
-    const events = this.eventDeferrals.get(element)
-    while (events?.length) events.shift()!()
-  },
-}
-
-const captureEvent = (e: Event) => {
-  const t = e.target
-  if (!e.isTrusted || !t) return
-  hydrationStack.eventDeferrals
-    .get(t as Element)
-    ?.push(() => t.dispatchEvent(e))
-}
-const toggleEvtListeners = (element: Element, value: boolean) => {
-  for (const key in element) {
-    if (key.startsWith("on")) {
-      const eventType = key.substring(2)
-      element[value ? "addEventListener" : "removeEventListener"](
-        eventType,
-        captureEvent,
-        { passive: true }
-      )
-    }
-  }
 }

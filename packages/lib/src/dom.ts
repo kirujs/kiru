@@ -5,6 +5,7 @@ import {
   propToHtmlAttr,
   getVNodeAppContext,
   setRef,
+  isValidTextChild,
 } from "./utils/index.js"
 import {
   booleanAttributes,
@@ -348,34 +349,33 @@ function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
  * Creates and inserts an empty signal-bound text node into
  * the dom tree if the signal value is null or undefined.
  */
-function tryHydrateNullableSignalChild(
-  vNode: VNode,
-  currentChild: MaybeDom
-): MaybeDom {
+function getOrCreateTextNode(vNode: VNode): MaybeDom {
   const sig = vNode.props.nodeValue
-  if (!Signal.isSignal(sig)) return
-
-  const value = unwrap(sig)
-  if (value !== null && value !== undefined) {
-    return
+  if (!Signal.isSignal(sig)) {
+    return hydrationStack.getCurrentChild()
   }
+
+  const value = sig.peek()
+  if (isValidTextChild(value)) {
+    return hydrationStack.getCurrentChild()
+  }
+
   const dom = createSignalTextNode(vNode, sig)
+  const currentChild = hydrationStack.getCurrentChild()
 
-  if (currentChild) {
-    currentChild.before(dom)
-  } else {
-    hydrationStack.parent().appendChild(dom)
+  if (!currentChild) {
+    return hydrationStack.getCurrentParent().appendChild(dom)
   }
 
+  currentChild.before(dom)
   return dom
 }
 
 function hydrateDom(vNode: VNode) {
-  const currentChild = hydrationStack.currentChild()
   const dom =
-    (vNode.type === "#text" &&
-      tryHydrateNullableSignalChild(vNode, currentChild)) ||
-    currentChild
+    vNode.type === "#text"
+      ? getOrCreateTextNode(vNode)
+      : hydrationStack.getCurrentChild()
 
   hydrationStack.bumpChildIndex()
 

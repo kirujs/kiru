@@ -22,7 +22,6 @@ export function hydrate(
 
   const prevRenderMode = renderMode.current
   renderMode.current = "hydrate"
-  hydrationStack.captureEvents(container)
 
   const prevHydrationMode = hydrationMode.current
   hydrationMode.current = options?.hydrationMode ?? "dynamic"
@@ -30,8 +29,6 @@ export function hydrate(
   const app = mount(children, container, options)
 
   renderMode.current = prevRenderMode
-  hydrationStack.releaseEvents(container)
-
   hydrationMode.current = prevHydrationMode
 
   return app
