@@ -268,7 +268,7 @@ function setSignalProp(
   const value = signal.peek()
   const prev = unwrap(prevValue)
   if (value !== prev) {
-    setProp(dom, attr, value, prev)
+    setProp(dom, attr ?? modifier, value, prev)
   }
 }
 
