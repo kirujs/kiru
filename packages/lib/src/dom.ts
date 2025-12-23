@@ -208,7 +208,7 @@ function updateDom(vNode: DomVNode) {
   }
 }
 
-function deriveSelectElementValue(dom: HTMLSelectElement) {
+function getSelectElementValue(dom: HTMLSelectElement) {
   if (dom.multiple) {
     return Array.from(dom.selectedOptions).map((option) => option.value)
   }
@@ -233,7 +233,7 @@ const bindAttrToEventMap: Record<string, string> = {
   playbackRate: "ratechange",
   currentTime: "timeupdate",
 }
-const numericValueElements = ["progress", "meter", "number", "range"]
+const numericValueInputTypes = new Set(["progress", "meter", "number", "range"])
 
 function setSignalProp(
   vNode: VNode,
@@ -242,71 +242,80 @@ function setSignalProp(
   signal: Signal<any>,
   prevValue: unknown
 ) {
-  const cleanups = (vNode.cleanups ??= {})
   const [modifier, attr] = key.split(":")
+  const cleanups = (vNode.cleanups ??= {})
   if (modifier !== "bind") {
     cleanups[key] = signal.subscribe((value, prev) => {
       if (value === prev) return
       setProp(dom, key, value, prev)
       if (__DEV__) {
-        window.__kiru.profilingContext?.emit(
-          "signalAttrUpdate",
-          getVNodeAppContext(vNode)!
-        )
+        emitSignalAttrUpdate(vNode)
       }
     })
-
-    const value = signal.peek()
-    const prev = unwrap(prevValue)
-    if (value === prev) return
-    setProp(dom, key, value, prev)
-    return
-  }
-
-  const evtName = bindAttrToEventMap[attr]
-  if (!evtName) {
-    if (__DEV__) {
-      console.error(`[kiru]: ${attr} is not a valid element binding attribute.`)
-    }
-    return
-  }
-
-  const isSelect = dom instanceof HTMLSelectElement
-  const setAttr = isSelect
-    ? (value: any) => setSelectElementValue(dom, value)
-    : (value: any) => ((dom as any)[attr] = value)
-
-  const signalUpdateCallback = (value: any) => {
-    setAttr(value)
-    if (__DEV__) {
-      window.__kiru.profilingContext?.emit(
-        "signalAttrUpdate",
-        getVNodeAppContext(vNode)!
-      )
-    }
-  }
-
-  const setSigFromElement = (val: any) => {
-    signal.sneak(val)
-    signal.notify((sub) => sub !== signalUpdateCallback)
-  }
-
-  let evtHandler: (evt: Event) => void
-  if (attr === "value") {
-    const useNumericValue =
-      numericValueElements.indexOf((dom as HTMLInputElement).type) !== -1
-    evtHandler = () => {
-      let val: any = (dom as HTMLInputElement | HTMLSelectElement).value
-      if (isSelect) {
-        val = deriveSelectElementValue(dom)
-      } else if (typeof signal.peek() === "number" && useNumericValue) {
-        val = (dom as HTMLInputElement).valueAsNumber
-      }
-      setSigFromElement(val)
-    }
   } else {
-    evtHandler = (e: Event) => {
-      const val = (e.target as any)[attr]
+    const evtName = bindAttrToEventMap[attr]
+    if (!evtName) {
+      if (__DEV__) {
+        console.error(
+          `[kiru]: ${attr} is not a valid element binding attribute.`
+        )
+      }
+      return
+    }
+    cleanups[key] = bindElementProp(vNode, dom, attr, evtName, signal)
+  }
+
+  const value = signal.peek()
+  const prev = unwrap(prevValue)
+  if (value !== prev) {
+    setProp(dom, attr, value, prev)
+  }
+}
+
+function createElementValueReader(
+  dom: Exclude<SomeDom, Text>,
+  signal: Signal<any>
+) {
+  if (dom instanceof HTMLInputElement) {
+    return createInputValueReader(dom, signal)
+  }
+  if (dom instanceof HTMLSelectElement) {
+    return () => getSelectElementValue(dom)
+  }
+  return () => (dom as any).value
+}
+
+function bindElementProp(
+  vNode: VNode,
+  dom: Exclude<SomeDom, Text>,
+  attr: string,
+  evtName: string,
+  signal: Signal<any>
+): () => void {
+  const writeToSignal = (val: any) => {
+    signal.sneak(val)
+    signal.notify((sub) => sub !== updateFromSignal)
+  }
+
+  const writeToElement =
+    dom instanceof HTMLSelectElement && attr === "value"
+      ? (value: any) => setSelectElementValue(dom, value)
+      : (value: any) => ((dom as any)[attr] = value)
+
+  const updateFromSignal = (value: any) => {
+    writeToElement(value)
+    if (__DEV__) {
+      emitSignalAttrUpdate(vNode)
+    }
+  }
+
+  let evtHandler: EventListener
+  if (attr === "value") {
+    const readValue = createElementValueReader(dom, signal)
+    evtHandler = () => writeToSignal(readValue())
+  } else {
+    evtHandler = () => {
+      const val = (dom as any)[attr]
       /**
        * the 'timeupdate' event is fired when the currentTime property is
        * set (from code OR playback), so we need to prevent unnecessary
@@ -314,22 +323,42 @@ function setSignalProp(
        * elements with the same signal bound to 'currentTime'
        */
       if (attr === "currentTime" && signal.peek() === val) return
-      setSigFromElement(val)
+      writeToSignal(val)
     }
   }
 
   dom.addEventListener(evtName, evtHandler)
-  const unsub = signal.subscribe(signalUpdateCallback)
+  const unsub = signal.subscribe(updateFromSignal)
 
-  cleanups[key] = () => {
+  return () => {
     dom.removeEventListener(evtName, evtHandler)
     unsub()
   }
+}
 
-  const value = signal.peek()
-  const prev = unwrap(prevValue)
-  if (value === prev) return
-  setProp(dom, attr, value, prev)
+function createInputValueReader(
+  dom: HTMLInputElement,
+  signal: Signal<any>
+): () => any {
+  const t = dom.type
+  const v = signal.peek()
+
+  if (t === "date" && v instanceof Date) {
+    return () => dom.valueAsDate
+  }
+
+  if (numericValueInputTypes.has(t) && typeof v === "number") {
+    return () => dom.valueAsNumber
+  }
+
+  return () => dom.value
+}
+
+function emitSignalAttrUpdate(vNode: VNode) {
+  window.__kiru.profilingContext?.emit(
+    "signalAttrUpdate",
+    getVNodeAppContext(vNode)!
+  )
 }
 
 function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
