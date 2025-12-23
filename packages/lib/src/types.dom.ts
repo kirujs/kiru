@@ -338,7 +338,7 @@ type NativeTransitionEvent = TransitionEvent
 type NativeUIEvent = UIEvent
 type NativeWheelEvent = WheelEvent
 
-type NoChildElementElement =
+type NoChildEventsElement =
   | HTMLAreaElement
   | HTMLBaseElement
   | HTMLBRElement
@@ -348,6 +348,7 @@ type NoChildElementElement =
   | HTMLInputElement
   | HTMLLinkElement
   | HTMLMetaElement
+  | HTMLSelectElement
   | HTMLSourceElement
   | HTMLTrackElement
   | HTMLTextAreaElement
@@ -360,10 +361,8 @@ declare global {
       E,
       "target" | "currentTarget"
     > & {
-      target: C extends NoChildElementElement
-        ? EventTarget & C
-        : EventTarget & T
-      currentTarget: EventTarget & C
+      target: C extends NoChildEventsElement ? C : T
+      currentTarget: C
     }
 
     type EventHandler<E extends DOMEvent> = {

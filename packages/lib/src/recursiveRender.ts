@@ -6,6 +6,7 @@ import {
   isExoticType,
   assertValidElementProps,
   isPrimitiveChild,
+  isValidTextChild,
 } from "./utils/index.js"
 import { isStreamDataThrowValue } from "./utils/promise.js"
 import { Signal } from "./signals/base.js"
@@ -50,7 +51,11 @@ function render(
         return
       }
     }
-    return ctx.write(encodeHtmlEntities(String(value)))
+
+    if (isValidTextChild(value)) {
+      ctx.write(encodeHtmlEntities(String(value)))
+    }
+    return
   }
   if (!isVNode(el)) {
     return
