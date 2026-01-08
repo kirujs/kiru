@@ -3,6 +3,7 @@ import { __DEV__ } from "../env.js"
 import { hookIndex, node } from "../globals.js"
 import { noop } from "../utils/index.js"
 import { requestUpdate } from "../scheduler.js"
+import { isHmrUpdate } from "../hmr.js"
 export {
   cleanupHook,
   depsRequireChange,
@@ -177,7 +178,7 @@ function useHook<
       const res = (callback as HookCallback<T>)({
         hook,
         isInit: !oldHook,
-        isHMR: vNode.hmrUpdated,
+        isHMR: isHmrUpdate(),
         update: () => requestUpdate(vNode),
         queueEffect,
         vNode,

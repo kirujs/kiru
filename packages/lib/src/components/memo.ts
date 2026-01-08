@@ -17,12 +17,7 @@ function _arePropsEqual<T extends Record<string, unknown>>(
 
 export interface MemoFn<T extends Record<string, unknown> = {}> {
   (props: T): JSX.Element
-  [$MEMO]: {
-    arePropsEqual: (
-      prevProps: Record<string, unknown>,
-      nextProps: Record<string, unknown>
-    ) => boolean
-  }
+  [$MEMO]: (prevProps: T, nextProps: T) => boolean
 }
 
 export function memo<T extends Record<string, unknown> = {}>(
@@ -34,14 +29,12 @@ export function memo<T extends Record<string, unknown> = {}>(
       return createElement(fn, props)
     },
     {
-      [$MEMO]: { arePropsEqual },
+      [$MEMO]: arePropsEqual,
       displayName: "Kiru.memo",
     }
   )
 }
 
 export function isMemoFn(fn: Function & { [$MEMO]?: any }): fn is MemoFn {
-  return (
-    typeof fn === "function" && typeof fn[$MEMO]?.arePropsEqual === "function"
-  )
+  return typeof fn[$MEMO] === "function"
 }

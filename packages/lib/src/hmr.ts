@@ -1,7 +1,7 @@
 import { $HMR_ACCEPT, $DEV_FILE_LINK } from "./constants.js"
 import { __DEV__ } from "./env.js"
 import { traverseApply } from "./utils/index.js"
-import { requestUpdate } from "./scheduler.js"
+import { flushSync, requestUpdate } from "./scheduler.js"
 import { Signal } from "./signals/base.js"
 import type { WatchEffect } from "./signals/watch.js"
 import type { Store } from "./store.js"
@@ -23,6 +23,11 @@ type HotVarDesc = {
   value: HotVar
   hooks?: Array<{ name: string; args: string }>
   link: string
+}
+
+let _isHmrUpdate = false
+export function isHmrUpdate() {
+  return _isHmrUpdate
 }
 
 export function isGenericHmrAcceptor(
@@ -128,15 +133,20 @@ export function createHMRContext() {
             if (vNode.type === oldEntry.value) {
               vNode.type = newEntry.value as any
               dirtiedApps.add(ctx)
-              vNode.hmrUpdated = true
             }
           })
         })
       }
     }
-    dirtiedApps.forEach((ctx) => ctx.rootNode && requestUpdate(ctx.rootNode))
-    isModuleReplacementExecution = false
 
+    if (dirtiedApps.size) {
+      _isHmrUpdate = true
+      dirtiedApps.forEach((ctx) => requestUpdate(ctx.rootNode))
+      flushSync()
+      _isHmrUpdate = false
+    }
+
+    isModuleReplacementExecution = false
     currentModuleMemory = null
     currentModuleFilePath = null
   }

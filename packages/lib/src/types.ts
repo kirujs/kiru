@@ -210,20 +210,13 @@ declare global {
       cleanups?: Record<string, Function>
       effects?: Array<Function>
       immediateEffects?: Array<Function>
-      memoizedProps?: Record<string, any>
-      arePropsEqual?: (
-        prev: Record<string, any>,
-        next: Record<string, any>
-      ) => boolean
       // dev-mode only
       hookSig?: string[]
-      hmrUpdated?: boolean
     }
   }
   interface VNodeSnapshot {
     props: Kiru.VNode["props"]
     key: Kiru.VNode["key"]
-    memoizedProps: Kiru.VNode["memoizedProps"]
     index: number
   }
 

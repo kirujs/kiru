@@ -7,6 +7,7 @@ import type {
 import {
   $CONTEXT_PROVIDER,
   $ERROR_BOUNDARY,
+  $MEMO,
   CONSECUTIVE_DIRTY_LIMIT,
   FLAG_DELETION,
   FLAG_DIRTY,
@@ -35,6 +36,8 @@ import {
   findParentErrorBoundary,
 } from "./utils/index.js"
 import type { AppContext } from "./appContext"
+import type { MemoFn } from "./components/memo"
+import { isHmrUpdate } from "./hmr.js"
 
 type VNode = Kiru.VNode
 
@@ -55,7 +58,7 @@ let animationFrameHandle = -1
  * Runs a function after any existing work has been completed,
  * or immediately if the scheduler is already idle.
  */
-export function nextIdle(fn: () => void) {
+export function nextIdle(fn: () => void): void {
   if (isRunningOrQueued) {
     nextIdleEffects.push(fn)
     return
@@ -66,13 +69,13 @@ export function nextIdle(fn: () => void) {
 /**
  * Syncronously flushes any pending work.
  */
-export function flushSync() {
+export function flushSync(): void {
   if (!isRunningOrQueued) return
   window.cancelAnimationFrame(animationFrameHandle)
   doWork()
 }
 
-export function renderRootSync(rootNode: VNode) {
+export function renderRootSync(rootNode: VNode): void {
   rootNode.flags |= FLAG_DIRTY
   treesInProgress.push(rootNode)
 
@@ -90,20 +93,20 @@ export function requestUpdate(vNode: VNode): void {
   queueUpdate(vNode)
 }
 
-function queueBeginWork() {
+function queueBeginWork(): void {
   if (isRunningOrQueued) return
   isRunningOrQueued = true
   animationFrameHandle = window.requestAnimationFrame(doWork)
 }
 
-function onWorkFinished() {
+function onWorkFinished(): void {
   isRunningOrQueued = false
   while (nextIdleEffects.length) {
     nextIdleEffects.shift()!()
   }
 }
 
-function queueUpdate(vNode: VNode) {
+function queueUpdate(vNode: VNode): void {
   // In immediate effect mode (useLayoutEffect), immediately mark the render as dirty
   if (isImmediateEffectsMode) {
     immediateEffectDirtiedRender = true
@@ -129,12 +132,12 @@ function queueUpdate(vNode: VNode) {
   treesInProgress.push(vNode)
 }
 
-function queueDelete(vNode: VNode) {
+function queueDelete(vNode: VNode): void {
   traverseApply(vNode, (n) => (n.flags |= FLAG_DELETION))
   deletions.push(vNode)
 }
 
-const depthSort = (a: VNode, b: VNode) => b.depth - a.depth
+const depthSort = (a: VNode, b: VNode): number => b.depth - a.depth
 
 let currentWorkRoot: VNode | null = null
 
@@ -163,7 +166,7 @@ function doWork(): void {
     const flags = currentWorkRoot.flags
     if (flags & FLAG_DELETION) continue
     if (flags & FLAG_DIRTY) {
-      let n: VNode | void = currentWorkRoot
+      let n: VNode | null = currentWorkRoot
       while ((n = performUnitOfWork(n))) {}
 
       while (deletions.length) {
@@ -194,7 +197,7 @@ function doWork(): void {
   consecutiveDirtyCount = 0
 
   onWorkFinished()
-  flushEffects(postEffects)
+  queueMicrotask(() => flushEffects(postEffects))
   if (__DEV__) {
     window.__kiru.emit("update", appCtx!)
     window.__kiru.profilingContext?.emit("update", appCtx!)
@@ -202,15 +205,57 @@ function doWork(): void {
   }
 }
 
-function performUnitOfWork(vNode: VNode): VNode | void {
-  let renderChild = true
+function performUnitOfWork(vNode: VNode): VNode | null {
+  const next = updateVNode(vNode)
+
+  if (vNode.deletions !== null) {
+    vNode.deletions.forEach(queueDelete)
+    vNode.deletions = null
+  }
+
+  if (next) {
+    return next
+  }
+
+  let nextNode: VNode | null = vNode
+  while (nextNode) {
+    // queue effects upon ascent
+    if (nextNode.immediateEffects) {
+      preEffects.push(...nextNode.immediateEffects)
+      nextNode.immediateEffects = undefined
+    }
+    if (nextNode.effects) {
+      postEffects.push(...nextNode.effects)
+      nextNode.effects = undefined
+    }
+
+    if (nextNode === currentWorkRoot) return null
+    if (nextNode.sibling) {
+      return nextNode.sibling
+    }
+
+    nextNode = nextNode.parent
+    if (renderMode.current === "hydrate" && nextNode?.dom) {
+      hydrationStack.pop()
+    }
+  }
+
+  return null
+}
+
+function updateVNode(vNode: VNode): VNode | null {
+  const { type, props, prev, flags } = vNode
+  if (__DEV__ && isHmrUpdate()) {
+  } else if ((flags & FLAG_DIRTY) === 0 && props === prev?.props) {
+    return null
+  }
   try {
-    if (typeof vNode.type === "string") {
-      updateHostComponent(vNode as DomVNode)
-    } else if (isExoticType(vNode.type)) {
-      updateExoticComponent(vNode)
+    if (typeof type === "string") {
+      return updateHostComponent(vNode as DomVNode)
+    } else if (isExoticType(type)) {
+      return updateExoticComponent(vNode)
     } else {
-      renderChild = updateFunctionComponent(vNode as FunctionVNode)
+      return updateFunctionComponent(vNode as FunctionVNode)
     }
   } catch (error) {
     if (__DEV__) {
@@ -243,47 +288,16 @@ function performUnitOfWork(vNode: VNode): VNode | void {
         throw error
       }
       console.error(error)
-      return
+      return vNode.child
     }
     setTimeout(() => {
       throw error
     })
   }
-
-  if (vNode.deletions !== null) {
-    vNode.deletions.forEach(queueDelete)
-    vNode.deletions = null
-  }
-
-  if (renderChild && vNode.child) {
-    return vNode.child
-  }
-
-  let nextNode: VNode | null = vNode
-  while (nextNode) {
-    // queue effects upon ascent
-    if (nextNode.immediateEffects) {
-      preEffects.push(...nextNode.immediateEffects)
-      nextNode.immediateEffects = undefined
-    }
-    if (nextNode.effects) {
-      postEffects.push(...nextNode.effects)
-      nextNode.effects = undefined
-    }
-
-    if (nextNode === currentWorkRoot) return
-    if (nextNode.sibling) {
-      return nextNode.sibling
-    }
-
-    nextNode = nextNode.parent
-    if (renderMode.current === "hydrate" && nextNode?.dom) {
-      hydrationStack.pop()
-    }
-  }
+  return null
 }
 
-function updateExoticComponent(vNode: VNode) {
+function updateExoticComponent(vNode: VNode): VNode | null {
   const { props, type } = vNode
   let children = props.children
 
@@ -309,20 +323,19 @@ function updateExoticComponent(vNode: VNode) {
     }
   }
 
-  vNode.child = reconcileChildren(vNode, children)
+  return (vNode.child = reconcileChildren(vNode, children))
 }
 
-function updateFunctionComponent(vNode: FunctionVNode) {
+function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
   const { type, props, subs, prev, flags } = vNode
   if (flags & FLAG_MEMO) {
-    vNode.memoizedProps = props
     if (
-      prev?.memoizedProps &&
-      vNode.arePropsEqual!(prev.memoizedProps, props) &&
-      !vNode.hmrUpdated
+      prev &&
+      (type as MemoFn)[$MEMO](prev.props, props) &&
+      !(__DEV__ && isHmrUpdate())
     ) {
       vNode.flags |= FLAG_NOOP
-      return false
+      return null
     }
     vNode.flags &= ~FLAG_NOOP
   }
@@ -352,7 +365,7 @@ function updateFunctionComponent(vNode: FunctionVNode) {
       if (__DEV__) {
         newChild = latest(type)(props)
 
-        if (vNode.hmrUpdated && vNode.hooks && vNode.hookSig) {
+        if (isHmrUpdate() && vNode.hooks && vNode.hookSig) {
           const len = vNode.hooks.length
           if (hookIndex.current < len) {
             // clean up any hooks that were removed
@@ -365,7 +378,6 @@ function updateFunctionComponent(vNode: FunctionVNode) {
           }
         }
 
-        delete vNode.hmrUpdated
         if (++renderTryCount > CONSECUTIVE_DIRTY_LIMIT) {
           throw new KiruError({
             message:
@@ -378,14 +390,14 @@ function updateFunctionComponent(vNode: FunctionVNode) {
       }
       newChild = type(props)
     } while (isRenderDirtied)
-    vNode.child = reconcileChildren(vNode, newChild)
-    return true
+
+    return (vNode.child = reconcileChildren(vNode, newChild))
   } finally {
     node.current = null
   }
 }
 
-function updateHostComponent(vNode: DomVNode) {
+function updateHostComponent(vNode: DomVNode): VNode | null {
   const { props, type } = vNode
   if (__DEV__) {
     assertValidElementProps(vNode)
@@ -409,9 +421,11 @@ function updateHostComponent(vNode: DomVNode) {
       hydrationStack.push(vNode.dom!)
     }
   }
+
+  return vNode.child
 }
 
-function checkForTooManyConsecutiveDirtyRenders() {
+function checkForTooManyConsecutiveDirtyRenders(): void {
   if (consecutiveDirtyCount > CONSECUTIVE_DIRTY_LIMIT) {
     throw new KiruError(
       "Maximum update depth exceeded. This can happen when a component repeatedly calls setState during render or in useLayoutEffect. Kiru limits the number of nested updates to prevent infinite loops."
@@ -419,7 +433,7 @@ function checkForTooManyConsecutiveDirtyRenders() {
   }
 }
 
-function flushEffects(effectArr: Function[]) {
+function flushEffects(effectArr: Function[]): void {
   for (let i = 0; i < effectArr.length; i++) {
     effectArr[i]()
   }

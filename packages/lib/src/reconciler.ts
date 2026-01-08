@@ -1,6 +1,5 @@
 import {
   $FRAGMENT,
-  $MEMO,
   FLAG_MEMO,
   FLAG_PLACEMENT,
   FLAG_UPDATE,
@@ -499,7 +498,6 @@ function createVNode(
 
   if (typeof type === "function" && isMemoFn(type)) {
     node.flags |= FLAG_MEMO
-    node.arePropsEqual = type[$MEMO].arePropsEqual
   }
 
   if (__DEV__ && "window" in globalThis) {

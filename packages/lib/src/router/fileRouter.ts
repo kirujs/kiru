@@ -26,12 +26,8 @@ export interface FileRouterProps {
 
 export function FileRouter({ config }: FileRouterProps): JSX.Element {
   const [controller] = useState(() => {
-    if (fileRouterInstance.current && !config.preloaded) {
-      throw new Error(
-        "[kiru/router]: FileRouter cannot be instantiated more than once at a time."
-      )
-    }
-    const router = (fileRouterInstance.current ??= new FileRouterController())
+    fileRouterInstance.current?.dispose()
+    const router = (fileRouterInstance.current = new FileRouterController())
     router.init(config)
     return router
   })

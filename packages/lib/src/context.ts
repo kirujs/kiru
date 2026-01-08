@@ -1,10 +1,7 @@
-import { $CONTEXT, $CONTEXT_PROVIDER, $HMR_ACCEPT } from "./constants.js"
+import { $CONTEXT, $CONTEXT_PROVIDER } from "./constants.js"
 import { createElement } from "./element.js"
 import { __DEV__ } from "./env.js"
-import { GenericHMRAcceptor } from "./hmr.js"
 import { useState } from "./hooks/useState.js"
-import { requestUpdate } from "./scheduler.js"
-import { traverseApply } from "./utils/index.js"
 
 export function createContext<T>(defaultValue: T): Kiru.Context<T> {
   const ctx: Kiru.Context<T> = {
@@ -24,25 +21,6 @@ export function createContext<T>(defaultValue: T): Kiru.Context<T> {
     get displayName() {
       return this.Provider.displayName || "Anonymous Context"
     },
-  }
-  if (__DEV__) {
-    const asHmrAcceptor = ctx as any as GenericHMRAcceptor<Kiru.Context<T>>
-    asHmrAcceptor[$HMR_ACCEPT] = {
-      inject: (prev) => {
-        const newProvider = ctx.Provider
-        window.__kiru.apps.forEach((ctx) => {
-          traverseApply(ctx.rootNode, (vNode) => {
-            if (vNode.type === prev.Provider) {
-              vNode.type = newProvider
-              vNode.hmrUpdated = true
-              requestUpdate(vNode)
-            }
-          })
-        })
-      },
-      destroy: () => {},
-      provide: () => ctx,
-    }
   }
 
   return ctx

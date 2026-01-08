@@ -114,13 +114,8 @@ function getVNodeAppContext(vNode: Kiru.VNode): AppContext | null {
 }
 
 function commitSnapshot(vNode: Kiru.VNode): void {
-  const {
-    props: { children, ...props },
-    key,
-    memoizedProps,
-    index,
-  } = vNode
-  vNode.prev = { props, key, memoizedProps, index }
+  const { props, key, index } = vNode
+  vNode.prev = { props, key, index }
   vNode.flags &= ~(FLAG_UPDATE | FLAG_PLACEMENT | FLAG_DELETION)
 }
 
