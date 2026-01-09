@@ -1,4 +1,4 @@
-import { useState } from "kiru"
+import { memo, useState } from "kiru"
 
 export default function RootLayout({ children }: { children: JSX.Children }) {
   const [count, setCount] = useState(0)
@@ -14,10 +14,10 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
   )
 }
 
-function Foo() {
+const Foo = memo(() => {
   console.log("Foo")
   return <div>foo</div>
-}
+})
 
 // const $k0 = _jsx("header", null, "Header"),
 //   $k1 = 1 + 2 + 3 + [1, 2, 3].reduce((a, b) => a + b, 0),

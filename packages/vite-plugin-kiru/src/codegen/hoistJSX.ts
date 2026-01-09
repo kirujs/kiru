@@ -1,5 +1,5 @@
 import * as AST from "./ast"
-import { TransformCTX, isComponent } from "./shared"
+import { TransformCTX, createAliasHandler } from "./shared"
 type AstNode = AST.AstNode
 
 type Hoistable = {
@@ -8,72 +8,121 @@ type Hoistable = {
   varName: string
 }
 
+// Identifiers that are known to be module-level static values
+let staticHoistableIds = new Set<string>()
+
 export function prepareJSXHoisting(ctx: TransformCTX) {
   const { code, ast } = ctx
 
   // Track _jsx and _jsxFragment aliases
-  const jsxAliases = new Set<string>(["_jsx"])
-  const fragmentAliases = new Set<string>(["_jsxFragment"])
+  const createElement = createAliasHandler("createElement")
+  const fragment = createAliasHandler("Fragment")
+  const memo = createAliasHandler("memo")
 
   // Find imports to track aliases
-  for (const node of ast.body as AstNode[]) {
+  const bodyNodes = ast.body as AstNode[]
+
+  for (const node of bodyNodes) {
     if (node.type === "ImportDeclaration") {
-      if (node.source?.value === "kiru") {
-        const specifiers = node.specifiers || []
-        for (const spec of specifiers) {
-          if (spec.imported?.name === "createElement" && spec.local?.name) {
-            jsxAliases.add(spec.local.name)
-          }
-          if (spec.imported?.name === "Fragment" && spec.local?.name) {
-            fragmentAliases.add(spec.local.name)
-          }
-        }
-      }
-    } else {
-      break
+      ;[createElement, fragment, memo].forEach((handler) => {
+        handler.addAliases(node)
+      })
     }
   }
 
-  const bodyNodes = ast.body as AstNode[]
   let counter = 0
 
   // Track which nodes are hoistable (to avoid double-hoisting)
   const hoistableSet = new Set<AstNode>()
 
+  // Reset static identifier set for this file
+  staticHoistableIds.clear()
+
+  // Pre-pass: collect module-level static identifiers
+  for (const node of bodyNodes) {
+    if (node.type !== "VariableDeclaration") continue
+    const kind = (node as any).kind
+    // Only consider top-level consts for now
+    if (kind !== "const") continue
+
+    const declarations = (node as any).declarations || []
+    for (const decl of declarations as AstNode[]) {
+      if (decl.type !== "VariableDeclarator") continue
+      const id = (decl as any).id as AstNode | undefined
+      if (!id || id.type !== "Identifier" || !id.name) continue
+
+      const init = (decl as any).init as AstNode | undefined
+      if (!init) continue
+
+      // Consider static literals or static JSX/_jsx calls as static values
+      let isStatic = false
+      if (isStaticLiteral(init)) {
+        isStatic = true
+      } else if (
+        init.type === "CallExpression" &&
+        isHoistableSubtree(init, createElement.aliases, fragment.aliases)
+      ) {
+        isStatic = true
+      }
+
+      if (isStatic) {
+        staticHoistableIds.add(id.name)
+      }
+    }
+  }
+
   // First pass: identify all hoistable nodes
   for (const node of bodyNodes) {
-    if (!isComponent(node, bodyNodes)) continue
+    // if (!isComponent(node, bodyNodes)) {
+    //   console.log("[vite-plugin-kiru]: skipping non-component", node)
+    //   continue
+    // }
 
-    const body = getComponentBody(node, bodyNodes)
-    if (!body) continue
+    // const body = getComponentBody(node, bodyNodes)
+    // if (!body) continue
 
     const candidateNodes: AstNode[] = []
-    AST.walk(body, {
+    function pushCandidate(node: AstNode) {
+      candidateNodes.push(node)
+      console.log("[vite-plugin-kiru]: pushing candidate", node)
+    }
+    let fnDepth = 0
+    const FunctionDepthTracker = () => {
+      fnDepth++
+      return () => fnDepth--
+    }
+    AST.walk(node, {
+      FunctionDeclaration: FunctionDepthTracker,
+      FunctionExpression: FunctionDepthTracker,
+      ArrowFunctionExpression: FunctionDepthTracker,
       CallExpression: (callNode) => {
+        if (fnDepth === 0) return
         const callee = callNode.callee
 
         // Collect _jsx calls
-        if (
-          callee?.type === "Identifier" &&
-          callee.name &&
-          jsxAliases.has(callee.name)
-        ) {
-          candidateNodes.push(callNode)
+        if (createElement.isMatchingCallExpression(callNode)) {
+          pushCandidate(callNode)
           // Also check children for static expressions
           const childrenArgs = callNode.arguments?.slice(2) || []
           for (const child of childrenArgs) {
-            // Collect BinaryExpressions and other static expressions
+            // Collect BinaryExpressions, UnaryExpressions, ConditionalExpressions, and LogicalExpressions
             if (
               child.type === "BinaryExpression" ||
-              child.type === "UnaryExpression"
+              child.type === "UnaryExpression" ||
+              child.type === "ConditionalExpression" ||
+              child.type === "LogicalExpression"
             ) {
-              candidateNodes.push(child)
+              pushCandidate(child)
               // Also collect nested CallExpressions/MemberExpressions from the expression
               collectNestedOperations(child, candidateNodes)
             }
             // Also check for static array literals
             if (child.type === "ArrayExpression" && isStaticLiteral(child)) {
-              candidateNodes.push(child)
+              pushCandidate(child)
+            }
+            // Also check for static object literals
+            if (child.type === "ObjectExpression" && isStaticLiteral(child)) {
+              pushCandidate(child)
             }
           }
           return
@@ -89,11 +138,12 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
             obj?.type === "CallExpression" ||
             obj?.type === "MemberExpression"
           ) {
-            candidateNodes.push(callNode)
+            pushCandidate(callNode)
           }
         }
       },
       MemberExpression: (memberNode) => {
+        if (fnDepth === 0) return
         // Only collect MemberExpressions that are NOT part of a CallExpression
         // (i.e., property access like { foo: 123 }.foo, not method calls)
         // We'll handle method calls via CallExpression above
@@ -104,7 +154,7 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
         ) {
           // Check if this MemberExpression is the callee of a CallExpression
           // If so, we'll handle it via the CallExpression, not here
-          candidateNodes.push(memberNode)
+          pushCandidate(memberNode)
         }
       },
     })
@@ -125,8 +175,8 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
             if (
               isHoistableStaticOperation(
                 node,
-                jsxAliases,
-                fragmentAliases,
+                createElement.aliases,
+                fragment.aliases,
                 hoistableSet
               )
             ) {
@@ -138,8 +188,8 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
             if (
               isHoistableSubtree(
                 node,
-                jsxAliases,
-                fragmentAliases,
+                createElement.aliases,
+                fragment.aliases,
                 hoistableSet
               )
             ) {
@@ -152,8 +202,8 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
           if (
             isHoistableStaticOperation(
               node,
-              jsxAliases,
-              fragmentAliases,
+              createElement.aliases,
+              fragment.aliases,
               hoistableSet
             )
           ) {
@@ -166,13 +216,19 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
             hoistableSet.add(node)
             changed = true
           }
+        } else if (node.type === "ObjectExpression") {
+          // Check if it's a static object literal
+          if (isStaticLiteral(node)) {
+            hoistableSet.add(node)
+            changed = true
+          }
         } else {
           // Check if it's a static expression (BinaryExpression, etc.)
           if (
             isHoistableStaticExpression(
               node,
-              jsxAliases,
-              fragmentAliases,
+              createElement.aliases,
+              fragment.aliases,
               hoistableSet
             )
           ) {
@@ -188,12 +244,12 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
   const allHoistables: Hoistable[] = []
 
   for (const node of bodyNodes) {
-    if (!isComponent(node, bodyNodes)) continue
+    // if (!isComponent(node, bodyNodes)) continue
 
-    const body = getComponentBody(node, bodyNodes)
-    if (!body) continue
+    // const body = getComponentBody(node, bodyNodes)
+    // if (!body) continue
 
-    AST.walk(body, {
+    AST.walk(node, {
       CallExpression: (callNode, walkCtx) => {
         if (!hoistableSet.has(callNode)) return
 
@@ -247,6 +303,33 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
 
         walkCtx.exitBranch()
       },
+      ConditionalExpression: (conditionalNode, walkCtx) => {
+        if (!hoistableSet.has(conditionalNode)) return
+
+        const varName = `$k${counter++}`
+        allHoistables.push({
+          node: conditionalNode,
+          code: code.original.substring(
+            conditionalNode.start,
+            conditionalNode.end
+          ),
+          varName,
+        })
+
+        walkCtx.exitBranch()
+      },
+      LogicalExpression: (logicalNode, walkCtx) => {
+        if (!hoistableSet.has(logicalNode)) return
+
+        const varName = `$k${counter++}`
+        allHoistables.push({
+          node: logicalNode,
+          code: code.original.substring(logicalNode.start, logicalNode.end),
+          varName,
+        })
+
+        walkCtx.exitBranch()
+      },
       ArrayExpression: (arrayNode, walkCtx) => {
         if (!hoistableSet.has(arrayNode)) return
 
@@ -254,6 +337,18 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
         allHoistables.push({
           node: arrayNode,
           code: code.original.substring(arrayNode.start, arrayNode.end),
+          varName,
+        })
+
+        walkCtx.exitBranch()
+      },
+      ObjectExpression: (objectNode, walkCtx) => {
+        if (!hoistableSet.has(objectNode)) return
+
+        const varName = `$k${counter++}`
+        allHoistables.push({
+          node: objectNode,
+          code: code.original.substring(objectNode.start, objectNode.end),
           varName,
         })
 
@@ -577,7 +672,7 @@ function isHoistableSubtree(
   callNode: AstNode,
   jsxAliases: Set<string>,
   fragmentAliases: Set<string>,
-  hoistableSet: Set<AstNode>
+  hoistableSet?: Set<AstNode>
 ): boolean {
   const callee = callNode.callee
   if (
@@ -609,14 +704,14 @@ function isHoistableSubtree(
         jsxAliases.has(childCallee.name)
       ) {
         // If already marked as hoistable, it's fine
-        if (hoistableSet.has(child)) {
+        if (hoistableSet?.has(child)) {
           continue
         }
         // Check if this child is hoistable
         if (
           isHoistableSubtree(child, jsxAliases, fragmentAliases, hoistableSet)
         ) {
-          hoistableSet.add(child)
+          hoistableSet?.add(child)
           continue
         }
         // If child JSX is not hoistable, this node can't be hoisted
@@ -643,6 +738,15 @@ function collectNestedOperations(node: AstNode, candidates: AstNode[]) {
       break
     case "UnaryExpression":
       collectNestedOperations((node as any).argument as AstNode, candidates)
+      break
+    case "ConditionalExpression":
+      collectNestedOperations((node as any).test as AstNode, candidates)
+      collectNestedOperations((node as any).consequent as AstNode, candidates)
+      collectNestedOperations((node as any).alternate as AstNode, candidates)
+      break
+    case "LogicalExpression":
+      collectNestedOperations((node as any).left as AstNode, candidates)
+      collectNestedOperations((node as any).right as AstNode, candidates)
       break
     case "CallExpression":
     case "MemberExpression":
@@ -683,8 +787,52 @@ function isHoistableStaticExpression(
         fragmentAliases,
         hoistableSet
       )
+    case "ConditionalExpression":
+      // Check if test, consequent, and alternate are all static
+      return (
+        isHoistableStaticExpression(
+          (node as any).test as AstNode,
+          jsxAliases,
+          fragmentAliases,
+          hoistableSet
+        ) &&
+        isHoistableStaticExpression(
+          (node as any).consequent as AstNode,
+          jsxAliases,
+          fragmentAliases,
+          hoistableSet
+        ) &&
+        isHoistableStaticExpression(
+          (node as any).alternate as AstNode,
+          jsxAliases,
+          fragmentAliases,
+          hoistableSet
+        )
+      )
+    case "LogicalExpression":
+      // Check if left and right operands are both static
+      return (
+        isHoistableStaticExpression(
+          (node as any).left as AstNode,
+          jsxAliases,
+          fragmentAliases,
+          hoistableSet
+        ) &&
+        isHoistableStaticExpression(
+          (node as any).right as AstNode,
+          jsxAliases,
+          fragmentAliases,
+          hoistableSet
+        )
+      )
     case "Literal":
       return true
+    case "ArrayExpression":
+      // Check if it's a static array literal
+      return isStaticLiteral(node)
+    case "ObjectExpression":
+      // Check if it's a static object literal
+      return isStaticLiteral(node)
     case "CallExpression":
     case "MemberExpression":
       // Check if it's a hoistable static operation (like [1,2,3].reduce(...))
@@ -714,17 +862,40 @@ function isStaticChild(node: AstNode): boolean {
     case "Literal":
       return true
     case "Identifier":
-      // Identifiers in JSX children are dynamic (like {children}, {count}, etc.)
-      // Only allow if it's a known static constant (we could enhance this)
+      // Treat identifiers that are known module-level statics as static children
+      if (node.name && staticHoistableIds.has(node.name)) {
+        return true
+      }
+      // Other identifiers (like {children}, {count}, etc.) are dynamic
       return false
     case "ArrayExpression": {
       const elems = node.expressions || []
       return elems.every((e) => isStaticChild(e as AstNode))
     }
+    case "ObjectExpression": {
+      const props = node.properties || []
+      return props.every((p) => {
+        if (p.type !== "Property") return false
+        return isStaticChild(p.value as AstNode)
+      })
+    }
     case "BinaryExpression":
       return (
         isStaticChild(node.left as AstNode) &&
         isStaticChild(node.right as AstNode)
+      )
+    case "ConditionalExpression":
+      // Check if test, consequent, and alternate are all static
+      return (
+        isStaticChild((node as any).test as AstNode) &&
+        isStaticChild((node as any).consequent as AstNode) &&
+        isStaticChild((node as any).alternate as AstNode)
+      )
+    case "LogicalExpression":
+      // Check if left and right operands are both static
+      return (
+        isStaticChild((node as any).left as AstNode) &&
+        isStaticChild((node as any).right as AstNode)
       )
     case "TemplateLiteral":
       // Template literals with expressions are dynamic
@@ -733,39 +904,6 @@ function isStaticChild(node: AstNode): boolean {
       // Other expressions are considered dynamic
       return false
   }
-}
-
-function getComponentBody(node: AstNode, bodyNodes: AstNode[]): AstNode | null {
-  if (node.type === "FunctionDeclaration" && node.body) {
-    return node.body as AstNode
-  }
-  if (node.type === "ExportNamedDeclaration" && node.declaration) {
-    return getComponentBody(node.declaration, bodyNodes)
-  }
-  if (node.type === "ExportDefaultDeclaration" && node.declaration) {
-    const decl = node.declaration
-    if (decl.type === "FunctionDeclaration" && decl.body) {
-      return decl.body as AstNode
-    }
-    if (
-      (decl.type === "ArrowFunctionExpression" ||
-        decl.type === "FunctionExpression") &&
-      decl.body
-    ) {
-      return decl.body as AstNode
-    }
-  }
-  if (node.type === "VariableDeclaration" && node.declarations?.[0]?.init) {
-    const init = node.declarations[0].init
-    if (
-      (init.type === "ArrowFunctionExpression" ||
-        init.type === "FunctionExpression") &&
-      init.body
-    ) {
-      return init.body as AstNode
-    }
-  }
-  return null
 }
 
 // Check if props are static (only literals, no identifiers)
