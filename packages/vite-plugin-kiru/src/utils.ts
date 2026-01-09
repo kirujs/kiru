@@ -2,7 +2,7 @@ import path from "node:path"
 import { globSync } from "glob"
 import type { PluginState } from "./config.js"
 import { ANSI } from "./ansi.js"
-import { SSGOptions } from "./types.js"
+import { SSGOptions, SSGSitemapOptions } from "./types.js"
 
 export function createLogger(state: PluginState) {
   return (...data: any[]) => {
@@ -13,7 +13,9 @@ export function createLogger(state: PluginState) {
 
 export function resolveUserDocument(
   projectRoot: string,
-  ssgOptions: Required<SSGOptions>
+  ssgOptions: Required<Omit<SSGOptions, "sitemap">> & {
+    sitemap?: SSGSitemapOptions
+  }
 ): string {
   const { dir, document } = ssgOptions
   const fp = path.resolve(projectRoot, dir, document).replace(/\\/g, "/")

@@ -11,6 +11,9 @@ export default defineConfig({
     kiru({
       include: ["../shared/"],
       loggingEnabled: true,
+      experimental: {
+        staticHoisting: true,
+      },
     }),
   ],
 })

@@ -150,6 +150,27 @@ export interface DevtoolsOptions {
   formatFileLink?: FileLinkFormatter
 }
 
+export interface ExperimentalOptions {
+  /**
+   * Enable static JSX hoisting optimization
+   * @default false
+   * @example
+   * ```tsx
+   * function MyComponent() {
+   *   return <div>Hello, world!</div>
+   * }
+   * // becomes:
+   * const $k0 = createElement("div", null, "Hello, world!")
+   * function MyComponent() {
+   *   return $k0
+   * }
+   * // because the JSX is static, it can be hoisted to the top of the component.
+   * // our 'div' with 'Hello, world!' is _never rerendered_.
+   * ```
+   */
+  staticHoisting?: boolean
+}
+
 export interface KiruPluginOptions {
   /**
    * Whether the devtools should be injected into the build during development
@@ -178,6 +199,11 @@ export interface KiruPluginOptions {
    * Callback for when a file is excluded from transforms due to not being in project root or `include`
    */
   onFileExcluded?: (id: string) => void
+
+  /**
+   * Experimental options
+   */
+  experimental?: ExperimentalOptions
 
   /**
    * Options for SSG

@@ -1,4 +1,4 @@
-import type { SSGOptions } from "./types.js"
+import type { SSGOptions, SSGSitemapOptions } from "./types.js"
 import { resolveUserDocument } from "./utils.js"
 
 export const VIRTUAL_ROUTES_ID = "virtual:kiru:routes"
@@ -7,7 +7,9 @@ export const VIRTUAL_ENTRY_CLIENT_ID = "virtual:kiru:entry-client"
 
 export async function createVirtualModules(
   projectRoot: string,
-  ssgOptions: Required<SSGOptions>
+  ssgOptions: Required<Omit<SSGOptions, "sitemap">> & {
+    sitemap?: SSGSitemapOptions
+  }
 ) {
   const userDoc = resolveUserDocument(projectRoot, ssgOptions)
 

@@ -35,6 +35,9 @@ export interface PluginState {
   dtClientPathname: string
   dtHostScriptPath: string
   manifestPath: string
+  features: {
+    staticHoisting: boolean
+  }
   ssgOptions:
     | (Required<Omit<SSGOptions, "sitemap">> & {
         sitemap?: SSGSitemapOptions
@@ -94,6 +97,9 @@ export function createPluginState(
     dtHostScriptPath: "/__devtools_host__.js",
     manifestPath: "vite-manifest.json",
     loggingEnabled: opts.loggingEnabled === true,
+    features: {
+      staticHoisting: opts.experimental?.staticHoisting === true,
+    },
     ssgOptions: null,
   }
 
@@ -226,6 +232,9 @@ export function updatePluginState(
     dtClientPathname: state.dtClientPathname!,
     dtHostScriptPath: state.dtHostScriptPath!,
     manifestPath: state.manifestPath!,
+    features: {
+      staticHoisting: state.features?.staticHoisting ?? false,
+    },
     ssgOptions: state.ssgOptions!,
     staticProps: {},
   } satisfies PluginState

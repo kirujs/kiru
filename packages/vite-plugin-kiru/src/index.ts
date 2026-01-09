@@ -1,6 +1,10 @@
 import path from "node:path"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
-import { prepareDevOnlyHooks, prepareHMR } from "./codegen/index.js"
+import {
+  prepareDevOnlyHooks,
+  prepareHMR,
+  prepareJSXHoisting,
+} from "./codegen/index.js"
 import { ANSI } from "./ansi.js"
 import {
   createPluginState,
@@ -172,6 +176,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
 
       if (!state.isProduction && !state.isBuild) {
         prepareHMR(ctx)
+      }
+
+      if (state.features.staticHoisting) {
+        prepareJSXHoisting(ctx)
       }
 
       if (!code.hasChanged()) {
