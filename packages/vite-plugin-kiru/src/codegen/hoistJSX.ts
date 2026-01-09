@@ -184,21 +184,21 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
     }
   }
 
-  // Second pass: collect hoistables per component and insert before each
+  // Second pass: collect all hoistables across all components
+  const allHoistables: Hoistable[] = []
+
   for (const node of bodyNodes) {
     if (!isComponent(node, bodyNodes)) continue
 
     const body = getComponentBody(node, bodyNodes)
     if (!body) continue
 
-    const componentHoistables: Hoistable[] = []
-
     AST.walk(body, {
       CallExpression: (callNode, walkCtx) => {
         if (!hoistableSet.has(callNode)) return
 
         const varName = `$k${counter++}`
-        componentHoistables.push({
+        allHoistables.push({
           node: callNode,
           code: code.original.substring(callNode.start, callNode.end),
           varName,
@@ -227,7 +227,7 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
         }
 
         const varName = `$k${counter++}`
-        componentHoistables.push({
+        allHoistables.push({
           node: memberNode,
           code: code.original.substring(memberNode.start, memberNode.end),
           varName,
@@ -239,7 +239,7 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
         if (!hoistableSet.has(binaryNode)) return
 
         const varName = `$k${counter++}`
-        componentHoistables.push({
+        allHoistables.push({
           node: binaryNode,
           code: code.original.substring(binaryNode.start, binaryNode.end),
           varName,
@@ -251,7 +251,7 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
         if (!hoistableSet.has(arrayNode)) return
 
         const varName = `$k${counter++}`
-        componentHoistables.push({
+        allHoistables.push({
           node: arrayNode,
           code: code.original.substring(arrayNode.start, arrayNode.end),
           varName,
@@ -260,29 +260,29 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
         walkCtx.exitBranch()
       },
     })
+  }
 
-    if (componentHoistables.length === 0) continue
+  if (allHoistables.length === 0) return
 
-    // Generate hoisted declarations for this component
-    const declarations =
-      componentHoistables.length === 1
-        ? `const ${componentHoistables[0].varName} = ${componentHoistables[0].code}`
-        : componentHoistables
-            .map((h, i) =>
-              i === 0
-                ? `const ${h.varName} = ${h.code}`
-                : `  ${h.varName} = ${h.code}`
-            )
-            .join(",\n")
+  // Generate hoisted declarations
+  const declarations =
+    allHoistables.length === 1
+      ? `const ${allHoistables[0].varName} = ${allHoistables[0].code}`
+      : allHoistables
+          .map((h, i) =>
+            i === 0
+              ? `const ${h.varName} = ${h.code}`
+              : `  ${h.varName} = ${h.code}`
+          )
+          .join(",\n")
 
-    // Insert just before the component
-    code.appendRight(node.start, `\n${declarations}\n`)
+  // Insert at the end of the code
+  code.append(`\n${declarations}\n`)
 
-    // Replace in reverse order to maintain positions
-    for (let i = componentHoistables.length - 1; i >= 0; i--) {
-      const h = componentHoistables[i]
-      code.update(h.node.start, h.node.end, h.varName)
-    }
+  // Replace in reverse order to maintain positions
+  for (let i = allHoistables.length - 1; i >= 0; i--) {
+    const h = allHoistables[i]
+    code.update(h.node.start, h.node.end, h.varName)
   }
 }
 

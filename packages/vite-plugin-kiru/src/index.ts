@@ -174,12 +174,12 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
 
       prepareDevOnlyHooks(ctx)
 
-      if (!state.isProduction && !state.isBuild) {
-        prepareHMR(ctx)
-      }
-
       if (state.features.staticHoisting) {
         prepareJSXHoisting(ctx)
+      }
+
+      if (!state.isProduction && !state.isBuild) {
+        prepareHMR(ctx)
       }
 
       if (!code.hasChanged()) {
