@@ -1,5 +1,4 @@
 import { STREAMED_DATA_EVENT } from "../constants.js"
-import { __DEV__ } from "../env.js"
 import { hydrationMode, renderMode } from "../globals.js"
 import { Signal, useSignal } from "../signals/base.js"
 import { cleanupHook, depsRequireChange, useHook } from "./utils.js"

@@ -4,6 +4,7 @@ import {
   safeStringify,
   shallowCompare,
   generateRandomID,
+  call,
 } from "../utils/index.js"
 import { useEffect } from "../hooks/useEffect.js"
 import { useMemo } from "../hooks/useMemo.js"
@@ -260,7 +261,7 @@ function createFormController<T extends Record<string, unknown>>(
       }
     }
 
-    formFieldUpdaters.get(name)?.forEach((update) => update())
+    formFieldUpdaters.get(name)?.forEach(call)
   }
 
   const setFieldValue = <K extends RecordKey<T>>(
@@ -410,9 +411,7 @@ function createFormController<T extends Record<string, unknown>>(
       delete formFieldErrors[fieldName as RecordKey<T>]
     }
     updateSubscribers()
-    formFieldUpdaters.forEach((updaters) => {
-      updaters.forEach((update) => update())
-    })
+    formFieldUpdaters.forEach((updaters) => updaters.forEach(call))
   }
 
   const validateForm = async () => {
@@ -634,11 +633,9 @@ export function useForm<T extends Record<string, unknown> = {}>(
             "useFormSubscription",
             { sub: null! as FormStateSubscriber<T> },
             ({ hook, isInit, isHMR, update }) => {
-              if (__DEV__) {
-                if (isHMR) {
-                  isInit = true
-                  hook.cleanup?.()
-                }
+              if (__DEV__ && isHMR) {
+                isInit = true
+                hook.cleanup?.()
               }
               if (isInit) {
                 hook.sub = {

@@ -41,15 +41,11 @@ function render(
   }
   if (Signal.isSignal(el)) {
     const value = el.peek()
-    if (__DEV__) {
-      if (!isPrimitiveChild(value)) {
-        if (__DEV__) {
-          console.error(
-            `[kiru]: expected primitive child but received ${value}`
-          )
-        }
-        return
+    if (!isPrimitiveChild(value)) {
+      if (__DEV__) {
+        console.error(`[kiru]: expected primitive child but received ${value}`)
       }
+      return
     }
 
     if (isValidTextChild(value)) {

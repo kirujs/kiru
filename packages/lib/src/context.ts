@@ -1,6 +1,5 @@
 import { $CONTEXT, $CONTEXT_PROVIDER } from "./constants.js"
 import { createElement } from "./element.js"
-import { __DEV__ } from "./env.js"
 import { useState } from "./hooks/useState.js"
 
 export function createContext<T>(defaultValue: T): Kiru.Context<T> {

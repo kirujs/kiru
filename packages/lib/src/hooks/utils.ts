@@ -116,17 +116,16 @@ function useHook<
 ): ReturnType<U> {
   const vNode = getVNodeOrError(hookName)
 
-  if (__DEV__) {
-    if (
-      currentHookName !== null &&
-      !nestedHookWarnings.has(hookName + currentHookName)
-    ) {
-      nestedHookWarnings.add(hookName + currentHookName)
-      throw new KiruError({
-        message: `Nested primitive "useHook" calls are not supported. "${hookName}" was called inside "${currentHookName}". Strange will most certainly happen.`,
-        vNode,
-      })
-    }
+  if (
+    __DEV__ &&
+    currentHookName !== null &&
+    !nestedHookWarnings.has(hookName + currentHookName)
+  ) {
+    nestedHookWarnings.add(hookName + currentHookName)
+    throw new KiruError({
+      message: `Nested primitive "useHook" calls are not supported. "${hookName}" was called inside "${currentHookName}". Strange will most certainly happen.`,
+      vNode,
+    })
   }
 
   const queueEffect = (callback: Function, opts?: { immediate?: boolean }) => {

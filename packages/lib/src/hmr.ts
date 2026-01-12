@@ -1,5 +1,4 @@
 import { $HMR_ACCEPT, $DEV_FILE_LINK } from "./constants.js"
-import { __DEV__ } from "./env.js"
 import { traverseApply } from "./utils/index.js"
 import { flushSync, requestUpdate } from "./scheduler.js"
 import { Signal } from "./signals/base.js"

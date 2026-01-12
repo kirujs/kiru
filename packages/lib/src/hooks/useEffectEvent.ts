@@ -1,6 +1,5 @@
 import { sideEffectsEnabled } from "../utils/index.js"
 import { node } from "../globals.js"
-import { __DEV__ } from "../env.js"
 import { useHook } from "./utils.js"
 
 /**

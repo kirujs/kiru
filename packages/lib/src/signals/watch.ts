@@ -2,7 +2,12 @@ import { __DEV__ } from "../env.js"
 import { useHook } from "../hooks/utils.js"
 import { effectQueue } from "./globals.js"
 import { executeWithTracking } from "./effect.js"
-import { latest, sideEffectsEnabled, generateRandomID } from "../utils/index.js"
+import {
+  latest,
+  sideEffectsEnabled,
+  generateRandomID,
+  call,
+} from "../utils/index.js"
 import type { Signal } from "./base.js"
 import type { SignalValues } from "./types.js"
 
@@ -26,12 +31,12 @@ export class WatchEffect<const Deps extends readonly Signal<unknown>[] = []> {
     this.unsubs = new Map()
     this.isRunning = false
     this.cleanup = null
-    if (__DEV__) {
-      if ("window" in globalThis) {
-        const signals = window.__kiru.HMRContext!.signals
-        if (signals.isWaitingForNextWatchCall()) {
-          signals.pushWatch(this as WatchEffect)
-        }
+    if (__DEV__ && "window" in globalThis) {
+      const { isWaitingForNextWatchCall, pushWatch } =
+        window.__kiru.HMRContext!.signals
+
+      if (isWaitingForNextWatchCall()) {
+        pushWatch(this as WatchEffect)
       }
     }
     this.start()
@@ -44,22 +49,24 @@ export class WatchEffect<const Deps extends readonly Signal<unknown>[] = []> {
 
     this.isRunning = true
 
-    if (__DEV__) {
-      // postpone execution during HMR
-      if ("window" in globalThis && window.__kiru.HMRContext?.isReplacement()) {
-        return queueMicrotask(() => {
-          if (this.isRunning) {
-            WatchEffect.run(this as WatchEffect)
-          }
-        })
-      }
+    // postpone execution during HMR
+    if (
+      __DEV__ &&
+      "window" in globalThis &&
+      window.__kiru.HMRContext?.isReplacement()
+    ) {
+      return queueMicrotask(() => {
+        if (this.isRunning) {
+          WatchEffect.run(this as WatchEffect)
+        }
+      })
     }
     WatchEffect.run(this as WatchEffect)
   }
 
   stop() {
     effectQueue.delete(this.id)
-    this.unsubs.forEach((fn) => fn())
+    this.unsubs.forEach(call)
     this.unsubs.clear()
     this.cleanup?.()
     this.cleanup = null
@@ -117,11 +124,9 @@ export function useWatch<const Deps extends readonly Signal<unknown>[]>(
     "useWatch",
     { watcher: null as any as WatchEffect<Deps> },
     ({ hook, isInit, isHMR }) => {
-      if (__DEV__) {
-        if (isHMR) {
-          hook.cleanup?.()
-          isInit = true
-        }
+      if (__DEV__ && isHMR) {
+        hook.cleanup?.()
+        isInit = true
       }
       if (isInit) {
         const watcher = (hook.watcher = watch(depsOrGetter as Deps, getter!))

@@ -1,6 +1,5 @@
 import { $MEMO } from "../constants.js"
 import { createElement } from "../element.js"
-import { __DEV__ } from "../env.js"
 
 function _arePropsEqual<T extends Record<string, unknown>>(
   prevProps: T,

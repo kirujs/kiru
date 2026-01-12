@@ -220,10 +220,8 @@ function updateTextNode(
 
 function updateNode(parent: VNode, oldChild: VNode | null, newChild: KElement) {
   let { type, props, key } = newChild
-  if (__DEV__) {
-    if (typeof type === "function") {
-      type = latest(type)
-    }
+  if (__DEV__ && typeof type === "function") {
+    type = latest(type)
   }
   if (type === $FRAGMENT) {
     return updateFragment(

@@ -34,6 +34,7 @@ import {
   isExoticType,
   getVNodeAppContext,
   findParentErrorBoundary,
+  call,
 } from "./utils/index.js"
 import type { AppContext } from "./appContext"
 import type { MemoFn } from "./components/memo"
@@ -358,7 +359,7 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
        * and not clearing the entire set.
        */
       if (subs) {
-        subs.forEach((unsub) => unsub())
+        subs.forEach(call)
         subs.clear()
       }
 
@@ -408,10 +409,8 @@ function updateHostComponent(vNode: DomVNode): VNode | null {
     } else {
       vNode.dom = createDom(vNode)
     }
-    if (__DEV__) {
-      if (vNode.dom instanceof Element) {
-        vNode.dom.__kiruNode = vNode
-      }
+    if (__DEV__ && vNode.dom instanceof Element) {
+      vNode.dom.__kiruNode = vNode
     }
   }
   // text should _never_ have children

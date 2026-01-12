@@ -2,7 +2,11 @@ import { Signal } from "../signals/base.js"
 import { __DEV__ } from "../env.js"
 import { renderMode } from "../globals.js"
 
-export { noop, latest, composeRefs, setRef, sideEffectsEnabled }
+export { call, noop, latest, composeRefs, setRef, sideEffectsEnabled }
+
+function call(fn: Function): void {
+  fn()
+}
 
 const noop = Object.freeze(() => {})
 

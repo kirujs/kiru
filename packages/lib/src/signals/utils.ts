@@ -1,3 +1,4 @@
+import { call } from "../utils/index.js"
 import { Signal } from "./base.js"
 import { effectQueue } from "./globals.js"
 
@@ -7,6 +8,6 @@ export function unwrap<T>(value: T | Signal<T>, reactive = false): T {
 }
 
 export const tick = () => {
-  effectQueue.forEach((fn) => fn())
+  effectQueue.forEach(call)
   effectQueue.clear()
 }
