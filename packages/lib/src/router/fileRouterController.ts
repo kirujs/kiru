@@ -75,27 +75,7 @@ export class FileRouterController {
       query: {},
       signal: this.abortController.signal,
     }
-    const __this = this
-    this.contextValue = {
-      invalidate: async (...paths: string[]) => {
-        if (this.invalidate(...paths)) {
-          return this.loadRoute(void 0, void 0, true)
-        }
-      },
-      get state() {
-        return { ...__this.state }
-      },
-      navigate: this.navigate.bind(this),
-      prefetchRouteModules: this.prefetchRouteModules.bind(this),
-      reload: async (options?: ReloadOptions) => {
-        if (options?.invalidate ?? true) {
-          this.invalidate(this.state.pathname)
-        }
-        return this.loadRoute(void 0, void 0, options?.transition)
-      },
-      setQuery: this.setQuery.bind(this),
-      setHash: this.setHash.bind(this),
-    }
+    this.contextValue = this.createContextValue()
     if (__DEV__) {
       this.filePathToPageRoute = new Map()
       this.pageRouteToConfig = new Map()
@@ -475,6 +455,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
 
       return handleStateTransition(signal, enableTransition, () => {
         this.state = routerState
+        this.contextValue = this.createContextValue()
         this.currentPage.value = {
           component: page.default,
           config,
@@ -662,6 +643,29 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         "",
         path
       )
+    }
+  }
+  private createContextValue() {
+    const __this = this
+    return {
+      invalidate: async (...paths: string[]) => {
+        if (this.invalidate(...paths)) {
+          return this.loadRoute(void 0, void 0, true)
+        }
+      },
+      get state() {
+        return { ...__this.state }
+      },
+      navigate: this.navigate.bind(this),
+      prefetchRouteModules: this.prefetchRouteModules.bind(this),
+      reload: async (options?: ReloadOptions) => {
+        if (options?.invalidate ?? true) {
+          this.invalidate(this.state.pathname)
+        }
+        return this.loadRoute(void 0, void 0, options?.transition)
+      },
+      setQuery: this.setQuery.bind(this),
+      setHash: this.setHash.bind(this),
     }
   }
 }
