@@ -84,7 +84,7 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
     const candidateNodes: AstNode[] = []
     function pushCandidate(node: AstNode) {
       candidateNodes.push(node)
-      console.log("[vite-plugin-kiru]: pushing candidate", node)
+      // console.log("[vite-plugin-kiru]: pushing candidate", node)
     }
     let fnDepth = 0
     const FunctionDepthTracker = () => {
@@ -366,8 +366,12 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
       : allHoistables
           .map((h, i) =>
             i === 0
-              ? `const ${h.varName} = ${h.code}`
-              : `  ${h.varName} = ${h.code}`
+              ? `const ${h.varName} =${
+                  h.code.startsWith("_jsx") ? " /* @__PURE__ */" : ""
+                } ${h.code}`
+              : `  ${h.varName} =${
+                  h.code.startsWith("_jsx") ? " /* @__PURE__ */" : ""
+                } ${h.code}`
           )
           .join(",\n")
 
@@ -378,6 +382,17 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
   for (let i = allHoistables.length - 1; i >= 0; i--) {
     const h = allHoistables[i]
     code.update(h.node.start, h.node.end, h.varName)
+    if ("_rollupAnnotations" in h.node) {
+      const annotations = h.node._rollupAnnotations as {
+        end: number
+        start: number
+        type: string
+      }[]
+      const pureAnnotation = annotations.find((a) => a.type === "pure")
+      if (pureAnnotation) {
+        code.remove(pureAnnotation.start, pureAnnotation.end)
+      }
+    }
   }
 }
 
