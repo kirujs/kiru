@@ -1,5 +1,5 @@
 import type { Signal } from "./base.js"
-import { unwrap } from "./utils"
+import { unwrap } from "./utils.js"
 
 type InferArraySignalItemType<T extends Signal<any[]> | readonly unknown[]> =
   T extends Signal<infer V>
@@ -7,12 +7,12 @@ type InferArraySignalItemType<T extends Signal<any[]> | readonly unknown[]> =
       ? W
       : never
     : T extends unknown[]
-    ? T[number]
-    : never
+      ? T[number]
+      : never
 
 type ForProps<
   T extends Signal<any[]> | readonly unknown[],
-  U = InferArraySignalItemType<T>
+  U = InferArraySignalItemType<T>,
 > = {
   each: T
   fallback?: JSX.Element
