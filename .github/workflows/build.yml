@@ -4,7 +4,7 @@ on:
     branches:
       - main
 env:
-  NODE_ENV: development
+  GITHUB: true
 jobs:
   build:
     runs-on: ubuntu-latest
