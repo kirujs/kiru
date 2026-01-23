@@ -1,4 +1,5 @@
 .vscode
+.builderman
 node_modules
 dist
 pnpm-lock.yaml

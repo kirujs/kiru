@@ -13,7 +13,8 @@
     "pnpm": ">=10.18.0"
   },
   "dependencies": {
-    "builderman": "^1.5.1",
+    "@builderman/resolvers-pnpm": "^1.0.0",
+    "builderman": "^1.6.0",
     "cross-env": "^10.1.0"
   }
 }
