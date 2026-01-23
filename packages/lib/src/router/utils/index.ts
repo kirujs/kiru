@@ -33,7 +33,7 @@ function formatViteImportMap(
     }
 
     let specificity = 0
-    let k = key.slice(dirIndex + dir.length)
+    let k = baseUrl + key.slice(dirIndex + dir.length)
     while (k.startsWith("/")) {
       k = k.slice(1)
     }
@@ -87,7 +87,7 @@ function formatViteImportMap(
 
     return {
       ...acc,
-      [baseUrl + segments.join("/")]: value,
+      [segments.join("/")]: value,
     }
   }, {})
 }
@@ -181,16 +181,19 @@ function matchLayouts(
   layouts: FormattedViteImportMap,
   routeSegments: string[]
 ) {
-  return ["/", ...routeSegments].reduce((acc, _, i) => {
-    const layoutPath = "/" + routeSegments.slice(0, i).join("/")
-    const layout = layouts[layoutPath]
+  return ["/", ...routeSegments].reduce(
+    (acc, _, i) => {
+      const layoutPath = routeSegments.slice(0, i).join("/")
+      const layout = layouts[layoutPath]
 
-    if (!layout) {
-      return acc
-    }
+      if (!layout) {
+        return acc
+      }
 
-    return [...acc, layout]
-  }, [] as FormattedViteImportMap[string][])
+      return [...acc, layout]
+    },
+    [] as FormattedViteImportMap[string][]
+  )
 }
 
 function normalizePrefixPath(path: string) {

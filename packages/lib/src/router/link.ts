@@ -37,7 +37,7 @@ export const Link: Kiru.FC<LinkProps> = ({
   prefetchJs,
   ...props
 }) => {
-  const { navigate, prefetchRouteModules } = useFileRouter()
+  const { navigate, prefetchRouteModules, baseUrl } = useFileRouter()
 
   const handleMouseOver = useCallback(
     (e: Kiru.MouseEvent<HTMLAnchorElement>) => {
@@ -63,13 +63,13 @@ export const Link: Kiru.FC<LinkProps> = ({
       onclick?.(e)
       if (e.defaultPrevented) return
       e.preventDefault()
-      navigate(to, { replace, transition })
+      navigate(baseUrl + to, { replace, transition })
     },
     [onclick, navigate, to, replace, transition]
   )
 
   return createElement("a", {
-    href: to,
+    href: baseUrl + to,
     onclick: handleClick,
     onmouseover: handleMouseOver,
     onfocus: handleFocus,

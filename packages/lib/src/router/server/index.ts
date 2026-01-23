@@ -179,7 +179,7 @@ export async function render(
   // console.log("immediate", immediate)
 
   return {
-    status: is404Route ? 404 : result?.status ?? 200,
+    status: is404Route ? 404 : (result?.status ?? 200),
     body: `<!doctype html>${prePageOutlet}<body>${pageOutletContent}</body>${postPageOutlet}`,
   }
 }

@@ -57,6 +57,7 @@ export class FileRouterController {
   private pages: FormattedViteImportMap<PageModule>
   private pageRouteToConfig?: Map<string, PageConfig>
   private state: RouterState
+  private baseUrl = "/"
 
   constructor() {
     routerCache.current ??= new RouterCache()
@@ -177,6 +178,7 @@ export class FileRouterController {
       normalizePrefixPath(dir),
       normalizePrefixPath(baseUrl),
     ]
+    this.baseUrl = normalizedBaseUrl.slice(0, -1)
 
     if (preloaded) {
       const {
@@ -506,7 +508,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
             data: null,
             error: new FileRouterDataLoadError(error),
             loading: false,
-          } satisfies PageProps<PageConfig<unknown>>)
+          }) satisfies PageProps<PageConfig<unknown>>
       )
       .then((state) => {
         if (routerState.signal.aborted) return
@@ -648,6 +650,9 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
   private createContextValue() {
     const __this = this
     return {
+      get baseUrl() {
+        return __this.baseUrl
+      },
       invalidate: async (...paths: string[]) => {
         if (this.invalidate(...paths)) {
           return this.loadRoute(void 0, void 0, true)

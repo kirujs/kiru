@@ -18,6 +18,11 @@ export interface ReloadOptions {
 
 export interface FileRouterContextType {
   /**
+   * The base URL of the router
+   * @default "/"
+   */
+  baseUrl: string
+  /**
    * Invalidate cached loader data for the given paths
    * @example
    * invalidate("/users", "/posts", "/users/1")
