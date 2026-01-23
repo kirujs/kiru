@@ -15,6 +15,7 @@ import { FileRouterDataLoadError } from "../errors.js"
 import { renderToString } from "../../renderToString.js"
 
 export interface RenderContext {
+  baseUrl: string
   pages: FormattedViteImportMap
   layouts: FormattedViteImportMap
   Document: Kiru.FC
@@ -140,6 +141,7 @@ export async function render(
   const app = createElement(RouterContext.Provider, {
     children: Fragment({ children }),
     value: {
+      baseUrl: ctx.baseUrl,
       state: {
         params,
         query,

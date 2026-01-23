@@ -37,11 +37,11 @@ import {
   generateStaticPaths as kiruServerGenerateStaticPaths
 } from "kiru/router/server"
 import Document from "${userDoc}"
-import { pages, layouts } from "${VIRTUAL_ROUTES_ID}"
+import { baseUrl, pages, layouts } from "${VIRTUAL_ROUTES_ID}"
 
 export async function render(url, ctx) {
   const { registerModule, registerPreloadedPageProps } = ctx
-  return kiruServerRender(url, { registerModule, registerPreloadedPageProps, Document, pages, layouts })
+  return kiruServerRender(url, { registerModule, registerPreloadedPageProps, Document, baseUrl, pages, layouts })
 }
 
 export async function generateStaticPaths() {
