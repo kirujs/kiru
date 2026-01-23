@@ -141,7 +141,7 @@ export async function render(
   const app = createElement(RouterContext.Provider, {
     children: Fragment({ children }),
     value: {
-      baseUrl: ctx.baseUrl,
+      baseUrl: ctx.baseUrl.slice(0, -1),
       state: {
         params,
         query,
