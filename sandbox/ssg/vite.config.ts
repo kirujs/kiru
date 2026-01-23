@@ -2,6 +2,7 @@ import { defineConfig } from "vite"
 import kiru from "vite-plugin-kiru"
 
 export default defineConfig({
+  base: "/test",
   plugins: [
     kiru({
       loggingEnabled: true,

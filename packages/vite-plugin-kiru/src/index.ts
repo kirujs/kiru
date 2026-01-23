@@ -24,13 +24,20 @@ import {
 import { createVirtualModules } from "./virtual-modules.js"
 
 import type { KiruPluginOptions, SSGOptions } from "./types.js"
-import { build, InlineConfig, type Plugin, type PluginOption } from "vite"
+import {
+  build,
+  InlineConfig,
+  ResolvedConfig,
+  type Plugin,
+  type PluginOption,
+} from "vite"
 
 export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   let state: PluginState
   let log: (...data: any[]) => void
   let virtualModules: Record<string, () => string> = {}
   let inlineConfig: InlineConfig | undefined
+  let resolvedConfig: ResolvedConfig | undefined
 
   const mainPlugin = {
     name: "vite-plugin-kiru",
@@ -39,6 +46,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       return createViteConfig(config, opts)
     },
     async configResolved(config) {
+      resolvedConfig = config
       const initialState = createPluginState(opts)
       state = updatePluginState(initialState, config, opts)
       log = createLogger(state)
@@ -107,6 +115,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
                 server,
                 url,
                 state.projectRoot,
+                resolvedConfig?.base ?? "/",
                 () => resolveUserDocument(projectRoot, ssgOptions)
               )
               res.statusCode = status
@@ -142,7 +151,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           state as PluginState & { ssgOptions: Required<SSGOptions> },
           outputOptions,
           bundle,
-          log
+          log,
+          resolvedConfig?.base ?? "/"
         )
       } catch (e) {
         log(ANSI.red("[SSG]: prerender failed"), e)

@@ -35,6 +35,7 @@ export async function handleSSR(
   server: ViteDevServer,
   url: string,
   projectRoot: string,
+  baseUrl: string,
   resolveUserDocument: () => string
 ) {
   const mod = (await server.ssrLoadModule(
@@ -93,8 +94,8 @@ export async function handleSSR(
 
   if (cssModules.length) {
     const stylesheets = cssModules.map((mod) => {
-      const p = mod.id?.replace(projectRoot, "")
-      return `<link rel="stylesheet" type="text/css" href="${p}?temp">`
+      const p = mod.id?.replace(projectRoot, "")!
+      return `<link rel="stylesheet" type="text/css" href="${path.join(baseUrl, p).replace(/\\/g, "/")}?temp">`
     })
 
     html = html.replace("<head>", "<head>" + stylesheets.join("\n"))

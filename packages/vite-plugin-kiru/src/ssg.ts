@@ -26,7 +26,8 @@ export async function generateStaticSite(
   state: PluginState & { ssgOptions: Required<SSGOptions> },
   outputOptions: OutputOptions,
   bundle: OutputBundle,
-  log: (...data: any[]) => void
+  log: (...data: any[]) => void,
+  baseUrl: string
 ) {
   const { projectRoot, baseOutDir, manifestPath, ssgOptions } = state
   const outDirAbs = path.resolve(projectRoot, outputOptions?.dir ?? "dist")
@@ -65,10 +66,13 @@ export async function generateStaticSite(
   for (let i = 0; i < routes.length; i += maxConcurrentRenders) {
     const chunkKeys = routes.slice(i, i + maxConcurrentRenders)
     renderingChunks.push(
-      chunkKeys.reduce((acc, key) => {
-        acc[key] = paths[key]
-        return acc
-      }, {} as Record<string, string>)
+      chunkKeys.reduce(
+        (acc, key) => {
+          acc[key] = paths[key]
+          return acc
+        },
+        {} as Record<string, string>
+      )
     )
   }
 
@@ -81,7 +85,8 @@ export async function generateStaticSite(
           route,
           srcFilePath,
           clientEntry,
-          manifest
+          manifest,
+          baseUrl
         )
         const filePath = getOutputPath(clientOutDirAbs, route)
 
@@ -127,7 +132,7 @@ function collectCssForModules(
   manifest: Manifest,
   moduleIds: string[],
   projectRoot: string
-): string {
+): string[] {
   const seen = new Set<string>()
   const cssFiles = new Set<string>()
 
@@ -189,14 +194,7 @@ function collectCssForModules(
     }
   }
 
-  if (cssFiles.size) {
-    const links = Array.from(cssFiles)
-      .map((f) => `<link rel="stylesheet" type="text/css" href="/${f}">`)
-      .join("")
-    return links
-  }
-
-  return ""
+  return Array.from(cssFiles)
 }
 
 function findClientEntry(dir: string): string | null {
@@ -221,7 +219,8 @@ async function renderRoute(
   route: string,
   srcFilePath: string,
   clientEntry: string | null,
-  manifest: Manifest | null
+  manifest: Manifest | null,
+  baseUrl: string
 ): Promise<string> {
   const moduleIds: string[] = []
   const { projectRoot, ssgOptions } = state
@@ -244,15 +243,24 @@ async function renderRoute(
   }
   const result = await mod.render(route, ctx)
   let html = result.body
-  let cssLinks = ""
+  let cssLinks: string[] = []
   if (manifest) {
     cssLinks = collectCssForModules(manifest, moduleIds, projectRoot)
   }
 
   if (clientEntry) {
-    const scriptTag = `<script type="module" src="/${clientEntry}"></script>`
+    const scriptTag = `<script type="module" src="${path.join(baseUrl, clientEntry).replace(/\\/g, "/")}"></script>`
     const headInjected = cssLinks
-      ? html.replace("<head>", "<head>" + cssLinks)
+      ? html.replace(
+          "<head>",
+          "<head>" +
+            cssLinks
+              .map(
+                (f) =>
+                  `<link rel="stylesheet" type="text/css" href="${path.join(baseUrl, f).replace(/\\/g, "/")}">`
+              )
+              .join("")
+        )
       : html
     html = headInjected.includes("</body>")
       ? headInjected.replace("</body>", scriptTag + "</body>")
