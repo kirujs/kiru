@@ -1,5 +1,5 @@
 import path from "node:path"
-import { globSync } from "glob"
+import { globSync } from "tinyglobby"
 import type { PluginState } from "./config.js"
 import { ANSI } from "./ansi.js"
 import { SSGOptions, SSGSitemapOptions } from "./types.js"

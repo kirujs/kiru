@@ -1,6 +1,6 @@
 import path from "node:path"
 import fs from "node:fs"
-import { globSync } from "glob"
+import { globSync } from "tinyglobby"
 import { pathToFileURL } from "node:url"
 import { ANSI } from "./ansi.js"
 import type { OutputBundle, OutputOptions } from "rollup"
