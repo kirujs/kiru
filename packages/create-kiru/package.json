@@ -11,10 +11,10 @@
     "create-kiru": "./index.js"
   },
   "dependencies": {
-    "commander": "^12.1.0",
-    "degit": "^2.8.4",
-    "execa": "^9.6.0",
-    "inquirer": "^11.1.0"
+    "commander": "14.0.3",
+    "degit": "2.8.4",
+    "execa": "9.6.1",
+    "inquirer": "13.2.2"
   },
   "license": "ISC",
   "devDependencies": {
