@@ -360,6 +360,7 @@ function updateFromMap(
   }
 
   if (Array.isArray(child)) {
+    const props = { children: child }
     const oldChild = existingChildren.get(index)
     if (__DEV__) {
       markListChild(child)
@@ -369,11 +370,11 @@ function updateFromMap(
         dev_emitUpdateNode()
       }
       oldChild.flags |= FLAG_UPDATE
-      oldChild.props.children = child
+      oldChild.props = props
       return oldChild
     }
 
-    return createVNode(parent, $FRAGMENT, { children: child }, null, index)
+    return createVNode(parent, $FRAGMENT, props, null, index)
   }
 
   return null
