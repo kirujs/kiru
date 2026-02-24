@@ -59,8 +59,9 @@ type ElementMap = {
     Kiru.EventAttributes<HTMLTagToElement<Tag>> &
     JSX.ElementAttributes & {
       ref?:
-        | Kiru.Ref<HTMLTagToElement<Tag>>
+        | Kiru.Ref<HTMLTagToElement<Tag> | null>
         | SignalClass<HTMLTagToElement<Tag> | null>
+        | null
     }
 } & {
   [Tag in keyof SvgElementAttributes]: SignalableSvgElementAttributes<Tag> &
@@ -70,8 +71,9 @@ type ElementMap = {
     Kiru.EventAttributes<SVGTagToElement<Tag>> &
     JSX.ElementAttributes & {
       ref?:
-        | Kiru.Ref<SVGTagToElement<Tag>>
+        | Kiru.Ref<SVGTagToElement<Tag> | null>
         | SignalClass<SVGTagToElement<Tag> | null>
+        | null
     }
 } & {
   [Tag in `${string}-${string}`]: Record<string, any>
@@ -190,7 +192,7 @@ declare global {
       props: {
         [key: string]: any
         children?: unknown
-        ref?: Kiru.Ref<unknown>
+        ref?: Kiru.Ref<unknown> | null
       }
     }
 
