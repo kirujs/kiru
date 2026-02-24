@@ -7,7 +7,7 @@ export default defineConfig({
     kiru({
       loggingEnabled: true,
       ssg: {
-        baseUrl: "/test",
+        baseUrl: "/",
         dir: "./src/pages",
         document: "document.tsx",
         page: "index.{tsx,jsx}",
