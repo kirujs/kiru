@@ -1,7 +1,7 @@
 import { Signal } from "../signals/base.js"
 import { watch } from "../signals/watch.js"
 import { __DEV__ } from "../env.js"
-import { flushSync, nextIdle } from "../scheduler.js"
+import { nextIdle } from "../scheduler.js"
 import { ReloadOptions, type FileRouterContextType } from "./context.js"
 import { FileRouterDataLoadError } from "./errors.js"
 import { fileRouterInstance, fileRouterRoute, routerCache } from "./globals.js"
@@ -31,6 +31,7 @@ import {
 } from "./utils/index.js"
 import { RouterCache, type CacheKey } from "./cache.js"
 import { scrollStack } from "./scrollStack.js"
+import { ViewTransitions } from "../viewTransitions.js"
 
 interface PageConfigWithLoader<T = unknown> extends PageConfig {
   loader: PageDataLoaderConfig<T>
@@ -508,7 +509,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
             data: null,
             error: new FileRouterDataLoadError(error),
             loading: false,
-          }) satisfies PageProps<PageConfig<unknown>>
+          } satisfies PageProps<PageConfig<unknown>>)
       )
       .then((state) => {
         if (routerState.signal.aborted) return
@@ -698,19 +699,13 @@ async function handleStateTransition(
   enableTransition: boolean,
   callback: () => void
 ) {
-  if (!enableTransition || typeof document.startViewTransition !== "function") {
+  if (!enableTransition) {
     return new Promise<void>((resolve) => {
       callback()
       nextIdle(resolve)
     })
   }
-  const vt = document.startViewTransition(() => {
-    callback()
-    flushSync()
-  })
-
-  signal.addEventListener("abort", () => vt.skipTransition())
-  await vt.ready
+  await ViewTransitions.run(callback, { signal })
 }
 
 function validateRoutes(pageMap: FormattedViteImportMap) {
