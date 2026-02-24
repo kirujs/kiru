@@ -175,6 +175,8 @@ export class Signal<T> {
   }
 
   static entangle<T>(signal: Signal<T>) {
+    if (tracking.enabled === false) return
+
     const vNode = node.current
     const trackedSignalObservations = tracking.current()
     if (trackedSignalObservations) {
