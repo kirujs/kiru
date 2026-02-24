@@ -598,17 +598,13 @@ interface PopoverControlAttributes {
   popoverTargetAction?: "show" | "hide" | "toggle"
 }
 
-declare class DoNotUseBindWithPlainError extends Error {
-  $brand: "DoNotUseBindWithPlainError"
-}
-
 type BindableProp<K extends string, V> =
   | ({
-      [k in K]?: Signalable<V>
-    } & { [k in `bind:${K}`]?: DoNotUseBindWithPlainError })
+      [k in K]?: Signalable<V | undefined>
+    } & { [k in `bind:${K}`]?: never })
   | ({
-      [k in `bind:${K}`]?: Signal<V>
-    } & { [k in K]?: DoNotUseBindWithPlainError })
+      [k in `bind:${K}`]?: Signal<V | undefined>
+    } & { [k in K]?: never })
 
 type MediaElementBindableProps = BindableProp<"volume", number> &
   BindableProp<"playbackRate", number> &

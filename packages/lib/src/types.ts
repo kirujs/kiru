@@ -32,24 +32,26 @@ type ElementProps<T extends keyof JSX.IntrinsicElements> =
 type SignalableHtmlElementAttributes<Tag extends keyof HtmlElementAttributes> =
   {
     [K in keyof HtmlElementAttributes[Tag]]: Signalable<
-      HtmlElementAttributes[Tag][K]
+      HtmlElementAttributes[Tag][K] | undefined
     >
   } & (Tag extends keyof HtmlElementBindableProps
     ? HtmlElementBindableProps[Tag]
     : {})
 type SignalableSvgElementAttributes<Tag extends keyof SvgElementAttributes> = {
   [K in keyof SvgElementAttributes[Tag]]: Signalable<
-    SvgElementAttributes[Tag][K]
+    SvgElementAttributes[Tag][K] | undefined
   >
 }
 type SignalableAriaProps = {
-  [K in keyof ARIAMixin]?: Signalable<ARIAMixin[K]>
+  [K in keyof ARIAMixin]?: Signalable<ARIAMixin[K] | undefined>
 }
 type SignalableGlobalAttributes = {
-  [K in keyof GlobalAttributes]: Signalable<GlobalAttributes[K]>
+  [K in keyof GlobalAttributes]: Signalable<GlobalAttributes[K] | undefined>
 }
 type SignalableSvgGlobalAttributes = {
-  [K in keyof SvgGlobalAttributes]: Signalable<SvgGlobalAttributes[K]>
+  [K in keyof SvgGlobalAttributes]: Signalable<
+    SvgGlobalAttributes[K] | undefined
+  >
 }
 
 type ElementMap = {
