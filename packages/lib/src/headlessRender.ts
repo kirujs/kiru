@@ -19,9 +19,7 @@ export interface HeadlessRenderContext {
   onStreamData?: (data: Kiru.StatefulPromise<unknown>[]) => void
 }
 
-export { render as headlessRender }
-
-function render(
+export function headlessRender(
   ctx: HeadlessRenderContext,
   el: unknown,
   parent: Kiru.VNode | null,
@@ -37,7 +35,7 @@ function render(
     return ctx.write(el.toString())
   }
   if (el instanceof Array) {
-    return el.forEach((c, i) => render(ctx, c, parent, i))
+    return el.forEach((c, i) => headlessRender(ctx, c, parent, i))
   }
   if (Signal.isSignal(el)) {
     const value = el.peek()
@@ -78,7 +76,7 @@ function render(
         },
       }
       try {
-        render(boundaryCtx, children, el, idx)
+        headlessRender(boundaryCtx, children, el, idx)
         // flush successful render
         ctx.write(boundaryBuffer)
         ctx.onStreamData?.([...streamPromises])
@@ -91,27 +89,30 @@ function render(
         onError?.(e)
         const fallbackContent =
           typeof fallback === "function" ? fallback(e) : fallback
-        render(ctx, fallbackContent, el, 0)
+        headlessRender(ctx, fallbackContent, el, 0)
       }
       return
     }
 
-    render(ctx, children, el, idx)
+    headlessRender(ctx, children, el, idx)
     return
   }
 
-  if (typeof type !== "string") {
+  if (typeof type === "function") {
     try {
       hookIndex.current = 0
       node.current = el
-      const res = type(props)
-      render(ctx, res, el, idx)
+      let children = type(props)
+      if (typeof children === "function") {
+        children = children(props)
+      }
+      headlessRender(ctx, children, el, idx)
       return
     } catch (error) {
       if (isStreamDataThrowValue(error)) {
         const { fallback, data } = error[$STREAM_DATA]
         ctx.onStreamData?.(data)
-        return render(ctx, fallback, el, 0)
+        return headlessRender(ctx, fallback, el, 0)
       }
       throw error
     } finally {
@@ -134,9 +135,9 @@ function render(
       )
     )
   } else if (Array.isArray(children)) {
-    children.forEach((c, i) => render(ctx, c, el, i))
+    children.forEach((c, i) => headlessRender(ctx, c, el, i))
   } else {
-    render(ctx, children, el, 0)
+    headlessRender(ctx, children, el, 0)
   }
   ctx.write(`</${type}>`)
 }

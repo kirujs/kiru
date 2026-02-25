@@ -2,7 +2,7 @@ import { Readable } from "node:stream"
 import { Fragment } from "../element.js"
 import { renderMode } from "../globals.js"
 import { STREAMED_DATA_EVENT } from "../constants.js"
-import { headlessRender, HeadlessRenderContext } from "../recursiveRender.js"
+import { headlessRender, HeadlessRenderContext } from "../headlessRender.js"
 
 const STREAMED_DATA_SETUP = `
 <script type="text/javascript">

@@ -1,6 +1,6 @@
 import { renderMode } from "./globals.js"
 import { Fragment } from "./element.js"
-import { headlessRender, HeadlessRenderContext } from "./recursiveRender.js"
+import { headlessRender, HeadlessRenderContext } from "./headlessRender.js"
 
 export function renderToString(element: JSX.Element) {
   const prev = renderMode.current
