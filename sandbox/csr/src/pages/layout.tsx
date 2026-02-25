@@ -1,13 +1,21 @@
-import { signal } from "kiru"
+import { Link } from "kiru/router"
+export default function RootLayout() {
+  const links = [
+    { href: "/", text: "Home" },
+    { href: "/about", text: "About" },
+    { href: "/users", text: "Users" },
+  ]
 
-export default function RootLayout({ children }: { children: JSX.Children }) {
-  const count = signal(0)
-  return () => (
+  return ({ children }: { children: JSX.Children }) => (
     <>
-      <header>Header</header>
+      <header>
+        <nav>
+          {links.map((link) => (
+            <Link to={link.href}>{link.text}</Link>
+          ))}
+        </nav>
+      </header>
       <main>{children}</main>
-      <button onclick={() => count.value++}>Count: {count.value}</button>
-      {1 + 2 + 3 + [1, 2, 3].reduce((a, b) => a + b, 0)}
       <footer>Footer</footer>
     </>
   )
