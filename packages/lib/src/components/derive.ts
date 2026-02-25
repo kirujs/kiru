@@ -12,11 +12,12 @@ export type Derivable =
   | Kiru.StatefulPromise<unknown>
   | Record<string, Kiru.Signal<unknown> | Kiru.StatefulPromise<unknown>>
 
-type InnerOf<T> = T extends Kiru.Signal<infer V>
-  ? V
-  : T extends Kiru.StatefulPromise<infer P>
-  ? P
-  : never
+type InnerOf<T> =
+  T extends Kiru.Signal<infer V>
+    ? V
+    : T extends Kiru.StatefulPromise<infer P>
+      ? P
+      : never
 
 type UnwrapDerive<T extends Derivable> = T extends
   | Kiru.Signal<unknown>
@@ -36,7 +37,7 @@ export type DeriveFallbackMode = "swr" | "fallback"
 
 export interface DeriveProps<
   T extends Derivable,
-  Mode extends DeriveFallbackMode = "fallback"
+  Mode extends DeriveFallbackMode = "fallback",
 > {
   from: T
   mode?: Mode
@@ -45,37 +46,40 @@ export interface DeriveProps<
       ? ChildFnWithStale<U>
       : ChildFn<U>
     : T extends Record<string, any>
-    ? RecordHasPromise<T> extends true
-      ? Mode extends "swr"
-        ? ChildFnWithStale<UnwrapDerive<T>>
+      ? RecordHasPromise<T> extends true
+        ? Mode extends "swr"
+          ? ChildFnWithStale<UnwrapDerive<T>>
+          : ChildFn<UnwrapDerive<T>>
         : ChildFn<UnwrapDerive<T>>
       : ChildFn<UnwrapDerive<T>>
-    : ChildFn<UnwrapDerive<T>>
   fallback?: T extends Kiru.StatefulPromise<any>
     ? JSX.Element
     : T extends Record<string, any>
-    ? RecordHasPromise<T> extends true
-      ? JSX.Element
+      ? RecordHasPromise<T> extends true
+        ? JSX.Element
+        : never
       : never
-    : never
 }
 
-export function Derive<
-  T extends Derivable,
-  U extends DeriveFallbackMode = "swr"
->(): (props: DeriveProps<T, U>) => JSX.Children {
+type Derive = {
+  <T extends Derivable, U extends DeriveFallbackMode = "swr">(
+    props: DeriveProps<T, U>
+  ): (props: DeriveProps<T, U>) => JSX.Element
+}
+
+export const Derive: Derive = () => {
   return (props) => {
     const { from, children, fallback, mode } = props
-    const prevSuccess = ref<UnwrapDerive<T> | null>(null)
+    const prevSuccess = ref<unknown>(null)
 
     const promises = new Set<Kiru.StatefulPromise<any>>()
-    let value: UnwrapDerive<T>
+    let value: unknown
 
     if (isStatefulPromise(from)) {
       promises.add(from)
-      value = from.value as UnwrapDerive<T>
+      value = from.value as unknown
     } else if (Signal.isSignal(from)) {
-      value = from.value as UnwrapDerive<T>
+      value = from.value as unknown
     } else {
       const out: Record<string, any> = {}
       for (const key in from) {
@@ -83,11 +87,11 @@ export function Derive<
         if (isStatefulPromise(v)) promises.add(v)
         out[key] = (v as Signal<unknown> | Kiru.StatefulPromise<unknown>).value
       }
-      value = out as UnwrapDerive<T>
+      value = out as unknown
     }
 
     if (promises.size === 0) {
-      return (children as ChildFn<UnwrapDerive<T>>)(value)
+      return (children as ChildFn<unknown>)(value)
     }
 
     if (!sideEffectsEnabled()) {
@@ -108,13 +112,13 @@ export function Derive<
 
         const prev = prevSuccess.current!
         if (mode !== "fallback" && prev) {
-          return (children as ChildFnWithStale<UnwrapDerive<T>>)(prev, true)
+          return (children as ChildFnWithStale<unknown>)(prev, true)
         }
         return fallback
       }
     }
 
     prevSuccess.current = value
-    return (children as ChildFnWithStale<UnwrapDerive<T>>)(value, false)
+    return (children as ChildFnWithStale<unknown>)(value, false)
   }
 }
