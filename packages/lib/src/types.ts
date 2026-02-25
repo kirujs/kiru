@@ -108,9 +108,9 @@ declare global {
     type Element =
       | Element[]
       | Kiru.Element
-      | ((props?: any) => JSX.Element)
       | PrimitiveChild
       | Kiru.Signal<PrimitiveChild>
+      | ((props: any) => JSX.Element)
 
     interface ElementAttributes {
       key?: JSX.ElementKey
@@ -137,12 +137,11 @@ declare global {
     }
 
     interface FC<T = {}> {
-      (props: FCProps<T>): JSX.Element | ((props: FCProps<T>) => JSX.Element)
+      (props: T): JSX.Element | ((props: T) => JSX.Element)
       /** Used to display the name of the component in devtools  */
       displayName?: string
     }
 
-    type FCProps<T = {}> = T & { children?: JSX.Children }
     type InferProps<T> = T extends Kiru.FC<infer P> ? P : never
 
     interface RefObject<T> {

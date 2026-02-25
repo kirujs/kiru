@@ -4,6 +4,7 @@ import {
   isElement,
   isValidTextChild,
   latest,
+  propsChanged,
 } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import { __DEV__ } from "./env.js"
@@ -232,7 +233,7 @@ function updateNode(parent: VNode, oldChild: VNode | null, newChild: KElement) {
     oldChild.index = 0
     oldChild.sibling = null
     if (typeof type === "string") {
-      if (propsChanged(oldChild.props, props)) {
+      if (domNodePropsChanged(oldChild.props, props)) {
         oldChild.flags |= FLAG_UPDATE
       }
     } else {
@@ -338,7 +339,7 @@ function updateFromMap(
         dev_emitUpdateNode()
       }
       if (typeof type === "string") {
-        if (propsChanged(oldChild.props, props)) {
+        if (domNodePropsChanged(oldChild.props, props)) {
           oldChild.flags |= FLAG_UPDATE
         }
       } else {
@@ -372,17 +373,6 @@ function updateFromMap(
   }
 
   return null
-}
-
-function propsChanged(oldProps: VNode["props"], newProps: VNode["props"]) {
-  const aKeys = Object.keys(oldProps)
-  const bKeys = Object.keys(newProps)
-  if (aKeys.length !== bKeys.length) return true
-  for (let key of aKeys) {
-    if (key === "children" || key === "key") continue
-    if (oldProps[key] !== newProps[key]) return true
-  }
-  return false
 }
 
 function dev_emitUpdateNode() {
@@ -493,4 +483,12 @@ function createVNode(
     window.__kiru.profilingContext?.emit("createNode", appCtx)
   }
   return node
+}
+
+const IGNORED_DOM_NODE_PROPS = ["children", "key"]
+function domNodePropsChanged(
+  oldProps: Kiru.VNode["props"],
+  newProps: Kiru.VNode["props"]
+) {
+  return propsChanged(oldProps, newProps, IGNORED_DOM_NODE_PROPS)
 }

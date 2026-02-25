@@ -32,6 +32,7 @@ import {
   getVNodeAppContext,
   findParentErrorBoundary,
   call,
+  propsChanged,
 } from "./utils/index.js"
 import type { AppContext } from "./appContext"
 import { isHmrUpdate } from "./hmr.js"
@@ -241,8 +242,13 @@ function performUnitOfWork(vNode: VNode): VNode | null {
 
 function updateVNode(vNode: VNode): VNode | null {
   const { type, props, prev, flags } = vNode
+
   if (__DEV__ && isHmrUpdate()) {
-  } else if ((flags & FLAG_DIRTY) === 0 && props === prev?.props) {
+  } else if (
+    prev &&
+    (flags & FLAG_DIRTY) === 0 &&
+    (prev.props === props || !propsChanged(prev.props, props))
+  ) {
     return null
   }
   try {
@@ -323,11 +329,7 @@ function updateExoticComponent(vNode: VNode): VNode | null {
 }
 
 function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
-  const { type, props, subs, prev, flags } = vNode
-
-  if (prev && (flags & FLAG_DIRTY) === 0) {
-    return null
-  }
+  const { type, props, subs } = vNode
 
   try {
     node.current = vNode

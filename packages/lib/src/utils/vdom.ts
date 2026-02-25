@@ -33,6 +33,7 @@ export {
   normalizeElementKey,
   getVNodeId,
   registerVNodeCleanup,
+  propsChanged,
 }
 
 function cloneElement(vNode: Kiru.VNode): Kiru.Element {
@@ -204,4 +205,19 @@ function registerVNodeCleanup(
   callback: () => void
 ) {
   ;(vNode.cleanups ??= {})[id] = callback
+}
+
+function propsChanged(
+  oldProps: Kiru.VNode["props"],
+  newProps: Kiru.VNode["props"],
+  keysToSkip?: string[]
+) {
+  const aKeys = Object.keys(oldProps)
+  const bKeys = Object.keys(newProps)
+  if (aKeys.length !== bKeys.length) return true
+  for (let key of aKeys) {
+    if (keysToSkip?.includes(key)) continue
+    if (oldProps[key] !== newProps[key]) return true
+  }
+  return false
 }
