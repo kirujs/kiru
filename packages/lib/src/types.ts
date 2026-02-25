@@ -110,7 +110,7 @@ declare global {
       | Kiru.Element
       | PrimitiveChild
       | Kiru.Signal<PrimitiveChild>
-      | ((props: any) => JSX.Element)
+      | Kiru.FC<any>
 
     interface ElementAttributes {
       key?: JSX.ElementKey
@@ -137,7 +137,9 @@ declare global {
     }
 
     interface FC<T = {}> {
-      (props: T): JSX.Element | ((props: T) => JSX.Element)
+      (
+        props: T
+      ): Exclude<JSX.Element, Kiru.FC<any>> | ((props: T) => JSX.Element)
       /** Used to display the name of the component in devtools  */
       displayName?: string
     }

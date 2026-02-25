@@ -1,4 +1,4 @@
-import { ref, signal, onBeforeMount, onMount, onCleanup, Signal } from "kiru"
+import { ref, signal, onBeforeMount, onMount, onCleanup } from "kiru"
 
 const tag = signal("")
 export function App() {
