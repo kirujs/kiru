@@ -1,4 +1,4 @@
-import { Fragment, signal, effect } from "kiru"
+import { Fragment, signal, effect, Derive } from "kiru"
 
 const text = signal("Hello World!")
 
@@ -12,6 +12,7 @@ export default function HomePage() {
       <input bind:value={text} />
       <Fragment key="test">test 123</Fragment>
       <h1>Welcome Home!</h1>
+      <Derive from={text}>{(text) => <p>{text}</p>}</Derive>
       <p>This page is wrapped by the root layout only.</p>
       <p>You can see the navigation header and footer from the root layout.</p>
     </div>

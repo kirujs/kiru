@@ -1,12 +1,15 @@
-import * as Kiru from "kiru"
+import * as kiru from "kiru"
+import { className as cls } from "kiru/utils"
 import { assert, FlameIcon } from "devtools-shared"
 
 type Vec2 = [x: number, y: number]
 
-interface ButtonControllerConfig {
+interface DraggableMenuControllerConfig {
   onclick: () => void
 }
-const BUTTON_POSITION_STORAGE_KEY = "kiru.devtools.anchorPosition"
+const MENU_POSITION_STORAGE_KEY = "kiru.devtools.anchorPosition"
+const MENU_PADDING = 10
+const MIN_MENU_CORNER_DIST = 50
 type SnapSide = "top" | "right" | "bottom" | "left"
 interface PositionStorageInfo {
   percent: number
@@ -14,7 +17,7 @@ interface PositionStorageInfo {
 }
 
 const loadPosFromStorage = (): PositionStorageInfo => {
-  const posStr = localStorage.getItem(BUTTON_POSITION_STORAGE_KEY)
+  const posStr = localStorage.getItem(MENU_POSITION_STORAGE_KEY)
   if (posStr) {
     try {
       const parsed = JSON.parse(posStr)
@@ -35,21 +38,26 @@ const loadPosFromStorage = (): PositionStorageInfo => {
     percent: 0.5,
     snapSide: "bottom",
   }
-  localStorage.setItem(BUTTON_POSITION_STORAGE_KEY, JSON.stringify(info))
+  localStorage.setItem(MENU_POSITION_STORAGE_KEY, JSON.stringify(info))
   return info
 }
-const createButtonController = (config: ButtonControllerConfig) => {
+const createDraggableMenuController = (
+  config: DraggableMenuControllerConfig
+) => {
   const { percent: initialPercent, snapSide: initialSnapSide } =
     loadPosFromStorage()
 
-  const btnRef = Kiru.ref<HTMLButtonElement>(null)
-  const percent = Kiru.signal(initialPercent)
-  const snapSide = Kiru.signal(initialSnapSide)
+  const containerRef = kiru.signal<HTMLDivElement | null>(null)
+  const btnRef = kiru.signal<HTMLButtonElement | null>(null)
 
-  const handleMouseDown = (e: MouseEvent) => {
+  const percent = kiru.signal(initialPercent)
+  const snapSide = kiru.signal(initialSnapSide)
+  const menuPos = kiru.signal<Vec2>([0, 0])
+
+  const handleBtnMouseDown = (e: MouseEvent) => {
     if (e.button !== 0) return
 
-    const btn = btnRef.current!
+    const btn = btnRef.value!
     const [initialX, initialY]: Vec2 = [e.clientX, e.clientY]
     const initialBtnRect = btn.getBoundingClientRect()
     const [initialOffsetX, initialOffsetY]: Vec2 = [
@@ -75,14 +83,15 @@ const createButtonController = (config: ButtonControllerConfig) => {
       ]
       const currentXPercent = currentX / window.innerWidth
       const currentYPercent = currentY / window.innerHeight
-      console.log({ currentXPercent, currentYPercent })
 
+      const SECTION_SIZE_LARGE = 0.5
+      const SECTION_SIZE_SMALL = 0.25
       const isLandscape = window.innerWidth > window.innerHeight
       if (isLandscape) {
-        const topSectorMax = 0.5
-        const bottomSectorMin = 0.5
-        const leftSectorMax = 0.15
-        const rightSectorMin = 0.85
+        const topSectorMax = SECTION_SIZE_LARGE
+        const bottomSectorMin = SECTION_SIZE_LARGE
+        const leftSectorMax = SECTION_SIZE_SMALL
+        const rightSectorMin = 1 - SECTION_SIZE_SMALL
 
         if (currentXPercent < leftSectorMax) {
           snapSide.value = "left"
@@ -98,10 +107,10 @@ const createButtonController = (config: ButtonControllerConfig) => {
           percent.value = currentXPercent
         }
       } else {
-        const topSectorMax = 0.15
-        const bottomSectorMin = 0.85
-        const leftSectorMax = 0.5
-        const rightSectorMin = 0.5
+        const topSectorMax = SECTION_SIZE_SMALL
+        const bottomSectorMin = 1 - SECTION_SIZE_SMALL
+        const leftSectorMax = SECTION_SIZE_LARGE
+        const rightSectorMin = SECTION_SIZE_LARGE
 
         if (currentYPercent < topSectorMax) {
           snapSide.value = "top"
@@ -117,7 +126,7 @@ const createButtonController = (config: ButtonControllerConfig) => {
           percent.value = currentYPercent
         }
       }
-      applyButtonPosition(btn)
+      calculatePosition()
     }
 
     const handleMouseUp = () => {
@@ -127,17 +136,17 @@ const createButtonController = (config: ButtonControllerConfig) => {
       if (!dragging) return config.onclick()
 
       localStorage.setItem(
-        BUTTON_POSITION_STORAGE_KEY,
+        MENU_POSITION_STORAGE_KEY,
         JSON.stringify({ percent: percent.value, snapSide: snapSide.value })
       )
     }
 
     window.addEventListener("mousemove", handleMouseMove)
     window.addEventListener("mouseup", handleMouseUp)
-    //window.addEventListener("mouseleave", handleMouseUp)
   }
 
-  const applyButtonPosition = (btn: HTMLButtonElement) => {
+  const calculatePosition = () => {
+    const btn = btnRef.value!
     let transformX = 0
     let transformY = 0
     switch (snapSide.value) {
@@ -164,43 +173,127 @@ const createButtonController = (config: ButtonControllerConfig) => {
 
     const windowWidth = window.innerWidth
     const windowHeight = window.innerHeight
+    const isHorizontal = snapSide.value === "top" || snapSide.value === "bottom"
+
+    const xPad = isHorizontal ? MIN_MENU_CORNER_DIST : MENU_PADDING
     const finalX = clamp(
       transformX * windowWidth,
-      10,
-      windowWidth - 10 - btnRect.width
+      xPad,
+      windowWidth - xPad - btnRect.width
     )
     const finalY = clamp(
       transformY * windowHeight,
-      10,
-      windowHeight - 10 - btnRect.height
+      MENU_PADDING,
+      windowHeight - MENU_PADDING - btnRect.height
     )
-    btn.style.transform = `translate(${finalX}px, ${finalY}px)`
+    menuPos.value = [finalX, finalY]
   }
 
-  Kiru.onBeforeMount(() => {
-    const btn = btnRef.current!
-    btn.style.position = "fixed"
-    btn.style.top = "0"
-    btn.style.left = "0"
-    btn.style.zIndex = "9999999"
-    btn.style.transition = "transform 80ms"
-
-    applyButtonPosition(btn)
-    window.addEventListener("resize", () => applyButtonPosition(btn))
-    btn.addEventListener("mousedown", handleMouseDown)
+  menuPos.subscribe(([x, y]) => {
+    const container = containerRef.value!
+    container.style.transform = `translate(${x}px, ${y}px)`
   })
 
-  return { ref: btnRef }
+  kiru.onBeforeMount(() => {
+    calculatePosition()
+    window.addEventListener("resize", calculatePosition)
+    btnRef.value!.addEventListener("mousedown", handleBtnMouseDown)
+  })
+
+  return { btnRef, containerRef, snapSide }
 }
 
 export default function DevtoolsHostApp() {
-  const btnController = createButtonController({
-    onclick: () => {},
+  const mounted = kiru.signal(false)
+  const showTooltipMenu = kiru.signal(false)
+  const tooltipRef = kiru.ref<HTMLDivElement>(null)
+  const menuController = createDraggableMenuController({
+    onclick: () => (showTooltipMenu.value = !showTooltipMenu.value),
   })
 
-  return () => (
-    <button ref={btnController.ref} className="bg-crimson rounded-full p-2">
-      <FlameIcon />
-    </button>
-  )
+  const tooltipFlexDirection = kiru.computed(() => {
+    return menuController.snapSide.value === "left" ||
+      menuController.snapSide.value === "right"
+      ? "flex-col"
+      : "flex-row"
+  })
+
+  const containerFlexDirection = kiru.computed(() => {
+    return menuController.snapSide.value === "left" ||
+      menuController.snapSide.value === "right"
+      ? "flex-row"
+      : "flex-col"
+  })
+
+  kiru.onMount(() => {
+    const tooltip = tooltipRef.current!
+    const tooltipSize = tooltip.getBoundingClientRect()
+    kiru.effect(
+      [showTooltipMenu, menuController.snapSide],
+      (show, snapSide) => {
+        const offsetSize =
+          Math.min(tooltipSize.width, tooltipSize.height) + MENU_PADDING
+        let offsetX = 0
+        let offsetY = 0
+
+        if (snapSide === "left") {
+          offsetX = -offsetSize
+          offsetY = 0
+        } else if (snapSide === "right") {
+          offsetX = offsetSize
+          offsetY = 0
+        } else if (snapSide === "top") {
+          offsetX = 0
+          offsetY = -offsetSize
+        } else if (snapSide === "bottom") {
+          offsetX = 0
+          offsetY = offsetSize
+        }
+
+        const translateX = show ? -offsetX : offsetX
+        const translateY = show ? -offsetY : offsetY
+
+        tooltip.style.transform = `
+        scale(${show ? 1 : 0}) 
+        translate(${translateX}px, ${translateY}px)
+      `
+
+        setTimeout(() => {
+          mounted.value = true
+        }, 50)
+      }
+    )
+  })
+
+  return () => {
+    return (
+      <div
+        ref={menuController.containerRef}
+        style={{
+          transition: "80ms",
+          opacity: mounted.value ? 1 : 0,
+        }}
+        className={`flex ${containerFlexDirection} items-center justify-center fixed top-0 left-0 z-50`}
+      >
+        <div
+          ref={tooltipRef}
+          style="transition: 80ms ease-in-out"
+          className={cls(
+            `absolute z-0 flex ${tooltipFlexDirection} p-2 gap-2`,
+            "bg-neutral-900 border-2 border-crimson rounded-full shadow"
+          )}
+        >
+          <FlameIcon />
+          <FlameIcon />
+          <FlameIcon />
+        </div>
+        <button
+          ref={menuController.btnRef}
+          className="bg-crimson rounded-full p-2 z-10"
+        >
+          <FlameIcon />
+        </button>
+      </div>
+    )
+  }
 }

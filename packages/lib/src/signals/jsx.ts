@@ -1,3 +1,4 @@
+import { Signalable } from "../types.js"
 import type { Signal } from "./base.js"
 import { unwrap } from "./utils.js"
 
@@ -27,4 +28,13 @@ export function For<T extends Signal<any[]> | unknown[]>({
   const items = unwrap(each, true)
   if (items.length === 0) return fallback
   return items.map(children)
+}
+
+export interface ShowProps {
+  children: JSX.Element
+  when: Signalable<unknown>
+  fallback?: JSX.Element
+}
+export function Show({ children, when, fallback }: ShowProps): JSX.Element {
+  return !!unwrap(when, true) ? children : fallback
 }

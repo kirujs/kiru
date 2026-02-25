@@ -137,7 +137,7 @@ declare global {
       displayName?: string
     }
 
-    interface FC<T = {}> {
+    export interface FC<T = {}> {
       (
         props: T
       ): Exclude<JSX.Element, Kiru.FC<any>> | ((props: T) => JSX.Element)

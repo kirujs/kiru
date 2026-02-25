@@ -1,4 +1,4 @@
-import * as Kiru from "kiru"
+import * as kiru from "kiru"
 import {
   Chart,
   type PointStyle,
@@ -25,16 +25,16 @@ export type LineChartData = {
 }
 
 export interface LineChartProps extends Omit<
-  Kiru.ElementProps<"canvas">,
+  kiru.ElementProps<"canvas">,
   "ref"
 > {
-  data: Kiru.Signal<LineChartData>
+  data: kiru.Signal<LineChartData>
 }
 
 export function LineChart({ data, ...props }: LineChartProps) {
-  const canvasRef = Kiru.ref<HTMLCanvasElement>(null)
+  const canvasRef = kiru.ref<HTMLCanvasElement>(null)
 
-  Kiru.onMount(() => {
+  kiru.onMount(() => {
     Chart.register(
       zoomPlugin,
       LinearScale,

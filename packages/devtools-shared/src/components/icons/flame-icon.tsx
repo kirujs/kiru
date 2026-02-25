@@ -1,4 +1,4 @@
-import * as Kiru from "kiru"
+import * as kiru from "kiru"
 import type { ElementProps } from "kiru"
 export function FlameIcon(props: ElementProps<"svg">) {
   return (

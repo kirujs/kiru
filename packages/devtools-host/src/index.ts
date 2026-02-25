@@ -1,4 +1,4 @@
-import * as Kiru from "kiru"
+import * as kiru from "kiru"
 import App from "./app"
 // @ts-expect-error
 import tailwindInlineCss from "inline:./style.css"
@@ -21,7 +21,7 @@ if ("window" in globalThis) {
     })
     shadow.appendChild(appRoot)
 
-    Kiru.mount(Kiru.createElement(App, {}), appRoot, {
+    kiru.mount(kiru.createElement(App, {}), appRoot, {
       name: "kiru.devtools",
     })
     const handleMainWindowClose = () => devtoolsState.popupWindow.value?.close()
