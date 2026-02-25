@@ -1,9 +1,9 @@
-import type { AppContext, AppContextOptions } from "../appContext"
+import type { AppHandle, AppHandleOptions } from "../appContext"
 import { hydrationStack } from "../hydration.js"
 import { hydrationMode, renderMode } from "../globals.js"
 import { mount } from "../index.js"
 
-interface HydrationAppContextOptions extends AppContextOptions {
+interface HydrationAppContextOptions extends AppHandleOptions {
   /**
    * Configures the hydration mode
    * - "static": SSG
@@ -17,7 +17,7 @@ export function hydrate(
   children: JSX.Element,
   container: HTMLElement,
   options?: HydrationAppContextOptions
-): AppContext {
+): AppHandle {
   hydrationStack.clear()
 
   const prevRenderMode = renderMode.current

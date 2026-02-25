@@ -3,7 +3,7 @@ import {
   commitSnapshot,
   propFilters,
   propToHtmlAttr,
-  getVNodeAppContext,
+  getVNodeApp,
   setRef,
   isValidTextChild,
   registerVNodeCleanup,
@@ -31,7 +31,7 @@ import type {
   SomeDom,
   SomeElement,
 } from "./types.utils"
-import type { AppContext } from "./appContext.js"
+import type { AppHandle } from "./appContext.js"
 
 export {
   commitWork,
@@ -363,10 +363,7 @@ function createInputValueReader(
 }
 
 function emitSignalAttrUpdate(vNode: VNode) {
-  window.__kiru.profilingContext?.emit(
-    "signalAttrUpdate",
-    getVNodeAppContext(vNode)!
-  )
+  window.__kiru.profilingContext?.emit("signalAttrUpdate", getVNodeApp(vNode)!)
 }
 
 function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
@@ -376,7 +373,7 @@ function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
     if (__DEV__) {
       window.__kiru.profilingContext?.emit(
         "signalTextUpdate",
-        getVNodeAppContext(vNode)!
+        getVNodeApp(vNode)!
       )
     }
   })
@@ -733,9 +730,9 @@ function commitDeletion(vNode: VNode) {
   if (vNode === vNode.parent?.child) {
     vNode.parent.child = vNode.sibling
   }
-  let ctx: AppContext
+  let app: AppHandle
   if (__DEV__) {
-    ctx = getVNodeAppContext(vNode)!
+    app = getVNodeApp(vNode)!
   }
   traverseApply(vNode, (node) => {
     const {
@@ -756,7 +753,7 @@ function commitDeletion(vNode: VNode) {
     }
 
     if (__DEV__) {
-      window.__kiru.profilingContext?.emit("removeNode", ctx)
+      window.__kiru.profilingContext?.emit("removeNode", app)
       if (dom instanceof Element) {
         delete dom.__kiruNode
       }

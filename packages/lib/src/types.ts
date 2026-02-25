@@ -22,7 +22,7 @@ import type {
   Signalable,
   SomeDom,
 } from "./types.utils"
-import type { AppContext } from "./appContext"
+import type { AppHandle } from "./appContext"
 
 export type { AsyncTaskState, ElementProps, Prettify, Signalable, StyleObject }
 
@@ -189,7 +189,7 @@ declare global {
     type LifecycleHookCallback = () => (() => void) | void
 
     interface VNode extends Element {
-      app?: AppContext
+      app?: AppHandle
       dom?: SomeDom
       index: number
       depth: number

@@ -23,17 +23,17 @@ import {
   latest,
   traverseApply,
   isExoticType,
-  getVNodeAppContext,
+  getVNodeApp,
   findParentErrorBoundary,
   call,
   propsChanged,
 } from "./utils/index.js"
-import type { AppContext } from "./appContext"
+import type { AppHandle } from "./appContext"
 import { isHmrUpdate } from "./hmr.js"
 
 type VNode = Kiru.VNode
 
-let appCtx: AppContext | null
+let app: AppHandle | null
 let treesInProgress: VNode[] = []
 let isRunningOrQueued = false
 let nextIdleEffects: (() => void)[] = []
@@ -107,7 +107,7 @@ function queueUpdate(vNode: VNode): void {
   // If this node is currently being rendered, just mark it dirty
   if (node.current === vNode) {
     if (__DEV__) {
-      window.__kiru.profilingContext?.emit("updateDirtied", appCtx!)
+      window.__kiru.profilingContext?.emit("updateDirtied", app!)
     }
     isRenderDirtied = true
     return
@@ -137,10 +137,10 @@ function doWork(): void {
   if (__DEV__) {
     const n = deletions[0] ?? treesInProgress[0]
     if (n) {
-      appCtx = getVNodeAppContext(n)!
-      window.__kiru.profilingContext?.beginTick(appCtx)
+      app = getVNodeApp(n)!
+      window.__kiru.profilingContext?.beginTick(app)
     } else {
-      appCtx = null
+      app = null
     }
   }
 
@@ -181,8 +181,8 @@ function doWork(): void {
     immediateEffectDirtiedRender = false
     consecutiveDirtyCount++
     if (__DEV__) {
-      window.__kiru.profilingContext?.endTick(appCtx!)
-      window.__kiru.profilingContext?.emit("updateDirtied", appCtx!)
+      window.__kiru.profilingContext?.endTick(app!)
+      window.__kiru.profilingContext?.emit("updateDirtied", app!)
     }
     return flushSync()
   }
@@ -191,9 +191,9 @@ function doWork(): void {
   onWorkFinished()
   queueMicrotask(() => flushEffects(postEffects))
   if (__DEV__) {
-    window.__kiru.emit("update", appCtx!)
-    window.__kiru.profilingContext?.emit("update", appCtx!)
-    window.__kiru.profilingContext?.endTick(appCtx!)
+    window.__kiru.emit("update", app!)
+    window.__kiru.profilingContext?.emit("update", app!)
+    window.__kiru.profilingContext?.endTick(app!)
   }
 }
 
@@ -257,7 +257,7 @@ function updateVNode(vNode: VNode): VNode | null {
     if (__DEV__) {
       window.__kiru.emit(
         "error",
-        appCtx!,
+        app!,
         error instanceof Error ? error : new Error(String(error))
       )
     }

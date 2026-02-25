@@ -1,4 +1,4 @@
-import type { AppContext } from "./appContext"
+import type { AppHandle } from "./appContext"
 
 const MAX_TICKS = 100
 
@@ -19,12 +19,12 @@ interface TickTS {
   end: number
 }
 
-type ProfilingEventListener = (app: AppContext) => void
+type ProfilingEventListener = (app: AppHandle) => void
 
 export function createProfilingContext() {
   const eventListeners = new Map<ProfilingEvent, Set<ProfilingEventListener>>()
   const appStats: Map<
-    AppContext,
+    AppHandle,
     {
       timestamps: TickTS[]
       mountDuration: number
@@ -33,7 +33,7 @@ export function createProfilingContext() {
   > = new Map()
   return {
     appStats,
-    emit: (event: ProfilingEvent, app: AppContext) => {
+    emit: (event: ProfilingEvent, app: AppHandle) => {
       eventListeners.get(event)?.forEach((listener) => listener(app))
     },
     addEventListener: (
@@ -52,23 +52,23 @@ export function createProfilingContext() {
       if (!eventListeners.has(event)) return
       eventListeners.get(event)!.delete(listener)
     },
-    mountDuration: (app: AppContext) => {
+    mountDuration: (app: AppHandle) => {
       const stats = appStats.get(app)
       if (!stats) return 0
       return stats.mountDuration
     },
-    totalTicks: (app: AppContext) => {
+    totalTicks: (app: AppHandle) => {
       const stats = appStats.get(app)
       if (!stats) return 0
       return stats.totalTicks
     },
-    lastTickDuration: (app: AppContext) => {
+    lastTickDuration: (app: AppHandle) => {
       const stats = appStats.get(app)
       if (!stats) return 0
       const last = stats.timestamps[stats.timestamps.length - 1]
       return last.end - last.start
     },
-    averageTickDuration: (app: AppContext) => {
+    averageTickDuration: (app: AppHandle) => {
       const stats = appStats.get(app)
       if (!stats) return 0
       const completeTicks = stats.timestamps.filter((ts) => ts.end !== Infinity)
@@ -77,7 +77,7 @@ export function createProfilingContext() {
         completeTicks.length
       )
     },
-    beginTick: (app: AppContext) => {
+    beginTick: (app: AppHandle) => {
       if (!appStats.has(app)) {
         appStats.set(app, {
           mountDuration: Infinity,
@@ -89,7 +89,7 @@ export function createProfilingContext() {
       stats.totalTicks++
       stats.timestamps.push({ start: performance.now(), end: Infinity })
     },
-    endTick: (app: AppContext) => {
+    endTick: (app: AppHandle) => {
       if (!appStats.has(app)) return
       const stats = appStats.get(app)!
 

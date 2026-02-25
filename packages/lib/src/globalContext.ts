@@ -3,7 +3,7 @@ import { createHMRContext } from "./hmr.js"
 import { createProfilingContext } from "./profiling.js"
 import { fileRouterInstance } from "./router/globals.js"
 import type { FileRouterController } from "./router/fileRouterController"
-import type { AppContext } from "./appContext"
+import type { AppHandle } from "./appContext"
 import type { requestUpdate } from "./index.js"
 
 export { createKiruGlobalContext, type GlobalKiruEvent, type KiruGlobalContext }
@@ -33,45 +33,42 @@ interface SchedulerInterface {
 }
 
 interface KiruGlobalContext {
-  readonly apps: AppContext[]
-  emit<T extends Evt>(event: T["name"], ctx: AppContext, data?: T["data"]): void
+  readonly apps: AppHandle[]
+  emit<T extends Evt>(event: T["name"], app: AppHandle, data?: T["data"]): void
   on<T extends Evt>(
     event: T["name"],
-    callback: (ctx: AppContext, data: T["data"]) => void
+    callback: (app: AppHandle, data: T["data"]) => void
   ): void
   off<T extends Evt>(
     event: T["name"],
-    callback: (ctx: AppContext, data?: T["data"]) => void
+    callback: (app: AppHandle, data?: T["data"]) => void
   ): void
   HMRContext?: ReturnType<typeof createHMRContext>
   profilingContext?: ReturnType<typeof createProfilingContext>
   fileRouterInstance?: {
     current: FileRouterController | null
   }
-  getSchedulerInterface?: (app: AppContext) => SchedulerInterface | null
+  getSchedulerInterface?: (app: AppHandle) => SchedulerInterface | null
 }
 
 function createKiruGlobalContext(): KiruGlobalContext {
-  const contexts = new Set<AppContext>()
-  const contextToSchedulerInterface = new WeakMap<
-    AppContext,
-    SchedulerInterface
-  >()
+  const apps = new Set<AppHandle>()
+  const appToSchedulerInterface = new WeakMap<AppHandle, SchedulerInterface>()
   const listeners = new Map<
     GlobalKiruEvent,
-    Set<(ctx: AppContext, data?: Evt["data"]) => void>
+    Set<(app: AppHandle, data?: Evt["data"]) => void>
   >()
   function emit<T extends Evt>(
     event: T["name"],
-    ctx: AppContext,
+    app: AppHandle,
     data?: T["data"]
   ): void {
-    listeners.get(event)?.forEach((cb) => cb(ctx, data))
+    listeners.get(event)?.forEach((cb) => cb(app, data))
   }
 
   function on<T extends Evt>(
     event: T["name"],
-    callback: (ctx: AppContext, data: T["data"]) => void
+    callback: (app: AppHandle, data: T["data"]) => void
   ): void {
     if (!listeners.has(event)) {
       listeners.set(event, new Set())
@@ -81,14 +78,14 @@ function createKiruGlobalContext(): KiruGlobalContext {
 
   function off<T extends Evt>(
     event: T["name"],
-    callback: (ctx: AppContext, data?: T["data"]) => void
+    callback: (ctx: AppHandle, data?: T["data"]) => void
   ): void {
     listeners.get(event)?.delete(callback)
   }
 
   const globalContext: KiruGlobalContext = {
     get apps() {
-      return Array.from(contexts)
+      return Array.from(apps)
     },
     emit,
     on,
@@ -96,15 +93,15 @@ function createKiruGlobalContext(): KiruGlobalContext {
   }
 
   // Initialize event listeners
-  on("mount", (ctx, requestUpdate) => {
-    contexts.add(ctx)
+  on("mount", (app, requestUpdate) => {
+    apps.add(app)
     if (requestUpdate && typeof requestUpdate === "function") {
-      contextToSchedulerInterface.set(ctx, { requestUpdate })
+      appToSchedulerInterface.set(app, { requestUpdate })
     }
   })
-  on("unmount", (ctx) => {
-    contexts.delete(ctx)
-    contextToSchedulerInterface.delete(ctx)
+  on("unmount", (app) => {
+    apps.delete(app)
+    appToSchedulerInterface.delete(app)
   })
 
   if (__DEV__) {
@@ -112,7 +109,7 @@ function createKiruGlobalContext(): KiruGlobalContext {
     globalContext.profilingContext = createProfilingContext()
     globalContext.fileRouterInstance = fileRouterInstance
     globalContext.getSchedulerInterface = (app) => {
-      return contextToSchedulerInterface.get(app) ?? null
+      return appToSchedulerInterface.get(app) ?? null
     }
   }
 

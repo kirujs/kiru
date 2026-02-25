@@ -9,7 +9,7 @@ import {
 import { createElement } from "../index.js"
 import { KiruError } from "../error.js"
 import { node } from "../globals.js"
-import type { AppContext } from "../appContext.js"
+import type { AppHandle } from "../appContext.js"
 import type { ErrorBoundaryNode } from "../types.utils.js"
 
 export {
@@ -24,7 +24,7 @@ export {
   isContextProvider,
   vNodeContains,
   getCurrentVNode,
-  getVNodeAppContext,
+  getVNodeApp,
   commitSnapshot,
   traverseApply,
   findParent,
@@ -98,7 +98,7 @@ function getCurrentVNode(): Kiru.VNode | null {
   return node.current
 }
 
-function getVNodeAppContext(vNode: Kiru.VNode): AppContext | null {
+function getVNodeApp(vNode: Kiru.VNode): AppHandle | null {
   let n: Kiru.VNode | null = vNode
   while (n) {
     if (n.app) {

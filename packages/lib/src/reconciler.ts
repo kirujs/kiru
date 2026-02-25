@@ -1,6 +1,6 @@
 import { $FRAGMENT, FLAG_PLACEMENT, FLAG_UPDATE } from "./constants.js"
 import {
-  getVNodeAppContext,
+  getVNodeApp,
   isElement,
   isValidTextChild,
   latest,
@@ -8,19 +8,19 @@ import {
 } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import { __DEV__ } from "./env.js"
-import type { AppContext } from "./appContext.js"
+import type { AppHandle } from "./appContext.js"
 import { createVNode as createBaseVNode } from "./vNode.js"
 
 type VNode = Kiru.VNode
 type KElement = Kiru.Element
-let appCtx: AppContext
+let app: AppHandle
 
 export function reconcileChildren(
   parent: VNode,
   children: unknown
 ): VNode | null {
   if (__DEV__) {
-    appCtx = getVNodeAppContext(parent)!
+    app = getVNodeApp(parent)!
   }
   if (Array.isArray(children)) {
     if (__DEV__) {
@@ -377,7 +377,7 @@ function updateFromMap(
 
 function dev_emitUpdateNode() {
   if (!("window" in globalThis)) return
-  window.__kiru.profilingContext?.emit("updateNode", appCtx)
+  window.__kiru.profilingContext?.emit("updateNode", app)
 }
 
 const $LIST_CHILD = Symbol("kiru:marked-list-child")
@@ -480,7 +480,7 @@ function createVNode(
   node.flags |= FLAG_PLACEMENT
 
   if (__DEV__ && "window" in globalThis) {
-    window.__kiru.profilingContext?.emit("createNode", appCtx)
+    window.__kiru.profilingContext?.emit("createNode", app)
   }
   return node
 }

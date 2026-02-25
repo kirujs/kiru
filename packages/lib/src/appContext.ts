@@ -5,14 +5,14 @@ import { createVNode } from "./vNode.js"
 
 type VNode = Kiru.VNode
 
-export interface AppContextOptions {
+export interface AppHandleOptions {
   /**
    * App name - shown in devtools
    */
   name?: string
 }
 
-export interface AppContext {
+export interface AppHandle {
   id: number
   name: string
   rootNode: VNode
@@ -25,8 +25,8 @@ let appId = 0
 export function mount(
   children: JSX.Element,
   container: HTMLElement,
-  options?: AppContextOptions
-): AppContext {
+  options?: AppHandleOptions
+): AppHandle {
   if (__DEV__) {
     if (container.__kiruNode) {
       throw new Error(
@@ -36,7 +36,7 @@ export function mount(
   }
   const rootNode = createRootNode(container)
   const id = appId++
-  const appContext: AppContext = {
+  const appContext: AppHandle = {
     id,
     name: options?.name ?? `App-${id}`,
     rootNode,
@@ -45,12 +45,12 @@ export function mount(
   }
 
   function render(children: JSX.Element) {
-    rootNode.props.children = children
+    rootNode.props = { children }
     renderRootSync(rootNode)
   }
 
   function unmount() {
-    rootNode.props.children = null
+    rootNode.props = { children: null }
     renderRootSync(rootNode)
     if (__DEV__) {
       delete container.__kiruNode
