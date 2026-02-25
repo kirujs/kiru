@@ -2,7 +2,6 @@ import { $HMR_ACCEPT, $DEV_FILE_LINK } from "./constants.js"
 import { traverseApply } from "./utils/index.js"
 import { flushSync, requestUpdate } from "./scheduler.js"
 import { Signal } from "./signals/base.js"
-import type { AppContext } from "./appContext.js"
 import type { Effect } from "./signals/effect.js"
 
 export type HMRAccept<T = {}> = {
@@ -91,7 +90,7 @@ export function createHMRContext() {
     if (currentModuleMemory === null)
       throw new Error("[kiru]: HMR could not register: No active module")
 
-    let dirtiedApps: Set<AppContext> = new Set()
+    let dirtyNodes = new Set<Kiru.VNode>()
     for (const [name, newEntry] of Object.entries(hotVarRegistrationEntries)) {
       const oldEntry = currentModuleMemory.hotVars.get(name)
 
@@ -126,16 +125,16 @@ export function createHMRContext() {
           traverseApply(ctx.rootNode, (vNode) => {
             if (vNode.type === oldEntry.value) {
               vNode.type = newEntry.value as any
-              dirtiedApps.add(ctx)
+              dirtyNodes.add(vNode)
             }
           })
         })
       }
     }
 
-    if (dirtiedApps.size) {
+    if (dirtyNodes.size) {
       _isHmrUpdate = true
-      dirtiedApps.forEach((ctx) => requestUpdate(ctx.rootNode))
+      dirtyNodes.forEach((n) => requestUpdate(n))
       flushSync()
       _isHmrUpdate = false
     }
