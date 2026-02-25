@@ -108,6 +108,7 @@ declare global {
     type Element =
       | Element[]
       | Kiru.Element
+      | ((props?: any) => JSX.Element)
       | PrimitiveChild
       | Kiru.Signal<PrimitiveChild>
 
@@ -129,16 +130,14 @@ declare global {
     }
     interface Context<T> {
       [$CONTEXT]: true
-      Provider: (({ value, children }: ProviderProps<T>) => JSX.Element) & {
-        displayName?: string
-      }
+      Provider: Kiru.FC<ProviderProps<T>>
       default: () => T
       /** Used to display the name of the context in devtools  */
       displayName?: string
     }
 
     interface FC<T = {}> {
-      (props: FCProps<T>): JSX.Element
+      (props: FCProps<T>): JSX.Element | ((props: FCProps<T>) => JSX.Element)
       /** Used to display the name of the component in devtools  */
       displayName?: string
     }
@@ -146,19 +145,6 @@ declare global {
     type FCProps<T = {}> = T & { children?: JSX.Children }
     type InferProps<T> = T extends Kiru.FC<infer P> ? P : never
 
-    interface HookDevtoolsProvisions<T extends Record<string, any>> {
-      get: () => T
-      set?: (value: T) => void
-    }
-    type Hook<T> = T & {
-      cleanup?: () => void
-      name?: string
-      dev?: {
-        /** Used to perform invalidation during HMR when the hook's arguments have changed */
-        initialArgs?: any
-        devtools?: HookDevtoolsProvisions<any>
-      }
-    }
     interface RefObject<T> {
       current: T
     }
@@ -198,6 +184,8 @@ declare global {
       }
     }
 
+    type SetupEffect = () => (() => void) | void
+
     interface VNode extends Element {
       app?: AppContext
       dom?: SomeDom
@@ -209,11 +197,11 @@ declare global {
       sibling: VNode | null
       prev: VNodeSnapshot | null
       deletions: VNode[] | null
-      hooks?: Hook<unknown>[]
       subs?: Set<Function>
       cleanups?: Record<string, Function>
-      effects?: Array<Function>
-      immediateEffects?: Array<Function>
+      effects?: Array<SetupEffect>
+      immediateEffects?: Array<SetupEffect>
+      render?: (props: VNode["props"]) => unknown
       // dev-mode only
       hookSig?: string[]
     }

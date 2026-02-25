@@ -25,37 +25,37 @@ const lib = task({
   },
 })
 
-const createDevtoolsTask = (name) =>
-  task({
-    name,
-    cwd: `packages/${name}`,
-    commands: {
-      build: {
-        run: "pnpm build",
-        cache: {
-          inputs: ["src", lib.artifact("build"), pnpm.package()],
-          outputs: ["dist"],
-        },
-      },
-      dev: {
-        run: "pnpm dev",
-        readyWhen: (output) => output.includes("Build complete!"),
-      },
-    },
-  })
+// const createDevtoolsTask = (name) =>
+//   task({
+//     name,
+//     cwd: `packages/${name}`,
+//     commands: {
+//       build: {
+//         run: "pnpm build",
+//         cache: {
+//           inputs: ["src", lib.artifact("build"), pnpm.package()],
+//           outputs: ["dist"],
+//         },
+//       },
+//       dev: {
+//         run: "pnpm dev",
+//         readyWhen: (output) => output.includes("Build complete!"),
+//       },
+//     },
+//   })
 
-const devtoolsClient = createDevtoolsTask(
-  "devtools-client",
-  "packages/devtools-client"
-)
-const devtoolsHost = createDevtoolsTask(
-  "devtools-host",
-  "packages/devtools-host"
-)
-const devtools = pipeline([devtoolsClient, devtoolsHost]).toTask({
-  name: "devtools",
-  dependencies: [lib],
-})
+// const devtoolsClient = createDevtoolsTask(
+//   "devtools-client",
+//   "packages/devtools-client"
+// )
+// const devtoolsHost = createDevtoolsTask(
+//   "devtools-host",
+//   "packages/devtools-host"
+// )
+// const devtools = pipeline([devtoolsClient, devtoolsHost]).toTask({
+//   name: "devtools",
+//   dependencies: [lib],
+// })
 
 const vitePlugin = task({
   name: "vite-plugin-kiru",
@@ -67,8 +67,8 @@ const vitePlugin = task({
         inputs: [
           "src",
           lib.artifact("build"),
-          devtoolsClient.artifact("build"),
-          devtoolsHost.artifact("build"),
+          //devtoolsClient.artifact("build"),
+          //devtoolsHost.artifact("build"),
           pnpm.package(),
         ],
         outputs: ["dist"],
@@ -76,7 +76,10 @@ const vitePlugin = task({
     },
     dev: {
       run: "pnpm dev",
-      dependencies: [lib, devtools],
+      dependencies: [
+        lib,
+        //  devtools
+      ],
     },
   },
 })
@@ -135,7 +138,7 @@ const command = argv[0]
 
 const result = await pipeline([
   lib,
-  devtools,
+  //devtools,
   vitePlugin,
   csrTest,
   ssgTest,

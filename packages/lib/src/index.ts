@@ -11,8 +11,8 @@ export * from "./error.js"
 export * from "./hooks/index.js"
 export * from "./components/index.js"
 export * from "./renderToString.js"
+export * from "./ref.js"
 export { nextIdle, flushSync, requestUpdate } from "./scheduler.js"
-export * from "./store.js"
 export * from "./viewTransitions.js"
 
 // @ts-ignore

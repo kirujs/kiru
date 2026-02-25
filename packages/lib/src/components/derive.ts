@@ -1,11 +1,11 @@
 import { node } from "../globals.js"
 import { $STREAM_DATA } from "../constants.js"
 import { requestUpdate } from "../scheduler.js"
-import { useRef } from "../hooks/index.js"
 import { Signal } from "../signals/index.js"
 import { sideEffectsEnabled } from "../utils/index.js"
 import type { RecordHas } from "../types.utils"
 import { isStatefulPromise, StreamDataThrowValue } from "../utils/promise.js"
+import { ref } from "../ref.js"
 
 export type Derivable =
   | Kiru.Signal<unknown>
@@ -63,59 +63,58 @@ export interface DeriveProps<
 export function Derive<
   T extends Derivable,
   U extends DeriveFallbackMode = "swr"
->(props: DeriveProps<T, U>) {
-  const { from, children, fallback, mode } = props
-  const prevSuccess = useRef<UnwrapDerive<T> | null>(null)
+>(): (props: DeriveProps<T, U>) => JSX.Children {
+  return (props) => {
+    const { from, children, fallback, mode } = props
+    const prevSuccess = ref<UnwrapDerive<T> | null>(null)
 
-  const promises = new Set<Kiru.StatefulPromise<any>>()
-  let value: UnwrapDerive<T>
+    const promises = new Set<Kiru.StatefulPromise<any>>()
+    let value: UnwrapDerive<T>
 
-  if (isStatefulPromise(from)) {
-    promises.add(from)
-    value = from.value as UnwrapDerive<T>
-  } else if (Signal.isSignal(from)) {
-    value = from.value as UnwrapDerive<T>
-  } else {
-    const out: Record<string, any> = {}
-    for (const key in from) {
-      const v = from[key]
-      if (isStatefulPromise(v)) promises.add(v)
-      out[key] = (v as Signal<unknown> | Kiru.StatefulPromise<unknown>).value
-    }
-    value = out as UnwrapDerive<T>
-  }
-
-  if (promises.size === 0) {
-    return (children as ChildFn<UnwrapDerive<T>>)(value)
-  }
-
-  if (!sideEffectsEnabled()) {
-    throw {
-      [$STREAM_DATA]: {
-        fallback,
-        data: Array.from(promises),
-      },
-    } satisfies StreamDataThrowValue
-  }
-
-  for (const p of promises) {
-    if (p.state === "rejected") {
-      throw p.error
-    }
-    if (p.state === "pending") {
-      const nodeRef = node.current!
-      Promise.allSettled(promises).then(() => requestUpdate(nodeRef))
-
-      if (mode !== "fallback" && prevSuccess.current) {
-        return (children as ChildFnWithStale<UnwrapDerive<T>>)(
-          prevSuccess.current,
-          true
-        )
+    if (isStatefulPromise(from)) {
+      promises.add(from)
+      value = from.value as UnwrapDerive<T>
+    } else if (Signal.isSignal(from)) {
+      value = from.value as UnwrapDerive<T>
+    } else {
+      const out: Record<string, any> = {}
+      for (const key in from) {
+        const v = from[key]
+        if (isStatefulPromise(v)) promises.add(v)
+        out[key] = (v as Signal<unknown> | Kiru.StatefulPromise<unknown>).value
       }
-      return fallback
+      value = out as UnwrapDerive<T>
     }
-  }
 
-  prevSuccess.current = value
-  return (children as ChildFnWithStale<UnwrapDerive<T>>)(value, false)
+    if (promises.size === 0) {
+      return (children as ChildFn<UnwrapDerive<T>>)(value)
+    }
+
+    if (!sideEffectsEnabled()) {
+      throw {
+        [$STREAM_DATA]: {
+          fallback,
+          data: Array.from(promises),
+        },
+      } satisfies StreamDataThrowValue
+    }
+    for (const p of promises) {
+      if (p.state === "rejected") {
+        throw p.error
+      }
+      if (p.state === "pending") {
+        const nodeRef = node.current!
+        Promise.allSettled(promises).then(() => requestUpdate(nodeRef))
+
+        const prev = prevSuccess.current!
+        if (mode !== "fallback" && prev) {
+          return (children as ChildFnWithStale<UnwrapDerive<T>>)(prev, true)
+        }
+        return fallback
+      }
+    }
+
+    prevSuccess.current = value
+    return (children as ChildFnWithStale<UnwrapDerive<T>>)(value, false)
+  }
 }

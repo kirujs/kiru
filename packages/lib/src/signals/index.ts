@@ -4,9 +4,9 @@
  * 2. global computed will lose its vNode subscription on HMR
  * */
 
-export { Signal, signal, useSignal } from "./base.js"
-export { ComputedSignal, computed, useComputed } from "./computed.js"
-export { WatchEffect, watch, useWatch } from "./watch.js"
+export { Signal, signal } from "./base.js"
+export { ComputedSignal, computed } from "./computed.js"
+export { Effect, effect } from "./effect.js"
 export { unwrap, tick } from "./utils.js"
 export * from "./for.js"
 export * from "./types.js"

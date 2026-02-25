@@ -12,7 +12,7 @@ import {
   updatePluginState,
   type PluginState,
 } from "./config.js"
-import { setupDevtools, createDevtoolsHtmlTransform } from "./devtools.js"
+//import { createDevtoolsHtmlTransform } from "./devtools.js"
 import { handleSSR } from "./dev-server.js"
 import { createPreviewMiddleware } from "./preview-server.js"
 import { generateStaticSite } from "./ssg.js"
@@ -59,10 +59,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
     transformIndexHtml() {
       if (!state.devtoolsEnabled) return
-      return createDevtoolsHtmlTransform(
-        state.dtClientPathname,
-        state.dtHostScriptPath
-      )
+      //return createDevtoolsHtmlTransform(
+      //  state.dtClientPathname,
+      //  state.dtHostScriptPath
+      //)
     },
     configurePreviewServer(server) {
       if (!state.ssgOptions) return
@@ -74,21 +74,21 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       if (state.isProduction || state.isBuild) return
       const {
         ssgOptions,
-        devtoolsEnabled,
+        //devtoolsEnabled,
         dtClientPathname,
         dtHostScriptPath,
-        fileLinkFormatter,
+        //fileLinkFormatter,
         projectRoot,
       } = state
 
-      if (devtoolsEnabled) {
-        setupDevtools(
-          server,
-          { dtClientPathname, formatFileLink: fileLinkFormatter },
-          dtHostScriptPath,
-          log
-        )
-      }
+      // if (devtoolsEnabled) {
+      //   setupDevtools(
+      //     server,
+      //     { dtClientPathname, formatFileLink: fileLinkFormatter },
+      //     dtHostScriptPath,
+      //     log
+      //   )
+      // }
 
       if (ssgOptions) {
         // SSR HTML middleware using document.tsx

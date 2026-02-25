@@ -1,8 +1,7 @@
 import { FLAG_STATIC_DOM } from "../constants.js"
 import { __DEV__ } from "../env.js"
 import { KiruError } from "../error.js"
-import { renderMode } from "../globals.js"
-import { useVNode } from "../hooks/utils.js"
+import { node, renderMode } from "../globals.js"
 import { nextIdle, requestUpdate } from "../scheduler.js"
 
 interface PortalProps {
@@ -11,7 +10,7 @@ interface PortalProps {
 }
 
 export function Portal({ children, container }: PortalProps) {
-  const vNode = useVNode()
+  const vNode = node.current!
   if (!vNode.dom) {
     vNode.flags |= FLAG_STATIC_DOM
     switch (renderMode.current) {

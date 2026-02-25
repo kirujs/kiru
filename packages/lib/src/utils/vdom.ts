@@ -11,7 +11,6 @@ import { KiruError } from "../error.js"
 import { node } from "../globals.js"
 import type { AppContext } from "../appContext.js"
 import type { ErrorBoundaryNode } from "../types.utils.js"
-import { isMemoFn } from "../components/memo.js"
 
 export {
   cloneElement,
@@ -22,7 +21,6 @@ export {
   isExoticType,
   isFragment,
   isLazy,
-  isMemo,
   isContextProvider,
   vNodeContains,
   getCurrentVNode,
@@ -85,10 +83,6 @@ function isLazy(vNode: Kiru.VNode): boolean {
     "displayName" in vNode.type &&
     vNode.type.displayName === "Kiru.lazy"
   )
-}
-
-function isMemo(vNode: Kiru.VNode): boolean {
-  return typeof vNode.type === "function" && isMemoFn(vNode.type)
 }
 
 function isContextProvider(

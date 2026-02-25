@@ -7,9 +7,9 @@ import {
 import { $HMR_ACCEPT, $SIGNAL } from "../constants.js"
 import { __DEV__ } from "../env.js"
 import { node } from "../globals.js"
-import { useHook } from "../hooks/utils.js"
 import { requestUpdate } from "../scheduler.js"
-import { tracking, signalSubsMap } from "./globals.js"
+import { signalSubsMap } from "./globals.js"
+import { tracking } from "./tracking.js"
 import type { SignalSubscriber, ReadonlySignal } from "./types.js"
 import type { HMRAccept } from "../hmr.js"
 
@@ -202,43 +202,4 @@ export class Signal<T> {
 
 export const signal = <T>(initial: T, displayName?: string) => {
   return new Signal(initial, displayName)
-}
-
-export const useSignal = <T>(initial: T, displayName?: string) => {
-  return useHook(
-    "useSignal",
-    { signal: null! as Signal<T> },
-    ({ hook, isInit, isHMR }) => {
-      if (__DEV__) {
-        if (isInit) {
-          hook.dev = {
-            devtools: {
-              get: () => ({
-                displayName: hook.signal.displayName,
-                value: hook.signal.peek(),
-              }),
-              set: ({ value }) => {
-                hook.signal.value = value
-              },
-            },
-            initialArgs: [initial, displayName],
-          }
-        }
-        if (isHMR) {
-          const [v, name] = hook.dev!.initialArgs
-          if (v !== initial || name !== displayName) {
-            hook.cleanup?.()
-            isInit = true
-            hook.dev!.initialArgs = [initial, displayName]
-          }
-        }
-      }
-
-      if (isInit) {
-        hook.cleanup = () => Signal.dispose(hook.signal)
-        hook.signal = new Signal(initial, displayName)
-      }
-      return hook.signal
-    }
-  )
 }

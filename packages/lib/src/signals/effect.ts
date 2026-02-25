@@ -1,61 +1,103 @@
-import { node } from "../globals.js"
-import { sideEffectsEnabled } from "../utils/index.js"
-import { tracking, effectQueue } from "./globals.js"
-import { tick } from "./utils.js"
+import { __DEV__ } from "../env.js"
+import { effectQueue } from "./globals.js"
+import { executeWithTracking } from "./tracking.js"
+import { latest, generateRandomID, call } from "../utils/index.js"
 import type { Signal } from "./base.js"
 import type { SignalValues } from "./types.js"
 
-type TrackedExecutionContext<T, Deps extends readonly Signal<unknown>[]> = {
-  id: string
-  subs: Map<string, Function>
-  fn: (...values: SignalValues<Deps>) => T
-  deps?: Deps
-  onDepChanged: () => void
+type EffectCallbackReturn = (() => void) | void
+
+export class Effect<const Deps extends readonly Signal<unknown>[] = []> {
+  protected id: string
+  protected callback: (...values: SignalValues<Deps>) => EffectCallbackReturn
+  protected deps?: Deps
+  protected unsubs: Map<string, Function>
+  protected cleanup: (() => void) | null
+  protected isRunning?: boolean
+
+  constructor(
+    callback: (...values: SignalValues<Deps>) => EffectCallbackReturn,
+    deps?: Deps
+  ) {
+    this.id = generateRandomID()
+    this.callback = callback
+    this.deps = deps
+    this.unsubs = new Map()
+    this.isRunning = false
+    this.cleanup = null
+    if (__DEV__ && "window" in globalThis) {
+      const { isWaitingForNextWatchCall, pushWatch } =
+        window.__kiru.HMRContext!.signals
+
+      if (isWaitingForNextWatchCall()) {
+        pushWatch(this as Effect)
+      }
+    }
+    this.start()
+  }
+
+  start() {
+    if (this.isRunning) {
+      return
+    }
+
+    this.isRunning = true
+
+    // postpone execution during HMR
+    if (
+      __DEV__ &&
+      "window" in globalThis &&
+      window.__kiru.HMRContext?.isReplacement()
+    ) {
+      return queueMicrotask(() => {
+        if (this.isRunning) {
+          Effect.run(this as Effect)
+        }
+      })
+    }
+    Effect.run(this as Effect)
+  }
+
+  stop() {
+    effectQueue.delete(this.id)
+    this.unsubs.forEach(call)
+    this.unsubs.clear()
+    this.cleanup?.()
+    this.cleanup = null
+    this.isRunning = false
+  }
+
+  private static run(watchEffect: Effect) {
+    const effect = latest(watchEffect)
+    const { id, callback: getter, unsubs: subs, deps } = effect
+
+    effect.cleanup =
+      executeWithTracking({
+        id,
+        subs,
+        fn: getter,
+        deps,
+        onDepChanged: () => {
+          effect.cleanup?.()
+          Effect.run(effect)
+        },
+      }) ?? null
+  }
 }
 
-/**
- * Executes an effect function with dependency tracking enabled, and manages
- * the effect's subscriptions.
- * @param ctx - The execution context
- * @returns The result of the effect function
- */
-export function executeWithTracking<T, Deps extends readonly Signal<unknown>[]>(
-  ctx: TrackedExecutionContext<T, Deps>
-): T {
-  const { id, subs, fn, deps = [], onDepChanged } = ctx
-  let observations: Map<string, Signal<unknown>> | undefined
-
-  effectQueue.delete(id)
-  const isServer = !!node.current && !sideEffectsEnabled()
-
-  if (!isServer) {
-    observations = new Map<string, Signal<unknown>>()
-    tracking.stack.push(observations)
+export function effect(callback: () => EffectCallbackReturn): Effect
+export function effect<const Deps extends readonly Signal<unknown>[]>(
+  dependencies: Deps,
+  callback: (...values: SignalValues<Deps>) => EffectCallbackReturn
+): Effect<Deps>
+export function effect<const Deps extends readonly Signal<unknown>[]>(
+  depsOrGetter: Deps | (() => EffectCallbackReturn),
+  callback?: (...values: SignalValues<Deps>) => EffectCallbackReturn
+): Effect<Deps> | Effect {
+  if (typeof depsOrGetter === "function") {
+    return new Effect<[]>(depsOrGetter)
   }
-
-  const result = fn(...(deps.map((s) => s.value) as SignalValues<Deps>))
-
-  if (!isServer) {
-    for (const [id, unsub] of subs) {
-      if (observations!.has(id)) continue
-      unsub()
-      subs.delete(id)
-    }
-
-    const effect = () => {
-      if (!effectQueue.size) {
-        queueMicrotask(tick)
-      }
-      effectQueue.set(id, onDepChanged)
-    }
-
-    for (const [id, sig] of observations!) {
-      if (subs.has(id)) continue
-      const unsub = sig.subscribe(effect)
-      subs.set(id, unsub)
-    }
-    tracking.stack.pop()
-  }
-
-  return result
+  const dependencies = depsOrGetter
+  const effectGetter = callback!
+  return new Effect(effectGetter, dependencies)
 }

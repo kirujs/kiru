@@ -1,9 +1,4 @@
-import {
-  $FRAGMENT,
-  FLAG_MEMO,
-  FLAG_PLACEMENT,
-  FLAG_UPDATE,
-} from "./constants.js"
+import { $FRAGMENT, FLAG_PLACEMENT, FLAG_UPDATE } from "./constants.js"
 import {
   getVNodeAppContext,
   isElement,
@@ -13,7 +8,6 @@ import {
 import { Signal } from "./signals/base.js"
 import { __DEV__ } from "./env.js"
 import type { AppContext } from "./appContext.js"
-import { isMemoFn } from "./components/memo.js"
 import { createVNode as createBaseVNode } from "./vNode.js"
 
 type VNode = Kiru.VNode
@@ -494,10 +488,6 @@ function createVNode(
 ): VNode {
   const node = createBaseVNode(type, parent, props, key, index)
   node.flags |= FLAG_PLACEMENT
-
-  if (typeof type === "function" && isMemoFn(type)) {
-    node.flags |= FLAG_MEMO
-  }
 
   if (__DEV__ && "window" in globalThis) {
     window.__kiru.profilingContext?.emit("createNode", appCtx)

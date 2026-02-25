@@ -1,6 +1,6 @@
-import { createContext } from "../context.js"
+import { node } from "../globals.js"
+import { createContext, getContext } from "../context.js"
 import { __DEV__ } from "../env.js"
-import { useContext } from "../hooks/index.js"
 import type { RouteQuery, RouterState } from "./types.js"
 
 export interface ReloadOptions {
@@ -77,5 +77,5 @@ if (__DEV__) {
 }
 
 export function useFileRouter(): FileRouterContextType {
-  return useContext(RouterContext)
+  return getContext(node.current!, RouterContext).value
 }

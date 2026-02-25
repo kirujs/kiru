@@ -2,9 +2,8 @@ import { $HMR_ACCEPT, $DEV_FILE_LINK } from "./constants.js"
 import { traverseApply } from "./utils/index.js"
 import { flushSync, requestUpdate } from "./scheduler.js"
 import { Signal } from "./signals/base.js"
-import type { WatchEffect } from "./signals/watch.js"
-import type { Store } from "./store.js"
 import type { AppContext } from "./appContext.js"
+import type { Effect } from "./signals/effect.js"
 
 export type HMRAccept<T = {}> = {
   provide: () => T
@@ -15,7 +14,7 @@ export type HMRAccept<T = {}> = {
 export type GenericHMRAcceptor<T = {}> = {
   [$HMR_ACCEPT]: HMRAccept<T>
 }
-type HotVar = Kiru.FC | Store<any, any> | Signal<any> | Kiru.Context<any>
+type HotVar = Kiru.FC | Signal<any> | Kiru.Context<any>
 
 type HotVarDesc = {
   type: string
@@ -43,7 +42,7 @@ export function isGenericHmrAcceptor(
 
 type ModuleMemory = {
   hotVars: Map<string, HotVarDesc>
-  unnamedWatchers: Array<WatchEffect>
+  unnamedEffects: Array<Effect>
 }
 
 type HotVarRegistrationEntry = {
@@ -72,12 +71,12 @@ export function createHMRContext() {
     if (!mod) {
       mod = {
         hotVars: new Map(),
-        unnamedWatchers: [],
+        unnamedEffects: [],
       }
       moduleMap.set(filePath, mod)
     } else {
       while (onHmrCallbacks.length) onHmrCallbacks.shift()!()
-      for (const prevWatcher of mod.unnamedWatchers.splice(0)) {
+      for (const prevWatcher of mod.unnamedEffects.splice(0)) {
         prevWatcher.stop()
       }
     }
@@ -108,10 +107,6 @@ export function createHMRContext() {
           // @ts-ignore
           oldEntry.value.__next = newEntry.value
         }
-      }
-
-      if (newEntry.type === "createStore") {
-        window.__kiru.stores!.add(name, newEntry.value as Store<any, any>)
       }
 
       currentModuleMemory.hotVars.set(name, newEntry)
@@ -157,8 +152,8 @@ export function createHMRContext() {
     isWaitingForNextWatchCall() {
       return isWaitingForNextWatchCall
     },
-    pushWatch(watch: WatchEffect) {
-      currentModuleMemory!.unnamedWatchers.push(watch)
+    pushWatch(effect: Effect) {
+      currentModuleMemory!.unnamedEffects.push(effect)
       isWaitingForNextWatchCall = false
     },
   }

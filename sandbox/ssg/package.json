@@ -17,7 +17,6 @@
     "vite-plugin-kiru": "workspace:^"
   },
   "dependencies": {
-    "kiru": "workspace:^",
-    "shared": "workspace:^"
+    "kiru": "workspace:^"
   }
 }

@@ -2,6 +2,8 @@ import { describe, it } from "node:test"
 import assert from "node:assert"
 import { renderToString } from "../../renderToString.js"
 import * as kiru from "../../index.js"
+import { node } from "../../globals.js"
+import { getContext } from "../../index.js"
 
 describe("renderToString", () => {
   it("produces HTML with styles formatted correctly", () => {
@@ -29,7 +31,8 @@ describe("renderToString", () => {
       )
     }
     const ChildComponent = () => {
-      const ctx = kiru.useContext(MyContext)
+      const n = node.current!
+      const ctx = getContext(n, MyContext).value
       return <h1>{ctx}</h1>
     }
     const expected = `<div><h1>test123</h1></div>`

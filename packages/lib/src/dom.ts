@@ -13,7 +13,6 @@ import {
   FLAG_UPDATE,
   FLAG_STATIC_DOM,
   svgTags,
-  FLAG_NOOP,
   EVENT_PREFIX_REGEX,
 } from "./constants.js"
 import { Signal } from "./signals/base.js"
@@ -81,8 +80,8 @@ function createDom(vNode: DomVNode): SomeDom {
     t == "#text"
       ? createTextNode(vNode)
       : svgTags.has(t)
-        ? document.createElementNS("http://www.w3.org/2000/svg", t)
-        : document.createElement(t)
+      ? document.createElementNS("http://www.w3.org/2000/svg", t)
+      : document.createElement(t)
 
   return dom
 }
@@ -684,15 +683,6 @@ function commitWork_impl(
 ) {
   let child: VNode | null = vNode.child
   while (child) {
-    if (child.flags & FLAG_NOOP) {
-      if (child.flags & FLAG_PLACEMENT) {
-        placeAndCommitNoopChildren(child, currentHostNode)
-      }
-      commitSnapshot(child)
-      child = child.sibling
-      continue
-    }
-
     if (child.dom) {
       commitWork_impl(child, { node: child as ElementVNode }, false)
       if (!(child.flags & FLAG_STATIC_DOM)) {
@@ -739,7 +729,6 @@ function commitDeletion(vNode: VNode) {
   }
   traverseApply(vNode, (node) => {
     const {
-      hooks,
       subs,
       cleanups,
       dom,
@@ -748,7 +737,6 @@ function commitDeletion(vNode: VNode) {
 
     subs?.forEach((unsub) => unsub())
     if (cleanups) Object.values(cleanups).forEach((c) => c())
-    while (hooks?.length) hooks.pop()!.cleanup?.()
 
     if (__DEV__) {
       window.__kiru.profilingContext?.emit("removeNode", ctx)
@@ -769,41 +757,4 @@ function commitDeletion(vNode: VNode) {
   })
 
   vNode.parent = null
-}
-
-function placeAndCommitNoopChildren(
-  parent: VNode,
-  currentHostNode: HostNode
-): void {
-  if (!parent.child) return
-
-  const domChildren: SomeDom[] = []
-  collectDomNodes(parent.child, domChildren)
-  if (domChildren.length === 0) return
-
-  const { node, lastChild } = currentHostNode
-  if (lastChild) {
-    lastChild.after(...domChildren)
-  } else {
-    const nextSiblingDom = getNextSiblingDom(parent, node)
-    const parentDom = node.dom
-    if (nextSiblingDom) {
-      nextSiblingDom.before(...domChildren)
-    } else {
-      parentDom.append(...domChildren)
-    }
-  }
-  currentHostNode.lastChild = domChildren[domChildren.length - 1]
-}
-
-function collectDomNodes(firstChild: VNode, children: SomeDom[]): void {
-  let child: VNode | null = firstChild
-  while (child) {
-    if (child.dom) {
-      children.push(child.dom)
-    } else if (child.child) {
-      collectDomNodes(child.child, children)
-    }
-    child = child.sibling
-  }
 }

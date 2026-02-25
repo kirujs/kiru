@@ -7,12 +7,9 @@ import type {
 import {
   $CONTEXT_PROVIDER,
   $ERROR_BOUNDARY,
-  $MEMO,
   CONSECUTIVE_DIRTY_LIMIT,
   FLAG_DELETION,
   FLAG_DIRTY,
-  FLAG_MEMO,
-  FLAG_NOOP,
 } from "./constants.js"
 import {
   commitDeletion,
@@ -37,7 +34,6 @@ import {
   call,
 } from "./utils/index.js"
 import type { AppContext } from "./appContext"
-import type { MemoFn } from "./components/memo"
 import { isHmrUpdate } from "./hmr.js"
 
 type VNode = Kiru.VNode
@@ -329,17 +325,11 @@ function updateExoticComponent(vNode: VNode): VNode | null {
 
 function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
   const { type, props, subs, prev, flags } = vNode
-  if (flags & FLAG_MEMO) {
-    if (
-      prev &&
-      (type as MemoFn)[$MEMO](prev.props, props) &&
-      !(__DEV__ && isHmrUpdate())
-    ) {
-      vNode.flags |= FLAG_NOOP
-      return null
-    }
-    vNode.flags &= ~FLAG_NOOP
+
+  if (prev && (flags & FLAG_DIRTY) === 0) {
+    return null
   }
+
   try {
     node.current = vNode
     let newChild
@@ -364,20 +354,32 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
       }
 
       if (__DEV__) {
-        newChild = latest(type)(props)
+        if (isHmrUpdate() && vNode.render) {
+          delete vNode.render
+        }
 
-        if (isHmrUpdate() && vNode.hooks && vNode.hookSig) {
-          const len = vNode.hooks.length
-          if (hookIndex.current < len) {
-            // clean up any hooks that were removed
-            for (let i = hookIndex.current; i < len; i++) {
-              const hook = vNode.hooks[i]
-              hook.cleanup?.()
-            }
-            vNode.hooks.length = hookIndex.current
-            vNode.hookSig.length = hookIndex.current
+        if (vNode.render) {
+          newChild = vNode.render(props)
+        } else {
+          newChild = latest(type)(props)
+          if (typeof newChild === "function") {
+            vNode.render = newChild as (props: any) => unknown
+            newChild = vNode.render(props)
           }
         }
+
+        // if (isHmrUpdate() && vNode.hooks && vNode.hookSig) {
+        //   const len = vNode.hooks.length
+        //   if (hookIndex.current < len) {
+        //     // clean up any hooks that were removed
+        //     for (let i = hookIndex.current; i < len; i++) {
+        //       const hook = vNode.hooks[i]
+        //       hook.cleanup?.()
+        //     }
+        //     vNode.hooks.length = hookIndex.current
+        //     vNode.hookSig.length = hookIndex.current
+        //   }
+        // }
 
         if (++renderTryCount > CONSECUTIVE_DIRTY_LIMIT) {
           throw new KiruError({
@@ -389,7 +391,15 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
         }
         continue
       }
-      newChild = type(props)
+      if (vNode.render) {
+        newChild = vNode.render(props)
+      } else {
+        newChild = type(props)
+        if (typeof newChild === "function") {
+          vNode.render = newChild as (props: any) => unknown
+          newChild = vNode.render(props)
+        }
+      }
     } while (isRenderDirtied)
 
     return (vNode.child = reconcileChildren(vNode, newChild))

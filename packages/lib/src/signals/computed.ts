@@ -1,9 +1,8 @@
 import { __DEV__ } from "../env.js"
 import { $HMR_ACCEPT } from "../constants.js"
-import { depsRequireChange, useHook } from "../hooks/utils.js"
 import { call, latest } from "../utils/index.js"
 import { effectQueue, signalSubsMap } from "./globals.js"
-import { executeWithTracking } from "./effect.js"
+import { executeWithTracking } from "./tracking.js"
 import { Signal } from "./base.js"
 import type { HMRAccept } from "../hmr.js"
 
@@ -130,64 +129,4 @@ export function computed<T>(
   displayName?: string
 ): ComputedSignal<T> {
   return new ComputedSignal(getter, displayName)
-}
-
-export function useComputed<T>(
-  getter: (prev?: T) => T,
-  displayName?: string
-): ComputedSignal<T>
-
-export function useComputed<T>(
-  getter: (prev?: T) => T,
-  deps?: unknown[],
-  displayName?: string
-): ComputedSignal<T>
-
-export function useComputed<T>(
-  getter: (prev?: T) => T,
-  depsOrDisplayName?: string | unknown[],
-  displayName?: string
-) {
-  return useHook(
-    "useComputedSignal",
-    {
-      signal: null! as ComputedSignal<T>,
-      deps: void 0 as unknown[] | undefined,
-    },
-    ({ hook, isInit, isHMR }) => {
-      if (__DEV__) {
-        hook.dev = {
-          devtools: {
-            get: () => ({
-              displayName: hook.signal.displayName,
-              value: hook.signal.peek(),
-            }),
-          },
-        }
-        if (isHMR) {
-          // useComputed is always considered side-effecty, so we need to re-run
-          hook.cleanup?.()
-          isInit = true
-        }
-      }
-      if (isInit) {
-        if (typeof depsOrDisplayName === "string") {
-          displayName = depsOrDisplayName
-          depsOrDisplayName = void 0
-        }
-        hook.deps = depsOrDisplayName
-        hook.cleanup = () => ComputedSignal.dispose(hook.signal)
-        hook.signal = computed(getter, displayName)
-      } else if (
-        hook.deps &&
-        typeof depsOrDisplayName !== "string" &&
-        depsRequireChange(hook.deps, depsOrDisplayName)
-      ) {
-        hook.deps = depsOrDisplayName
-        ComputedSignal.updateGetter(hook.signal, getter)
-      }
-
-      return hook.signal
-    }
-  )
 }

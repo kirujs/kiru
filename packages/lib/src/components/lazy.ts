@@ -1,7 +1,8 @@
 import { createElement } from "../element.js"
 import { __DEV__ } from "../env.js"
-import { useRequestUpdate } from "../hooks/utils.js"
 import { sideEffectsEnabled } from "../utils/runtime.js"
+import { node } from "../globals.js"
+import { requestUpdate } from "../scheduler.js"
 
 interface FCModule {
   default: Kiru.FC<any>
@@ -33,7 +34,7 @@ export function lazy<T extends LazyImportValue>(
 ): Kiru.FC<LazyComponentProps<T>> {
   function LazyWrapper(props: LazyComponentProps<T>) {
     const { fallback = null, ...rest } = props
-    const requestUpdate = useRequestUpdate()
+    const nodeRef = node.current!
     if (!sideEffectsEnabled()) {
       return fallback
     }
@@ -53,13 +54,13 @@ export function lazy<T extends LazyImportValue>(
           typeof componentOrModule === "function"
             ? componentOrModule
             : componentOrModule.default
-        requestUpdate()
+        requestUpdate(nodeRef)
       })
       return fallback
     }
 
     if (cachedState.result === null) {
-      cachedState.promise.then(requestUpdate)
+      cachedState.promise.then(() => requestUpdate(nodeRef))
       return fallback
     }
 
