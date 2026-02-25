@@ -1,5 +1,4 @@
-import { node } from "../globals.js"
-import { createContext, getContext } from "../context.js"
+import { createContext, useContext } from "../context.js"
 import { __DEV__ } from "../env.js"
 import type { RouteQuery, RouterState } from "./types.js"
 
@@ -77,5 +76,5 @@ if (__DEV__) {
 }
 
 export function useFileRouter(): FileRouterContextType {
-  return getContext(node.current!, RouterContext).value
+  return useContext(RouterContext)
 }

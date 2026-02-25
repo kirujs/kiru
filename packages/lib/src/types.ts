@@ -130,6 +130,7 @@ declare global {
     }
     interface Context<T> {
       [$CONTEXT]: true
+      id: string
       Provider: Kiru.FC<ProviderProps<T>>
       default: () => T
       /** Used to display the name of the context in devtools  */

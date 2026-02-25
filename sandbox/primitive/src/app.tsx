@@ -1,29 +1,37 @@
-import { ref, signal, onBeforeMount, onMount, onCleanup } from "kiru"
+import { ref, signal, onBeforeMount, onMount, onCleanup, Signal } from "kiru"
 
 const tag = signal("")
 export function App() {
-  // const showCounter = signal(true)
-
-  console.log("tag", tag.value)
-
+  console.log("app mounted", tag.value)
   return () => (
     <div>
       <input bind:value={tag} />
-      <Counter tag={tag.value} />
-      {/* <button onclick={() => (showCounter.value = !showCounter.value)}>
-        Toggle Counter
-      </button>
-      {showCounter.value && <Counter />} */}
+      <Counter foo={tag} />
     </div>
   )
 }
 
-interface CounterProps {
-  tag: string
+const createMousePosWatcher = () => {
+  const pos = signal({ x: 0, y: 0 })
+  const handleMouseMove = (e: MouseEvent) => {
+    pos.value = { x: e.clientX, y: e.clientY }
+  }
+  window.addEventListener("mousemove", handleMouseMove)
+  onCleanup(() => {
+    window.removeEventListener("mousemove", handleMouseMove)
+  })
+  return pos
 }
+
+interface CounterProps {
+  foo: Signal<string>
+}
+
 const Counter: Kiru.FC<CounterProps> = (props) => {
   const btnRef = ref<HTMLButtonElement>(null)
   const count = signal(0)
+  const pos = createMousePosWatcher()
+
   {
     const intervalId = setInterval(() => {
       count.value++
@@ -45,10 +53,11 @@ const Counter: Kiru.FC<CounterProps> = (props) => {
     })
   }
 
-  console.log("initial tag", props.tag)
+  console.log("initial render", props.foo)
 
-  return (newProps) => {
-    console.log("render", newProps.tag)
+  return ({ foo }) => {
+    console.log("render", foo.value)
+    console.log("pos", pos.value)
 
     return (
       <div>

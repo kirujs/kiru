@@ -506,7 +506,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
             data: null,
             error: new FileRouterDataLoadError(error),
             loading: false,
-          } satisfies PageProps<PageConfig<unknown>>)
+          }) satisfies PageProps<PageConfig<unknown>>
       )
       .then((state) => {
         if (routerState.signal.aborted) return

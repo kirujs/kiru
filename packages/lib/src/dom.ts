@@ -7,6 +7,7 @@ import {
   setRef,
   isValidTextChild,
   registerVNodeCleanup,
+  call,
 } from "./utils/index.js"
 import {
   booleanAttributes,
@@ -76,7 +77,7 @@ function onAfterFlushDomChanges() {
   }
   persistingFocus = false
   queueMicrotask(() => {
-    postHookCleanups.forEach((fn) => fn())
+    postHookCleanups.forEach(call)
     postHookCleanups.length = 0
   })
 }

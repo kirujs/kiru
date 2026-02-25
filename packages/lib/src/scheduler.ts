@@ -1,11 +1,5 @@
-import type {
-  ContextProviderNode,
-  DomVNode,
-  ErrorBoundaryNode,
-  FunctionVNode,
-} from "./types.utils"
+import type { DomVNode, ErrorBoundaryNode, FunctionVNode } from "./types.utils"
 import {
-  $CONTEXT_PROVIDER,
   $ERROR_BOUNDARY,
   CONSECUTIVE_DIRTY_LIMIT,
   FLAG_DELETION,
@@ -303,16 +297,7 @@ function updateExoticComponent(vNode: VNode): VNode | null {
   const { props, type } = vNode
   let children = props.children
 
-  if (type === $CONTEXT_PROVIDER) {
-    const {
-      props: { dependents, value },
-      prev,
-    } = vNode as ContextProviderNode<unknown>
-
-    if (dependents.size && prev && prev.props.value !== value) {
-      dependents.forEach(queueUpdate)
-    }
-  } else if (type === $ERROR_BOUNDARY) {
+  if (type === $ERROR_BOUNDARY) {
     const n = vNode as ErrorBoundaryNode
     const { error } = n
     if (error) {
@@ -358,13 +343,13 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
         if (isHmrUpdate()) {
           const { hooks } = vNode
           if (vNode.cleanups) {
-            Object.values(vNode.cleanups).forEach((c) => c())
+            Object.values(vNode.cleanups).forEach(call)
             delete vNode.cleanups
           }
           if (hooks) {
             const { preCleanups, postCleanups } = hooks
-            preCleanups.forEach((c) => c())
-            postCleanups.forEach((c) => c())
+            preCleanups.forEach(call)
+            postCleanups.forEach(call)
             preCleanups.length = postCleanups.length = 0
           }
           delete vNode.render
@@ -375,6 +360,7 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
         } else {
           newChild = latest(type)(props)
           if (typeof newChild === "function") {
+            vNode.subs?.forEach(call)
             vNode.render = newChild as (props: any) => unknown
             newChild = vNode.render(props)
           }

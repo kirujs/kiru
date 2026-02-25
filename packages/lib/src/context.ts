@@ -1,15 +1,16 @@
-import { noop } from "./utils/index.js"
+import { generateRandomID, noop, registerVNodeCleanup } from "./utils/index.js"
 import { $CONTEXT, $CONTEXT_PROVIDER } from "./constants.js"
 import { createElement } from "./element.js"
-import { ref } from "./ref.js"
 import type { ContextProviderNode } from "./types.utils.js"
+import { node } from "./globals.js"
 
 export function createContext<T>(defaultValue: T): Kiru.Context<T> {
   const ctx: Kiru.Context<T> = {
     [$CONTEXT]: true,
-    Provider: ({ value, children }: Kiru.ProviderProps<T>) => {
-      const dependents = ref(new Set<Kiru.VNode>())
-      return () =>
+    id: generateRandomID(),
+    Provider: () => {
+      const dependents = new Set<Kiru.VNode>()
+      return ({ value, children }) =>
         createElement(
           $CONTEXT_PROVIDER,
           { value, ctx, dependents },
@@ -32,7 +33,7 @@ export function isContext<T>(thing: unknown): thing is Kiru.Context<T> {
   return typeof thing === "object" && !!thing && $CONTEXT in thing
 }
 
-export function getContext<T>(
+export function findAndSubscribeToContext<T>(
   vNode: Kiru.VNode,
   context: Kiru.Context<T>
 ): { value: T; cleanup: () => void } {
@@ -49,4 +50,15 @@ export function getContext<T>(
     n = n.parent
   }
   return { value: context.default(), cleanup: noop }
+}
+
+export function useContext<T>(context: Kiru.Context<T>): T {
+  const n = node.current
+  if (!n) {
+    throw new Error("useContext must be called inside a Kiru component")
+  }
+  const { value, cleanup } = findAndSubscribeToContext(n, context)
+  registerVNodeCleanup(n, context.id, cleanup)
+
+  return value
 }
