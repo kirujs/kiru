@@ -25,33 +25,33 @@ const lib = task({
   },
 })
 
-// const createDevtoolsTask = (name) =>
-//   task({
-//     name,
-//     cwd: `packages/${name}`,
-//     commands: {
-//       build: {
-//         run: "pnpm build",
-//         cache: {
-//           inputs: ["src", lib.artifact("build"), pnpm.package()],
-//           outputs: ["dist"],
-//         },
-//       },
-//       dev: {
-//         run: "pnpm dev",
-//         readyWhen: (output) => output.includes("Build complete!"),
-//       },
-//     },
-//   })
+const createDevtoolsTask = (name) =>
+  task({
+    name,
+    cwd: `packages/${name}`,
+    commands: {
+      build: {
+        run: "pnpm build",
+        cache: {
+          inputs: ["src", lib.artifact("build"), pnpm.package()],
+          outputs: ["dist"],
+        },
+      },
+      dev: {
+        run: "pnpm dev",
+        readyWhen: (output) => output.includes("Build complete!"),
+      },
+    },
+  })
 
 // const devtoolsClient = createDevtoolsTask(
 //   "devtools-client",
 //   "packages/devtools-client"
 // )
-// const devtoolsHost = createDevtoolsTask(
-//   "devtools-host",
-//   "packages/devtools-host"
-// )
+const devtoolsHost = createDevtoolsTask(
+  "devtools-host",
+  "packages/devtools-host"
+)
 // const devtools = pipeline([devtoolsClient, devtoolsHost]).toTask({
 //   name: "devtools",
 //   dependencies: [lib],
@@ -68,7 +68,7 @@ const vitePlugin = task({
           "src",
           lib.artifact("build"),
           //devtoolsClient.artifact("build"),
-          //devtoolsHost.artifact("build"),
+          devtoolsHost.artifact("build"),
           pnpm.package(),
         ],
         outputs: ["dist"],
@@ -88,19 +88,19 @@ const csrTest = task({
   name: "e2e:csr",
   cwd: "e2e/csr",
   commands: {
-    build: {
-      run: "pnpm build",
-      cache: {
-        inputs: [
-          "src",
-          lib.artifact("build"),
-          vitePlugin.artifact("build"),
-          pnpm.package(),
-        ],
-        outputs: ["dist"],
-      },
-    },
-    test: "pnpm test",
+    // build: {
+    //   run: "pnpm build",
+    //   cache: {
+    //     inputs: [
+    //       "src",
+    //       lib.artifact("build"),
+    //       vitePlugin.artifact("build"),
+    //       pnpm.package(),
+    //     ],
+    //     outputs: ["dist"],
+    //   },
+    // },
+    // test: "pnpm test",
   },
   dependencies: [lib],
   env: {
@@ -112,19 +112,19 @@ const ssgTest = task({
   name: "e2e:ssg",
   cwd: "e2e/ssg",
   commands: {
-    build: {
-      run: "pnpm build",
-      cache: {
-        inputs: [
-          "src",
-          lib.artifact("build"),
-          vitePlugin.artifact("build"),
-          pnpm.package(),
-        ],
-        outputs: ["dist"],
-      },
-    },
-    test: "pnpm test",
+    // build: {
+    //   run: "pnpm build",
+    //   cache: {
+    //     inputs: [
+    //       "src",
+    //       lib.artifact("build"),
+    //       vitePlugin.artifact("build"),
+    //       pnpm.package(),
+    //     ],
+    //     outputs: ["dist"],
+    //   },
+    // },
+    // test: "pnpm test",
   },
   // github can't run two cypress tests in parallel
   dependencies: (process.env.GITHUB ? [csrTest] : []).concat(lib),
@@ -138,7 +138,7 @@ const command = argv[0]
 
 const result = await pipeline([
   lib,
-  //devtools,
+  devtoolsHost,
   vitePlugin,
   csrTest,
   ssgTest,

@@ -1,22 +1,21 @@
-import {
-  AppHandle,
-  onMount,
-  ProfilingEvent,
-  signal,
-  useRequestUpdate,
-} from "kiru"
-import LineChart, { type LineChartData } from "../components/line-chart.jsx"
-import { kiruGlobal } from "../state.js"
+import * as Kiru from "kiru"
+
+import { LineChart, type LineChartData } from "../components/line-chart.jsx"
+import { kiruGlobal as getKiruGlobal } from "../state.js"
 import { isDevtoolsApp, typedMapEntries } from "../utils.js"
 
-type EventStateMap = Record<ProfilingEvent, { values: number[]; color: string }>
+type EventStateMap = Record<
+  Kiru.ProfilingEvent,
+  { values: number[]; color: string }
+>
 
 const MAX_TICKS = 100
 
 export function ProfilingTabView() {
-  const requestUpdate = useRequestUpdate()
-  onMount(() => {
-    const update = (app: AppHandle) => {
+  const requestUpdate = Kiru.useRequestUpdate()
+  const kiruGlobal = getKiruGlobal()
+  Kiru.onMount(() => {
+    const update = (app: Kiru.AppHandle) => {
       if (isDevtoolsApp(app)) return
       requestUpdate()
     }
@@ -41,13 +40,14 @@ export function ProfilingTabView() {
 }
 
 type AppProfilingChartProps = {
-  app: AppHandle
+  app: Kiru.AppHandle
 }
 
 function AppProfilingChart({ app: thisApp }: AppProfilingChartProps) {
-  const requestUpdate = useRequestUpdate()
-  onMount(() => {
-    const onUpdate = (app: AppHandle) => {
+  const requestUpdate = Kiru.useRequestUpdate()
+  const kiruGlobal = getKiruGlobal()
+  Kiru.onMount(() => {
+    const onUpdate = (app: Kiru.AppHandle) => {
       if (app.id !== thisApp.id) return
       requestUpdate()
     }
@@ -57,21 +57,21 @@ function AppProfilingChart({ app: thisApp }: AppProfilingChartProps) {
 
   const profilingContext = kiruGlobal?.profilingContext!
   const events = createEventStateMap()
-  const chartHovered = signal(false)
-  const lineChartData = signal<LineChartData>({
+  const chartHovered = Kiru.signal(false)
+  const lineChartData = Kiru.signal<LineChartData>({
     labels: [(performance.now() / 1000).toFixed(2)],
     datasets: createLineChartDatasets(events),
   })
 
-  onMount(() => {
+  Kiru.onMount(() => {
     const cleanups: (() => void)[] = []
     Object.entries(events).forEach(([event, { values }]) => {
-      const listener = (app: AppHandle) => {
+      const listener = (app: Kiru.AppHandle) => {
         if (app.id !== thisApp.id) return
         if (chartHovered.peek() === true) return
         values[values.length - 1]++
       }
-      const e = event as ProfilingEvent
+      const e = event as Kiru.ProfilingEvent
       profilingContext.addEventListener(e, listener)
       cleanups.push(() => profilingContext.removeEventListener(e, listener))
     })

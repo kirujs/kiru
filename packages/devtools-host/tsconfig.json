@@ -1,17 +1,19 @@
 {
   "compilerOptions": {
-    "target": "ES2021",
+    "target": "ES2020",
     "useDefineForClassFields": true,
     "module": "ESNext",
     "lib": ["ES2021", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
+    //"emitDeclarationOnly": true,
+    "declaration": true,
+    "types": ["node"],
 
     /* Bundler mode */
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
+    // "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
 
     /* Linting */
     "strict": true,
@@ -20,5 +22,6 @@
     "noFallthroughCasesInSwitch": true,
     "jsx": "preserve"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["dist"]
 }

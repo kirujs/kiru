@@ -1,27 +1,26 @@
 import { Signal, signal, type AppHandle } from "kiru"
 
-export let kiruGlobal!: typeof window.__kiru
-if ("window" in globalThis) {
-  kiruGlobal = window.opener?.__kiru ?? window.__kiru
+const stateRegister: Record<string, any> = ((window.opener ?? window)[
+  "__kiru_devtools_state_register"
+] ??= {})
+
+export const kiruGlobal = (): typeof window.__kiru => {
+  return window.opener?.__kiru ?? window.__kiru
 }
 
 type SyncedState<T extends Record<string, unknown>> = {
-  [K in keyof T]: Signal<T[K]>
+  [K in keyof T & string]: Signal<T[K]>
 }
 
-type SyncedStateBroadcastData<
-  T extends Record<string, unknown>,
-  K extends keyof T,
-> =
+type SyncedStateBroadcastData<T extends Record<string, unknown>> =
   | {
       version: number
       type: "SET"
-      key: K
-      value: T[K]
+      key: keyof T & string
     }
   | {
       type: "GET"
-      key: K
+      key: keyof T & string
     }
 
 function createSyncedState<T extends Record<string, unknown>>(
@@ -29,42 +28,49 @@ function createSyncedState<T extends Record<string, unknown>>(
   initial: T
 ): [state: SyncedState<T>, dispose: () => void] {
   const broadcastChannel = new BroadcastChannel(channelName)
-  const emit = (message: SyncedStateBroadcastData<T, keyof T>) => {
+  const emit = (message: SyncedStateBroadcastData<T>, value?: unknown) => {
+    if (message.type === "SET") {
+      const { key, version } = message
+      stateRegister[key] = value
+      return broadcastChannel.postMessage({ type: "SET", key, version })
+    }
     broadcastChannel.postMessage(message)
   }
 
   const versions = {} as { [K in keyof T]: number }
   const syncedState = {} as SyncedState<T>
   const messageHandlers = {} as {
-    [K in keyof T]: (data: SyncedStateBroadcastData<T, K>) => void
+    [K in keyof T & string]: (data: SyncedStateBroadcastData<T>) => void
   }
 
   for (const key in initial) {
-    const state: Signal<T[keyof T]> = (syncedState[key] = signal(initial[key]))
+    const state: Signal<T[keyof T & string]> = (syncedState[key] = signal(
+      initial[key]
+    ))
     versions[key] = 0
 
     messageHandlers[key] = (data) => {
       if (data.type === "GET") {
         const value = state.value
         const version = versions[key]
-        return emit({ type: "SET", key, value, version })
+        return emit({ type: "SET", key, version }, value)
       }
 
       if (data.version > versions[key]) {
-        state.value = data.value
+        state.value = stateRegister[key]
         versions[key] = data.version
       }
     }
 
     state.subscribe((value) => {
       const version = ++versions[key]
-      emit({ type: "SET", key, value, version })
+      emit({ type: "SET", key, version }, value)
     })
   }
 
   broadcastChannel.addEventListener(
     "message",
-    ({ data }: MessageEvent<SyncedStateBroadcastData<T, keyof T>>) => {
+    ({ data }: MessageEvent<SyncedStateBroadcastData<T>>) => {
       messageHandlers[data.key](data)
     }
   )
@@ -79,7 +85,7 @@ function createSyncedState<T extends Record<string, unknown>>(
   return [syncedState, dispose]
 }
 
-const [state] = createSyncedState("kiru-devtools:syncedState", {
+const [devtoolsState] = createSyncedState("kiru-devtools:syncedState", {
   vNodeSelection: {
     enabled: false,
     vNode: null as Kiru.VNode | null,
@@ -89,4 +95,4 @@ const [state] = createSyncedState("kiru-devtools:syncedState", {
   selectedNode: null as Kiru.VNode | null,
 })
 
-export { state }
+export { devtoolsState }

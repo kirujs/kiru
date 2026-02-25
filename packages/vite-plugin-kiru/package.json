@@ -21,7 +21,8 @@
     "esbuild": "^0.27.2",
     "rollup": "^4.57.1",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "kiru-devtools-host": "workspace:^"
   },
   "dependencies": {
     "tinyglobby": "0.2.15",
