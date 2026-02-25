@@ -4,6 +4,7 @@ import { executeWithTracking } from "./tracking.js"
 import { latest, generateRandomID, call } from "../utils/index.js"
 import type { Signal } from "./base.js"
 import type { SignalValues } from "./types.js"
+import { node } from "../globals.js"
 
 type EffectCallbackReturn = (() => void) | void
 
@@ -32,6 +33,9 @@ export class Effect<const Deps extends readonly Signal<unknown>[] = []> {
       if (isWaitingForNextWatchCall()) {
         pushWatch(this as Effect)
       }
+    }
+    if (node.current) {
+      ;(node.current.cleanups ??= {})[this.id] = () => this.stop()
     }
     this.start()
   }

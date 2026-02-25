@@ -184,7 +184,7 @@ declare global {
       }
     }
 
-    type SetupEffect = () => (() => void) | void
+    type LifecycleHookCallback = () => (() => void) | void
 
     interface VNode extends Element {
       app?: AppContext
@@ -199,11 +199,14 @@ declare global {
       deletions: VNode[] | null
       subs?: Set<Function>
       cleanups?: Record<string, Function>
-      effects?: Array<SetupEffect>
-      immediateEffects?: Array<SetupEffect>
+
+      hooks?: {
+        pre: LifecycleHookCallback[]
+        preCleanups: (() => void)[]
+        post: LifecycleHookCallback[]
+        postCleanups: (() => void)[]
+      }
       render?: (props: VNode["props"]) => unknown
-      // dev-mode only
-      hookSig?: string[]
     }
   }
   interface VNodeSnapshot {

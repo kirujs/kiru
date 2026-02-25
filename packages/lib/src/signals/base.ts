@@ -56,6 +56,11 @@ export class Signal<T> {
     } else {
       this.$subs = new Set()
     }
+
+    if (node.current) {
+      const cleanup = Signal.dispose.bind(null, this)
+      ;(node.current.cleanups ??= {})[this.$id] = cleanup
+    }
   }
 
   get value() {

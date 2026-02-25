@@ -1,4 +1,4 @@
-import { effect, ref, signal, onBeforeMounted, onMounted } from "kiru"
+import { effect, ref, signal, onBeforeMount, onMount, onCleanup } from "kiru"
 
 export function App() {
   const showCounter = signal(true)
@@ -17,17 +17,23 @@ function Counter() {
   const btnRef = ref<HTMLButtonElement>(null)
   const count = signal(0)
 
-  effect(() => {
-    console.log(count.value)
+  const intervalId = setInterval(() => {
+    count.value++
+  }, 1000)
+
+  onCleanup(() => {
+    //console.log("cleanup")
+    clearInterval(intervalId)
   })
 
-  onBeforeMounted(() => {
+  onBeforeMount(() => {
     console.log("counter before mounted", btnRef.current)
+    return () => console.log("onBeforeMount: unmounted")
   })
 
-  onMounted(() => {
+  onMount(() => {
     console.log("counter mounted", btnRef.current)
-    return () => console.log("unmounted")
+    //return () => console.log("onMount: unmounted")
   })
 
   return () => (

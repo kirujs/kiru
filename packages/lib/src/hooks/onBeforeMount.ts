@@ -5,8 +5,8 @@ import { queueSetupEffect } from "./utils.js"
  * Optionally returns a cleanup function that will run when the component unmounts.
  * Intended for use during component setup when the component returns a render function.
  *
- * @see https://kirujs.dev/docs/hooks/onBeforeMounted
+ * @see https://kirujs.dev/docs/hooks/onBeforeMount
  */
-export function onBeforeMounted(fn: () => (() => void) | void): void {
+export function onBeforeMount(fn: () => (() => void) | void): void {
   queueSetupEffect(fn, { immediate: true })
 }

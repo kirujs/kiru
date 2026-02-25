@@ -47,8 +47,8 @@ let isImmediateEffectsMode = false
 let immediateEffectDirtiedRender = false
 let isRenderDirtied = false
 let consecutiveDirtyCount = 0
-let preEffects: Array<Function> = []
-let postEffects: Array<Function> = []
+let preEffects: Kiru.LifecycleHookCallback[] = []
+let postEffects: Kiru.LifecycleHookCallback[] = []
 let animationFrameHandle = -1
 
 /**
@@ -217,13 +217,12 @@ function performUnitOfWork(vNode: VNode): VNode | null {
   let nextNode: VNode | null = vNode
   while (nextNode) {
     // queue effects upon ascent
-    if (nextNode.immediateEffects) {
-      preEffects.push(...nextNode.immediateEffects)
-      nextNode.immediateEffects = undefined
-    }
-    if (nextNode.effects) {
-      postEffects.push(...nextNode.effects)
-      nextNode.effects = undefined
+    const { hooks } = nextNode
+    if (hooks) {
+      preEffects.push(...hooks.pre)
+      postEffects.push(...hooks.post)
+      hooks.pre.length = 0
+      hooks.post.length = 0
     }
 
     if (nextNode === currentWorkRoot) return null
@@ -354,7 +353,18 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
       }
 
       if (__DEV__) {
-        if (isHmrUpdate() && vNode.render) {
+        if (isHmrUpdate()) {
+          const { hooks } = vNode
+          if (vNode.cleanups) {
+            Object.values(vNode.cleanups).forEach((c) => c())
+            delete vNode.cleanups
+          }
+          if (hooks) {
+            const { preCleanups, postCleanups } = hooks
+            preCleanups.forEach((c) => c())
+            postCleanups.forEach((c) => c())
+            preCleanups.length = postCleanups.length = 0
+          }
           delete vNode.render
         }
 
@@ -368,19 +378,6 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
           }
         }
 
-        // if (isHmrUpdate() && vNode.hooks && vNode.hookSig) {
-        //   const len = vNode.hooks.length
-        //   if (hookIndex.current < len) {
-        //     // clean up any hooks that were removed
-        //     for (let i = hookIndex.current; i < len; i++) {
-        //       const hook = vNode.hooks[i]
-        //       hook.cleanup?.()
-        //     }
-        //     vNode.hooks.length = hookIndex.current
-        //     vNode.hookSig.length = hookIndex.current
-        //   }
-        // }
-
         if (++renderTryCount > CONSECUTIVE_DIRTY_LIMIT) {
           throw new KiruError({
             message:
@@ -391,6 +388,7 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
         }
         continue
       }
+
       if (vNode.render) {
         newChild = vNode.render(props)
       } else {

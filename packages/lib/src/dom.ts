@@ -48,6 +48,8 @@ type HostNode = {
 
 let persistingFocus = false
 let didBlurActiveElement = false
+const postHookCleanups: (() => void)[] = []
+
 const placementBlurHandler = (event: Event) => {
   event.preventDefault()
   event.stopPropagation()
@@ -72,6 +74,10 @@ function onAfterFlushDomChanges() {
     didBlurActiveElement = false
   }
   persistingFocus = false
+  queueMicrotask(() => {
+    postHookCleanups.forEach((fn) => fn())
+    postHookCleanups.length = 0
+  })
 }
 
 function createDom(vNode: DomVNode): SomeDom {
@@ -80,8 +86,8 @@ function createDom(vNode: DomVNode): SomeDom {
     t == "#text"
       ? createTextNode(vNode)
       : svgTags.has(t)
-      ? document.createElementNS("http://www.w3.org/2000/svg", t)
-      : document.createElement(t)
+        ? document.createElementNS("http://www.w3.org/2000/svg", t)
+        : document.createElement(t)
 
   return dom
 }
@@ -733,10 +739,17 @@ function commitDeletion(vNode: VNode) {
       cleanups,
       dom,
       props: { ref },
+      hooks,
     } = node
 
     subs?.forEach((unsub) => unsub())
     if (cleanups) Object.values(cleanups).forEach((c) => c())
+    if (hooks) {
+      const { preCleanups, postCleanups } = hooks
+
+      preCleanups.forEach((c) => c())
+      postHookCleanups.push(...postCleanups)
+    }
 
     if (__DEV__) {
       window.__kiru.profilingContext?.emit("removeNode", ctx)
