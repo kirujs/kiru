@@ -6,6 +6,7 @@ import {
   getVNodeAppContext,
   setRef,
   isValidTextChild,
+  registerVNodeCleanup,
 } from "./utils/index.js"
 import {
   booleanAttributes,
@@ -248,15 +249,15 @@ function setSignalProp(
   prevValue: unknown
 ) {
   const [modifier, attr] = key.split(":")
-  const cleanups = (vNode.cleanups ??= {})
   if (modifier !== "bind") {
-    cleanups[key] = signal.subscribe((value, prev) => {
+    const unsub = signal.subscribe((value, prev) => {
       if (value === prev) return
       setProp(dom, key, value, prev)
       if (__DEV__) {
         emitSignalAttrUpdate(vNode)
       }
     })
+    registerVNodeCleanup(vNode, key, unsub)
   } else {
     const evtName = bindAttrToEventMap[attr]
     if (!evtName) {
@@ -267,7 +268,8 @@ function setSignalProp(
       }
       return
     }
-    cleanups[key] = bindElementProp(vNode, dom, attr, evtName, signal)
+    const cleanup = bindElementProp(vNode, dom, attr, evtName, signal)
+    registerVNodeCleanup(vNode, key, cleanup)
   }
 
   const value = signal.peek()
@@ -367,7 +369,7 @@ function emitSignalAttrUpdate(vNode: VNode) {
 }
 
 function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
-  ;(vNode.cleanups ??= {}).nodeValue = signal.subscribe((value, prev) => {
+  const cleanup = signal.subscribe((value, prev) => {
     if (value === prev) return
     textNode.nodeValue = value
     if (__DEV__) {
@@ -377,6 +379,7 @@ function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
       )
     }
   })
+  registerVNodeCleanup(vNode, "nodeValue", cleanup)
 }
 
 /**

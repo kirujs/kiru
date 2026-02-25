@@ -1,4 +1,4 @@
-import { effect, ref, signal, onBeforeMount, onMount, onCleanup } from "kiru"
+import { ref, signal, onBeforeMount, onMount, onCleanup } from "kiru"
 
 export function App() {
   const showCounter = signal(true)

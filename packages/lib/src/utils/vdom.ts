@@ -32,6 +32,7 @@ export {
   assertValidElementProps,
   normalizeElementKey,
   getVNodeId,
+  registerVNodeCleanup,
 }
 
 function cloneElement(vNode: Kiru.VNode): Kiru.Element {
@@ -195,4 +196,12 @@ function getVNodeId(vNode: Kiru.VNode): string {
     n = n.parent
   }
   return `k:${BigInt(accumulator.join("")).toString(36)}`
+}
+
+function registerVNodeCleanup(
+  vNode: Kiru.VNode,
+  id: string,
+  callback: () => void
+) {
+  ;(vNode.cleanups ??= {})[id] = callback
 }

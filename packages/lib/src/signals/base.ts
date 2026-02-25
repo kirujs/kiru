@@ -3,6 +3,7 @@ import {
   safeStringify,
   sideEffectsEnabled,
   generateRandomID,
+  registerVNodeCleanup,
 } from "../utils/index.js"
 import { $HMR_ACCEPT, $SIGNAL } from "../constants.js"
 import { __DEV__ } from "../env.js"
@@ -57,9 +58,9 @@ export class Signal<T> {
       this.$subs = new Set()
     }
 
-    if (node.current) {
-      const cleanup = Signal.dispose.bind(null, this)
-      ;(node.current.cleanups ??= {})[this.$id] = cleanup
+    const n = node.current
+    if (n) {
+      registerVNodeCleanup(n, this.$id, Signal.dispose.bind(null, this))
     }
   }
 

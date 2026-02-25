@@ -1,7 +1,12 @@
 import { __DEV__ } from "../env.js"
 import { effectQueue } from "./globals.js"
 import { executeWithTracking } from "./tracking.js"
-import { latest, generateRandomID, call } from "../utils/index.js"
+import {
+  latest,
+  generateRandomID,
+  call,
+  registerVNodeCleanup,
+} from "../utils/index.js"
 import type { Signal } from "./base.js"
 import type { SignalValues } from "./types.js"
 import { node } from "../globals.js"
@@ -34,8 +39,9 @@ export class Effect<const Deps extends readonly Signal<unknown>[] = []> {
         pushWatch(this as Effect)
       }
     }
-    if (node.current) {
-      ;(node.current.cleanups ??= {})[this.id] = () => this.stop()
+    const n = node.current
+    if (n) {
+      registerVNodeCleanup(n, this.id, this.stop.bind(this))
     }
     this.start()
   }

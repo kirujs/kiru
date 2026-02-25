@@ -1,5 +1,5 @@
 import { node } from "../globals.js"
-import { generateRandomID } from "../utils/index.js"
+import { generateRandomID, registerVNodeCleanup } from "../utils/index.js"
 
 /**
  * Registers a cleanup function that runs when the component unmounts.
@@ -11,6 +11,5 @@ export function onCleanup(fn: () => void): void {
   const vNode = node.current!
   if (!vNode)
     throw new Error("Cannot queue cleanup effect outside of a component")
-  vNode.cleanups ??= {}
-  vNode.cleanups[generateRandomID(10)] = fn
+  registerVNodeCleanup(vNode, generateRandomID(10), fn)
 }
