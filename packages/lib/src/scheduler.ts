@@ -85,6 +85,14 @@ export function requestUpdate(vNode: VNode): void {
   queueUpdate(vNode)
 }
 
+export function useRequestUpdate(): () => void {
+  const n = node.current
+  if (!n) {
+    throw new Error("useRequestUpdate must be called inside a Kiru component")
+  }
+  return () => requestUpdate(n)
+}
+
 function queueBeginWork(): void {
   if (isRunningOrQueued) return
   isRunningOrQueued = true
