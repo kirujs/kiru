@@ -15,7 +15,7 @@ import {
 } from "./dom.js"
 import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
-import { hookIndex, node, renderMode } from "./globals.js"
+import { node, renderMode } from "./globals.js"
 import { hydrationStack } from "./hydration.js"
 import { reconcileChildren } from "./reconciler.js"
 import {
@@ -323,7 +323,6 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
     do {
       vNode.flags &= ~FLAG_DIRTY
       isRenderDirtied = false
-      hookIndex.current = 0
 
       /**
        * remove previous signal subscriptions (if any) every render.

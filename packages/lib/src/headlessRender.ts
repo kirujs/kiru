@@ -1,4 +1,4 @@
-import { node, hookIndex } from "./globals.js"
+import { node } from "./globals.js"
 import {
   isVNode,
   encodeHtmlEntities,
@@ -100,7 +100,6 @@ export function headlessRender(
 
   if (typeof type === "function") {
     try {
-      hookIndex.current = 0
       node.current = el
       let children = type(props)
       if (typeof children === "function") {
