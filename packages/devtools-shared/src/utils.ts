@@ -33,3 +33,42 @@ export function typedMapEntries<T extends Map<any, any>>(
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
+
+export function trapFocus(
+  e: KeyboardEvent,
+  element: Element | ShadowRoot,
+  activeElement: Element | null
+) {
+  if (e.key === "Tab") {
+    const focusableElements = element.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    const firstElement = focusableElements[0]
+    const lastElement = focusableElements[focusableElements.length - 1]
+    if (
+      activeElement &&
+      !element.contains(activeElement) &&
+      firstElement &&
+      firstElement instanceof HTMLElement
+    ) {
+      return firstElement.focus()
+    }
+    if (e.shiftKey) {
+      if (
+        activeElement === firstElement &&
+        lastElement instanceof HTMLElement
+      ) {
+        lastElement.focus()
+        e.preventDefault()
+      }
+    } else {
+      if (
+        activeElement === lastElement &&
+        firstElement instanceof HTMLElement
+      ) {
+        firstElement.focus()
+        e.preventDefault()
+      }
+    }
+  }
+}

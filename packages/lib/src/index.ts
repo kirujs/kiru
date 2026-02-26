@@ -21,7 +21,7 @@ export {
 } from "./scheduler.js"
 export * from "./viewTransitions.js"
 
-// @ts-ignore
-if ("window" in globalThis && !globalThis.__KIRU_DEVTOOLS__) {
+if ("window" in globalThis) {
+  console.log("Creating Kiru global context")
   globalThis.window.__kiru ??= createKiruGlobalContext()
 }

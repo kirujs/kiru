@@ -8,6 +8,7 @@ import {
   DevtoolsApp,
   MouseIcon,
   devtoolsState,
+  trapFocus,
 } from "devtools-shared"
 import { ComponentSelectorOverlay } from "./component-selector-overlay"
 import { isOverlayShown, toggleOverlayShown } from "./state"
@@ -209,32 +210,52 @@ const EmbeddedOverlay: Kiru.FC<EmbeddedOverlayProps> = () => {
     allowFloat: true,
     snapDistance: 50,
   })
+  const componentSelectionEnabled = kiru.computed(
+    () => devtoolsState.componentSelection.value.enabled
+  )
+  const rootRef = kiru.ref<HTMLButtonElement>(null)
 
   kiru.onMount(() => {
     overlayController.init()
-    return () => overlayController.dispose()
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const shadowRoot = document.querySelector("kiru-devtools")!.shadowRoot!
+      const appRoot = rootRef.current!
+      if (appRoot.matches(":focus-within, :focus")) {
+        trapFocus(e, appRoot, shadowRoot.activeElement)
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      overlayController.dispose()
+      window.removeEventListener("keydown", handleKeyDown)
+    }
   })
 
-  return ({ scale, opacity }) => (
-    <div ref={overlayController.containerRef}>
-      <div
-        style={{
-          scale,
-          opacity,
-          transition: "150ms ease-in-out",
-        }}
-        className="rounded z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/10"
-      >
-        <button
-          ref={overlayController.handleRef}
-          className="w-full bg-white/5 rounded py-1 px-2 text-left cursor-grab active:cursor-grabbing"
+  return ({ scale, opacity }) => {
+    return (
+      <div ref={overlayController.containerRef}>
+        <div
+          style={{
+            scale,
+            opacity: componentSelectionEnabled.value ? 0 : opacity,
+            transition: "150ms ease-in-out",
+            pointerEvents: componentSelectionEnabled.value ? "none" : "auto",
+          }}
+          className="rounded z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/10"
         >
-          Overlay
-        </button>
-        <div className="p-2">
-          <DevtoolsApp />
+          <button
+            ref={overlayController.handleRef}
+            className="w-full bg-white/5 rounded py-1 px-2 text-left cursor-grab active:cursor-grabbing"
+          >
+            Overlay
+          </button>
+          <div className="p-2">
+            <DevtoolsApp rootRef={rootRef} />
+          </div>
         </div>
       </div>
-    </div>
-  )
+    )
+  }
 }

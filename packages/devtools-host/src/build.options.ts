@@ -49,13 +49,25 @@ export const options = {
 } as const satisfies BuildOptions
 
 export function writeFile(content: string) {
-  fs.rmSync("dist", { recursive: true, force: true })
-  fs.mkdirSync("dist")
-  fs.writeFileSync(
-    "dist/index.js",
-    `export default \`${content.replace(/[`\\$]/g, "\\$&")}\n\``,
-    {
-      encoding: "utf-8",
-    }
-  )
+  try {
+    fs.rmSync("dist", { recursive: true, force: true })
+  } catch (error) {
+    console.error("[devtools-host]: Error deleting dist directory:", error)
+  }
+  try {
+    fs.mkdirSync("dist")
+  } catch (error) {
+    console.error("[devtools-host]: Error creating dist directory:", error)
+  }
+  try {
+    fs.writeFileSync(
+      "dist/index.js",
+      `export default \`${content.replace(/[`\\$]/g, "\\$&")}\n\``,
+      {
+        encoding: "utf-8",
+      }
+    )
+  } catch (error) {
+    console.error("[devtools-host]: Error writing dist file:", error)
+  }
 }

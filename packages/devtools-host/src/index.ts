@@ -8,9 +8,13 @@ if ("window" in globalThis) {
   function init() {
     const pageRoot = document.createElement("kiru-devtools")
     pageRoot.setAttribute("style", "display: contents")
+    pageRoot.tabIndex = -1
     document.body.appendChild(pageRoot)
 
-    const shadow = pageRoot.attachShadow({ mode: "open" })
+    const shadow = pageRoot.attachShadow({
+      mode: "open",
+      delegatesFocus: true,
+    })
     const sheet = new CSSStyleSheet()
     sheet.replaceSync(tailwindInlineCss)
     shadow.adoptedStyleSheets = [sheet]
