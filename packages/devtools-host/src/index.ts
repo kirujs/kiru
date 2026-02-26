@@ -17,7 +17,7 @@ if ("window" in globalThis) {
 
     const appRoot = Object.assign(document.createElement("div"), {
       id: "devtools-root",
-      className: "fixed flex bottom-0 right-0 z-[9999999]",
+      className: "fixed flex top-0 left-0 z-[9999999]",
     })
     shadow.appendChild(appRoot)
 

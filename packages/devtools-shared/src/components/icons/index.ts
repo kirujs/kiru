@@ -1,1 +1,5 @@
+export * from "./component-icon.js"
+export * from "./expand-icon.js"
 export * from "./flame-icon.js"
+export * from "./gauge-icon.js"
+export * from "./grip-icon.js"

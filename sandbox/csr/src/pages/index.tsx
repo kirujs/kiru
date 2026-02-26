@@ -1,4 +1,4 @@
-import { Fragment, signal, effect, Derive } from "kiru"
+import { Fragment, signal, effect, Derive, ElementProps } from "kiru"
 
 const text = signal("Hello World!")
 

@@ -13,6 +13,11 @@ const ProfilingEvents = [
 ] as const
 
 export type ProfilingEvent = (typeof ProfilingEvents)[number]
+export interface AppStats {
+  timestamps: TickTS[]
+  mountDuration: number
+  totalTicks: number
+}
 
 interface TickTS {
   start: number
@@ -23,14 +28,7 @@ type ProfilingEventListener = (app: AppHandle) => void
 
 export function createProfilingContext() {
   const eventListeners = new Map<ProfilingEvent, Set<ProfilingEventListener>>()
-  const appStats: Map<
-    AppHandle,
-    {
-      timestamps: TickTS[]
-      mountDuration: number
-      totalTicks: number
-    }
-  > = new Map()
+  const appStats: Map<AppHandle, AppStats> = new Map()
   return {
     appStats,
     emit: (event: ProfilingEvent, app: AppHandle) => {

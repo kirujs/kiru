@@ -1,23 +1,34 @@
 import * as kiru from "kiru"
 import { className as cls } from "kiru/utils"
-import { assert, FlameIcon } from "devtools-shared"
+import {
+  assert,
+  ComponentIcon,
+  ExpandIcon,
+  FlameIcon,
+  GaugeIcon,
+  GripIcon,
+  ProfilingTabView,
+} from "devtools-shared"
 
 type Vec2 = [x: number, y: number]
 
-interface DraggableMenuControllerConfig {
-  onclick: () => void
+interface DraggableControllerConfig {
+  onclick?: () => void
+  storageKey: string
 }
 const MENU_POSITION_STORAGE_KEY = "kiru.devtools.anchorPosition"
+const OVERLAY_POSITION_STORAGE_KEY = "kiru.devtools.overlayPosition"
+
 const MENU_PADDING = 10
 const MIN_MENU_CORNER_DIST = 50
 type SnapSide = "top" | "right" | "bottom" | "left"
-interface PositionStorageInfo {
+interface DraggablePositionInfo {
   percent: number
   snapSide: SnapSide
 }
 
-const loadPosFromStorage = (): PositionStorageInfo => {
-  const posStr = localStorage.getItem(MENU_POSITION_STORAGE_KEY)
+const loadDraggablePosFromStorage = (key: string): DraggablePositionInfo => {
+  const posStr = localStorage.getItem(key)
   if (posStr) {
     try {
       const parsed = JSON.parse(posStr)
@@ -34,35 +45,49 @@ const loadPosFromStorage = (): PositionStorageInfo => {
       return parsed
     } catch {}
   }
-  const info: PositionStorageInfo = {
+  const info: DraggablePositionInfo = {
     percent: 0.5,
     snapSide: "bottom",
   }
-  localStorage.setItem(MENU_POSITION_STORAGE_KEY, JSON.stringify(info))
+  localStorage.setItem(key, JSON.stringify(info))
   return info
 }
-const createDraggableMenuController = (
-  config: DraggableMenuControllerConfig
-) => {
+const createDraggableController = (config: DraggableControllerConfig) => {
+  const cleanups: (() => void)[] = []
+  const dispose = () => cleanups.forEach((c) => c())
+
   const { percent: initialPercent, snapSide: initialSnapSide } =
-    loadPosFromStorage()
+    loadDraggablePosFromStorage(config.storageKey)
 
   const containerRef = kiru.signal<HTMLDivElement | null>(null)
-  const btnRef = kiru.signal<HTMLButtonElement | null>(null)
+  const handleRef = kiru.signal<HTMLButtonElement | null>(null)
 
   const percent = kiru.signal(initialPercent)
   const snapSide = kiru.signal(initialSnapSide)
-  const menuPos = kiru.signal<Vec2>([0, 0])
+  const containerPos = kiru.signal<Vec2>([0, 0])
+
+  cleanups.push(
+    containerPos.subscribe(([x, y]) => {
+      const container = containerRef.value!
+      container.style.transform = `translate(${x}px, ${y}px)`
+    })
+  )
+
+  cleanups.push(() => {
+    ;[containerRef, handleRef, percent, snapSide, containerPos].forEach((s) => {
+      kiru.Signal.dispose(s)
+    })
+  })
 
   const handleBtnMouseDown = (e: MouseEvent) => {
     if (e.button !== 0) return
 
-    const btn = btnRef.value!
+    const handle = handleRef.value!
     const [initialX, initialY]: Vec2 = [e.clientX, e.clientY]
-    const initialBtnRect = btn.getBoundingClientRect()
+    const initialHandleRect = handle.getBoundingClientRect()
     const [initialOffsetX, initialOffsetY]: Vec2 = [
-      initialX - initialBtnRect.left,
-      initialY - initialBtnRect.top,
+      initialX - initialHandleRect.left,
+      initialY - initialHandleRect.top,
     ]
     let dragging = false
     const handleMouseMove = (e: MouseEvent) => {
@@ -133,10 +158,10 @@ const createDraggableMenuController = (
       window.removeEventListener("mousemove", handleMouseMove)
       window.removeEventListener("mouseup", handleMouseUp)
 
-      if (!dragging) return config.onclick()
+      if (!dragging) return config.onclick?.()
 
       localStorage.setItem(
-        MENU_POSITION_STORAGE_KEY,
+        config.storageKey,
         JSON.stringify({ percent: percent.value, snapSide: snapSide.value })
       )
     }
@@ -146,7 +171,7 @@ const createDraggableMenuController = (
   }
 
   const calculatePosition = () => {
-    const btn = btnRef.value!
+    const handle = handleRef.value!
     let transformX = 0
     let transformY = 0
     switch (snapSide.value) {
@@ -167,7 +192,7 @@ const createDraggableMenuController = (
         transformX = 100
         break
     }
-    const btnRect = btn.getBoundingClientRect()
+    const handleRect = handle.getBoundingClientRect()
     const clamp = (value: number, min: number, max: number) =>
       Math.min(Math.max(value, min), max)
 
@@ -179,48 +204,52 @@ const createDraggableMenuController = (
     const finalX = clamp(
       transformX * windowWidth,
       xPad,
-      windowWidth - xPad - btnRect.width
+      windowWidth - xPad - handleRect.width
     )
     const finalY = clamp(
       transformY * windowHeight,
       MENU_PADDING,
-      windowHeight - MENU_PADDING - btnRect.height
+      windowHeight - MENU_PADDING - handleRect.height
     )
-    menuPos.value = [finalX, finalY]
+    containerPos.value = [finalX, finalY]
   }
-
-  menuPos.subscribe(([x, y]) => {
-    const container = containerRef.value!
-    container.style.transform = `translate(${x}px, ${y}px)`
-  })
 
   kiru.onBeforeMount(() => {
     calculatePosition()
     window.addEventListener("resize", calculatePosition)
-    btnRef.value!.addEventListener("mousedown", handleBtnMouseDown)
+    handleRef.value!.addEventListener("mousedown", handleBtnMouseDown)
+    return () => {
+      window.removeEventListener("resize", calculatePosition)
+      handleRef.value!.removeEventListener("mousedown", handleBtnMouseDown)
+    }
   })
 
-  return { btnRef, containerRef, snapSide }
+  return { handleRef, containerRef, snapSide, dispose }
 }
 
+const mounted = kiru.signal(false)
+const showTooltipMenu = kiru.signal(false)
+const tooltipRef = kiru.ref<HTMLDivElement>(null)
+
+const isOverlayShown = kiru.signal(false)
+const toggleOverlayShown = () => (isOverlayShown.value = !isOverlayShown.value)
+
 export default function DevtoolsHostApp() {
-  const mounted = kiru.signal(false)
-  const showTooltipMenu = kiru.signal(false)
-  const tooltipRef = kiru.ref<HTMLDivElement>(null)
-  const menuController = createDraggableMenuController({
+  const mainMenuController = createDraggableController({
+    storageKey: MENU_POSITION_STORAGE_KEY,
     onclick: () => (showTooltipMenu.value = !showTooltipMenu.value),
   })
 
   const tooltipFlexDirection = kiru.computed(() => {
-    return menuController.snapSide.value === "left" ||
-      menuController.snapSide.value === "right"
+    return mainMenuController.snapSide.value === "left" ||
+      mainMenuController.snapSide.value === "right"
       ? "flex-col"
       : "flex-row"
   })
 
   const containerFlexDirection = kiru.computed(() => {
-    return menuController.snapSide.value === "left" ||
-      menuController.snapSide.value === "right"
+    return mainMenuController.snapSide.value === "left" ||
+      mainMenuController.snapSide.value === "right"
       ? "flex-row"
       : "flex-col"
   })
@@ -229,7 +258,7 @@ export default function DevtoolsHostApp() {
     const tooltip = tooltipRef.current!
     const tooltipSize = tooltip.getBoundingClientRect()
     kiru.effect(
-      [showTooltipMenu, menuController.snapSide],
+      [showTooltipMenu, mainMenuController.snapSide],
       (show, snapSide) => {
         const offsetSize =
           Math.min(tooltipSize.width, tooltipSize.height) + MENU_PADDING
@@ -267,33 +296,58 @@ export default function DevtoolsHostApp() {
 
   return () => {
     return (
-      <div
-        ref={menuController.containerRef}
-        style={{
-          transition: "80ms",
-          opacity: mounted.value ? 1 : 0,
-        }}
-        className={`flex ${containerFlexDirection} items-center justify-center fixed top-0 left-0 z-50`}
-      >
+      <>
         <div
-          ref={tooltipRef}
-          style="transition: 80ms ease-in-out"
-          className={cls(
-            `absolute z-0 flex ${tooltipFlexDirection} p-2 gap-2`,
-            "bg-neutral-900 border-2 border-crimson rounded-full shadow"
-          )}
+          ref={mainMenuController.containerRef}
+          style={{
+            transition: "80ms",
+            opacity: mounted.value ? 1 : 0,
+          }}
+          className={`flex ${containerFlexDirection} items-center justify-center fixed top-0 left-0 z-50`}
         >
-          <FlameIcon />
-          <FlameIcon />
-          <FlameIcon />
+          <div
+            ref={tooltipRef}
+            style="transition: 80ms ease-in-out"
+            className={cls(
+              `absolute z-0 flex ${tooltipFlexDirection} p-2 gap-2`,
+              "bg-neutral-900 border-2 border-crimson rounded-full shadow"
+            )}
+          >
+            <button onclick={toggleOverlayShown}>
+              <ExpandIcon className="w-4 h-4" />
+            </button>
+          </div>
+          <button
+            ref={mainMenuController.handleRef}
+            className="bg-crimson rounded-full p-2 z-10"
+          >
+            <FlameIcon />
+          </button>
         </div>
-        <button
-          ref={menuController.btnRef}
-          className="bg-crimson rounded-full p-2 z-10"
-        >
-          <FlameIcon />
-        </button>
-      </div>
+        <kiru.Show when={isOverlayShown}>
+          <EmbeddedOverlay />
+        </kiru.Show>
+      </>
     )
   }
+}
+
+function EmbeddedOverlay() {
+  const overlayController = createDraggableController({
+    storageKey: OVERLAY_POSITION_STORAGE_KEY,
+  })
+  return () => (
+    <div
+      ref={overlayController.containerRef}
+      className="p-2 fixed top-0 left-0 rounded z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/5"
+    >
+      <button
+        ref={overlayController.handleRef}
+        className="bg-crimson rounded-full p-2 z-10"
+      >
+        <FlameIcon />
+      </button>
+      <ProfilingTabView />
+    </div>
+  )
 }

@@ -10,7 +10,7 @@ export * from "./customEvents.js"
 export * from "./element.js"
 export * from "./error.js"
 export * from "./hooks/index.js"
-export type { ProfilingEvent } from "./profiling.js"
+export type { ProfilingEvent, AppStats } from "./profiling.js"
 export * from "./renderToString.js"
 export * from "./ref.js"
 export {

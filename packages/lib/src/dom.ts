@@ -748,8 +748,9 @@ function commitDeletion(vNode: VNode) {
     if (hooks) {
       const { preCleanups, postCleanups } = hooks
 
-      preCleanups.forEach((c) => c())
+      preCleanups.forEach(call)
       postHookCleanups.push(...postCleanups)
+      preCleanups.length = postCleanups.length = 0
     }
 
     if (__DEV__) {

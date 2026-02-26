@@ -1,1 +1,1 @@
-export * from "./profiling-tab"
+export * from "./profiling-tab/index.js"
