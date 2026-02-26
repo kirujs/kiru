@@ -17,10 +17,10 @@ const createMousePosWatcher = () => {
     pos.value = { x: e.clientX, y: e.clientY }
   }
   window.addEventListener("mousemove", handleMouseMove)
-  onCleanup(() => {
-    window.removeEventListener("mousemove", handleMouseMove)
-  })
-  return pos
+  return [
+    pos,
+    () => window.removeEventListener("mousemove", handleMouseMove),
+  ] as const
 }
 
 interface CounterProps {
@@ -30,7 +30,8 @@ interface CounterProps {
 const Counter: Kiru.FC<CounterProps> = (props) => {
   const btnRef = ref<HTMLButtonElement>(null)
   const count = signal(0)
-  const pos = createMousePosWatcher()
+  const [pos, dispose] = createMousePosWatcher()
+  onCleanup(() => dispose())
 
   {
     const intervalId = setInterval(() => {
