@@ -1,5 +1,6 @@
 import * as kiru from "kiru"
 import { AppsIcon, FolderTreeIcon, GaugeIcon, CogIcon } from "./components"
+import { ProfilingTabView } from "./tabs/profiling-tab/index.js"
 
 interface TabViewProps {
   active: boolean
@@ -17,7 +18,7 @@ const APP_TABS = {
   },
   Profiling: {
     Icon: GaugeIcon,
-    View: () => <div>Profiling</div>,
+    View: ProfilingTabView,
   },
   Settings: {
     Icon: CogIcon,
@@ -30,20 +31,20 @@ const selectedTab = kiru.computed(() => APP_TABS[selectedTabId.value])
 
 export function DevtoolsApp() {
   return (
-    <>
-      <nav className="flex flex-col gap-2 justify-between p-2 bg-neutral-400 bg-opacity-5 border border-white border-opacity-10 rounded">
+    <div className="flex gap-2">
+      <nav className="flex flex-col gap-2 justify-between">
         <div className="flex flex-col gap-2">
           {Object.keys(APP_TABS).map((key) => (
             <TabButton key={key} id={key as keyof typeof APP_TABS} />
           ))}
         </div>
       </nav>
-      <main className="flex flex-col flex-1 max-h-[calc(100vh-1rem)] overflow-y-auto">
+      <main className="flex flex-col flex-1 max-h-[calc(100vh-1rem)] overflow-y-auto p-2 bg-white/5 rounded">
         <kiru.Derive from={selectedTab}>
           {(selectedTab) => <selectedTab.View />}
         </kiru.Derive>
       </main>
-    </>
+    </div>
   )
 }
 

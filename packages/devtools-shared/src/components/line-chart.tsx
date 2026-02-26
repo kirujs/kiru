@@ -24,10 +24,8 @@ export type LineChartData = {
   }[]
 }
 
-export interface LineChartProps extends Omit<
-  kiru.ElementProps<"canvas">,
-  "ref"
-> {
+export interface LineChartProps
+  extends Omit<kiru.ElementProps<"canvas">, "ref"> {
   data: kiru.Signal<LineChartData>
 }
 
@@ -35,7 +33,6 @@ export function LineChart({ data, ...props }: LineChartProps) {
   const canvasRef = kiru.ref<HTMLCanvasElement>(null)
 
   kiru.onMount(() => {
-    console.log("LineChart mount")
     Chart.register(
       zoomPlugin,
       LinearScale,
@@ -87,7 +84,6 @@ export function LineChart({ data, ...props }: LineChartProps) {
     })
 
     return () => {
-      console.log("LineChart unmount")
       chart.destroy()
       unsub()
     }

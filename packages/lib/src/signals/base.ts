@@ -197,7 +197,6 @@ export class Signal<T> {
   }
 
   static dispose(signal: Signal<any>) {
-    console.log("disposing", signal)
     signal.$isDisposed = true
     if (__DEV__) {
       signalSubsMap.delete(signal.$id)

@@ -17,11 +17,11 @@ if ("window" in globalThis) {
 
     const appRoot = Object.assign(document.createElement("div"), {
       id: "devtools-root",
-      className: "fixed flex top-0 left-0 z-[9999999]",
+      className: "fixed flex top-0 left-0 w-0 h-0 z-[9999999]",
     })
     shadow.appendChild(appRoot)
 
-    kiru.mount(kiru.createElement(App, {}), appRoot, {
+    kiru.mount(kiru.createElement(App), appRoot, {
       name: "kiru.devtools",
     })
     const handleMainWindowClose = () => devtoolsState.popupWindow.value?.close()
