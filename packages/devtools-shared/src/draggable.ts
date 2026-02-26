@@ -58,9 +58,9 @@ export function createDraggableController(
     if (e.button !== 0) return
 
     const container = containerRef.value!
-    const [initialX, initialY]: Vec2 = [e.clientX, e.clientY]
+    const [initialX, initialY] = [e.clientX, e.clientY]
     const initialContainerRect = container.getBoundingClientRect()
-    const [initialOffsetX, initialOffsetY]: Vec2 = [
+    const [initialOffsetX, initialOffsetY] = [
       initialX - initialContainerRect.left,
       initialY - initialContainerRect.top,
     ]
@@ -77,55 +77,32 @@ export function createDraggableController(
 
       if (!dragging) return
 
-      const [currentX, currentY]: Vec2 = [
+      const [currentX, currentY] = [
         e.clientX - initialOffsetX,
         e.clientY - initialOffsetY,
       ]
       const [boundsW, boundsH] = config.getDraggableBounds()
-      const currentXPercent = currentX / boundsW
-      const currentYPercent = currentY / boundsH
+      const { width: containerW, height: containerH } =
+        container.getBoundingClientRect()
 
-      const SECTION_SIZE_LARGE = 0.5
-      const SECTION_SIZE_SMALL = 0.25
-      const isLandscape = boundsW > boundsH
-      if (isLandscape) {
-        const topSectorMax = SECTION_SIZE_LARGE
-        const bottomSectorMin = SECTION_SIZE_LARGE
-        const leftSectorMax = SECTION_SIZE_SMALL
-        const rightSectorMin = 1 - SECTION_SIZE_SMALL
+      const distLeft = currentX
+      const distRight = boundsW - (currentX + containerW)
+      const distTop = currentY
+      const distBottom = boundsH - (currentY + containerH)
 
-        if (currentXPercent < leftSectorMax) {
-          snapSide.value = "left"
-          percent.value = currentYPercent
-        } else if (currentXPercent > rightSectorMin) {
-          snapSide.value = "right"
-          percent.value = currentYPercent
-        } else if (currentYPercent < topSectorMax) {
-          snapSide.value = "top"
-          percent.value = currentXPercent
-        } else if (currentYPercent > bottomSectorMin) {
-          snapSide.value = "bottom"
-          percent.value = currentXPercent
-        }
+      const minDist = Math.min(distLeft, distRight, distTop, distBottom)
+      if (minDist === distLeft) {
+        snapSide.value = "left"
+        percent.value = currentY / boundsH
+      } else if (minDist === distRight) {
+        snapSide.value = "right"
+        percent.value = currentY / boundsH
+      } else if (minDist === distTop) {
+        snapSide.value = "top"
+        percent.value = currentX / boundsW
       } else {
-        const topSectorMax = SECTION_SIZE_SMALL
-        const bottomSectorMin = 1 - SECTION_SIZE_SMALL
-        const leftSectorMax = SECTION_SIZE_LARGE
-        const rightSectorMin = SECTION_SIZE_LARGE
-
-        if (currentYPercent < topSectorMax) {
-          snapSide.value = "top"
-          percent.value = currentXPercent
-        } else if (currentYPercent > bottomSectorMin) {
-          snapSide.value = "bottom"
-          percent.value = currentXPercent
-        } else if (currentXPercent < leftSectorMax) {
-          snapSide.value = "left"
-          percent.value = currentYPercent
-        } else if (currentXPercent > rightSectorMin) {
-          snapSide.value = "right"
-          percent.value = currentYPercent
-        }
+        snapSide.value = "bottom"
+        percent.value = currentX / boundsW
       }
       calculatePosition()
     }
@@ -184,12 +161,19 @@ export function createDraggableController(
 
   const init = () => {
     const handle = handleRef.value!
+    const container = containerRef.value!
     if (!handle) return console.error("handle not found", new Error().stack)
+
     calculatePosition()
+
+    const resizeObserver = new ResizeObserver(calculatePosition)
+    resizeObserver.observe(container)
+
     window.addEventListener("resize", calculatePosition)
     handle.addEventListener("mousedown", onHandleMouseDown)
 
     cleanups.push(() => {
+      resizeObserver.disconnect()
       window.removeEventListener("resize", calculatePosition)
       handle.removeEventListener("mousedown", onHandleMouseDown)
     })
