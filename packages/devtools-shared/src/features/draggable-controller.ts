@@ -194,8 +194,12 @@ export function createDraggableController(
 
   const init = () => {
     const handle = handleRef.value!
-    const container = containerRef.value!
     if (!handle) return console.error("handle not found", new Error().stack)
+    const container = containerRef.value!
+    if (!container)
+      return console.error("container not found", new Error().stack)
+
+    container.style.position = "fixed"
 
     calculatePosition()
 
