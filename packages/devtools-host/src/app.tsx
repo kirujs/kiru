@@ -20,7 +20,8 @@ const toggleOverlayShown = () => (isOverlayShown.value = !isOverlayShown.value)
 
 export default function DevtoolsHostApp() {
   const mainMenuController = createDraggableController({
-    storageKey: MENU_POSITION_STORAGE_KEY,
+    storage: localStorage,
+    key: MENU_POSITION_STORAGE_KEY,
     getPadding: (side) => {
       if (side === "top" || side === "bottom") {
         return [MENU_PADDING, MENU_PADDING]
@@ -129,7 +130,8 @@ export default function DevtoolsHostApp() {
 
 function EmbeddedOverlay() {
   const overlayController = createDraggableController({
-    storageKey: OVERLAY_POSITION_STORAGE_KEY,
+    storage: sessionStorage,
+    key: OVERLAY_POSITION_STORAGE_KEY,
     getPadding: (side) => {
       if (side === "top" || side === "bottom") {
         return [MENU_PADDING, MENU_PADDING]
@@ -146,15 +148,17 @@ function EmbeddedOverlay() {
   return () => (
     <div
       ref={overlayController.containerRef}
-      className="p-2 fixed top-0 left-0 rounded z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/5"
+      className="fixed top-0 left-0 rounded z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/10"
     >
       <button
         ref={overlayController.handleRef}
-        className="bg-crimson rounded-full p-2 z-10"
+        className="w-full bg-white/5 rounded py-1"
       >
-        <FlameIcon />
+        Overlay
       </button>
-      <ProfilingTabView />
+      <div className="p-2">
+        <ProfilingTabView />
+      </div>
     </div>
   )
 }

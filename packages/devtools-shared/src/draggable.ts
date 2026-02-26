@@ -11,7 +11,8 @@ interface DraggablePositionInfo {
 
 interface DraggableControllerConfig {
   onclick?: () => void
-  storageKey: string
+  storage: Storage
+  key: string
   getPadding: (snapSide: SnapSide) => Vec2
   getDraggableBounds: () => Vec2
 }
@@ -31,7 +32,7 @@ export function createDraggableController(
   const dispose = () => cleanups.forEach((c) => c())
 
   const { percent: initialPercent, snapSide: initialSnapSide } =
-    loadDraggablePosFromStorage(config.storageKey)
+    loadDraggablePosFromStorage(config.storage, config.key)
 
   const containerRef = kiru.signal<HTMLDivElement | null>(null)
   const handleRef = kiru.signal<HTMLButtonElement | null>(null)
@@ -135,8 +136,8 @@ export function createDraggableController(
 
       if (!dragging) return config.onclick?.()
 
-      localStorage.setItem(
-        config.storageKey,
+      config.storage.setItem(
+        config.key,
         JSON.stringify({ percent: percent.value, snapSide: snapSide.value })
       )
     }
@@ -197,8 +198,11 @@ export function createDraggableController(
   return { init, handleRef, containerRef, snapSide, dispose }
 }
 
-function loadDraggablePosFromStorage(key: string): DraggablePositionInfo {
-  const posStr = localStorage.getItem(key)
+function loadDraggablePosFromStorage(
+  storage: Storage,
+  key: string
+): DraggablePositionInfo {
+  const posStr = storage.getItem(key)
   if (posStr) {
     try {
       const parsed = JSON.parse(posStr)
@@ -219,6 +223,6 @@ function loadDraggablePosFromStorage(key: string): DraggablePositionInfo {
     percent: 0.5,
     snapSide: "bottom",
   }
-  localStorage.setItem(key, JSON.stringify(info))
+  storage.setItem(key, JSON.stringify(info))
   return info
 }
