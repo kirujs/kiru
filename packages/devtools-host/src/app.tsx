@@ -120,7 +120,7 @@ export default function DevtoolsHostApp() {
         >
           <div
             ref={tooltipRef}
-            style="transition: 150ms ease-in-out; transform-origin: 0 0"
+            style="transition: 80ms ease-in-out; transform-origin: 0 0"
             className={cls(
               `absolute left-1/2 top-1/2 z-0 flex ${tooltipFlexDirection} p-2 gap-2`,
               "bg-neutral-900 border-2 border-crimson rounded-full shadow"
