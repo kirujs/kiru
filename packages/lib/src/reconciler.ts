@@ -8,7 +8,7 @@ import {
 } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import { __DEV__ } from "./env.js"
-import type { AppHandle } from "./appContext.js"
+import type { AppHandle } from "./appHandle.js"
 import { createVNode as createBaseVNode } from "./vNode.js"
 
 type VNode = Kiru.VNode

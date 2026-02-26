@@ -3,7 +3,7 @@ import { createHMRContext } from "./hmr.js"
 import { createProfilingContext } from "./profiling.js"
 import { fileRouterInstance } from "./router/globals.js"
 import type { FileRouterController } from "./router/fileRouterController"
-import type { AppHandle } from "./appContext"
+import type { AppHandle } from "./appHandle"
 import type { requestUpdate } from "./index.js"
 
 export { createKiruGlobalContext, type GlobalKiruEvent, type KiruGlobalContext }

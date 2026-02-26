@@ -9,7 +9,7 @@ import {
 import { createElement } from "../index.js"
 import { KiruError } from "../error.js"
 import { node } from "../globals.js"
-import type { AppHandle } from "../appContext.js"
+import type { AppHandle } from "../appHandle.js"
 import type { ErrorBoundaryNode } from "../types.utils.js"
 
 export {

@@ -1,4 +1,4 @@
-import type { AppHandle } from "./appContext"
+import type { AppHandle } from "./appHandle"
 
 const MAX_TICKS = 100
 

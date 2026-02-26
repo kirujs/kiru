@@ -22,7 +22,7 @@ import type {
   Signalable,
   SomeDom,
 } from "./types.utils"
-import type { AppHandle } from "./appContext"
+import type { AppHandle } from "./appHandle"
 
 export type { AsyncTaskState, ElementProps, Prettify, Signalable, StyleObject }
 
@@ -138,9 +138,9 @@ declare global {
     }
 
     export interface FC<T = {}> {
-      (
-        props: T
-      ): Exclude<JSX.Element, Kiru.FC<any>> | ((props: T) => JSX.Element)
+      (props: T):
+        | Exclude<JSX.Element, Kiru.FC<any>>
+        | ((props: T) => JSX.Element)
       /** Used to display the name of the component in devtools  */
       displayName?: string
     }
@@ -210,14 +210,19 @@ declare global {
       }
       render?: (props: VNode["props"]) => unknown
     }
-  }
-  interface VNodeSnapshot {
-    props: Kiru.VNode["props"]
-    key: Kiru.VNode["key"]
-    index: number
+    interface VNodeSnapshot {
+      props: Kiru.VNode["props"]
+      key: Kiru.VNode["key"]
+      index: number
+    }
+
+    type ContainerElement = HTMLElement | ShadowRoot
   }
 
   interface Element {
+    __kiruNode?: Kiru.VNode
+  }
+  interface ShadowRoot {
     __kiruNode?: Kiru.VNode
   }
 }

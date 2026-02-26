@@ -31,7 +31,7 @@ import type {
   SomeDom,
   SomeElement,
 } from "./types.utils"
-import type { AppHandle } from "./appContext.js"
+import type { AppHandle } from "./appHandle.js"
 
 export {
   commitWork,
@@ -88,8 +88,8 @@ function createDom(vNode: DomVNode): SomeDom {
     t == "#text"
       ? createTextNode(vNode)
       : svgTags.has(t)
-        ? document.createElementNS("http://www.w3.org/2000/svg", t)
-        : document.createElement(t)
+      ? document.createElementNS("http://www.w3.org/2000/svg", t)
+      : document.createElement(t)
 
   return dom
 }

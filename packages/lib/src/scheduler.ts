@@ -28,7 +28,7 @@ import {
   call,
   propsChanged,
 } from "./utils/index.js"
-import type { AppHandle } from "./appContext"
+import type { AppHandle } from "./appHandle"
 import { isHmrUpdate } from "./hmr.js"
 
 type VNode = Kiru.VNode
