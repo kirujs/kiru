@@ -1,4 +1,6 @@
 import { Signal, signal, type AppHandle } from "kiru"
+import { isDevtoolsApp } from "./utils"
+import { APP_TABS } from "./constants"
 
 const stateRegister: Record<string, any> = ((window.opener ?? window)[
   "__kiru_devtools_state_register"
@@ -86,13 +88,32 @@ function createSyncedState<T extends Record<string, unknown>>(
 }
 
 const [devtoolsState] = createSyncedState("kiru-devtools:syncedState", {
+  apps: [] as AppHandle[],
   componentSelection: {
     enabled: false,
     componentNode: null as Kiru.VNode | null,
   },
+  devtoolsViewMode: "embedded" as "embedded" | "popup",
+  devtoolsTab: "Apps" as keyof typeof APP_TABS,
   popupWindow: null as Window | null,
   selectedApp: null as AppHandle | null,
   selectedNode: null as Kiru.VNode | null,
 })
+
+if ("window" in globalThis) {
+  window.addEventListener("kiru:ready", () => {
+    devtoolsState.apps.value = [...kiruGlobal().apps]
+    kiruGlobal().on("mount", (app) => {
+      if (isDevtoolsApp(app)) return
+      devtoolsState.apps.value = [...devtoolsState.apps.value, app]
+    })
+    kiruGlobal().on("unmount", (app) => {
+      if (isDevtoolsApp(app)) return
+      devtoolsState.apps.value = devtoolsState.apps.value.filter(
+        (a) => a !== app
+      )
+    })
+  })
+}
 
 export { devtoolsState }

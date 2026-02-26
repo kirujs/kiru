@@ -1,5 +1,10 @@
 import * as kiru from "kiru"
-import { devtoolsState, getNodeName } from "devtools-shared"
+import {
+  createMousePositionTracker,
+  devtoolsState,
+  getNodeName,
+} from "devtools-shared"
+import { isOverlayShown } from "./state"
 const { componentSelection } = devtoolsState
 
 const selectorEnabled = kiru.computed(() => componentSelection.value.enabled)
@@ -9,31 +14,42 @@ export function ComponentSelectorOverlay() {
 
   kiru.onCleanup(() => disposeMousePositionTracker())
 
-  const currentComponent = kiru.signal<null | {
+  const currentComponentHover = kiru.signal<null | {
     elements: Set<Element>
     component: Kiru.VNode
   }>(null)
 
-  const updateCurrentComponent = () => {
+  const updateCurrentComponentHover = () => {
     const { x, y } = mousePos.value
     if (!selectorEnabled.value) return
 
     const element = document.elementFromPoint(x, y)
-    currentComponent.value = element
+    currentComponentHover.value = element
       ? findElementNearestComponent(element)
       : null
   }
 
-  kiru.effect(() => updateCurrentComponent())
+  kiru.effect(() => updateCurrentComponentHover())
 
-  window.addEventListener("resize", updateCurrentComponent)
-  kiru.onCleanup(() =>
-    window.removeEventListener("resize", updateCurrentComponent)
-  )
+  const handleClick = () => {
+    if (!selectorEnabled.value || !currentComponentHover.value) return
+    devtoolsState.componentSelection.value = {
+      enabled: false,
+      componentNode: currentComponentHover.value.component,
+    }
+    openDevtoolsView()
+  }
+
+  window.addEventListener("resize", updateCurrentComponentHover)
+  window.addEventListener("click", handleClick)
+  kiru.onCleanup(() => {
+    window.removeEventListener("resize", updateCurrentComponentHover)
+    window.removeEventListener("click", handleClick)
+  })
 
   return () => {
     const enabled = selectorEnabled.value,
-      component = currentComponent.value
+      component = currentComponentHover.value
     if (!enabled || !component) return null
 
     const name = getNodeName(component.component)
@@ -78,19 +94,6 @@ export function ComponentSelectorOverlay() {
   }
 }
 
-function createMousePositionTracker() {
-  const mousePosition = kiru.signal({ x: 0, y: 0 })
-  const handleMouseMove = (e: MouseEvent) => {
-    mousePosition.value = { x: e.clientX, y: e.clientY }
-  }
-  window.addEventListener("mousemove", handleMouseMove)
-
-  return [
-    mousePosition,
-    () => window.removeEventListener("mousemove", handleMouseMove),
-  ] as const
-}
-
 interface ComponentSearchResult {
   elements: Set<Element>
   component: Kiru.VNode
@@ -133,4 +136,14 @@ function collectDomNodes(
     child = child.sibling
   }
   return elements
+}
+
+function openDevtoolsView() {
+  devtoolsState.devtoolsTab.value = "Apps"
+  if (devtoolsState.popupWindow.value) {
+    devtoolsState.popupWindow.value.focus()
+    return
+  }
+
+  isOverlayShown.value = true
 }

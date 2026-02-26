@@ -1,5 +1,5 @@
 import * as kiru from "kiru"
-import { assert, clamp } from "./utils"
+import { assert, clamp } from "../utils"
 
 type Vec2 = [x: number, y: number]
 

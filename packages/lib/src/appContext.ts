@@ -65,7 +65,11 @@ export function mount(
 
   render(children)
   window.__kiru.emit("mount", appContext, requestUpdate)
-  if (__DEV__) {
+  // @ts-expect-error
+  if (__DEV__ && !globalThis.__KIRU_READY__) {
+    // @ts-expect-error
+    globalThis.__KIRU_READY__ = true
+
     queueMicrotask(() => {
       window.dispatchEvent(new Event("kiru:ready"))
     })

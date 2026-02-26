@@ -42,7 +42,6 @@ export const Transition: Kiru.FC<TransitionProps> = (props) => {
 
   effect(() => {
     const newIn = unwrap(props.in, true)
-    console.log(newIn)
     const current = tState.peek()
     if (newIn && current !== "entered" && current !== "entering") {
       setTransitionState("entering")

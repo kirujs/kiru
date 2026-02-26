@@ -1,33 +1,14 @@
 import * as kiru from "kiru"
 import { AppsIcon, FolderTreeIcon, GaugeIcon, CogIcon } from "./components"
-import { ProfilingTabView } from "./tabs/profiling-tab/index.js"
+import { AppsTabView, ProfilingTabView } from "./tabs"
+import { devtoolsState } from "./state"
+import { APP_TABS } from "./constants"
 
-interface TabViewProps {
-  active: boolean
-  children: JSX.Children
-}
+const selectedTab = kiru.computed(
+  () => APP_TABS[devtoolsState.devtoolsTab.value]
+)
 
-const APP_TABS = {
-  Apps: {
-    Icon: AppsIcon,
-    View: () => <div>Apps</div>,
-  },
-  FileRouter: {
-    Icon: FolderTreeIcon,
-    View: () => <div>FileRouter</div>,
-  },
-  Profiling: {
-    Icon: GaugeIcon,
-    View: ProfilingTabView,
-  },
-  Settings: {
-    Icon: CogIcon,
-    View: () => <div>Settings</div>,
-  },
-}
-
-const selectedTabId = kiru.signal<keyof typeof APP_TABS>("Apps")
-const selectedTab = kiru.computed(() => APP_TABS[selectedTabId.value])
+console.log("boop")
 
 export function DevtoolsApp() {
   return (
@@ -39,7 +20,7 @@ export function DevtoolsApp() {
           ))}
         </div>
       </nav>
-      <main className="flex flex-col flex-1 max-h-[calc(100vh-1rem)] overflow-y-auto p-2 bg-white/5 rounded">
+      <main className="flex flex-col flex-1 max-h-[calc(100vh-1rem)] overflow-y-auto p-2 bg-neutral-400/5 rounded">
         <kiru.Derive from={selectedTab}>
           {(selectedTab) => <selectedTab.View />}
         </kiru.Derive>
@@ -53,10 +34,10 @@ function TabButton({ id }: { id: keyof typeof APP_TABS }) {
   return (
     <button
       key={id}
-      onclick={() => (selectedTabId.value = id)}
+      onclick={() => (devtoolsState.devtoolsTab.value = id)}
       className={
         "flex items-center px-2 py-1 gap-2 rounded border text-xs border-white border-opacity-10" +
-        (selectedTabId.value === id
+        (devtoolsState.devtoolsTab.value === id
           ? " bg-white bg-opacity-5 text-neutral-100"
           : " hover:bg-white hover:bg-opacity-10 text-neutral-400")
       }

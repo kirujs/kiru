@@ -6,7 +6,7 @@ import {
   initProfilingViewState,
   profilingViewState,
   type ProfilingViewStateItem,
-} from "./profiling-state.js"
+} from "./profiling-tab-state.js"
 
 export function ProfilingTabView() {
   const kiruGlobal = getKiruGlobal()

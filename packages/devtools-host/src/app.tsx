@@ -10,7 +10,7 @@ import {
   devtoolsState,
 } from "devtools-shared"
 import { ComponentSelectorOverlay } from "./component-selector-overlay"
-
+import { isOverlayShown, toggleOverlayShown } from "./state"
 const MENU_POSITION_STORAGE_KEY = "kiru.devtools.anchorPosition"
 const OVERLAY_POSITION_STORAGE_KEY = "kiru.devtools.overlayPosition"
 const MENU_PADDING = 10
@@ -18,9 +18,6 @@ const MENU_PADDING = 10
 const mounted = kiru.signal(false)
 const showTooltipMenu = kiru.signal(false)
 const tooltipRef = kiru.ref<HTMLDivElement>(null)
-
-const isOverlayShown = kiru.signal(false)
-const toggleOverlayShown = () => (isOverlayShown.value = !isOverlayShown.value)
 
 const toggleSelectComponentMode = () => {
   devtoolsState.componentSelection.value = {
@@ -230,7 +227,7 @@ const EmbeddedOverlay: Kiru.FC<EmbeddedOverlayProps> = () => {
       >
         <button
           ref={overlayController.handleRef}
-          className="w-full bg-white/5 rounded py-1 px-2 text-left"
+          className="w-full bg-white/5 rounded py-1 px-2 text-left cursor-grab active:cursor-grabbing"
         >
           Overlay
         </button>
