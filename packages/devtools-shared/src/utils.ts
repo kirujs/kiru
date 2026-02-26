@@ -29,3 +29,7 @@ export function typedMapEntries<T extends Map<any, any>>(
 ): InferredMapEntries<T> {
   return Array.from(map.entries()) as InferredMapEntries<T>
 }
+
+export function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}

@@ -1,5 +1,5 @@
 import * as kiru from "kiru"
-import { assert } from "./utils"
+import { assert, clamp } from "./utils"
 
 type Vec2 = [x: number, y: number]
 
@@ -22,6 +22,7 @@ interface DraggableController {
   handleRef: kiru.Signal<HTMLButtonElement | null>
   containerRef: kiru.Signal<HTMLDivElement | null>
   snapSide: kiru.Signal<SnapSide | null>
+  containerPos: kiru.Signal<Vec2>
   dispose: () => void
   init: () => void
 }
@@ -217,7 +218,7 @@ export function createDraggableController(
     })
   }
 
-  return { init, handleRef, containerRef, snapSide, dispose }
+  return { init, handleRef, containerRef, snapSide, containerPos, dispose }
 }
 
 function loadDraggablePosFromStorage(
@@ -261,8 +262,4 @@ function loadDraggablePosFromStorage(
   }
   storage.setItem(key, JSON.stringify(info))
   return info
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max)
 }

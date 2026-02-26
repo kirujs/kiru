@@ -5,6 +5,7 @@ import {
   ExpandIcon,
   FlameIcon,
   ProfilingTabView,
+  clamp,
 } from "devtools-shared"
 
 const MENU_POSITION_STORAGE_KEY = "kiru.devtools.anchorPosition"
@@ -43,37 +44,61 @@ export default function DevtoolsHostApp() {
 
   kiru.onMount(() => {
     mainMenuController.init()
+    const container = mainMenuController.containerRef.value!
     const tooltip = tooltipRef.current!
-    const tooltipSize = tooltip.getBoundingClientRect()
     kiru.effect(
-      [showTooltipMenu, mainMenuController.snapSide],
-      (show, snapSide) => {
-        const offsetSize =
-          Math.min(tooltipSize.width, tooltipSize.height) + MENU_PADDING
-        let offsetX = 0
-        let offsetY = 0
+      [
+        showTooltipMenu,
+        mainMenuController.snapSide,
+        mainMenuController.containerPos,
+      ],
+      (show, snapSide, [containerX, containerY]) => {
+        const [tooltipWidth, tooltipHeight] = [
+          tooltip.offsetWidth,
+          tooltip.offsetHeight,
+        ]
 
-        if (snapSide === "left") {
-          offsetX = -offsetSize
-          offsetY = 0
-        } else if (snapSide === "right") {
-          offsetX = offsetSize
-          offsetY = 0
-        } else if (snapSide === "top") {
-          offsetX = 0
-          offsetY = -offsetSize
-        } else if (snapSide === "bottom") {
-          offsetX = 0
-          offsetY = offsetSize
+        // left-1/2 top-1/2 places the tooltip's top-left at the container's center.
+        // Subtracting half the tooltip's own size recenters it on the container.
+        // The clamp delta shifts it only when near a viewport edge (zero otherwise).
+        // Uses containerPos (target coords) not getBoundingClientRect() to avoid
+        // reading a mid-transition visual position due to the CSS transition.
+        let clampDeltaX = 0
+        let clampDeltaY = 0
+        if (snapSide === "top" || snapSide === "bottom") {
+          const idealLeft =
+            containerX + container.offsetWidth / 2 - tooltipWidth / 2
+          const clampedLeft = clamp(
+            idealLeft,
+            MENU_PADDING,
+            window.innerWidth - MENU_PADDING - tooltipWidth
+          )
+          clampDeltaX = clampedLeft - idealLeft
+        } else {
+          const idealTop =
+            containerY + container.offsetHeight / 2 - tooltipHeight / 2
+          const clampedTop = clamp(
+            idealTop,
+            MENU_PADDING,
+            window.innerHeight - MENU_PADDING - tooltipHeight
+          )
+          clampDeltaY = clampedTop - idealTop
         }
 
-        const translateX = show ? -offsetX : offsetX
-        const translateY = show ? -offsetY : offsetY
+        // Slide offset along the snap axis.
+        const offsetSize = Math.min(tooltipWidth, tooltipHeight) + MENU_PADDING
+        let slideX = 0
+        let slideY = 0
+        if (snapSide === "left") slideX = show ? offsetSize : -offsetSize
+        else if (snapSide === "right") slideX = show ? -offsetSize : offsetSize
+        else if (snapSide === "top") slideY = show ? offsetSize : -offsetSize
+        else slideY = show ? -offsetSize : offsetSize
 
-        tooltip.style.transform = `
-        scale(${show ? 1 : 0}) 
-        translate(${translateX}px, ${translateY}px)
-      `
+        const translateX = -tooltipWidth / 2 + clampDeltaX + slideX
+        const translateY = -tooltipHeight / 2 + clampDeltaY + slideY
+        tooltip.style.transform = `scale(${
+          show ? 1 : 0
+        }) translate(${translateX}px, ${translateY}px)`
 
         setTimeout(() => {
           mounted.value = true
@@ -95,12 +120,18 @@ export default function DevtoolsHostApp() {
         >
           <div
             ref={tooltipRef}
-            style="transition: 80ms ease-in-out"
+            style="transition: 150ms ease-in-out; transform-origin: 0 0"
             className={cls(
-              `absolute z-0 flex ${tooltipFlexDirection} p-2 gap-2`,
+              `absolute left-1/2 top-1/2 z-0 flex ${tooltipFlexDirection} p-2 gap-2`,
               "bg-neutral-900 border-2 border-crimson rounded-full shadow"
             )}
           >
+            <button onclick={toggleOverlayShown}>
+              <ExpandIcon className="w-4 h-4" />
+            </button>
+            <button onclick={toggleOverlayShown}>
+              <ExpandIcon className="w-4 h-4" />
+            </button>
             <button onclick={toggleOverlayShown}>
               <ExpandIcon className="w-4 h-4" />
             </button>
