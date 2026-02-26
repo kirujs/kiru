@@ -123,7 +123,7 @@ export default function DevtoolsHostApp() {
             transition: "80ms",
             opacity: mounted.value ? 1 : 0,
           }}
-          className={`flex ${containerFlexDirection} items-center justify-center fixed top-0 left-0 z-50`}
+          className={`flex ${containerFlexDirection} items-center justify-center z-50`}
         >
           <div
             ref={tooltipRef}
