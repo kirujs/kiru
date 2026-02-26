@@ -22,16 +22,8 @@ export default function DevtoolsHostApp() {
   const mainMenuController = createDraggableController({
     storage: localStorage,
     key: MENU_POSITION_STORAGE_KEY,
-    getPadding: (side) => {
-      if (side === "top" || side === "bottom") {
-        return [MENU_PADDING, MENU_PADDING]
-      } else {
-        return [MENU_PADDING, MENU_PADDING]
-      }
-    },
-    getDraggableBounds: () => {
-      return [window.innerWidth, window.innerHeight]
-    },
+    getPadding: () => [MENU_PADDING, MENU_PADDING],
+    getDraggableBounds: () => [window.innerWidth, window.innerHeight],
     onclick: () => (showTooltipMenu.value = !showTooltipMenu.value),
   })
 
@@ -112,6 +104,12 @@ export default function DevtoolsHostApp() {
             <button onclick={toggleOverlayShown}>
               <ExpandIcon className="w-4 h-4" />
             </button>
+            <button onclick={toggleOverlayShown}>
+              <ExpandIcon className="w-4 h-4" />
+            </button>
+            <button onclick={toggleOverlayShown}>
+              <ExpandIcon className="w-4 h-4" />
+            </button>
           </div>
           <button
             ref={mainMenuController.handleRef}
@@ -132,16 +130,10 @@ function EmbeddedOverlay() {
   const overlayController = createDraggableController({
     storage: sessionStorage,
     key: OVERLAY_POSITION_STORAGE_KEY,
-    getPadding: (side) => {
-      if (side === "top" || side === "bottom") {
-        return [MENU_PADDING, MENU_PADDING]
-      } else {
-        return [MENU_PADDING, MENU_PADDING]
-      }
-    },
-    getDraggableBounds: () => {
-      return [window.innerWidth, window.innerHeight]
-    },
+    getPadding: () => [MENU_PADDING, MENU_PADDING],
+    getDraggableBounds: () => [window.innerWidth, window.innerHeight],
+    allowFloat: true,
+    snapDistance: 50,
   })
   kiru.onBeforeMount(() => overlayController.init())
 

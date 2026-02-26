@@ -4,23 +4,24 @@ import { assert } from "./utils"
 type Vec2 = [x: number, y: number]
 
 type SnapSide = "top" | "right" | "bottom" | "left"
-interface DraggablePositionInfo {
-  percent: number
-  snapSide: SnapSide
-}
+type DraggablePositionInfo =
+  | { type: "snapped"; side: SnapSide; percent: number }
+  | { type: "floating"; x: number; y: number }
 
 interface DraggableControllerConfig {
   onclick?: () => void
   storage: Storage
   key: string
-  getPadding: (snapSide: SnapSide) => Vec2
+  getPadding: (snapSide: SnapSide | null) => Vec2
   getDraggableBounds: () => Vec2
+  allowFloat?: boolean
+  snapDistance?: number
 }
 
 interface DraggableController {
   handleRef: kiru.Signal<HTMLButtonElement | null>
   containerRef: kiru.Signal<HTMLDivElement | null>
-  snapSide: kiru.Signal<SnapSide>
+  snapSide: kiru.Signal<SnapSide | null>
   dispose: () => void
   init: () => void
 }
@@ -31,14 +32,15 @@ export function createDraggableController(
   const cleanups: (() => void)[] = []
   const dispose = () => cleanups.forEach((c) => c())
 
-  const { percent: initialPercent, snapSide: initialSnapSide } =
-    loadDraggablePosFromStorage(config.storage, config.key)
-
   const containerRef = kiru.signal<HTMLDivElement | null>(null)
   const handleRef = kiru.signal<HTMLButtonElement | null>(null)
 
-  const percent = kiru.signal(initialPercent)
-  const snapSide = kiru.signal(initialSnapSide)
+  const position = kiru.signal<DraggablePositionInfo>(
+    loadDraggablePosFromStorage(config.storage, config.key)
+  )
+  const snapSide = kiru.computed<SnapSide | null>(() =>
+    position.value.type === "snapped" ? position.value.side : null
+  )
   const containerPos = kiru.signal<Vec2>([0, 0])
 
   cleanups.push(
@@ -49,9 +51,9 @@ export function createDraggableController(
   )
 
   cleanups.push(() => {
-    ;[containerRef, handleRef, percent, snapSide, containerPos].forEach((s) => {
+    ;[containerRef, handleRef, position, snapSide, containerPos].forEach((s) =>
       kiru.Signal.dispose(s)
-    })
+    )
   })
 
   const onHandleMouseDown = (e: MouseEvent) => {
@@ -91,18 +93,40 @@ export function createDraggableController(
       const distBottom = boundsH - (currentY + containerH)
 
       const minDist = Math.min(distLeft, distRight, distTop, distBottom)
-      if (minDist === distLeft) {
-        snapSide.value = "left"
-        percent.value = currentY / boundsH
+
+      const centerX = currentX + containerW / 2
+      const centerY = currentY + containerH / 2
+
+      if (config.allowFloat && minDist > (config.snapDistance ?? 0)) {
+        position.value = {
+          type: "floating",
+          x: centerX / boundsW,
+          y: centerY / boundsH,
+        }
+      } else if (minDist === distLeft) {
+        position.value = {
+          type: "snapped",
+          side: "left",
+          percent: centerY / boundsH,
+        }
       } else if (minDist === distRight) {
-        snapSide.value = "right"
-        percent.value = currentY / boundsH
+        position.value = {
+          type: "snapped",
+          side: "right",
+          percent: centerY / boundsH,
+        }
       } else if (minDist === distTop) {
-        snapSide.value = "top"
-        percent.value = currentX / boundsW
+        position.value = {
+          type: "snapped",
+          side: "top",
+          percent: centerX / boundsW,
+        }
       } else {
-        snapSide.value = "bottom"
-        percent.value = currentX / boundsW
+        position.value = {
+          type: "snapped",
+          side: "bottom",
+          percent: centerX / boundsW,
+        }
       }
       calculatePosition()
     }
@@ -113,10 +137,7 @@ export function createDraggableController(
 
       if (!dragging) return config.onclick?.()
 
-      config.storage.setItem(
-        config.key,
-        JSON.stringify({ percent: percent.value, snapSide: snapSide.value })
-      )
+      config.storage.setItem(config.key, JSON.stringify(position.value))
     }
 
     window.addEventListener("mousemove", onMouseMove)
@@ -125,38 +146,55 @@ export function createDraggableController(
 
   const calculatePosition = () => {
     const container = containerRef.value!
-    const containerRect = container.getBoundingClientRect()
-    const clamp = (value: number, min: number, max: number) =>
-      Math.min(Math.max(value, min), max)
+    const { width: containerW, height: containerH } =
+      container.getBoundingClientRect()
 
     const [boundsW, boundsH] = config.getDraggableBounds()
+    const pos = position.value
 
+    if (pos.type === "floating") {
+      const [xPad, yPad] = config.getPadding(null)
+      containerPos.value = [
+        clamp(
+          pos.x * boundsW - containerW / 2,
+          xPad,
+          boundsW - xPad - containerW
+        ),
+        clamp(
+          pos.y * boundsH - containerH / 2,
+          yPad,
+          boundsH - yPad - containerH
+        ),
+      ]
+      return
+    }
+
+    const [xPad, yPad] = config.getPadding(pos.side)
     let targetX = 0
     let targetY = 0
-    switch (snapSide.value) {
+    switch (pos.side) {
       case "top":
-        targetX = percent.value * boundsW
+        targetX = pos.percent * boundsW - containerW / 2
         targetY = 0
         break
       case "bottom":
-        targetX = percent.value * boundsW
+        targetX = pos.percent * boundsW - containerW / 2
         targetY = Infinity
         break
       case "left":
         targetX = 0
-        targetY = percent.value * boundsH
+        targetY = pos.percent * boundsH - containerH / 2
         break
       case "right":
         targetX = Infinity
-        targetY = percent.value * boundsH
+        targetY = pos.percent * boundsH - containerH / 2
         break
     }
 
-    const [xPad, yPad] = config.getPadding(snapSide.value)
-
-    const finalX = clamp(targetX, xPad, boundsW - xPad - containerRect.width)
-    const finalY = clamp(targetY, yPad, boundsH - yPad - containerRect.height)
-    containerPos.value = [finalX, finalY]
+    containerPos.value = [
+      clamp(targetX, xPad, boundsW - xPad - containerW),
+      clamp(targetY, yPad, boundsH - yPad - containerH),
+    ]
   }
 
   const init = () => {
@@ -190,23 +228,41 @@ function loadDraggablePosFromStorage(
   if (posStr) {
     try {
       const parsed = JSON.parse(posStr)
-      assert(
-        ["top", "right", "bottom", "left"].includes(parsed.snapSide),
-        "invalid snapSide"
-      )
-      assert(
-        typeof parsed.percent === "number" &&
-          parsed.percent >= 0 &&
-          parsed.percent <= 1,
-        "invalid percent"
-      )
-      return parsed
+      if (parsed.type === "snapped") {
+        assert(
+          ["top", "right", "bottom", "left"].includes(parsed.side),
+          "invalid side"
+        )
+        assert(
+          typeof parsed.percent === "number" &&
+            parsed.percent >= 0 &&
+            parsed.percent <= 1,
+          "invalid percent"
+        )
+        return parsed as DraggablePositionInfo
+      }
+      if (parsed.type === "floating") {
+        assert(
+          typeof parsed.x === "number" && parsed.x >= 0 && parsed.x <= 1,
+          "invalid x"
+        )
+        assert(
+          typeof parsed.y === "number" && parsed.y >= 0 && parsed.y <= 1,
+          "invalid y"
+        )
+        return parsed as DraggablePositionInfo
+      }
     } catch {}
   }
   const info: DraggablePositionInfo = {
+    type: "snapped",
+    side: "bottom",
     percent: 0.5,
-    snapSide: "bottom",
   }
   storage.setItem(key, JSON.stringify(info))
   return info
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
 }
