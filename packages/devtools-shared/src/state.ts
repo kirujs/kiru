@@ -86,9 +86,9 @@ function createSyncedState<T extends Record<string, unknown>>(
 }
 
 const [devtoolsState] = createSyncedState("kiru-devtools:syncedState", {
-  vNodeSelection: {
+  componentSelection: {
     enabled: false,
-    vNode: null as Kiru.VNode | null,
+    componentNode: null as Kiru.VNode | null,
   },
   popupWindow: null as Window | null,
   selectedApp: null as AppHandle | null,

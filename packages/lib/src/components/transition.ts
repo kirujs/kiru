@@ -1,10 +1,11 @@
-import { signal, Signal } from "../signals/base.js"
 import { onCleanup } from "../hooks/onCleanup.js"
+import { signal, Signal } from "../signals/base.js"
 import { effect } from "../signals/effect.js"
+import { unwrap } from "../signals/utils.js"
 
 export type TransitionState = "entering" | "entered" | "exiting" | "exited"
 interface TransitionProps {
-  in: Signal<boolean>
+  in: boolean | Signal<boolean>
   /**
    * Initial state of the transition
    * @default "exited"
@@ -40,7 +41,8 @@ export const Transition: Kiru.FC<TransitionProps> = (props) => {
   }
 
   effect(() => {
-    const newIn = props.in.value
+    const newIn = unwrap(props.in, true)
+    console.log(newIn)
     const current = tState.peek()
     if (newIn && current !== "entered" && current !== "entering") {
       setTransitionState("entering")
@@ -53,8 +55,8 @@ export const Transition: Kiru.FC<TransitionProps> = (props) => {
 
   onCleanup(() => clearTimeout(timeoutRef))
 
-  return (props: TransitionProps) => {
-    return props.element(tState.value)
+  return (newProps: TransitionProps) => {
+    return newProps.element(tState.value)
   }
 }
 

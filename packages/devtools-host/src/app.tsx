@@ -4,8 +4,10 @@ import {
   createDraggableController,
   ExpandIcon,
   FlameIcon,
-  ProfilingTabView,
   clamp,
+  DevtoolsApp,
+  MouseIcon,
+  devtoolsState,
 } from "devtools-shared"
 
 const MENU_POSITION_STORAGE_KEY = "kiru.devtools.anchorPosition"
@@ -18,6 +20,13 @@ const tooltipRef = kiru.ref<HTMLDivElement>(null)
 
 const isOverlayShown = kiru.signal(false)
 const toggleOverlayShown = () => (isOverlayShown.value = !isOverlayShown.value)
+
+const toggleSelectComponentMode = () => {
+  devtoolsState.componentSelection.value = {
+    enabled: !devtoolsState.componentSelection.value.enabled,
+    componentNode: null,
+  }
+}
 
 export default function DevtoolsHostApp() {
   const mainMenuController = createDraggableController({
@@ -122,25 +131,19 @@ export default function DevtoolsHostApp() {
             ref={tooltipRef}
             style="transition: 80ms ease-in-out; transform-origin: 0 0"
             className={cls(
-              `absolute left-1/2 top-1/2 z-0 flex ${tooltipFlexDirection} p-2 gap-2`,
-              "bg-neutral-900 border-2 border-crimson rounded-full shadow"
+              `absolute left-1/2 top-1/2 z-0 flex ${tooltipFlexDirection} p-1.5 gap-1.5`,
+              "bg-neutral-900 border border-crimson/50 rounded-xl shadow"
             )}
           >
-            <button onclick={toggleOverlayShown}>
+            <TooltipMenuButton
+              onclick={toggleSelectComponentMode}
+              active={devtoolsState.componentSelection.value.enabled}
+            >
+              <MouseIcon className="w-4 h-4" />
+            </TooltipMenuButton>
+            <TooltipMenuButton onclick={toggleOverlayShown}>
               <ExpandIcon className="w-4 h-4" />
-            </button>
-            <button onclick={toggleOverlayShown}>
-              <ExpandIcon className="w-4 h-4" />
-            </button>
-            <button onclick={toggleOverlayShown}>
-              <ExpandIcon className="w-4 h-4" />
-            </button>
-            <button onclick={toggleOverlayShown}>
-              <ExpandIcon className="w-4 h-4" />
-            </button>
-            <button onclick={toggleOverlayShown}>
-              <ExpandIcon className="w-4 h-4" />
-            </button>
+            </TooltipMenuButton>
           </div>
           <button
             ref={mainMenuController.handleRef}
@@ -149,15 +152,56 @@ export default function DevtoolsHostApp() {
             <FlameIcon />
           </button>
         </div>
-        <kiru.Show when={isOverlayShown}>
-          <EmbeddedOverlay />
-        </kiru.Show>
+        <kiru.Transition
+          in={isOverlayShown}
+          duration={{
+            in: 0,
+            out: 150,
+          }}
+          element={(state) => {
+            if (state === "exited") return null
+
+            let scale = 0,
+              opacity = 0
+            if (state === "entered") {
+              scale = opacity = 1
+            }
+            return <EmbeddedOverlay scale={scale} opacity={opacity} />
+          }}
+        />
       </>
     )
   }
 }
 
-function EmbeddedOverlay() {
+interface TooltipMenuButtonProps extends kiru.ElementProps<"button"> {
+  active?: boolean
+}
+
+function TooltipMenuButton({
+  className,
+  active = false,
+  ...props
+}: TooltipMenuButtonProps) {
+  return (
+    <button
+      className={cls(
+        "flex items-center px-2 py-1 gap-2",
+        "text-xs rounded border border-white border-opacity-10 bg-white/5 hover:bg-white/10",
+        active && "bg-white bg-opacity-15 text-neutral-100",
+        kiru.unwrap(className)
+      )}
+      {...props}
+    />
+  )
+}
+
+interface EmbeddedOverlayProps {
+  scale: number
+  opacity: number
+}
+
+const EmbeddedOverlay: Kiru.FC<EmbeddedOverlayProps> = () => {
   const overlayController = createDraggableController({
     storage: sessionStorage,
     key: OVERLAY_POSITION_STORAGE_KEY,
@@ -166,21 +210,31 @@ function EmbeddedOverlay() {
     allowFloat: true,
     snapDistance: 50,
   })
-  kiru.onBeforeMount(() => overlayController.init())
 
-  return () => (
-    <div
-      ref={overlayController.containerRef}
-      className="fixed top-0 left-0 rounded z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/10"
-    >
-      <button
-        ref={overlayController.handleRef}
-        className="w-full bg-white/5 rounded py-1"
+  kiru.onMount(() => {
+    overlayController.init()
+    return () => overlayController.dispose()
+  })
+
+  return ({ scale, opacity }) => (
+    <div ref={overlayController.containerRef}>
+      <div
+        style={{
+          scale,
+          opacity,
+          transition: "150ms ease-in-out",
+        }}
+        className="rounded z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/10"
       >
-        Overlay
-      </button>
-      <div className="p-2">
-        <ProfilingTabView />
+        <button
+          ref={overlayController.handleRef}
+          className="w-full bg-white/5 rounded py-1 px-2 text-left"
+        >
+          Overlay
+        </button>
+        <div className="p-2">
+          <DevtoolsApp />
+        </div>
       </div>
     </div>
   )

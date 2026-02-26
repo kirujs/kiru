@@ -1,4 +1,4 @@
-import { ref, signal, onBeforeMount, onMount, onCleanup, Signal } from "kiru"
+import { ref, signal, onBeforeMount, onMount, onCleanup } from "kiru"
 
 const tag = signal("")
 export function App() {
@@ -6,7 +6,7 @@ export function App() {
   return () => (
     <div>
       <input bind:value={tag} />
-      <Counter foo={tag} />
+      <Counter foo={tag.value} />
     </div>
   )
 }
@@ -24,7 +24,7 @@ const createMousePosWatcher = () => {
 }
 
 interface CounterProps {
-  foo: Signal<string>
+  foo: string
 }
 
 const Counter: Kiru.FC<CounterProps> = (props) => {
@@ -33,16 +33,15 @@ const Counter: Kiru.FC<CounterProps> = (props) => {
   const [pos, dispose] = createMousePosWatcher()
   onCleanup(() => dispose())
 
+  const intervalId = setInterval(() => {
+    count.value++
+  }, 1000)
+
+  onCleanup(() => {
+    clearInterval(intervalId)
+  })
+
   {
-    const intervalId = setInterval(() => {
-      count.value++
-    }, 1000)
-
-    onCleanup(() => {
-      //console.log("cleanup")
-      clearInterval(intervalId)
-    })
-
     onBeforeMount(() => {
       console.log("counter before mounted", btnRef.current)
       return () => console.log("onBeforeMount: unmounted")
@@ -57,7 +56,7 @@ const Counter: Kiru.FC<CounterProps> = (props) => {
   console.log("initial render", props.foo)
 
   return ({ foo }) => {
-    console.log("render", foo.value)
+    console.log("render", foo)
     console.log("pos", pos.value)
 
     return (

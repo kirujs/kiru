@@ -51,12 +51,6 @@ export function createDraggableController(
     })
   )
 
-  cleanups.push(() => {
-    ;[containerRef, handleRef, position, snapSide, containerPos].forEach((s) =>
-      kiru.Signal.dispose(s)
-    )
-  })
-
   const onHandleMouseDown = (e: MouseEvent) => {
     if (e.button !== 0) return
 
