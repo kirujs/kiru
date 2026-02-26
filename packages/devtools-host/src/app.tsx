@@ -9,6 +9,7 @@ import {
   MouseIcon,
   devtoolsState,
 } from "devtools-shared"
+import { ComponentSelectorOverlay } from "./component-selector-overlay"
 
 const MENU_POSITION_STORAGE_KEY = "kiru.devtools.anchorPosition"
 const OVERLAY_POSITION_STORAGE_KEY = "kiru.devtools.overlayPosition"
@@ -169,6 +170,7 @@ export default function DevtoolsHostApp() {
             return <EmbeddedOverlay scale={scale} opacity={opacity} />
           }}
         />
+        <ComponentSelectorOverlay />
       </>
     )
   }
