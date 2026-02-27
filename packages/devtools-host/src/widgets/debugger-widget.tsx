@@ -1,5 +1,6 @@
 import * as kiru from "kiru"
 import { className as cls, latest } from "kiru/utils"
+import type { DebuggerEntry } from "../../../lib/dist/globalContext"
 import {
   createDraggableController,
   createResizableController,
@@ -108,30 +109,33 @@ export const DebuggerWidget: Kiru.FC<DebuggerWidgetProps> = () => {
 }
 
 const DebuggerView: Kiru.FC = () => {
-  const trackedSignals = kiru.signal<Kiru.Signal<any>[]>([])
+  const debuggerEntries = kiru.signal<DebuggerEntry[]>([])
 
   kiru.onMount(() => {
-    const unsub = kiruGlobal().devtools!.debugger.subscribe((newSignals) => {
-      trackedSignals.value = Array.from(newSignals)
+    const unsub = kiruGlobal().devtools!.debugger.subscribe((newEntries) => {
+      debuggerEntries.value = Array.from(newEntries)
     })
     return () => unsub()
   })
 
   return () => (
     <div className="flex flex-col gap-2 p-2">
-      <kiru.For each={trackedSignals}>
-        {(s) => {
-          const signal = latest(s)
+      {debuggerEntries.value.map((entry) => (
+        <SignalCard
           // @ts-ignore ligma
-          return <SignalCard key={signal.$id} signal={signal} />
-        }}
-      </kiru.For>
+          key={`${entry.label}:${entry.signal.$id}`}
+          label={entry.label}
+          signal={entry.signal}
+        />
+      ))}
     </div>
   )
 }
 
-const SignalCard: Kiru.FC<{ signal: Kiru.Signal<any> }> = ({ signal }) => {
-  const rootKey = signal.displayName ?? `signal:${(signal as any).$id}`
+const SignalCard: Kiru.FC<{ label: string; signal: Kiru.Signal<any> }> = ({
+  label,
+  signal,
+}) => {
   const settings = devtoolsState.viewerSettings.peek()
 
   // For plain objects, spread keys at the root so the viewer shows properties
@@ -143,7 +147,7 @@ const SignalCard: Kiru.FC<{ signal: Kiru.Signal<any> }> = ({ signal }) => {
       : { value: val }
 
   const viewerRootSig = kiru.signal(
-    buildViewerRoot(toRootData(signal.peek()), rootKey, emptyCache(), settings)
+    buildViewerRoot(toRootData(signal.peek()), label, emptyCache(), settings)
   )
 
   kiru.onMount(() => {
@@ -151,10 +155,10 @@ const SignalCard: Kiru.FC<{ signal: Kiru.Signal<any> }> = ({ signal }) => {
       // Collect signals from the current root into prevCache so buildViewerRoot
       // can reuse collapse/page state, then dispose whatever wasn't reused.
       const prevCache = emptyCache()
-      collectFromRoot(viewerRootSig.peek(), rootKey, prevCache)
+      collectFromRoot(viewerRootSig.peek(), label, prevCache)
       viewerRootSig.value = buildViewerRoot(
         toRootData(newValue),
-        rootKey,
+        label,
         prevCache,
         settings
       )
@@ -163,7 +167,7 @@ const SignalCard: Kiru.FC<{ signal: Kiru.Signal<any> }> = ({ signal }) => {
     return () => {
       unsub()
       const c = emptyCache()
-      collectFromRoot(viewerRootSig.peek(), rootKey, c)
+      collectFromRoot(viewerRootSig.peek(), label, c)
       disposeCache(c)
     }
   })
@@ -171,7 +175,7 @@ const SignalCard: Kiru.FC<{ signal: Kiru.Signal<any> }> = ({ signal }) => {
   return () => (
     <div className="rounded border border-neutral-700 text-xs">
       <div className="px-2 py-1 border-b border-neutral-700 font-medium text-neutral-300">
-        {signal.displayName}
+        {label}
       </div>
       <ValueViewer root={viewerRootSig.value} />
     </div>

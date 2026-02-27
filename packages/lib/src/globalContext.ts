@@ -32,6 +32,11 @@ interface SchedulerInterface {
   requestUpdate: (vNode: Kiru.VNode) => void
 }
 
+export type DebuggerEntry = {
+  label: string
+  signal: Kiru.Signal<any>
+}
+
 interface KiruGlobalContext {
   readonly apps: AppHandle[]
   emit<T extends Evt>(event: T["name"], app: AppHandle, data?: T["data"]): void
@@ -45,11 +50,9 @@ interface KiruGlobalContext {
   ): void
   devtools?: {
     debugger: {
-      add: (signal: Kiru.Signal<any>) => void
+      add: (label: string, signal: Kiru.Signal<any>) => void
       remove: (signal: Kiru.Signal<any>) => void
-      subscribe: (
-        callback: (signals: Set<Kiru.Signal<any>>) => void
-      ) => () => void
+      subscribe: (callback: (entries: Set<DebuggerEntry>) => void) => () => void
     }
   }
   HMRContext?: ReturnType<typeof createHMRContext>
@@ -120,24 +123,26 @@ function createKiruGlobalContext(): KiruGlobalContext {
       return appToSchedulerInterface.get(app) ?? null
     }
 
-    const trackedSignals = new Set<Kiru.Signal<any>>()
-    const subscribers = new Set<
-      (trackedSignals: Set<Kiru.Signal<any>>) => void
-    >()
+    const debuggerEntries = new Set<DebuggerEntry>()
+    const subscribers = new Set<(debuggerEntries: Set<DebuggerEntry>) => void>()
 
     globalContext.devtools = {
       debugger: {
-        add: (signal: Kiru.Signal<any>) => {
-          trackedSignals.add(signal)
-          subscribers.forEach((cb) => cb(trackedSignals))
+        add: (label: string, signal: Kiru.Signal<any>) => {
+          debuggerEntries.add({ label, signal })
+          subscribers.forEach((cb) => cb(debuggerEntries))
         },
         remove: (signal: Kiru.Signal<any>) => {
-          trackedSignals.delete(signal)
-          subscribers.forEach((cb) => cb(trackedSignals))
+          debuggerEntries.forEach((entry) => {
+            if (entry.signal === signal) {
+              debuggerEntries.delete(entry)
+            }
+          })
+          subscribers.forEach((cb) => cb(debuggerEntries))
         },
-        subscribe: (cb: (trackedSignals: Set<Kiru.Signal<any>>) => void) => {
+        subscribe: (cb: (debuggerEntries: Set<DebuggerEntry>) => void) => {
           subscribers.add(cb)
-          cb(trackedSignals)
+          cb(debuggerEntries)
           return () => subscribers.delete(cb)
         },
       },
