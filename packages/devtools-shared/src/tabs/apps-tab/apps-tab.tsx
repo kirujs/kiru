@@ -6,17 +6,17 @@ import { MouseIcon, ResizableSplit } from "../../components"
 import { SelectedAppGraphView } from "./selected-app-graph"
 import { SelectedNodeView } from "./selected-node"
 
-const { apps, selectedApp } = devtoolsState
+const { apps, selectedApp, componentSelection } = devtoolsState
 
 const toggleComponentSelection = () => {
-  devtoolsState.componentSelection.value = {
-    enabled: !devtoolsState.componentSelection.value.enabled,
-    componentNode: null,
+  componentSelection.value = {
+    enabled: !componentSelection.value.enabled,
+    componentNode: componentSelection.value.componentNode,
   }
 }
 
 const componentSelectionEnabled = kiru.computed(
-  () => devtoolsState.componentSelection.value.enabled
+  () => componentSelection.value.enabled
 )
 
 export function AppsTabView() {

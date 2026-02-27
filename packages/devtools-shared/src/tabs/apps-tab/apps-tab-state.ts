@@ -21,6 +21,7 @@ export interface GraphNode {
   kiruNode: Kiru.VNode
   name: string
   collapsed: kiru.Signal<boolean>
+  parent: GraphNode | null
   child: GraphNode | null
   sibling: GraphNode | null
 }
@@ -40,10 +41,12 @@ kiru.effect(() => {
     return
   }
   appGraph.value = reconcileGraph(app, search, appGraph.peek())
+  expandParentsOfSelectedNode(appGraph.peek())
 
   const onAppUpdate = (updatedApp: kiru.AppHandle) => {
     if (updatedApp !== app) return
     appGraph.value = reconcileGraph(updatedApp, search, appGraph.peek())
+    expandParentsOfSelectedNode(appGraph.peek())
   }
   kiruGlobal().on("update", onAppUpdate)
   return () => kiruGlobal().off("update", onAppUpdate)
@@ -114,7 +117,8 @@ function searchFunctionNodes(
       if (searchMatchesItem(terms, name)) {
         const node = createGraphNode(n, name, existing)
         node.child = children[0] ?? null
-        for (let i = 0; i < children.length - 1; i++) {
+        for (let i = 0; i < children.length; i++) {
+          children[i].parent = node
           children[i].sibling = children[i + 1] ?? null
         }
         result.push(node)
@@ -155,10 +159,30 @@ function createGraphNode(
     name,
     kiruNode: vNode,
     collapsed,
+    parent: null,
     child: null,
     sibling: null,
   }
 }
+
+function expandParentsOfSelectedNode(graph: GraphRoot) {
+  const vNode = selectedNode.peek()
+  if (!vNode) return
+  const graphNode = findGraphNodeByVNode(graph, vNode)
+  if (!graphNode) return
+  let p = graphNode.parent
+  while (p) {
+    p.collapsed.value = false
+    p = p.parent
+  }
+}
+
+function onSelectedNodeChange(vNode: Kiru.VNode | null) {
+  if (!vNode) return
+  expandParentsOfSelectedNode(appGraph.peek())
+}
+
+selectedNode.subscribe(onSelectedNodeChange)
 
 const handleKeyDown = (e: KeyboardEvent) => {
   ifDevtoolsAppRootHasFocus((el) => {
@@ -219,7 +243,8 @@ function handleNavigation(el: Element, dir: "up" | "down") {
 
   const graphNode = findGraphNode(appGraph.peek(), nextNode)
   if (!graphNode) return
-  selectedNode.value = graphNode.kiruNode
+  selectedNode.sneak(graphNode.kiruNode)
+  selectedNode.notify((sub) => sub !== onSelectedNodeChange)
 }
 
 function findGraphNode(root: GraphRoot, node: HTMLElement): GraphNode | null {
