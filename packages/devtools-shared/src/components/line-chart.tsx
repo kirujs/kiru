@@ -83,8 +83,15 @@ export function LineChart({ data, ...props }: LineChartProps) {
       chart.update()
     })
 
+    // Chart.js's own responsive ResizeObserver can miss events when the canvas
+    // sits inside a flex/overflow chain. Observe the parent explicitly so the
+    // chart always matches its container dimensions when the widget is resized.
+    const resizeObserver = new ResizeObserver(() => chart.resize())
+    resizeObserver.observe(canvas.parentElement!)
+
     return () => {
       chart.destroy()
+      resizeObserver.disconnect()
       unsub()
     }
   })

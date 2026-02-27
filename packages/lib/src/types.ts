@@ -60,10 +60,7 @@ type ElementMap = {
     SignalableAriaProps &
     Kiru.EventAttributes<HTMLTagToElement<Tag>> &
     JSX.ElementAttributes & {
-      ref?:
-        | Kiru.Ref<HTMLTagToElement<Tag> | null>
-        | SignalClass<HTMLTagToElement<Tag> | null>
-        | null
+      ref?: Kiru.Ref<Element | null> | SignalClass<Element | null> | null
     }
 } & {
   [Tag in keyof SvgElementAttributes]: SignalableSvgElementAttributes<Tag> &
@@ -72,10 +69,7 @@ type ElementMap = {
     SignalableAriaProps &
     Kiru.EventAttributes<SVGTagToElement<Tag>> &
     JSX.ElementAttributes & {
-      ref?:
-        | Kiru.Ref<SVGTagToElement<Tag> | null>
-        | SignalClass<SVGTagToElement<Tag> | null>
-        | null
+      ref?: Kiru.Ref<Element | null> | SignalClass<Element | null> | null
     }
 } & {
   [Tag in `${string}-${string}`]: Record<string, any>

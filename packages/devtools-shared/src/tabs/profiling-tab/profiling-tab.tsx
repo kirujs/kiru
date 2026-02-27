@@ -7,6 +7,7 @@ import {
   profilingViewState,
   type ProfilingViewStateItem,
 } from "./profiling-tab-state.js"
+import { InfoIcon } from "../../components/icons/info-icon.jsx"
 
 export function ProfilingTabView() {
   const kiruGlobal = getKiruGlobal()
@@ -36,28 +37,31 @@ function AppProfilingChart({ item }: AppProfilingChartProps) {
 
   kiru.onCleanup(() => unsub())
 
+  const showStatsTooltip = kiru.signal(false)
+
   return () => (
-    <div className="flex flex-col gap-2 p-2">
-      <div
-        className="grid items-start gap-2"
-        style="grid-template-columns: 1fr max-content;"
-      >
-        <div className="flex flex-col gap-2">
-          <span>{item.app.name}</span>
-          <LineChart
-            data={chartData}
-            className="w-full max-w-full min-h-20 bg-black bg-opacity-30"
-            onmouseover={() => (hovered.value = true)}
-            onmouseout={() => (hovered.value = false)}
-          />
-        </div>
-        <div
-          className="text-xs grid grid-cols-2 gap-x-4"
-          style="grid-template-columns: auto auto;"
+    <div title={item.app.name} className="flex overflow-hidden">
+      <LineChart
+        data={chartData}
+        className="w-full max-w-full h-80 bg-black bg-opacity-30 overflow-hidden"
+        onmouseover={() => (hovered.value = true)}
+        onmouseout={() => (hovered.value = false)}
+      />
+      <div className="absolute top-1 right-1 flex flex-col gap-1 items-end">
+        <button
+          className="p-1"
+          onclick={() => (showStatsTooltip.value = !showStatsTooltip.value)}
         >
-          <kiru.Derive from={item.stats}>
-            {(stats) => (
-              <>
+          <InfoIcon className="w-4 h-4" />
+        </button>
+
+        <kiru.Derive from={{ stats: item.stats, showStatsTooltip }}>
+          {({ stats, showStatsTooltip }) =>
+            showStatsTooltip && (
+              <div
+                className="text-xs grid grid-cols-2 gap-x-4 bg-neutral-800/50 rounded-md p-2"
+                style="grid-template-columns: auto auto;"
+              >
                 <span className="text-right">Mount duration:</span>
                 {stats.mountDuration} ms
                 <span className="text-right">Total updates:</span>
@@ -66,10 +70,10 @@ function AppProfilingChart({ item }: AppProfilingChartProps) {
                 {stats.avgTickDuration} ms
                 <span className="text-right">Latest update:</span>
                 <span>{stats.lastTickDuration} ms</span>
-              </>
-            )}
-          </kiru.Derive>
-        </div>
+              </div>
+            )
+          }
+        </kiru.Derive>
       </div>
     </div>
   )

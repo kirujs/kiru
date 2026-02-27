@@ -19,8 +19,9 @@ interface DraggableControllerConfig {
 }
 
 interface DraggableController {
-  handleRef: kiru.Signal<HTMLButtonElement | null>
-  containerRef: kiru.Signal<HTMLDivElement | null>
+  handleRef: kiru.Signal<HTMLElement | null>
+  isDragging: kiru.Signal<boolean>
+  containerRef: kiru.Signal<HTMLElement | null>
   snapSide: kiru.Signal<SnapSide | null>
   containerPos: kiru.Signal<Vec2>
   dispose: () => void
@@ -33,8 +34,8 @@ export function createDraggableController(
   const cleanups: (() => void)[] = []
   const dispose = () => cleanups.forEach((c) => c())
 
-  const containerRef = kiru.signal<HTMLDivElement | null>(null)
-  const handleRef = kiru.signal<HTMLButtonElement | null>(null)
+  const containerRef = kiru.signal<HTMLElement | null>(null)
+  const handleRef = kiru.signal<HTMLElement | null>(null)
 
   const position = kiru.signal<DraggablePositionInfo>(
     loadDraggablePosFromStorage(config.storage, config.key)
@@ -43,6 +44,7 @@ export function createDraggableController(
     position.value.type === "snapped" ? position.value.side : null
   )
   const containerPos = kiru.signal<Vec2>([0, 0])
+  const dragging = kiru.signal(false)
 
   cleanups.push(
     containerPos.subscribe(([x, y]) => {
@@ -61,18 +63,18 @@ export function createDraggableController(
       initialX - initialContainerRect.left,
       initialY - initialContainerRect.top,
     ]
-    let dragging = false
+    dragging.value = false
     const onMouseMove = (e: MouseEvent) => {
       // once our delta is greater than 5px, we start dragging
       if (
-        !dragging &&
+        !dragging.peek() &&
         (Math.abs(e.clientX - initialX) > 5 ||
           Math.abs(e.clientY - initialY) > 5)
       ) {
-        dragging = true
+        dragging.value = true
       }
 
-      if (!dragging) return
+      if (!dragging.peek()) return
 
       const [currentX, currentY] = [
         e.clientX - initialOffsetX,
@@ -130,8 +132,9 @@ export function createDraggableController(
       window.removeEventListener("mousemove", onMouseMove)
       window.removeEventListener("mouseup", onMouseUp)
 
-      if (!dragging) return config.onclick?.()
+      if (!dragging.peek()) return config.onclick?.()
 
+      dragging.value = false
       config.storage.setItem(config.key, JSON.stringify(position.value))
     }
 
@@ -216,7 +219,15 @@ export function createDraggableController(
     })
   }
 
-  return { init, handleRef, containerRef, snapSide, containerPos, dispose }
+  return {
+    init,
+    isDragging: dragging,
+    handleRef,
+    containerRef,
+    snapSide,
+    containerPos,
+    dispose,
+  }
 }
 
 function loadDraggablePosFromStorage(

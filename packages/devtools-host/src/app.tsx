@@ -2,38 +2,32 @@ import * as kiru from "kiru"
 import { className as cls } from "kiru/utils"
 import {
   createDraggableController,
-  ExpandIcon,
+  createResizableController,
   FlameIcon,
   clamp,
-  DevtoolsApp,
-  MouseIcon,
-  devtoolsState,
-  trapFocus,
-  ifDevtoolsAppRootHasFocus,
+  ProfilingTabView,
+  GaugeIcon,
 } from "devtools-shared"
 import { ComponentSelectorOverlay } from "./component-selector-overlay"
-import { isOverlayShown, toggleOverlayShown, hideOverlay } from "./state"
+import { isProfilerShown } from "./state"
+import {
+  DRAG_SNAP_PADDING,
+  PROFILER_MIN_WIDTH,
+  PROFILER_MIN_HEIGHT,
+} from "./constants"
 const MENU_POSITION_STORAGE_KEY = "kiru.devtools.anchorPosition"
-const OVERLAY_POSITION_STORAGE_KEY = "kiru.devtools.overlayPosition"
-const MENU_PADDING = 10
+const PROFILER_POSITION_STORAGE_KEY = "kiru.devtools.profilerPosition"
+const PROFILER_SIZE_STORAGE_KEY = "kiru.devtools.profilerSize"
 
 const mounted = kiru.signal(false)
 const showTooltipMenu = kiru.signal(false)
 const tooltipRef = kiru.ref<HTMLDivElement>(null)
 
-const toggleSelectComponentMode = () => {
-  const { componentSelection } = devtoolsState
-  componentSelection.value = {
-    enabled: !componentSelection.value.enabled,
-    componentNode: componentSelection.value.componentNode,
-  }
-}
-
 export default function DevtoolsHostApp() {
   const mainMenuController = createDraggableController({
     storage: localStorage,
     key: MENU_POSITION_STORAGE_KEY,
-    getPadding: () => [MENU_PADDING, MENU_PADDING],
+    getPadding: () => [DRAG_SNAP_PADDING, DRAG_SNAP_PADDING],
     getDraggableBounds: () => [window.innerWidth, window.innerHeight],
     onclick: () => (showTooltipMenu.value = !showTooltipMenu.value),
   })
@@ -80,8 +74,8 @@ export default function DevtoolsHostApp() {
             containerX + container.offsetWidth / 2 - tooltipWidth / 2
           const clampedLeft = clamp(
             idealLeft,
-            MENU_PADDING,
-            window.innerWidth - MENU_PADDING - tooltipWidth
+            DRAG_SNAP_PADDING,
+            window.innerWidth - DRAG_SNAP_PADDING - tooltipWidth
           )
           clampDeltaX = clampedLeft - idealLeft
         } else {
@@ -89,14 +83,15 @@ export default function DevtoolsHostApp() {
             containerY + container.offsetHeight / 2 - tooltipHeight / 2
           const clampedTop = clamp(
             idealTop,
-            MENU_PADDING,
-            window.innerHeight - MENU_PADDING - tooltipHeight
+            DRAG_SNAP_PADDING,
+            window.innerHeight - DRAG_SNAP_PADDING - tooltipHeight
           )
           clampDeltaY = clampedTop - idealTop
         }
 
         // Slide offset along the snap axis.
-        const offsetSize = Math.min(tooltipWidth, tooltipHeight) + MENU_PADDING
+        const offsetSize =
+          Math.min(tooltipWidth, tooltipHeight) + DRAG_SNAP_PADDING
         let slideX = 0
         let slideY = 0
         if (snapSide === "left") slideX = show ? offsetSize : -offsetSize
@@ -128,6 +123,12 @@ export default function DevtoolsHostApp() {
           }}
           className={`flex ${containerFlexDirection} items-center justify-center z-50`}
         >
+          <button
+            ref={mainMenuController.handleRef}
+            className="bg-crimson rounded-full p-2 z-10"
+          >
+            <FlameIcon />
+          </button>
           <div
             ref={tooltipRef}
             style="transition: 80ms ease-in-out; transform-origin: 0 0"
@@ -137,37 +138,21 @@ export default function DevtoolsHostApp() {
             )}
           >
             <TooltipMenuButton
-              onclick={toggleSelectComponentMode}
-              active={devtoolsState.componentSelection.value.enabled}
+              onclick={() => (isProfilerShown.value = !isProfilerShown.value)}
             >
-              <MouseIcon className="w-4 h-4" />
-            </TooltipMenuButton>
-            <TooltipMenuButton onclick={toggleOverlayShown}>
-              <ExpandIcon className="w-4 h-4" />
+              <GaugeIcon className="w-4 h-4" />
             </TooltipMenuButton>
           </div>
-          <button
-            ref={mainMenuController.handleRef}
-            className="bg-crimson rounded-full p-2 z-10"
-          >
-            <FlameIcon />
-          </button>
         </div>
         <kiru.Transition
-          in={isOverlayShown}
+          in={isProfilerShown}
           duration={{
             in: 0,
             out: 150,
           }}
           element={(state) => {
             if (state === "exited") return null
-
-            let scale = 0,
-              opacity = 0
-            if (state === "entered") {
-              scale = opacity = 1
-            }
-            return <EmbeddedOverlay scale={scale} opacity={opacity} />
+            return <ProfilingWidget state={state} />
           }}
         />
         <ComponentSelectorOverlay />
@@ -198,83 +183,120 @@ function TooltipMenuButton({
   )
 }
 
-interface EmbeddedOverlayProps {
-  scale: number
-  opacity: number
+interface ProfilingWidgetProps {
+  state: kiru.TransitionState
 }
-
-const EmbeddedOverlay: Kiru.FC<EmbeddedOverlayProps> = () => {
-  const overlayController = createDraggableController({
+const ProfilingWidget: Kiru.FC<ProfilingWidgetProps> = () => {
+  const dragController = createDraggableController({
+    key: PROFILER_POSITION_STORAGE_KEY,
     storage: sessionStorage,
-    key: OVERLAY_POSITION_STORAGE_KEY,
-    getPadding: () => [MENU_PADDING, MENU_PADDING],
-    getDraggableBounds: () => [window.innerWidth, window.innerHeight],
     allowFloat: true,
     snapDistance: 50,
+    getDraggableBounds: () => [window.innerWidth, window.innerHeight],
+    getPadding: () => [DRAG_SNAP_PADDING, DRAG_SNAP_PADDING],
   })
-  const componentSelectionEnabled = kiru.computed(
-    () => devtoolsState.componentSelection.value.enabled
-  )
+
+  const resizeController = createResizableController({
+    key: PROFILER_SIZE_STORAGE_KEY,
+    storage: sessionStorage,
+    minSize: [PROFILER_MIN_WIDTH, PROFILER_MIN_HEIGHT],
+    aspectRatio: 2 / 1,
+  })
 
   kiru.onMount(() => {
-    overlayController.init()
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const shadowRoot = document.querySelector("kiru-devtools")!.shadowRoot!
-      ifDevtoolsAppRootHasFocus((el) => {
-        trapFocus(e, el, shadowRoot.activeElement)
-      })
-    }
-
-    window.addEventListener("keydown", handleKeyDown)
+    dragController.init()
+    resizeController.init()
     return () => {
-      overlayController.dispose()
-      window.removeEventListener("keydown", handleKeyDown)
+      dragController.dispose()
+      resizeController.dispose()
     }
   })
 
-  return ({ scale, opacity }) => {
-    return (
-      <>
-        <div
-          className="fixed inset-0 z-40 bg-black/30"
-          onclick={hideOverlay}
-          style={{
-            opacity:
-              isOverlayShown.value && !componentSelectionEnabled.value ? 1 : 0,
-            transition: "150ms ease-in-out",
-            pointerEvents:
-              isOverlayShown.value && !componentSelectionEnabled.value
-                ? "auto"
-                : "none",
-            visibility:
-              isOverlayShown.value && !componentSelectionEnabled.value
-                ? "visible"
-                : "hidden",
-          }}
-        />
-        <div ref={overlayController.containerRef} className="z-50">
-          <div
-            style={{
-              scale,
-              opacity: componentSelectionEnabled.value ? 0 : opacity,
-              transition: "150ms ease-in-out",
-              pointerEvents: componentSelectionEnabled.value ? "none" : "auto",
-            }}
-            className="rounded z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/10"
-          >
-            <button
-              ref={overlayController.handleRef}
-              className="w-full bg-white/5 rounded py-1 px-2 text-left cursor-grab active:cursor-grabbing"
-            >
-              Overlay
-            </button>
-            <div className="p-2">
-              <DevtoolsApp />
-            </div>
-          </div>
-        </div>
-      </>
-    )
+  const containerRef = (current: HTMLElement | null) => {
+    dragController.containerRef.value = current
+    dragController.handleRef.value = current
+    resizeController.containerRef.value = current
   }
+
+  const resizeHandleRef = (current: HTMLElement | null) => {
+    resizeController.handleRef.value = current
+  }
+
+  return ({ state }) => (
+    <div
+      ref={containerRef}
+      className={cls(
+        "z-50 fixed rounded p-1 flex flex-col gap-2 select-none overflow-hidden",
+        "bg-neutral-800 opacity-75 hover:opacity-100 shadow-lg"
+      )}
+      style={{
+        minWidth: `${PROFILER_MIN_WIDTH}px`,
+        minHeight: `${PROFILER_MIN_HEIGHT}px`,
+        cursor: resizeController.isResizing.value
+          ? "se-resize"
+          : dragController.isDragging.value
+          ? "grabbing"
+          : "grab",
+      }}
+    >
+      <div
+        style={{
+          transition: "80ms ease-in-out",
+          opacity: state === "entered" ? 1 : 0,
+          flex: 1,
+          overflow: "hidden",
+          minHeight: 0,
+        }}
+      >
+        <ProfilingTabView />
+      </div>
+      <div
+        ref={resizeHandleRef}
+        style={{
+          position: "absolute",
+          bottom: "4px",
+          right: "4px",
+          width: "16px",
+          height: "16px",
+          cursor: "se-resize",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <ResizeGripIcon />
+      </div>
+    </div>
+  )
+}
+
+function ResizeGripIcon() {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      aria-hidden="true"
+      style="color: rgba(255,255,255,0.25); display: block;"
+    >
+      <line
+        x1="9"
+        y1="1"
+        x2="1"
+        y2="9"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+      />
+      <line
+        x1="9"
+        y1="5"
+        x2="5"
+        y2="9"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+      />
+    </svg>
+  )
 }
