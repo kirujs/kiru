@@ -26,7 +26,7 @@ export function renderToReadableStream(element: JSX.Element): {
 } {
   const stream = new Readable({ read() {} })
   const rootNode = Fragment({ children: element })
-  const streamPromises = new Set<Kiru.StatefulPromise<unknown>>()
+  const streamPromises = new Set<Kiru.StatefulPromiseBase<unknown>>()
   const pendingWritePromises: Promise<void>[] = []
 
   let immediate = ""

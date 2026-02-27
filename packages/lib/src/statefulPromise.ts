@@ -1,13 +1,13 @@
-import { $STREAM_DATA, STREAMED_DATA_EVENT } from "../constants.js"
-import { hydrationMode, node, renderMode } from "../globals.js"
-import { Signal, signal } from "../signals/base.js"
-import { getVNodeId } from "./vdom.js"
-import { onCleanup } from "../hooks/onCleanup.js"
+import { $STREAM_DATA, STREAMED_DATA_EVENT } from "./constants.js"
+import { hydrationMode, node, renderMode } from "./globals.js"
+import { Signal, signal } from "./signals/base.js"
+import { getVNodeId } from "./utils/vdom.js"
+import { onCleanup } from "./hooks/onCleanup.js"
 
 export interface StreamDataThrowValue {
   [$STREAM_DATA]: {
     fallback?: JSX.Element
-    data: Kiru.StatefulPromise<unknown>[]
+    data: Kiru.StatefulPromiseBase<unknown>[]
   }
 }
 
@@ -21,26 +21,27 @@ export function isStreamDataThrowValue(
 }
 
 /**
- * Returns true if the value is a {@link Kiru.StatefulPromise}
+ * Returns true if the value is a {@link Kiru.StatefulPromiseBase}
  */
 export function isStatefulPromise(
   thing: unknown
-): thing is Kiru.StatefulPromise<unknown> {
+): thing is Kiru.StatefulPromiseBase<unknown> {
   return thing instanceof Promise && "id" in thing && "state" in thing
 }
 
-export { createStatefulPromise as usePromise }
-
 const nodeToPromiseIndex = new WeakMap<Kiru.VNode, number>()
 
-type UsePromiseResult<T> = Kiru.StatefulPromise<T> & {
+type StatefulPromise<T> = Kiru.StatefulPromiseBase<T> & {
   isPending: Signal<boolean>
 }
 
-function createStatefulPromise<T>(
+export function statefulPromise<T>(
   callback: (signal: AbortSignal) => Promise<T>
-): UsePromiseResult<T> {
+): StatefulPromise<T> {
   const vNode = node.current!
+  if (!vNode) {
+    throw new Error("statefulPromise must be called inside a Kiru component")
+  }
   const id = getVNodeId(vNode)
   const isPending = signal(true)
 
@@ -74,7 +75,10 @@ function createStatefulPromise<T>(
     id: promiseId,
     state: "pending",
   }
-  const statefulPromise: Kiru.StatefulPromise<T> = Object.assign(promise, state)
+  const statefulPromise: Kiru.StatefulPromiseBase<T> = Object.assign(
+    promise,
+    state
+  )
 
   statefulPromise
     .then((value) => {

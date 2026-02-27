@@ -19,6 +19,7 @@ export {
   requestUpdate,
   useRequestUpdate,
 } from "./scheduler.js"
+export * from "./statefulPromise.js"
 export * from "./viewTransitions.js"
 
 if ("window" in globalThis) {

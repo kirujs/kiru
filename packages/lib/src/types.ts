@@ -138,9 +138,9 @@ declare global {
     }
 
     export interface FC<T = {}> {
-      (props: T):
-        | Exclude<JSX.Element, Kiru.FC<any>>
-        | ((props: T) => JSX.Element)
+      (
+        props: T
+      ): Exclude<JSX.Element, Kiru.FC<any>> | ((props: T) => JSX.Element)
       /** Used to display the name of the component in devtools  */
       displayName?: string
     }
@@ -163,7 +163,7 @@ declare global {
       error?: Error
     }
 
-    interface StatefulPromise<T> extends Promise<T>, PromiseState<T> {}
+    interface StatefulPromiseBase<T> extends Promise<T>, PromiseState<T> {}
 
     type RenderMode = "dom" | "hydrate" | "string" | "stream"
 

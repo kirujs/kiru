@@ -8,7 +8,7 @@ import {
   isPrimitiveChild,
   isValidTextChild,
 } from "./utils/index.js"
-import { isStreamDataThrowValue } from "./utils/promise.js"
+import { isStreamDataThrowValue } from "./statefulPromise.js"
 import { Signal } from "./signals/base.js"
 import { $ERROR_BOUNDARY, voidElements, $STREAM_DATA } from "./constants.js"
 import { __DEV__ } from "./env.js"
@@ -16,7 +16,7 @@ import type { ErrorBoundaryNode } from "./types.utils"
 
 export interface HeadlessRenderContext {
   write(chunk: string): void
-  onStreamData?: (data: Kiru.StatefulPromise<unknown>[]) => void
+  onStreamData?: (data: Kiru.StatefulPromiseBase<unknown>[]) => void
 }
 
 export function headlessRender(
@@ -66,7 +66,7 @@ export function headlessRender(
   if (isExoticType(type)) {
     if (type === $ERROR_BOUNDARY) {
       let boundaryBuffer = ""
-      const streamPromises = new Set<Kiru.StatefulPromise<unknown>>()
+      const streamPromises = new Set<Kiru.StatefulPromiseBase<unknown>>()
       const boundaryCtx: HeadlessRenderContext = {
         write(chunk) {
           boundaryBuffer += chunk
