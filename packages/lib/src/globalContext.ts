@@ -103,7 +103,6 @@ function createKiruGlobalContext(): KiruGlobalContext {
     apps.delete(app)
     appToSchedulerInterface.delete(app)
   })
-
   if (__DEV__) {
     globalContext.HMRContext = createHMRContext()
     globalContext.profilingContext = createProfilingContext()

@@ -1,11 +1,12 @@
-import * as kiru from "kiru"
-import App from "./app"
 // @ts-expect-error
 import tailwindInlineCss from "inline:./style.css"
-import { devtoolsEvents, devtoolsState } from "devtools-shared"
 
 if ("window" in globalThis) {
-  function init() {
+  async function init() {
+    const kiru = await import("kiru")
+    const { default: App } = await import("./app")
+
+    const { devtoolsEvents, devtoolsState } = await import("devtools-shared")
     const pageRoot = document.createElement("kiru-devtools")
     pageRoot.setAttribute("style", "display: contents")
     pageRoot.tabIndex = -1
