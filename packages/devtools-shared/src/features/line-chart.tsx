@@ -32,6 +32,7 @@ export interface LineChartController {
   canvasRef: kiru.Signal<HTMLCanvasElement | null>
   init: () => () => void
   resetZoom: () => void
+  getZoomLevel: () => number
 }
 
 export function createLineChart(config: LineChartConfig): LineChartController {
@@ -42,6 +43,7 @@ export function createLineChart(config: LineChartConfig): LineChartController {
   let chart: Chart | null = null
 
   const resetZoom = () => chart?.resetZoom()
+  const getZoomLevel = () => chart?.getZoomLevel() ?? 0
 
   const init = () => {
     const canvas = canvasRef.value
@@ -73,7 +75,10 @@ export function createLineChart(config: LineChartConfig): LineChartController {
         plugins: {
           zoom: {
             pan: { enabled: true, mode: "x" },
-            zoom: { wheel: { enabled: true }, mode: "x" },
+            zoom: {
+              wheel: { enabled: true },
+              mode: "x",
+            },
           },
           legend: { align: "start", position: "bottom" },
           title: { display: false },
@@ -100,5 +105,5 @@ export function createLineChart(config: LineChartConfig): LineChartController {
     return () => dispose()
   }
 
-  return { canvasRef, init, resetZoom }
+  return { canvasRef, init, resetZoom, getZoomLevel }
 }

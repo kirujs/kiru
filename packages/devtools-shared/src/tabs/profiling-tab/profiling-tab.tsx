@@ -57,6 +57,12 @@ function AppProfilingChart({ item }: AppProfilingChartProps) {
         className="w-full max-w-full h-80 bg-black bg-opacity-30 overflow-hidden"
         onmouseover={onCanvasMouseOver}
         onmouseout={onCanvasMouseOut}
+        onmousedown={(e) => {
+          if (lineChart.getZoomLevel() <= 1) return
+          e.preventDefault()
+          e.stopPropagation()
+          e.stopImmediatePropagation()
+        }}
       />
       <div className="absolute top-1 right-1 flex flex-col gap-1 items-end">
         <button
