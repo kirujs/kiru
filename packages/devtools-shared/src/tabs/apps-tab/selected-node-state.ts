@@ -1,5 +1,6 @@
 import * as kiru from "kiru"
-import { devtoolsState } from "../../state"
+import { isVNodeDeleted } from "kiru/utils"
+import { devtoolsState, kiruGlobal } from "../../state"
 import { getNodeName } from "../../utils"
 import {
   buildViewerRoot,
@@ -9,7 +10,7 @@ import {
   ViewerRoot,
 } from "../../components/value-viewer-data"
 
-const { selectedNode, viewerSettings } = devtoolsState
+const { selectedNode, selectedApp, viewerSettings } = devtoolsState
 
 export interface SelectedNodeViewData {
   node: Kiru.VNode
@@ -28,8 +29,30 @@ export const selectedNodeViewData = kiru.signal<SelectedNodeViewData | null>(
 
 kiru.effect(() => {
   const node = selectedNode.value
+  const app = selectedApp.value
   const settings = viewerSettings.value
 
+  rebuildNodeViewData(node, settings)
+
+  if (!node || !app) return
+
+  const onAppUpdate = (updatedApp: kiru.AppHandle) => {
+    if (updatedApp !== app) return
+    if (isVNodeDeleted(node)) {
+      selectedNode.value = null
+      return
+    }
+    rebuildNodeViewData(node, viewerSettings.peek())
+  }
+
+  kiruGlobal().on("update", onAppUpdate)
+  return () => kiruGlobal().off("update", onAppUpdate)
+})
+
+function rebuildNodeViewData(
+  node: Kiru.VNode | null,
+  settings: { objectKeysChunkSize: number; arrayChunkSize: number }
+) {
   const prevData = selectedNodeViewData.peek()
 
   if (!node) {
@@ -40,7 +63,6 @@ kiru.effect(() => {
 
   const sameNode = prevData?.node === node
 
-  // Collect viewer-tree signals for reconciliation (only reuse when same node)
   const prevCache = emptyCache()
   if (sameNode && prevData) {
     collectFromRoot(prevData.props.root, "props", prevCache)
@@ -62,7 +84,6 @@ kiru.effect(() => {
     settings
   )
 
-  // Dispose any viewer-tree signals not reused (same-node prop changes)
   disposeCache(prevCache)
 
   selectedNodeViewData.value = {
@@ -70,7 +91,7 @@ kiru.effect(() => {
     name: getNodeName(node),
     props: { root: propsViewerRoot, collapsed: propsRootCollapsed },
   }
-})
+}
 
 function disposePropsData(props: PropsData) {
   kiru.Signal.dispose(props.collapsed)

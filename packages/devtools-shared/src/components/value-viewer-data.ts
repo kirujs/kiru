@@ -52,11 +52,25 @@ export interface ViewerArrayChunkNode {
   buildChildren: () => void
 }
 
+export interface ViewerSignalNode {
+  kind: "signal"
+  label: string
+  path: string
+  signal: kiru.Signal<unknown>
+  /**
+   * Reactive viewer node for the signal's current value.
+   * Rebuilt (and the old inner node's signals disposed) whenever the signal changes.
+   */
+  viewerNode: kiru.Signal<ViewerNode>
+  unsubscribe: () => void
+}
+
 export type ViewerNode =
   | ViewerLeafNode
   | ViewerObjectNode
   | ViewerArrayNode
   | ViewerArrayChunkNode
+  | ViewerSignalNode
 
 export interface ViewerRoot {
   /** Top-level entries — always built eagerly (one level deep, no recursion). */
@@ -73,10 +87,17 @@ type SignalCache = {
   page: Map<string, kiru.Signal<number>>
   /** Tracked only for disposal — children signals are never reused across builds. */
   children: Map<string, kiru.Signal<ViewerNode[] | null>>
+  /** Tracked for unsubscribing and disposing viewerNode signals. */
+  signalNodes: Map<string, ViewerSignalNode>
 }
 
 export function emptyCache(): SignalCache {
-  return { collapsed: new Map(), page: new Map(), children: new Map() }
+  return {
+    collapsed: new Map(),
+    page: new Map(),
+    children: new Map(),
+    signalNodes: new Map(),
+  }
 }
 
 export function collectFromRoot(
@@ -101,6 +122,9 @@ function collectFromNodes(nodes: ViewerNode[], cache: SignalCache) {
       cache.children.set(node.path, node.children)
       const built = node.children.peek()
       if (built !== null) collectFromNodes(built, cache)
+    } else if (node.kind === "signal") {
+      cache.signalNodes.set(node.path, node)
+      collectFromNodes([node.viewerNode.peek()], cache)
     }
   }
 }
@@ -109,6 +133,10 @@ export function disposeCache(cache: SignalCache) {
   for (const s of cache.collapsed.values()) kiru.Signal.dispose(s)
   for (const s of cache.page.values()) kiru.Signal.dispose(s)
   for (const s of cache.children.values()) kiru.Signal.dispose(s)
+  for (const n of cache.signalNodes.values()) {
+    n.unsubscribe()
+    kiru.Signal.dispose(n.viewerNode)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +180,23 @@ function buildNode(
   const leafKind = classifyLeaf(raw)
   if (leafKind !== null) {
     return { kind: leafKind, label, path, raw }
+  }
+
+  if (kiru.Signal.isSignal(raw)) {
+    const sig = raw as kiru.Signal<unknown>
+    const innerPath = `${path}.$value`
+    const innerNode = buildNode(sig.peek(), "value", innerPath, cache, settings)
+    const viewerNode = kiru.signal<ViewerNode>(innerNode)
+
+    const unsubscribe = sig.subscribe((newValue) => {
+      // Dispose the old inner node's signals before replacing
+      const oldCache = emptyCache()
+      collectFromNodes([viewerNode.peek()], oldCache)
+      disposeCache(oldCache)
+      viewerNode.value = buildNode(newValue, "value", innerPath, emptyCache(), settings)
+    })
+
+    return { kind: "signal", label, path, signal: sig, viewerNode, unsubscribe }
   }
 
   if (Array.isArray(raw)) {

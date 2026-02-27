@@ -10,6 +10,7 @@ import type {
   ViewerNode,
   ViewerObjectNode,
   ViewerRoot,
+  ViewerSignalNode,
 } from "./value-viewer-data"
 
 type ValueViewerProps = {
@@ -90,6 +91,8 @@ function ViewerNodeView({ node }: { node: ViewerNode }) {
       return <ArrayNodeView node={node} />
     case "array-chunk":
       return <ArrayChunkView node={node} />
+    case "signal":
+      return <SignalNodeView node={node} />
   }
 }
 
@@ -251,6 +254,26 @@ function ArrayChunkView({ node }: { node: ViewerArrayChunkNode }) {
         </div>
       )}
     </div>
+  )
+}
+
+function SignalNodeView({ node }: { node: ViewerSignalNode }) {
+  const inner = node.viewerNode.value
+
+  return (
+    <NodeWrapper>
+      <div className="flex items-center gap-2">
+        <label className="text-xs truncate" title={node.path}>
+          {node.label}
+        </label>
+        <span className="text-[10px] italic text-primary border border-primary/40 px-1 rounded leading-none py-px">
+          signal
+        </span>
+      </div>
+      <div className="pl-2 w-full">
+        <ViewerNodeView node={inner} />
+      </div>
+    </NodeWrapper>
   )
 }
 
