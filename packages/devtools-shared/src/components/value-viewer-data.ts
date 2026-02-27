@@ -189,11 +189,12 @@ function buildNode(
     const viewerNode = kiru.signal<ViewerNode>(innerNode)
 
     const unsubscribe = sig.subscribe((newValue) => {
-      // Dispose the old inner node's signals before replacing
-      const oldCache = emptyCache()
-      collectFromNodes([viewerNode.peek()], oldCache)
-      disposeCache(oldCache)
-      viewerNode.value = buildNode(newValue, "value", innerPath, emptyCache(), settings)
+      // Collect old signals by path for reconciliation, then reuse them in the
+      // new build so collapse/page state is preserved across value changes
+      const prevCache = emptyCache()
+      collectFromNodes([viewerNode.peek()], prevCache)
+      viewerNode.value = buildNode(newValue, "value", innerPath, prevCache, settings)
+      disposeCache(prevCache)
     })
 
     return { kind: "signal", label, path, signal: sig, viewerNode, unsubscribe }
