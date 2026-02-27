@@ -14,7 +14,10 @@ effect(() => {
   const intervalId = setInterval(() => {
     count.value++
   }, 1000)
-  return () => clearInterval(intervalId)
+  return () => {
+    console.log("effect cleanup")
+    clearInterval(intervalId)
+  }
 })
 
 const count = signal(0)

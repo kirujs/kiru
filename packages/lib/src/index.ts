@@ -23,6 +23,5 @@ export * from "./statefulPromise.js"
 export * from "./viewTransitions.js"
 
 if ("window" in globalThis) {
-  console.log("Creating Kiru global context")
   globalThis.window.__kiru ??= createKiruGlobalContext()
 }

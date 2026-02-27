@@ -16,9 +16,9 @@ type HotVarDesc = {
   name: string
 }
 
-const UNNAMED_WATCH_PREAMBLE = `\n
+const UNNAMED_EFFECT_PREAMBLE = `\n
 if (import.meta.hot && "window" in globalThis) {
-  window.__kiru.HMRContext?.signals.registerNextWatch();
+  window.__kiru.HMRContext?.signals.registerNextEffect();
 }
 `
 export function prepareHMR(ctx: TransformCTX) {
@@ -119,7 +119,7 @@ function findHotVars(
     "createStore",
     "signal",
     "computed",
-    "watch",
+    "effect",
     "createContext",
     "lazy",
   ].map((name) => createAliasHandler(name))
@@ -150,11 +150,11 @@ function findHotVars(
             return ctx.exitBranch()
           }
           if (
-            aliasHandler.name === "watch" &&
+            aliasHandler.name === "effect" &&
             ctx.stack.length === 1 &&
             ctx.stack[0].type === "ExpressionStatement"
           ) {
-            code.appendRight(node.start, UNNAMED_WATCH_PREAMBLE)
+            code.appendRight(node.start, UNNAMED_EFFECT_PREAMBLE)
             return ctx.exit()
           }
 

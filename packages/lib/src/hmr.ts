@@ -57,7 +57,7 @@ export function createHMRContext() {
   let currentModuleMemory: ModuleMemory | null = null
   let isModuleReplacementExecution = false
   const isReplacement = () => isModuleReplacementExecution
-  let isWaitingForNextWatchCall = false
+  let isWaitingForNextEffect = false
 
   const onHmrCallbacks: Array<() => void> = []
   const onHmr = (callback: () => void) => {
@@ -75,9 +75,10 @@ export function createHMRContext() {
       moduleMap.set(filePath, mod)
     } else {
       while (onHmrCallbacks.length) onHmrCallbacks.shift()!()
-      for (const prevWatcher of mod.unnamedEffects.splice(0)) {
-        prevWatcher.stop()
+      for (const effect of mod.unnamedEffects) {
+        effect.stop()
       }
+      mod.unnamedEffects.length = 0
     }
 
     currentModuleMemory = mod!
@@ -145,15 +146,15 @@ export function createHMRContext() {
   }
 
   const signals = {
-    registerNextWatch() {
-      isWaitingForNextWatchCall = true
+    registerNextEffect() {
+      isWaitingForNextEffect = true
     },
-    isWaitingForNextWatchCall() {
-      return isWaitingForNextWatchCall
+    isWaitingForNextEffect() {
+      return isWaitingForNextEffect
     },
-    pushWatch(effect: Effect) {
+    pushEffect(effect: Effect<any>) {
       currentModuleMemory!.unnamedEffects.push(effect)
-      isWaitingForNextWatchCall = false
+      isWaitingForNextEffect = false
     },
   }
 
