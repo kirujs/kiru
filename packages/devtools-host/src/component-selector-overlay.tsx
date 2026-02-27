@@ -3,6 +3,8 @@ import {
   createMousePositionTracker,
   devtoolsState,
   getNodeName,
+  isDevtoolsApp,
+  kiruGlobal,
 } from "devtools-shared"
 import { isOverlayShown } from "./state"
 const { componentSelection } = devtoolsState
@@ -43,8 +45,16 @@ export function ComponentSelectorOverlay() {
     openDevtoolsView()
   }
 
+  const onAppUpdate = (updatedApp: kiru.AppHandle) => {
+    if (isDevtoolsApp(updatedApp)) return
+    updateCurrentComponentHover()
+  }
+
+  kiruGlobal().on("update", onAppUpdate)
   window.addEventListener("resize", updateCurrentComponentHover)
+
   kiru.onCleanup(() => {
+    kiruGlobal().off("update", onAppUpdate)
     window.removeEventListener("resize", updateCurrentComponentHover)
   })
 
