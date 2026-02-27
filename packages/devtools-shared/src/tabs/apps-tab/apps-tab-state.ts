@@ -50,17 +50,11 @@ kiru.effect(() => {
     appGraph.value = createGraphRoot()
     return
   }
-  let currentGraph = (appGraph.value = reconcileGraph(
-    app,
-    search,
-    appGraph.peek()
-  ))
+  appGraph.value = reconcileGraph(app, search, appGraph.peek())
 
   const onAppUpdate = (updatedApp: kiru.AppHandle) => {
     if (updatedApp !== app) return
-    const newGraph = reconcileGraph(updatedApp, search, currentGraph)
-    currentGraph = newGraph
-    appGraph.value = newGraph
+    appGraph.value = reconcileGraph(updatedApp, search, appGraph.peek())
   }
   kiruGlobal().on("update", onAppUpdate)
   return () => kiruGlobal().off("update", onAppUpdate)
