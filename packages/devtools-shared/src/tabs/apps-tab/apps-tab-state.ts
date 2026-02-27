@@ -6,23 +6,22 @@ const { selectedApp, appSearchTerm } = devtoolsState
 
 export const appGraph = kiru.signal<GraphRoot>(createGraphRoot())
 
-const onKeyDown = (e: KeyboardEvent) => {
-  console.log(e.key)
-  switch (e.key) {
-    case "ArrowUp":
-      break
-    case "ArrowDown":
-      break
-    case "ArrowLeft":
-      break
-    case "ArrowRight":
-      break
-    default:
-      break
-  }
-}
 const handleKeyDown = (e: KeyboardEvent) => {
-  ifDevtoolsAppRootHasFocus(onKeyDown.bind(null, e))
+  ifDevtoolsAppRootHasFocus(() => {
+    console.log(e.key)
+    switch (e.key) {
+      case "ArrowUp":
+        break
+      case "ArrowDown":
+        break
+      case "ArrowLeft":
+        break
+      case "ArrowRight":
+        break
+      default:
+        break
+    }
+  })
 }
 
 export const setupKeyboardNavigation = () => {
@@ -32,7 +31,6 @@ export const setupKeyboardNavigation = () => {
 
 export interface GraphRoot {
   value: "ROOT"
-  collapsed: kiru.Signal<boolean>
   nodes: GraphNode[]
 }
 
@@ -45,17 +43,21 @@ export interface GraphNode {
 }
 
 kiru.effect(() => {
-  disposeGraph(appGraph.peek())
-  if (!selectedApp.value) {
+  const app = selectedApp.value
+  const search = appSearchTerm.value
+  if (!app) {
+    disposeGraph(appGraph.peek())
     appGraph.value = createGraphRoot()
     return
   }
-  const app = selectedApp.value
-  const search = appSearchTerm.value
-  let currentGraph = (appGraph.value = buildGraph(app, search))
+  let currentGraph = (appGraph.value = reconcileGraph(
+    app,
+    search,
+    appGraph.peek()
+  ))
 
   const onAppUpdate = (updatedApp: kiru.AppHandle) => {
-    if (updatedApp !== selectedApp.value) return
+    if (updatedApp !== app) return
     const newGraph = reconcileGraph(updatedApp, search, currentGraph)
     currentGraph = newGraph
     appGraph.value = newGraph
@@ -66,25 +68,12 @@ kiru.effect(() => {
 
 function disposeGraph(graph: GraphRoot | GraphNode | null) {
   if (!graph) return
-  kiru.Signal.dispose(graph.collapsed)
   if ("nodes" in graph) {
     graph.nodes.forEach(disposeGraph)
   } else {
     disposeGraph(graph.child)
     disposeGraph(graph.sibling)
   }
-}
-
-function buildGraph(app: kiru.AppHandle, search: string): GraphRoot {
-  const rootNode = app.rootNode
-  const graphRoot = createGraphRoot()
-  if (!rootNode) return graphRoot
-
-  const trimmed = search.trim().toLowerCase()
-  const searchTerms = trimmed ? trimmed.split(/\s+/) : []
-
-  graphRoot.nodes.push(...searchFunctionNodes(rootNode, searchTerms))
-  return graphRoot
 }
 
 function reconcileGraph(
@@ -163,7 +152,6 @@ function searchMatchesItem(terms: string[], item: string) {
 function createGraphRoot(...nodes: GraphNode[]): GraphRoot {
   return {
     value: "ROOT",
-    collapsed: kiru.signal(true),
     nodes,
   }
 }
