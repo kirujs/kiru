@@ -110,7 +110,7 @@ Exiting...`)
     if (!templateOption) {
       const { selectedTemplate } = await inquirer.prompt([
         {
-          type: "list",
+          type: "select",
           name: "selectedTemplate",
           message: "Which template do you want to use?",
           choices: templates,
@@ -121,7 +121,7 @@ Exiting...`)
 
       if (!match) {
         console.error("[create-kiru]: Invalid template. Exiting...")
-        return
+        return process.exit(1)
       }
 
       templateOption = match
@@ -139,7 +139,7 @@ Exiting...`)
         `[create-kiru]: An error occurred while cloning the template:`,
         error
       )
-      return
+      return process.exit(1)
     }
 
     if (!install) {
@@ -156,7 +156,7 @@ Exiting...`)
         console.log(
           `[create-kiru]: Configuration complete. Run \`${executingPackageManager} install\` in ${dir} to install them.`
         )
-        return
+        return process.exit(0)
       }
     }
 
@@ -176,7 +176,7 @@ Exiting...`)
         `[create-kiru]: An error occurred while installing dependencies:`,
         error
       )
-      return
+      return process.exit(1)
     }
 
     let runDevCommand = `${executingPackageManager} dev`
@@ -197,7 +197,7 @@ Exiting...`)
         console.log(
           `[create-kiru]: Configuration complete. Run \`${runDevCommand}\` in ${dir} to start the app.`
         )
-        return
+        return process.exit(0)
       }
     }
 
