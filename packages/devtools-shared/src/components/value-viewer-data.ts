@@ -255,7 +255,7 @@ function buildObjectChildren(
   )
 }
 
-export function buildRoot(
+export function buildViewerRoot(
   data: Record<string, unknown>,
   rootKey: string,
   cache: SignalCache,

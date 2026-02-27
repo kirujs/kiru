@@ -2,7 +2,7 @@ import * as kiru from "kiru"
 import { devtoolsState } from "../../state"
 import { getNodeName } from "../../utils"
 import {
-  buildRoot,
+  buildViewerRoot,
   collectFromRoot,
   disposeCache,
   emptyCache,
@@ -11,16 +11,15 @@ import {
 
 const { selectedNode, viewerSettings } = devtoolsState
 
-export interface SelectedNodeSection {
-  title: string
-  collapsed: kiru.Signal<boolean>
-  viewer: ViewerRoot
-}
-
 export interface SelectedNodeViewData {
   node: Kiru.VNode
   name: string
-  sections: SelectedNodeSection[]
+  props: PropsData
+}
+
+interface PropsData {
+  root: ViewerRoot
+  collapsed: kiru.Signal<boolean>
 }
 
 export const selectedNodeViewData = kiru.signal<SelectedNodeViewData | null>(
@@ -34,7 +33,7 @@ kiru.effect(() => {
   const prevData = selectedNodeViewData.peek()
 
   if (!node) {
-    if (prevData) disposeSections(prevData.sections)
+    if (prevData) disposePropsData(prevData.props)
     selectedNodeViewData.value = null
     return
   }
@@ -44,21 +43,24 @@ kiru.effect(() => {
   // Collect viewer-tree signals for reconciliation (only reuse when same node)
   const prevCache = emptyCache()
   if (sameNode && prevData) {
-    for (const section of prevData.sections) {
-      collectFromRoot(section.viewer, section.title, prevCache)
-    }
+    collectFromRoot(prevData.props.root, "props", prevCache)
   } else if (prevData) {
-    disposeSections(prevData.sections)
+    disposePropsData(prevData.props)
   }
 
   const nodeProps = { ...node.props } as Record<string, unknown>
   delete nodeProps.children
 
-  const propsCollapsed = sameNode
-    ? (prevData?.sections.find((s) => s.title === "props")?.collapsed ?? kiru.signal(true))
+  const propsRootCollapsed = sameNode
+    ? prevData?.props.collapsed ?? kiru.signal(true)
     : kiru.signal(true)
 
-  const propsViewer = buildRoot(nodeProps, "props", prevCache, settings)
+  const propsViewerRoot = buildViewerRoot(
+    nodeProps,
+    "props",
+    prevCache,
+    settings
+  )
 
   // Dispose any viewer-tree signals not reused (same-node prop changes)
   disposeCache(prevCache)
@@ -66,15 +68,14 @@ kiru.effect(() => {
   selectedNodeViewData.value = {
     node,
     name: getNodeName(node),
-    sections: [{ title: "props", collapsed: propsCollapsed, viewer: propsViewer }],
+    props: { root: propsViewerRoot, collapsed: propsRootCollapsed },
   }
 })
 
-function disposeSections(sections: SelectedNodeSection[]) {
-  for (const section of sections) {
-    kiru.Signal.dispose(section.collapsed)
-    const cache = emptyCache()
-    collectFromRoot(section.viewer, section.title, cache)
-    disposeCache(cache)
-  }
+function disposePropsData(props: PropsData) {
+  kiru.Signal.dispose(props.collapsed)
+  kiru.Signal.dispose(props.root.page)
+  const cache = emptyCache()
+  collectFromRoot(props.root, "props", cache)
+  disposeCache(cache)
 }
