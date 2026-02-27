@@ -226,8 +226,8 @@ const ProfilingWidget: Kiru.FC<ProfilingWidgetProps> = () => {
     <div
       ref={containerRef}
       className={cls(
-        "z-50 fixed rounded p-1 flex flex-col gap-2 select-none overflow-hidden",
-        "bg-neutral-800 opacity-75 hover:opacity-100 shadow-lg"
+        "z-50 fixed rounded p-0.5 flex flex-col gap-2 select-none overflow-hidden",
+        "bg-neutral-900 opacity-75 hover:opacity-100 shadow-lg"
       )}
       style={{
         minWidth: `${PROFILER_MIN_WIDTH}px`,

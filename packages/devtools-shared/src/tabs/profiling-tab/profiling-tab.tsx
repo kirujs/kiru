@@ -1,6 +1,6 @@
 import * as kiru from "kiru"
 
-import { LineChart } from "../../components/line-chart.jsx"
+import { createLineChart } from "../../features"
 import { kiruGlobal as getKiruGlobal } from "../../state.js"
 import {
   initProfilingViewState,
@@ -29,6 +29,7 @@ type AppProfilingChartProps = {
 function AppProfilingChart({ item }: AppProfilingChartProps) {
   const hovered = kiru.signal(false)
   const chartData = kiru.signal(item.chartData.peek())
+  const lineChart = createLineChart({ data: chartData })
 
   const unsub = item.chartData.subscribe((data) => {
     if (hovered.peek()) return
@@ -36,16 +37,26 @@ function AppProfilingChart({ item }: AppProfilingChartProps) {
   })
 
   kiru.onCleanup(() => unsub())
+  kiru.onMount(() => lineChart.init())
 
   const showStatsTooltip = kiru.signal(false)
 
+  const onCanvasMouseOver = () => {
+    hovered.value = true
+  }
+  const onCanvasMouseOut = () => {
+    hovered.value = false
+    chartData.value = item.chartData.peek()
+    lineChart.resetZoom()
+  }
+
   return () => (
     <div title={item.app.name} className="flex overflow-hidden">
-      <LineChart
-        data={chartData}
+      <canvas
+        ref={lineChart.canvasRef}
         className="w-full max-w-full h-80 bg-black bg-opacity-30 overflow-hidden"
-        onmouseover={() => (hovered.value = true)}
-        onmouseout={() => (hovered.value = false)}
+        onmouseover={onCanvasMouseOver}
+        onmouseout={onCanvasMouseOut}
       />
       <div className="absolute top-1 right-1 flex flex-col gap-1 items-end">
         <button
@@ -59,7 +70,7 @@ function AppProfilingChart({ item }: AppProfilingChartProps) {
           {({ stats, showStatsTooltip }) =>
             showStatsTooltip && (
               <div
-                className="text-xs grid grid-cols-2 gap-x-4 bg-neutral-800/50 rounded-md p-2"
+                className="text-xs grid grid-cols-2 gap-x-4 bg-neutral-800/50 hover:bg-neutral-800/80 rounded-md p-2"
                 style="grid-template-columns: auto auto;"
               >
                 <span className="text-right">Mount duration:</span>
