@@ -62,8 +62,13 @@ export function createProfilingContext() {
     },
     lastTickDuration: (app: AppHandle) => {
       const stats = appStats.get(app)
-      if (!stats) return 0
-      const last = stats.timestamps[stats.timestamps.length - 1]
+      if (!stats) return Infinity
+      let last = stats.timestamps[stats.timestamps.length - 1]
+      if (!last) return Infinity
+      if (last.end === Infinity) {
+        last = stats.timestamps[stats.timestamps.length - 2]
+      }
+      if (!last) return Infinity
       return last.end - last.start
     },
     averageTickDuration: (app: AppHandle) => {
@@ -88,7 +93,6 @@ export function createProfilingContext() {
       stats.timestamps.push({ start: performance.now(), end: Infinity })
     },
     endTick: (app: AppHandle) => {
-      if (!appStats.has(app)) return
       const stats = appStats.get(app)!
 
       const last = stats.timestamps[stats.timestamps.length - 1]

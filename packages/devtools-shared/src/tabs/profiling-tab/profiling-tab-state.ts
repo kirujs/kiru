@@ -1,6 +1,6 @@
 import * as kiru from "kiru"
 import { isDevtoolsApp } from "../../utils.js"
-import type { LineChartData } from "../../components/line-chart.jsx"
+import { LineChartData } from "../../features/line-chart.jsx"
 export type { LineChartData }
 
 const MAX_TICKS = 100

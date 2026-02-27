@@ -23,10 +23,10 @@ effect(() => {
 const count = signal(0)
 const double = computed(() => count.value * 2)
 if (import.meta.env.DEV) {
-  window.__kiru.devtools?.debugger.add("count", count)
-  window.__kiru.devtools?.debugger.add("double", double)
-  window.__kiru.devtools?.debugger.add("text", text)
-  window.__kiru.devtools?.debugger.add("foo", foo)
+  window.__kiru.devtools?.tracking.add("count", count)
+  window.__kiru.devtools?.tracking.add("double", double)
+  window.__kiru.devtools?.tracking.add("text", text)
+  window.__kiru.devtools?.tracking.add("foo", foo)
 }
 
 export default function HomePage() {

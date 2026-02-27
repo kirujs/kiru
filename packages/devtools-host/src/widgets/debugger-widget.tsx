@@ -112,7 +112,7 @@ const DebuggerView: Kiru.FC = () => {
   const debuggerEntries = kiru.signal<DebuggerEntry[]>([])
 
   kiru.onMount(() => {
-    const unsub = kiruGlobal().devtools!.debugger.subscribe((newEntries) => {
+    const unsub = kiruGlobal().devtools!.tracking.subscribe((newEntries) => {
       debuggerEntries.value = Array.from(newEntries)
     })
     return () => unsub()

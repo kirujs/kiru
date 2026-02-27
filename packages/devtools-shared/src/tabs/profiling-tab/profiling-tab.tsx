@@ -70,7 +70,7 @@ function AppProfilingChart({ item }: AppProfilingChartProps) {
           {({ stats, showStatsTooltip }) =>
             showStatsTooltip && (
               <div
-                className="text-xs grid grid-cols-2 gap-x-4 bg-neutral-700 bg-opacity-60 hover:bg-opacity-80 rounded-md p-2"
+                className="text-xs grid grid-cols-2 gap-x-4 bg-neutral-800 bg-opacity-60 hover:bg-opacity-80 rounded-md p-2"
                 style="grid-template-columns: auto auto;"
               >
                 <span className="text-right">Mount duration:</span>

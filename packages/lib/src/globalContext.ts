@@ -49,7 +49,7 @@ interface KiruGlobalContext {
     callback: (app: AppHandle, data?: T["data"]) => void
   ): void
   devtools?: {
-    debugger: {
+    tracking: {
       add: (label: string, signal: Kiru.Signal<any>) => void
       remove: (signal: Kiru.Signal<any>) => void
       subscribe: (callback: (entries: Set<DebuggerEntry>) => void) => () => void
@@ -127,7 +127,7 @@ function createKiruGlobalContext(): KiruGlobalContext {
     const subscribers = new Set<(debuggerEntries: Set<DebuggerEntry>) => void>()
 
     globalContext.devtools = {
-      debugger: {
+      tracking: {
         add: (label: string, signal: Kiru.Signal<any>) => {
           debuggerEntries.add({ label, signal })
           subscribers.forEach((cb) => cb(debuggerEntries))

@@ -115,7 +115,7 @@ export default function DevtoolsHostApp() {
             transition: "80ms",
             opacity: mounted.value ? 1 : 0,
           }}
-          className={`flex ${containerFlexDirection} items-center justify-center z-50`}
+          className={`z-[999999] flex ${containerFlexDirection} items-center justify-center z-50`}
         >
           <button
             ref={mainMenuController.handleRef}
@@ -128,20 +128,24 @@ export default function DevtoolsHostApp() {
             style="transition: 80ms ease-in-out; transform-origin: 0 0"
             className={cls(
               `absolute left-1/2 top-1/2 z-0 flex ${tooltipFlexDirection} p-1.5 gap-1.5`,
-              "bg-neutral-900 border border-crimson/50 rounded-xl shadow"
+              "bg-neutral-900 rounded-xl shadow"
             )}
           >
             <TooltipMenuButton
+              active={isProfilerShown}
               title="Toggle Profiler"
               onclick={() => (isProfilerShown.value = !isProfilerShown.value)}
             >
               <GaugeIcon className="w-4 h-4 pointer-events-none" />
+              <small>Profiler</small>
             </TooltipMenuButton>
             <TooltipMenuButton
+              active={isDebuggerShown}
               title="Toggle Debugger"
               onclick={() => (isDebuggerShown.value = !isDebuggerShown.value)}
             >
               <RadioIcon className="w-4 h-4 pointer-events-none" />
+              <small>Tracking</small>
             </TooltipMenuButton>
           </div>
         </div>
@@ -174,20 +178,22 @@ export default function DevtoolsHostApp() {
 }
 
 interface TooltipMenuButtonProps extends kiru.ElementProps<"button"> {
-  active?: boolean
+  active?: kiru.Signal<boolean>
 }
 
 function TooltipMenuButton({
   className,
-  active = false,
+  active,
   ...props
 }: TooltipMenuButtonProps) {
+  const isActive = !!active?.value
   return (
     <button
       className={cls(
         "flex items-center px-2 py-1 gap-2",
-        "text-xs rounded border border-white border-opacity-10 bg-white/5 hover:bg-white/10",
-        active && "bg-white bg-opacity-15 text-neutral-100",
+        "text-xs rounded border border-white border-opacity-10",
+        isActive && "bg-white/10 text-neutral-100",
+        !isActive && "bg-white/2.5 hover:bg-white/5 text-neutral-400",
         kiru.unwrap(className)
       )}
       {...props}
