@@ -57,7 +57,7 @@ function GraphNodeItem({
 
   return (
     <>
-      <div className="pl-4 mb-1 w-full">
+      <div data-graph-node-id={node.id} className="pl-4 mb-1 w-full">
         <button
           className={cls(
             "flex gap-2 items-center px-2 py-0.5 w-full",

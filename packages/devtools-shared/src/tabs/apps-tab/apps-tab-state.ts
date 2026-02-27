@@ -2,27 +2,9 @@ import * as kiru from "kiru"
 import { devtoolsState, kiruGlobal } from "../../state"
 import { getNodeName, ifDevtoolsAppRootHasFocus } from "../../utils"
 
-const { selectedApp, appSearchTerm } = devtoolsState
+const { selectedApp, selectedNode, appSearchTerm } = devtoolsState
 
 export const appGraph = kiru.signal<GraphRoot>(createGraphRoot())
-
-const handleKeyDown = (e: KeyboardEvent) => {
-  ifDevtoolsAppRootHasFocus(() => {
-    console.log(e.key)
-    switch (e.key) {
-      case "ArrowUp":
-        break
-      case "ArrowDown":
-        break
-      case "ArrowLeft":
-        break
-      case "ArrowRight":
-        break
-      default:
-        break
-    }
-  })
-}
 
 export const setupKeyboardNavigation = () => {
   window.addEventListener("keydown", handleKeyDown)
@@ -35,12 +17,19 @@ export interface GraphRoot {
 }
 
 export interface GraphNode {
+  id: string
   kiruNode: Kiru.VNode
   name: string
   collapsed: kiru.Signal<boolean>
   child: GraphNode | null
   sibling: GraphNode | null
 }
+
+type DiffMapEntry = {
+  id: string
+  collapsed: kiru.Signal<boolean>
+}
+type DiffMap = Map<Kiru.VNode, DiffMapEntry>
 
 kiru.effect(() => {
   const app = selectedApp.value
@@ -75,7 +64,7 @@ function reconcileGraph(
   search: string,
   currentGraph: GraphRoot
 ): GraphRoot {
-  const existing = new Map<Kiru.VNode, kiru.Signal<boolean>>()
+  const existing: DiffMap = new Map()
   collectCollapsedSignals(currentGraph, existing)
 
   const rootNode = app.rootNode
@@ -87,8 +76,8 @@ function reconcileGraph(
   }
 
   // Dispose collapsed signals for nodes that are no longer in the graph
-  for (const signal of existing.values()) {
-    kiru.Signal.dispose(signal)
+  for (const { collapsed } of existing.values()) {
+    kiru.Signal.dispose(collapsed)
   }
 
   return newGraph
@@ -96,13 +85,14 @@ function reconcileGraph(
 
 function collectCollapsedSignals(
   node: GraphRoot | GraphNode | null,
-  map: Map<Kiru.VNode, kiru.Signal<boolean>>
+  map: DiffMap
 ) {
   if (!node) return
   if ("nodes" in node) {
     for (const child of node.nodes) collectCollapsedSignals(child, map)
   } else {
-    map.set(node.kiruNode, node.collapsed)
+    const { id, collapsed } = node
+    map.set(node.kiruNode, { id, collapsed })
     collectCollapsedSignals(node.child, map)
     collectCollapsedSignals(node.sibling, map)
   }
@@ -111,7 +101,7 @@ function collectCollapsedSignals(
 function searchFunctionNodes(
   vNode: Kiru.VNode | null,
   terms: string[],
-  existing: Map<Kiru.VNode, kiru.Signal<boolean>> = new Map()
+  existing: DiffMap = new Map()
 ): GraphNode[] {
   const result: GraphNode[] = []
   let n = vNode
@@ -153,15 +143,115 @@ function createGraphRoot(...nodes: GraphNode[]): GraphRoot {
 function createGraphNode(
   vNode: Kiru.VNode,
   name: string,
-  existing: Map<Kiru.VNode, kiru.Signal<boolean>> = new Map()
+  existing: DiffMap = new Map()
 ): GraphNode {
-  const collapsed = existing.get(vNode) ?? kiru.signal(true)
+  const { id, collapsed } = existing.get(vNode) ?? {
+    id: crypto.randomUUID(),
+    collapsed: kiru.signal(true),
+  }
   existing.delete(vNode)
   return {
+    id,
     name,
     kiruNode: vNode,
     collapsed,
     child: null,
     sibling: null,
   }
+}
+
+const handleKeyDown = (e: KeyboardEvent) => {
+  ifDevtoolsAppRootHasFocus((el) => {
+    switch (e.key) {
+      case "ArrowUp":
+        handleNavigation(el, "up")
+        break
+      case "ArrowDown":
+        handleNavigation(el, "down")
+        break
+      case "ArrowLeft":
+        setCollapsed(true)
+        break
+      case "ArrowRight":
+        setCollapsed(false)
+        break
+      default:
+        break
+    }
+  })
+}
+
+function setCollapsed(collapsed: boolean) {
+  const currentVNode = selectedNode.peek()
+  if (!currentVNode) return
+  const graphNode = findGraphNodeByVNode(appGraph.peek(), currentVNode)
+  if (!graphNode?.child) return
+  graphNode.collapsed.value = collapsed
+}
+
+function handleNavigation(el: Element, dir: "up" | "down") {
+  const nodes = Array.from(
+    el.querySelectorAll("[data-graph-node-id]")
+  ) as HTMLElement[]
+  if (nodes.length === 0) return
+
+  const currentVNode = selectedNode.peek()
+  let currentIndex = -1
+  if (currentVNode) {
+    const currentGraphNode = findGraphNodeByVNode(appGraph.peek(), currentVNode)
+    if (currentGraphNode) {
+      currentIndex = nodes.findIndex(
+        (n) => n.dataset.graphNodeId === currentGraphNode.id
+      )
+    }
+  }
+
+  const delta = dir === "up" ? -1 : 1
+  const nextIndex =
+    currentIndex === -1
+      ? dir === "down"
+        ? 0
+        : nodes.length - 1
+      : (currentIndex + delta + nodes.length) % nodes.length
+
+  const nextNode = nodes[nextIndex]
+  if (!nextNode) return
+
+  const graphNode = findGraphNode(appGraph.peek(), nextNode)
+  if (!graphNode) return
+  selectedNode.value = graphNode.kiruNode
+}
+
+function findGraphNode(root: GraphRoot, node: HTMLElement): GraphNode | null {
+  const id = node.dataset.graphNodeId
+  if (!id) return null
+
+  const search = (n: GraphNode | null): GraphNode | null => {
+    if (!n) return null
+    if (n.id === id) return n
+    return search(n.child) ?? search(n.sibling)
+  }
+
+  for (const rootNode of root.nodes) {
+    const found = search(rootNode)
+    if (found) return found
+  }
+  return null
+}
+
+function findGraphNodeByVNode(
+  root: GraphRoot,
+  vNode: Kiru.VNode
+): GraphNode | null {
+  const search = (n: GraphNode | null): GraphNode | null => {
+    if (!n) return null
+    if (n.kiruNode === vNode) return n
+    return search(n.child) ?? search(n.sibling)
+  }
+
+  for (const rootNode of root.nodes) {
+    const found = search(rootNode)
+    if (found) return found
+  }
+  return null
 }
