@@ -192,7 +192,7 @@ function TooltipMenuButton({
       className={cls(
         "flex items-center px-2 py-1 gap-2",
         "text-xs rounded border border-white border-opacity-10",
-        isActive && "bg-white/10 text-neutral-100",
+        isActive && "bg-white/5 text-neutral-100",
         !isActive && "bg-white/2.5 hover:bg-white/5 text-neutral-400",
         kiru.unwrap(className)
       )}
@@ -200,7 +200,3 @@ function TooltipMenuButton({
     />
   )
 }
-
-// window.__kiru.devtools?.debugger.subscribe((trackedSignals) => {
-//   console.log("trackedSignals", trackedSignals)
-// })
