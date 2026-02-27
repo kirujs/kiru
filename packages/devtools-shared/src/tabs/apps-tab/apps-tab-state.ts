@@ -186,12 +186,18 @@ selectedNode.subscribe(onSelectedNodeChange)
 
 const handleKeyDown = (e: KeyboardEvent) => {
   ifDevtoolsAppRootHasFocus((el) => {
+    if (e.key === "l" && e.ctrlKey) {
+      e.preventDefault()
+      devtoolsState.appSearchInput.value?.focus()
+      devtoolsState.appSearchInput.value?.select()
+      return
+    }
     if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
       return
     }
 
     if (devtoolsState.appSearchInput.value?.matches(":focus")) {
-      if (e.ctrlKey || e.shiftKey) return
+      if (!e.altKey) return
       e.preventDefault()
     }
 
