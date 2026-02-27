@@ -226,7 +226,7 @@ const ProfilingWidget: Kiru.FC<ProfilingWidgetProps> = () => {
     <div
       ref={containerRef}
       className={cls(
-        "z-50 fixed rounded p-0.5 flex flex-col gap-2 select-none overflow-hidden",
+        "z-50 fixed rounded-lg p-0.5 flex flex-col gap-2 select-none overflow-hidden",
         "bg-neutral-900 opacity-75 hover:opacity-100 shadow-lg"
       )}
       style={{
