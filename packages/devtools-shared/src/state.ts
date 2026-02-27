@@ -1,5 +1,5 @@
 import { Signal, signal, type AppHandle } from "kiru"
-import { isDevtoolsApp } from "./utils"
+import { assert, isDevtoolsApp } from "./utils"
 import { APP_TABS } from "./constants"
 import { getVNodeApp } from "kiru/utils"
 
@@ -102,24 +102,63 @@ const [devtoolsState] = createSyncedState("kiru-devtools:syncedState", {
   popupWindow: null as Window | null,
   selectedApp: null as AppHandle | null,
   selectedNode: null as Kiru.VNode | null,
+  viewerSettings: {
+    objectKeysChunkSize: 10,
+    arrayChunkSize: 10,
+  },
 })
 
 if ("window" in globalThis) {
+  const {
+    apps,
+    componentSelection,
+    selectedNode,
+    selectedApp,
+    viewerSettings,
+  } = devtoolsState
+
   window.addEventListener("kiru:ready", () => {
-    devtoolsState.apps.value = [...kiruGlobal().apps]
+    apps.value = [...kiruGlobal().apps]
     kiruGlobal().on("mount", (app) => {
       if (isDevtoolsApp(app)) return
-      devtoolsState.apps.value = [...devtoolsState.apps.value, app]
+      apps.value = [...apps.value, app]
     })
     kiruGlobal().on("unmount", (app) => {
       if (isDevtoolsApp(app)) return
-      devtoolsState.apps.value = devtoolsState.apps.value.filter(
-        (a) => a !== app
-      )
+      apps.value = apps.value.filter((a) => a !== app)
     })
   })
 
-  const { componentSelection, selectedNode, selectedApp } = devtoolsState
+  const VIEWER_SETTINGS_STORAGE_KEY = "kiru-devtools:viewerSettings"
+  viewerSettings.subscribe((value) => {
+    localStorage.setItem("kiru-devtools:viewerSettings", JSON.stringify(value))
+  })
+
+  const settingsFromStorage = localStorage.getItem(VIEWER_SETTINGS_STORAGE_KEY)
+  if (settingsFromStorage) {
+    try {
+      const parsed = JSON.parse(settingsFromStorage)
+      assert(
+        typeof parsed.objectKeysChunkSize === "number" &&
+          parsed.objectKeysChunkSize > 0,
+        "invalid objectKeysChunkSize"
+      )
+      assert(
+        typeof parsed.arrayChunkSize === "number" && parsed.arrayChunkSize > 0,
+        "invalid arrayChunkSize"
+      )
+      viewerSettings.sneak({
+        objectKeysChunkSize: parsed.objectKeysChunkSize,
+        arrayChunkSize: parsed.arrayChunkSize,
+      })
+    } catch {
+      viewerSettings.sneak({
+        objectKeysChunkSize: 10,
+        arrayChunkSize: 10,
+      })
+    }
+  }
+
   componentSelection.subscribe(({ componentNode }) => {
     selectedNode.value = componentNode
     selectedApp.value = componentNode ? getVNodeApp(componentNode) : null
