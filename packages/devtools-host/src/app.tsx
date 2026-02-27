@@ -5,6 +5,7 @@ import {
   FlameIcon,
   clamp,
   GaugeIcon,
+  ZapIcon,
 } from "devtools-shared"
 import { ComponentSelectorOverlay } from "./component-selector-overlay"
 import { isDebuggerShown, isProfilerShown } from "./state"
@@ -140,7 +141,7 @@ export default function DevtoolsHostApp() {
               title="Toggle Debugger"
               onclick={() => (isDebuggerShown.value = !isDebuggerShown.value)}
             >
-              <FlameIcon className="w-4 h-4 pointer-events-none" />
+              <ZapIcon className="w-4 h-4 pointer-events-none" />
             </TooltipMenuButton>
           </div>
         </div>
