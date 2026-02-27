@@ -39,6 +39,7 @@ export class Signal<T> {
           return this as Signal<any>
         },
         inject: (prev) => {
+          window.__kiru.devtools?.debugger.remove(prev)
           signalSubsMap.get(this.$id)?.clear?.()
           signalSubsMap.delete(this.$id)
           this.$id = prev.$id
@@ -200,6 +201,7 @@ export class Signal<T> {
     signal.$isDisposed = true
     if (__DEV__) {
       signalSubsMap.delete(signal.$id)
+      window.__kiru.devtools?.debugger.remove(signal)
       return
     }
     signal.$subs!.clear()

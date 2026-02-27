@@ -6,3 +6,5 @@ export const toggleOverlayShown = () =>
 export const hideOverlay = () => (isOverlayShown.value = false)
 
 export const isProfilerShown = kiru.signal(false)
+
+export const isDebuggerShown = kiru.signal(false)

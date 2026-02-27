@@ -1,16 +1,34 @@
-import { Fragment, signal, effect, Derive, Signal } from "kiru"
+import { Fragment, signal, effect, Derive, Signal, computed } from "kiru"
 
 const text = signal("Hello World!")
+const foo = signal({
+  foo: "bar",
+  baz: [1, 2, 3],
+  qux: {
+    quux: "quuux",
+  },
+})
 
 effect(() => {
   console.log(text.value)
+  const intervalId = setInterval(() => {
+    count.value++
+  }, 1000)
+  return () => clearInterval(intervalId)
 })
 
 const count = signal(0)
-
-setInterval(() => {
-  count.value++
-}, 1000)
+const double = computed(() => count.value * 2)
+if (import.meta.env.DEV) {
+  count.displayName = "count"
+  double.displayName = "double"
+  text.displayName = "text 123 456"
+  foo.displayName = "foo"
+  window.__kiru.devtools?.debugger.add(count)
+  window.__kiru.devtools?.debugger.add(double)
+  window.__kiru.devtools?.debugger.add(text)
+  window.__kiru.devtools?.debugger.add(foo)
+}
 
 export default function HomePage() {
   return (

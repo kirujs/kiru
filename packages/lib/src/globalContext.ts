@@ -43,6 +43,15 @@ interface KiruGlobalContext {
     event: T["name"],
     callback: (app: AppHandle, data?: T["data"]) => void
   ): void
+  devtools?: {
+    debugger: {
+      add: (signal: Kiru.Signal<any>) => void
+      remove: (signal: Kiru.Signal<any>) => void
+      subscribe: (
+        callback: (signals: Set<Kiru.Signal<any>>) => void
+      ) => () => void
+    }
+  }
   HMRContext?: ReturnType<typeof createHMRContext>
   profilingContext?: ReturnType<typeof createProfilingContext>
   fileRouterInstance?: {
@@ -109,6 +118,29 @@ function createKiruGlobalContext(): KiruGlobalContext {
     globalContext.fileRouterInstance = fileRouterInstance
     globalContext.getSchedulerInterface = (app) => {
       return appToSchedulerInterface.get(app) ?? null
+    }
+
+    const trackedSignals = new Set<Kiru.Signal<any>>()
+    const subscribers = new Set<
+      (trackedSignals: Set<Kiru.Signal<any>>) => void
+    >()
+
+    globalContext.devtools = {
+      debugger: {
+        add: (signal: Kiru.Signal<any>) => {
+          trackedSignals.add(signal)
+          subscribers.forEach((cb) => cb(trackedSignals))
+        },
+        remove: (signal: Kiru.Signal<any>) => {
+          trackedSignals.delete(signal)
+          subscribers.forEach((cb) => cb(trackedSignals))
+        },
+        subscribe: (cb: (trackedSignals: Set<Kiru.Signal<any>>) => void) => {
+          subscribers.add(cb)
+          cb(trackedSignals)
+          return () => subscribers.delete(cb)
+        },
+      },
     }
   }
 

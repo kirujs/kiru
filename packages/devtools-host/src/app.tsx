@@ -2,22 +2,15 @@ import * as kiru from "kiru"
 import { className as cls } from "kiru/utils"
 import {
   createDraggableController,
-  createResizableController,
   FlameIcon,
   clamp,
-  ProfilingTabView,
   GaugeIcon,
 } from "devtools-shared"
 import { ComponentSelectorOverlay } from "./component-selector-overlay"
-import { isProfilerShown } from "./state"
-import {
-  DRAG_SNAP_PADDING,
-  PROFILER_MIN_WIDTH,
-  PROFILER_MIN_HEIGHT,
-} from "./constants"
+import { isDebuggerShown, isProfilerShown } from "./state"
+import { DRAG_SNAP_PADDING } from "./constants"
+import { DebuggerWidget, ProfilingWidget } from "./widgets"
 const MENU_POSITION_STORAGE_KEY = "kiru.devtools.anchorPosition"
-const PROFILER_POSITION_STORAGE_KEY = "kiru.devtools.profilerPosition"
-const PROFILER_SIZE_STORAGE_KEY = "kiru.devtools.profilerSize"
 
 const mounted = kiru.signal(false)
 const showTooltipMenu = kiru.signal(false)
@@ -138,9 +131,16 @@ export default function DevtoolsHostApp() {
             )}
           >
             <TooltipMenuButton
+              title="Toggle Profiler"
               onclick={() => (isProfilerShown.value = !isProfilerShown.value)}
             >
-              <GaugeIcon className="w-4 h-4" />
+              <GaugeIcon className="w-4 h-4 pointer-events-none" />
+            </TooltipMenuButton>
+            <TooltipMenuButton
+              title="Toggle Debugger"
+              onclick={() => (isDebuggerShown.value = !isDebuggerShown.value)}
+            >
+              <FlameIcon className="w-4 h-4 pointer-events-none" />
             </TooltipMenuButton>
           </div>
         </div>
@@ -153,6 +153,17 @@ export default function DevtoolsHostApp() {
           element={(state) => {
             if (state === "exited") return null
             return <ProfilingWidget state={state} />
+          }}
+        />
+        <kiru.Transition
+          in={isDebuggerShown}
+          duration={{
+            in: 0,
+            out: 150,
+          }}
+          element={(state) => {
+            if (state === "exited") return null
+            return <DebuggerWidget state={state} />
           }}
         />
         <ComponentSelectorOverlay />
@@ -183,120 +194,6 @@ function TooltipMenuButton({
   )
 }
 
-interface ProfilingWidgetProps {
-  state: kiru.TransitionState
-}
-const ProfilingWidget: Kiru.FC<ProfilingWidgetProps> = () => {
-  const dragController = createDraggableController({
-    key: PROFILER_POSITION_STORAGE_KEY,
-    storage: sessionStorage,
-    allowFloat: true,
-    snapDistance: 50,
-    getDraggableBounds: () => [window.innerWidth, window.innerHeight],
-    getPadding: () => [DRAG_SNAP_PADDING, DRAG_SNAP_PADDING],
-  })
-
-  const resizeController = createResizableController({
-    key: PROFILER_SIZE_STORAGE_KEY,
-    storage: sessionStorage,
-    minSize: [PROFILER_MIN_WIDTH, PROFILER_MIN_HEIGHT],
-    aspectRatio: 2 / 1,
-  })
-
-  kiru.onMount(() => {
-    dragController.init()
-    resizeController.init()
-    return () => {
-      dragController.dispose()
-      resizeController.dispose()
-    }
-  })
-
-  const containerRef = (current: HTMLElement | null) => {
-    dragController.containerRef.value = current
-    dragController.handleRef.value = current
-    resizeController.containerRef.value = current
-  }
-
-  const resizeHandleRef = (current: HTMLElement | null) => {
-    resizeController.handleRef.value = current
-  }
-
-  return ({ state }) => (
-    <div
-      ref={containerRef}
-      className={cls(
-        "z-50 fixed rounded-lg p-0.5 flex flex-col gap-2 select-none overflow-hidden",
-        "bg-neutral-900 opacity-75 hover:opacity-100 shadow-lg"
-      )}
-      style={{
-        minWidth: `${PROFILER_MIN_WIDTH}px`,
-        minHeight: `${PROFILER_MIN_HEIGHT}px`,
-        cursor: resizeController.isResizing.value
-          ? "se-resize"
-          : dragController.isDragging.value
-          ? "grabbing"
-          : "grab",
-      }}
-    >
-      <div
-        style={{
-          transition: "80ms ease-in-out",
-          opacity: state === "entered" ? 1 : 0,
-          flex: 1,
-          overflow: "hidden",
-          minHeight: 0,
-        }}
-      >
-        <ProfilingTabView />
-      </div>
-      <div
-        ref={resizeHandleRef}
-        style={{
-          position: "absolute",
-          bottom: "4px",
-          right: "4px",
-          width: "16px",
-          height: "16px",
-          cursor: "se-resize",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <ResizeGripIcon />
-      </div>
-    </div>
-  )
-}
-
-function ResizeGripIcon() {
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 10 10"
-      aria-hidden="true"
-      style="color: rgba(255,255,255,0.25); display: block;"
-    >
-      <line
-        x1="9"
-        y1="1"
-        x2="1"
-        y2="9"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linecap="round"
-      />
-      <line
-        x1="9"
-        y1="5"
-        x2="5"
-        y2="9"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linecap="round"
-      />
-    </svg>
-  )
-}
+// window.__kiru.devtools?.debugger.subscribe((trackedSignals) => {
+//   console.log("trackedSignals", trackedSignals)
+// })
