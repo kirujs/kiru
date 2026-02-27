@@ -25,7 +25,9 @@ export interface ViewerObjectNode {
   path: string
   collapsed: kiru.Signal<boolean>
   page: kiru.Signal<number>
-  children: ViewerNode[]
+  /** Null until the node is first expanded. Call buildChildren() to populate. */
+  children: kiru.Signal<ViewerNode[] | null>
+  buildChildren: () => void
 }
 
 export interface ViewerArrayNode {
@@ -34,7 +36,9 @@ export interface ViewerArrayNode {
   path: string
   collapsed: kiru.Signal<boolean>
   length: number
-  children: ViewerNode[]
+  /** Null until the node is first expanded. Call buildChildren() to populate. */
+  children: kiru.Signal<ViewerNode[] | null>
+  buildChildren: () => void
 }
 
 export interface ViewerArrayChunkNode {
@@ -43,7 +47,9 @@ export interface ViewerArrayChunkNode {
   path: string
   collapsed: kiru.Signal<boolean>
   range: { start: number; end: number }
-  children: ViewerNode[]
+  /** Null until the chunk is first expanded. Call buildChildren() to populate. */
+  children: kiru.Signal<ViewerNode[] | null>
+  buildChildren: () => void
 }
 
 export type ViewerNode =
@@ -53,17 +59,24 @@ export type ViewerNode =
   | ViewerArrayChunkNode
 
 export interface ViewerRoot {
+  /** Top-level entries — always built eagerly (one level deep, no recursion). */
   children: ViewerNode[]
   page: kiru.Signal<number>
 }
 
+// ---------------------------------------------------------------------------
+// Signal cache (for reconciliation across updates)
+// ---------------------------------------------------------------------------
+
 type SignalCache = {
   collapsed: Map<string, kiru.Signal<boolean>>
   page: Map<string, kiru.Signal<number>>
+  /** Tracked only for disposal — children signals are never reused across builds. */
+  children: Map<string, kiru.Signal<ViewerNode[] | null>>
 }
 
 export function emptyCache(): SignalCache {
-  return { collapsed: new Map(), page: new Map() }
+  return { collapsed: new Map(), page: new Map(), children: new Map() }
 }
 
 export function collectFromRoot(
@@ -80,10 +93,14 @@ function collectFromNodes(nodes: ViewerNode[], cache: SignalCache) {
     if (node.kind === "object") {
       cache.collapsed.set(node.path, node.collapsed)
       cache.page.set(node.path, node.page)
-      collectFromNodes(node.children, cache)
+      cache.children.set(node.path, node.children)
+      const built = node.children.peek()
+      if (built !== null) collectFromNodes(built, cache)
     } else if (node.kind === "array" || node.kind === "array-chunk") {
       cache.collapsed.set(node.path, node.collapsed)
-      collectFromNodes(node.children, cache)
+      cache.children.set(node.path, node.children)
+      const built = node.children.peek()
+      if (built !== null) collectFromNodes(built, cache)
     }
   }
 }
@@ -91,6 +108,7 @@ function collectFromNodes(nodes: ViewerNode[], cache: SignalCache) {
 export function disposeCache(cache: SignalCache) {
   for (const s of cache.collapsed.values()) kiru.Signal.dispose(s)
   for (const s of cache.page.values()) kiru.Signal.dispose(s)
+  for (const s of cache.children.values()) kiru.Signal.dispose(s)
 }
 
 // ---------------------------------------------------------------------------
@@ -139,51 +157,67 @@ function buildNode(
   if (Array.isArray(raw)) {
     const collapsed = cache.collapsed.get(path) ?? kiru.signal(true)
     cache.collapsed.delete(path)
+    // Children signal is always fresh — old signal (if any) stays in cache for disposal
+    const children = kiru.signal<ViewerNode[] | null>(null)
 
-    let children: ViewerNode[]
-    if (raw.length > settings.arrayChunkSize) {
-      const numChunks = Math.ceil(raw.length / settings.arrayChunkSize)
-      children = Array.from({ length: numChunks }, (_, idx) => {
-        const start = idx * settings.arrayChunkSize
-        const end = Math.min((idx + 1) * settings.arrayChunkSize, raw.length)
-        const chunkPath = `${path}[${start}..${end - 1}]`
-        const chunkCollapsed =
-          cache.collapsed.get(chunkPath) ?? kiru.signal(true)
-        cache.collapsed.delete(chunkPath)
-        const chunkChildren = raw
-          .slice(start, end)
-          .map((item, i) =>
-            buildNode(
-              item,
-              (start + i).toString(),
-              `${path}[${start + i}]`,
-              cache,
-              settings
-            )
-          )
-        return {
-          kind: "array-chunk" as const,
-          label: `[${start}..${end - 1}]`,
-          path: chunkPath,
-          collapsed: chunkCollapsed,
-          range: { start, end },
-          children: chunkChildren,
-        }
-      })
-    } else {
-      children = raw.map((item, idx) =>
-        buildNode(item, idx.toString(), `${path}[${idx}]`, cache, settings)
-      )
-    }
-
-    return {
+    const node: ViewerArrayNode = {
       kind: "array",
       label,
       path,
       collapsed,
       length: raw.length,
       children,
+      buildChildren: () => {
+        if (children.peek() !== null) return
+
+        if (raw.length > settings.arrayChunkSize) {
+          const numChunks = Math.ceil(raw.length / settings.arrayChunkSize)
+          children.value = Array.from({ length: numChunks }, (_, idx) => {
+            const start = idx * settings.arrayChunkSize
+            const end = Math.min(
+              (idx + 1) * settings.arrayChunkSize,
+              raw.length
+            )
+            const chunkPath = `${path}[${start}..${end - 1}]`
+            const chunkCollapsed = kiru.signal(true)
+            const chunkChildren = kiru.signal<ViewerNode[] | null>(null)
+            const rawSlice = raw.slice(start, end)
+            const chunk: ViewerArrayChunkNode = {
+              kind: "array-chunk",
+              label: `[${start}..${end - 1}]`,
+              path: chunkPath,
+              collapsed: chunkCollapsed,
+              range: { start, end },
+              children: chunkChildren,
+              buildChildren: () => {
+                if (chunkChildren.peek() !== null) return
+                chunkChildren.value = rawSlice.map((item, i) =>
+                  buildNode(
+                    item,
+                    (start + i).toString(),
+                    `${path}[${start + i}]`,
+                    emptyCache(),
+                    settings
+                  )
+                )
+              },
+            }
+            return chunk
+          })
+        } else {
+          children.value = raw.map((item, idx) =>
+            buildNode(
+              item,
+              idx.toString(),
+              `${path}[${idx}]`,
+              emptyCache(),
+              settings
+            )
+          )
+        }
+      },
     }
+    return node
   }
 
   // Plain object
@@ -191,14 +225,23 @@ function buildNode(
   cache.collapsed.delete(path)
   const page = cache.page.get(path) ?? kiru.signal(0)
   cache.page.delete(path)
-  const children = buildObjectChildren(
-    raw as Record<string, unknown>,
-    path,
-    cache,
-    settings
-  )
+  // Children signal is always fresh — old signal (if any) stays in cache for disposal
+  const children = kiru.signal<ViewerNode[] | null>(null)
+  const rawObj = raw as Record<string, unknown>
 
-  return { kind: "object", label, path, collapsed, page, children }
+  const node: ViewerObjectNode = {
+    kind: "object",
+    label,
+    path,
+    collapsed,
+    page,
+    children,
+    buildChildren: () => {
+      if (children.peek() !== null) return
+      children.value = buildObjectChildren(rawObj, path, emptyCache(), settings)
+    },
+  }
+  return node
 }
 
 function buildObjectChildren(

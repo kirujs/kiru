@@ -11,10 +11,16 @@ import {
 
 const { selectedNode, viewerSettings } = devtoolsState
 
+export interface SelectedNodeSection {
+  title: string
+  collapsed: kiru.Signal<boolean>
+  viewer: ViewerRoot
+}
+
 export interface SelectedNodeViewData {
   node: Kiru.VNode
   name: string
-  props: ViewerRoot
+  sections: SelectedNodeSection[]
 }
 
 export const selectedNodeViewData = kiru.signal<SelectedNodeViewData | null>(
@@ -25,37 +31,50 @@ kiru.effect(() => {
   const node = selectedNode.value
   const settings = viewerSettings.value
 
-  // Collect all signals from the previous tree so they can be reused or disposed
   const prevData = selectedNodeViewData.peek()
-  const prevCache = emptyCache()
-  if (prevData) {
-    collectFromRoot(prevData.props, "props", prevCache)
-  }
 
   if (!node) {
-    disposeCache(prevCache)
+    if (prevData) disposeSections(prevData.sections)
     selectedNodeViewData.value = null
     return
   }
 
-  // When the node identity changes, start fresh — dispose all previous signals
-  if (prevData?.node !== node) {
-    disposeCache(prevCache)
-    prevCache.collapsed.clear()
-    prevCache.page.clear()
+  const sameNode = prevData?.node === node
+
+  // Collect viewer-tree signals for reconciliation (only reuse when same node)
+  const prevCache = emptyCache()
+  if (sameNode && prevData) {
+    for (const section of prevData.sections) {
+      collectFromRoot(section.viewer, section.title, prevCache)
+    }
+  } else if (prevData) {
+    disposeSections(prevData.sections)
   }
 
   const nodeProps = { ...node.props } as Record<string, unknown>
   delete nodeProps.children
 
-  const propsRoot = buildRoot(nodeProps, "props", prevCache, settings)
+  const propsCollapsed = sameNode
+    ? (prevData?.sections.find((s) => s.title === "props")?.collapsed ?? kiru.signal(true))
+    : kiru.signal(true)
 
-  // Dispose any signals that weren't reused (only relevant for same-node updates)
+  const propsViewer = buildRoot(nodeProps, "props", prevCache, settings)
+
+  // Dispose any viewer-tree signals not reused (same-node prop changes)
   disposeCache(prevCache)
 
   selectedNodeViewData.value = {
     node,
     name: getNodeName(node),
-    props: propsRoot,
+    sections: [{ title: "props", collapsed: propsCollapsed, viewer: propsViewer }],
   }
 })
+
+function disposeSections(sections: SelectedNodeSection[]) {
+  for (const section of sections) {
+    kiru.Signal.dispose(section.collapsed)
+    const cache = emptyCache()
+    collectFromRoot(section.viewer, section.title, cache)
+    disposeCache(cache)
+  }
+}

@@ -2,7 +2,7 @@ import * as kiru from "kiru"
 import { ElementProps } from "kiru"
 import { ValueViewer } from "../../components/value-viewer"
 import { ChevronRightIcon } from "../../components/icons/chevron-right-icon"
-import { selectedNodeViewData } from "./selected-node-state"
+import { selectedNodeViewData, SelectedNodeSection } from "./selected-node-state"
 
 export function SelectedNodeView() {
   return () => {
@@ -16,46 +16,43 @@ export function SelectedNodeView() {
             {"<" + nodeViewData.name + ">"}
           </div>
         </h2>
-
-        <NodeDataSection
-          title={"props"}
-          disabled={nodeViewData.props.children.length === 0}
-        >
-          <ValueViewer root={nodeViewData.props} />
-        </NodeDataSection>
+        {nodeViewData.sections.map((section) => (
+          <NodeDataSection
+            key={section.title}
+            section={section}
+            disabled={section.viewer.children.length === 0}
+          />
+        ))}
       </div>
     )
   }
 }
 
 interface NodeDataSectionProps extends ElementProps<"div"> {
-  title: string
-  children: JSX.Children
+  section: SelectedNodeSection
   disabled?: boolean
 }
 
-const NodeDataSection: Kiru.FC<NodeDataSectionProps> = () => {
-  const collapsed = kiru.signal(true)
+function NodeDataSection({ section, disabled, className, ...props }: NodeDataSectionProps) {
+  const isCollapsed = section.collapsed.value
 
-  return ({ disabled, title, children, className, ...props }) => (
+  return (
     <div className="flex flex-col">
       <button
-        onclick={() => (collapsed.value = !collapsed.value)}
+        onclick={() => (section.collapsed.value = !section.collapsed.value)}
         disabled={disabled}
-        className={`${
-          disabled ? "opacity-50 cursor-default" : "cursor-pointer"
-        }`}
+        className={disabled ? "opacity-50 cursor-default" : "cursor-pointer"}
       >
         <span className="flex items-center gap-2 font-medium">
           <ChevronRightIcon
-            className={`transition ${collapsed.value ? "" : "rotate-90"}`}
+            className={`transition ${isCollapsed ? "" : "rotate-90"}`}
           />
-          {title}
+          {section.title}
         </span>
       </button>
-      {collapsed.value ? null : (
+      {isCollapsed ? null : (
         <div className={`p-2 ${className || ""}`} {...props}>
-          {children}
+          <ValueViewer root={section.viewer} />
         </div>
       )}
     </div>

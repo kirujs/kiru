@@ -95,15 +95,11 @@ function ViewerNodeView({ node }: { node: ViewerNode }) {
 
 function LeafNodeView({ node }: { node: ViewerLeafNode }) {
   const { label, path, raw, kind } = node
-  const Label = (
-    <label htmlFor={path} className="text-xs truncate" title={path}>
-      {label}
-    </label>
-  )
-
   return (
     <NodeWrapper>
-      {Label}
+      <label className="text-xs truncate" title={path}>
+        {label}
+      </label>
       <LeafValue kind={kind} raw={raw} />
     </NodeWrapper>
   )
@@ -170,6 +166,9 @@ function LeafValue({
 
 function ObjectNodeView({ node }: { node: ViewerObjectNode }) {
   const isCollapsed = node.collapsed.value
+  if (!isCollapsed) node.buildChildren()
+  // peek() — children is stable after first build, no need to track as a dep
+  const children = isCollapsed ? null : node.children.peek()
 
   return (
     <NodeWrapper>
@@ -185,13 +184,17 @@ function ObjectNodeView({ node }: { node: ViewerObjectNode }) {
           className={`transition ${isCollapsed ? "" : "rotate-90"}`}
         />
       </button>
-      {isCollapsed ? null : <ValueViewer root={node} />}
+      {children !== null && (
+        <ValueViewer root={{ children, page: node.page }} />
+      )}
     </NodeWrapper>
   )
 }
 
 function ArrayNodeView({ node }: { node: ViewerArrayNode }) {
   const isCollapsed = node.collapsed.value
+  if (!isCollapsed) node.buildChildren()
+  const children = isCollapsed ? null : node.children.peek()
 
   return (
     <NodeWrapper>
@@ -210,11 +213,13 @@ function ArrayNodeView({ node }: { node: ViewerArrayNode }) {
       {isCollapsed ? (
         <small className="text-neutral-300">{`Array(${node.length})`}</small>
       ) : (
-        <div className="flex flex-col items-start gap-1 w-full">
-          {node.children.map((child) => (
-            <ViewerNodeView node={child} />
-          ))}
-        </div>
+        children && (
+          <div className="flex flex-col items-start gap-1 w-full">
+            {children.map((child) => (
+              <ViewerNodeView node={child} />
+            ))}
+          </div>
+        )
       )}
     </NodeWrapper>
   )
@@ -222,6 +227,8 @@ function ArrayNodeView({ node }: { node: ViewerArrayNode }) {
 
 function ArrayChunkView({ node }: { node: ViewerArrayChunkNode }) {
   const isCollapsed = node.collapsed.value
+  if (!isCollapsed) node.buildChildren()
+  const children = isCollapsed ? null : node.children.peek()
 
   return (
     <div className="flex flex-col items-start gap-1 w-full">
@@ -236,9 +243,9 @@ function ArrayChunkView({ node }: { node: ViewerArrayChunkNode }) {
           className={`transition ${isCollapsed ? "" : "rotate-90"}`}
         />
       </button>
-      {!isCollapsed && (
+      {children && (
         <div className="flex flex-col items-start gap-1 w-full">
-          {node.children.map((child) => (
+          {children.map((child) => (
             <ViewerNodeView node={child} />
           ))}
         </div>
