@@ -76,10 +76,7 @@ const vitePlugin = task({
     },
     dev: {
       run: "pnpm dev",
-      dependencies: [
-        lib,
-        //  devtools
-      ],
+      dependencies: [lib, devtoolsHost],
     },
   },
 })
@@ -88,19 +85,19 @@ const csrTest = task({
   name: "e2e:csr",
   cwd: "e2e/csr",
   commands: {
-    // build: {
-    //   run: "pnpm build",
-    //   cache: {
-    //     inputs: [
-    //       "src",
-    //       lib.artifact("build"),
-    //       vitePlugin.artifact("build"),
-    //       pnpm.package(),
-    //     ],
-    //     outputs: ["dist"],
-    //   },
-    // },
-    // test: "pnpm test",
+    build: {
+      run: "pnpm build",
+      cache: {
+        inputs: [
+          "src",
+          lib.artifact("build"),
+          vitePlugin.artifact("build"),
+          pnpm.package(),
+        ],
+        outputs: ["dist"],
+      },
+    },
+    test: "pnpm test",
   },
   dependencies: [lib],
   env: {
@@ -112,19 +109,19 @@ const ssgTest = task({
   name: "e2e:ssg",
   cwd: "e2e/ssg",
   commands: {
-    // build: {
-    //   run: "pnpm build",
-    //   cache: {
-    //     inputs: [
-    //       "src",
-    //       lib.artifact("build"),
-    //       vitePlugin.artifact("build"),
-    //       pnpm.package(),
-    //     ],
-    //     outputs: ["dist"],
-    //   },
-    // },
-    // test: "pnpm test",
+    build: {
+      run: "pnpm build",
+      cache: {
+        inputs: [
+          "src",
+          lib.artifact("build"),
+          vitePlugin.artifact("build"),
+          pnpm.package(),
+        ],
+        outputs: ["dist"],
+      },
+    },
+    test: "pnpm test",
   },
   // github can't run two cypress tests in parallel
   dependencies: (process.env.GITHUB ? [csrTest] : []).concat(lib),

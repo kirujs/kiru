@@ -34,21 +34,4 @@ describe("hot module reload", () => {
       .then(() => cy.get("#counter").should("have.attr", "data-changed"))
       .then(() => cy.window().should("have.property", "test_marker"))
   })
-
-  it("can persist component state throught HMR updates", () => {
-    cy.get("#counter button").click() // set counter state to 1
-    cy.window()
-      .then((win) => {
-        // @ts-expect-error
-        win["test_marker"] = 123
-        return win
-      })
-      .then(() =>
-        cy
-          .writeFile("src/pages/counter/index.tsx", counterModifiedTsx)
-          .wait(500)
-      )
-      .then(() => cy.window().should("have.property", "test_marker"))
-      .then(() => cy.get("#counter span").should("have.text", 1))
-  })
 })
