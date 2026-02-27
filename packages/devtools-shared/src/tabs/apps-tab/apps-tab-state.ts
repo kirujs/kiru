@@ -186,22 +186,29 @@ selectedNode.subscribe(onSelectedNodeChange)
 
 const handleKeyDown = (e: KeyboardEvent) => {
   ifDevtoolsAppRootHasFocus((el) => {
-    switch (e.key) {
-      case "ArrowUp":
-        handleNavigation(el, "up")
-        break
-      case "ArrowDown":
-        handleNavigation(el, "down")
-        break
-      case "ArrowLeft":
-        setCollapsed(true)
-        break
-      case "ArrowRight":
-        setCollapsed(false)
-        break
-      default:
-        break
+    if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      return
     }
+
+    if (devtoolsState.appSearchInput.value?.matches(":focus")) {
+      if (e.ctrlKey || e.shiftKey) return
+      e.preventDefault()
+    }
+
+    const dir: "up" | "down" | "left" | "right" =
+      e.key === "ArrowUp"
+        ? "up"
+        : e.key === "ArrowDown"
+        ? "down"
+        : e.key === "ArrowLeft"
+        ? "left"
+        : "right"
+
+    if (dir === "left" || dir === "right") {
+      setCollapsed(dir === "left")
+      return
+    }
+    handleNavigation(el, dir)
   })
 }
 
