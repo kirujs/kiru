@@ -1,18 +1,18 @@
 import * as kiru from "kiru"
 import { devtoolsState } from "../../state"
-import { appGraph, GraphNode, GraphRoot } from "./apps-tab-state"
+import {
+  appGraph,
+  GraphNode,
+  GraphRoot,
+  setupKeyboardNavigation,
+} from "./apps-tab-state"
 import { ChevronRightIcon } from "../../components"
 import { className as cls } from "kiru/utils"
 
 const { selectedNode, appSearchTerm, appSearchInput } = devtoolsState
 
 export function SelectedAppGraphView() {
-  const handleKeyDown = (_: KeyboardEvent) => {
-    // TODO: Handle keyboard navigation for the graph
-  }
-
-  window.addEventListener("keydown", handleKeyDown)
-  kiru.onCleanup(() => window.removeEventListener("keydown", handleKeyDown))
+  kiru.onMount(() => setupKeyboardNavigation())
   return () => (
     <div className="flex-grow p-2 sticky top-0">
       <div className="flex gap-4 pb-2 border-b-2 border-neutral-800 mb-2 items-center">

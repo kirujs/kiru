@@ -1,10 +1,34 @@
 import * as kiru from "kiru"
-import { devtoolsState } from "../../state"
-import { getNodeName } from "../../utils"
+import { devtoolsState, kiruGlobal } from "../../state"
+import { getNodeName, ifDevtoolsAppRootHasFocus } from "../../utils"
 
 const { selectedApp, appSearchTerm } = devtoolsState
 
 export const appGraph = kiru.signal<GraphRoot>(createGraphRoot())
+
+const onKeyDown = (e: KeyboardEvent) => {
+  console.log(e.key)
+  switch (e.key) {
+    case "ArrowUp":
+      break
+    case "ArrowDown":
+      break
+    case "ArrowLeft":
+      break
+    case "ArrowRight":
+      break
+    default:
+      break
+  }
+}
+const handleKeyDown = (e: KeyboardEvent) => {
+  ifDevtoolsAppRootHasFocus(onKeyDown.bind(null, e))
+}
+
+export const setupKeyboardNavigation = () => {
+  window.addEventListener("keydown", handleKeyDown)
+  return () => window.removeEventListener("keydown", handleKeyDown)
+}
 
 export interface GraphRoot {
   value: "ROOT"
@@ -28,7 +52,16 @@ kiru.effect(() => {
   }
   const app = selectedApp.value
   const search = appSearchTerm.value
-  appGraph.value = buildGraph(app, search)
+  let currentGraph = (appGraph.value = buildGraph(app, search))
+
+  const onAppUpdate = (updatedApp: kiru.AppHandle) => {
+    if (updatedApp !== selectedApp.value) return
+    const newGraph = reconcileGraph(updatedApp, search, currentGraph)
+    currentGraph = newGraph
+    appGraph.value = newGraph
+  }
+  kiruGlobal().on("update", onAppUpdate)
+  return () => kiruGlobal().off("update", onAppUpdate)
 })
 
 function disposeGraph(graph: GraphRoot | GraphNode | null) {
@@ -54,20 +87,59 @@ function buildGraph(app: kiru.AppHandle, search: string): GraphRoot {
   return graphRoot
 }
 
+function reconcileGraph(
+  app: kiru.AppHandle,
+  search: string,
+  currentGraph: GraphRoot
+): GraphRoot {
+  const existing = new Map<Kiru.VNode, kiru.Signal<boolean>>()
+  collectCollapsedSignals(currentGraph, existing)
+
+  const rootNode = app.rootNode
+  const newGraph = createGraphRoot()
+  if (rootNode) {
+    const trimmed = search.trim().toLowerCase()
+    const searchTerms = trimmed ? trimmed.split(/\s+/) : []
+    newGraph.nodes.push(...searchFunctionNodes(rootNode, searchTerms, existing))
+  }
+
+  // Dispose collapsed signals for nodes that are no longer in the graph
+  for (const signal of existing.values()) {
+    kiru.Signal.dispose(signal)
+  }
+
+  return newGraph
+}
+
+function collectCollapsedSignals(
+  node: GraphRoot | GraphNode | null,
+  map: Map<Kiru.VNode, kiru.Signal<boolean>>
+) {
+  if (!node) return
+  if ("nodes" in node) {
+    for (const child of node.nodes) collectCollapsedSignals(child, map)
+  } else {
+    map.set(node.kiruNode, node.collapsed)
+    collectCollapsedSignals(node.child, map)
+    collectCollapsedSignals(node.sibling, map)
+  }
+}
+
 function searchFunctionNodes(
   vNode: Kiru.VNode | null,
-  terms: string[]
+  terms: string[],
+  existing: Map<Kiru.VNode, kiru.Signal<boolean>> = new Map()
 ): GraphNode[] {
   const result: GraphNode[] = []
   let n = vNode
   while (n) {
-    const children = searchFunctionNodes(n.child, terms)
+    const children = searchFunctionNodes(n.child, terms, existing)
     if (typeof n.type !== "function") {
       result.push(...children)
     } else {
       const name = getNodeName(n)
       if (searchMatchesItem(terms, name)) {
-        const node = createGraphNode(n, name)
+        const node = createGraphNode(n, name, existing)
         node.child = children[0] ?? null
         for (let i = 0; i < children.length - 1; i++) {
           children[i].sibling = children[i + 1] ?? null
@@ -96,11 +168,17 @@ function createGraphRoot(...nodes: GraphNode[]): GraphRoot {
   }
 }
 
-function createGraphNode(vNode: Kiru.VNode, name: string): GraphNode {
+function createGraphNode(
+  vNode: Kiru.VNode,
+  name: string,
+  existing: Map<Kiru.VNode, kiru.Signal<boolean>> = new Map()
+): GraphNode {
+  const collapsed = existing.get(vNode) ?? kiru.signal(true)
+  existing.delete(vNode)
   return {
     name,
     kiruNode: vNode,
-    collapsed: kiru.signal(true),
+    collapsed,
     child: null,
     sibling: null,
   }

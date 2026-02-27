@@ -1,23 +1,14 @@
 import * as kiru from "kiru"
-import { AppsIcon, FolderTreeIcon, GaugeIcon, CogIcon } from "./components"
-import { AppsTabView, ProfilingTabView } from "./tabs"
 import { devtoolsState } from "./state"
 import { APP_TABS } from "./constants"
-import { trapFocus } from "./utils"
 
 const selectedTab = kiru.computed(
   () => APP_TABS[devtoolsState.devtoolsTab.value]
 )
 
-console.log("boop")
-
-interface DevtoolsAppProps {
-  rootRef: Kiru.RefObject<HTMLButtonElement | null>
-}
-
-export function DevtoolsApp({ rootRef }: DevtoolsAppProps) {
+export function DevtoolsApp() {
   return (
-    <button ref={rootRef} className="flex gap-2 cursor-default">
+    <button ref={devtoolsState.rootRef} className="flex gap-2 cursor-default">
       <nav className="flex flex-col gap-2 justify-between">
         <div className="flex flex-col gap-2">
           {Object.keys(APP_TABS).map((key) => (

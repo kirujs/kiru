@@ -1,4 +1,5 @@
 import type { AppHandle } from "kiru"
+import { devtoolsState } from "./state"
 
 export function assert(value: unknown, message: string): asserts value {
   if (!value) {
@@ -71,4 +72,16 @@ export function trapFocus(
       }
     }
   }
+}
+
+export function devtoolsAppRootHasFocus() {
+  return devtoolsState.rootRef.value?.matches(":focus-within, :focus")
+}
+
+export function ifDevtoolsAppRootHasFocus<T>(callback: (el: Element) => T) {
+  const root = devtoolsState.rootRef.value
+  if (root?.matches(":focus-within, :focus")) {
+    return callback(root)
+  }
+  return null
 }

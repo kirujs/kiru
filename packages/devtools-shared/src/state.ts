@@ -90,6 +90,7 @@ function createSyncedState<T extends Record<string, unknown>>(
 
 const [devtoolsState] = createSyncedState("kiru-devtools:syncedState", {
   apps: [] as AppHandle[],
+  rootRef: null as HTMLButtonElement | null,
   appSearchTerm: "",
   appSearchInput: null as HTMLInputElement | null,
   componentSelection: {

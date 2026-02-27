@@ -9,6 +9,7 @@ import {
   MouseIcon,
   devtoolsState,
   trapFocus,
+  ifDevtoolsAppRootHasFocus,
 } from "devtools-shared"
 import { ComponentSelectorOverlay } from "./component-selector-overlay"
 import { isOverlayShown, toggleOverlayShown } from "./state"
@@ -213,17 +214,15 @@ const EmbeddedOverlay: Kiru.FC<EmbeddedOverlayProps> = () => {
   const componentSelectionEnabled = kiru.computed(
     () => devtoolsState.componentSelection.value.enabled
   )
-  const rootRef = kiru.ref<HTMLButtonElement>(null)
 
   kiru.onMount(() => {
     overlayController.init()
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const shadowRoot = document.querySelector("kiru-devtools")!.shadowRoot!
-      const appRoot = rootRef.current!
-      if (appRoot.matches(":focus-within, :focus")) {
-        trapFocus(e, appRoot, shadowRoot.activeElement)
-      }
+      ifDevtoolsAppRootHasFocus((el) => {
+        trapFocus(e, el, shadowRoot.activeElement)
+      })
     }
 
     window.addEventListener("keydown", handleKeyDown)
@@ -252,7 +251,7 @@ const EmbeddedOverlay: Kiru.FC<EmbeddedOverlayProps> = () => {
             Overlay
           </button>
           <div className="p-2">
-            <DevtoolsApp rootRef={rootRef} />
+            <DevtoolsApp />
           </div>
         </div>
       </div>
