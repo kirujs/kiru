@@ -23,7 +23,7 @@ export function ComponentSelectorOverlay() {
     const { x, y } = mousePos.value
     if (!selectorEnabled.value) return
 
-    const element = document.elementFromPoint(x, y)
+    const [_, element] = document.elementsFromPoint(x, y)
     currentComponentHover.value = element
       ? findElementNearestComponent(element)
       : null
@@ -31,7 +31,10 @@ export function ComponentSelectorOverlay() {
 
   kiru.effect(() => updateCurrentComponentHover())
 
-  const handleClick = () => {
+  const handleClick = (e: Kiru.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.stopImmediatePropagation()
     if (!selectorEnabled.value || !currentComponentHover.value) return
     devtoolsState.componentSelection.value = {
       enabled: false,
@@ -41,10 +44,8 @@ export function ComponentSelectorOverlay() {
   }
 
   window.addEventListener("resize", updateCurrentComponentHover)
-  window.addEventListener("click", handleClick)
   kiru.onCleanup(() => {
     window.removeEventListener("resize", updateCurrentComponentHover)
-    window.removeEventListener("click", handleClick)
   })
 
   return () => {
@@ -84,10 +85,11 @@ export function ComponentSelectorOverlay() {
           left: minLeft + "px",
           width: width + "px",
           height: height + "px",
-          pointerEvents: "none",
           transform: `translate(${minLeft}px, ${top}px)`,
+          cursor: "pointer",
         }}
         children={name}
+        onclick={handleClick}
         className="flex items-center justify-center bg-crimson/[69%] text-white"
       />
     )

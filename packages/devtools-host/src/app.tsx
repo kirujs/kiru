@@ -12,7 +12,7 @@ import {
   ifDevtoolsAppRootHasFocus,
 } from "devtools-shared"
 import { ComponentSelectorOverlay } from "./component-selector-overlay"
-import { isOverlayShown, toggleOverlayShown } from "./state"
+import { isOverlayShown, toggleOverlayShown, hideOverlay } from "./state"
 const MENU_POSITION_STORAGE_KEY = "kiru.devtools.anchorPosition"
 const OVERLAY_POSITION_STORAGE_KEY = "kiru.devtools.overlayPosition"
 const MENU_PADDING = 10
@@ -22,9 +22,10 @@ const showTooltipMenu = kiru.signal(false)
 const tooltipRef = kiru.ref<HTMLDivElement>(null)
 
 const toggleSelectComponentMode = () => {
-  devtoolsState.componentSelection.value = {
-    enabled: !devtoolsState.componentSelection.value.enabled,
-    componentNode: null,
+  const { componentSelection } = devtoolsState
+  componentSelection.value = {
+    enabled: !componentSelection.value.enabled,
+    componentNode: componentSelection.value.componentNode,
   }
 }
 
@@ -234,27 +235,46 @@ const EmbeddedOverlay: Kiru.FC<EmbeddedOverlayProps> = () => {
 
   return ({ scale, opacity }) => {
     return (
-      <div ref={overlayController.containerRef}>
+      <>
         <div
+          className="fixed inset-0 z-40 bg-black/30"
+          onclick={hideOverlay}
           style={{
-            scale,
-            opacity: componentSelectionEnabled.value ? 0 : opacity,
+            opacity:
+              isOverlayShown.value && !componentSelectionEnabled.value ? 1 : 0,
             transition: "150ms ease-in-out",
-            pointerEvents: componentSelectionEnabled.value ? "none" : "auto",
+            pointerEvents:
+              isOverlayShown.value && !componentSelectionEnabled.value
+                ? "auto"
+                : "none",
+            visibility:
+              isOverlayShown.value && !componentSelectionEnabled.value
+                ? "visible"
+                : "hidden",
           }}
-          className="rounded z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/10"
-        >
-          <button
-            ref={overlayController.handleRef}
-            className="w-full bg-white/5 rounded py-1 px-2 text-left cursor-grab active:cursor-grabbing"
+        />
+        <div ref={overlayController.containerRef} className="z-50">
+          <div
+            style={{
+              scale,
+              opacity: componentSelectionEnabled.value ? 0 : opacity,
+              transition: "150ms ease-in-out",
+              pointerEvents: componentSelectionEnabled.value ? "none" : "auto",
+            }}
+            className="rounded z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/10"
           >
-            Overlay
-          </button>
-          <div className="p-2">
-            <DevtoolsApp />
+            <button
+              ref={overlayController.handleRef}
+              className="w-full bg-white/5 rounded py-1 px-2 text-left cursor-grab active:cursor-grabbing"
+            >
+              Overlay
+            </button>
+            <div className="p-2">
+              <DevtoolsApp />
+            </div>
           </div>
         </div>
-      </div>
+      </>
     )
   }
 }
