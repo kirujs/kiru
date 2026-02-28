@@ -129,7 +129,17 @@ const DebuggerView: Kiru.FC = () => {
 
   return (
     <div className="flex flex-col gap-2 p-2">
-      <kiru.For each={debuggerEntries}>
+      <kiru.For
+        each={debuggerEntries}
+        fallback={
+          <div className="flex flex-col items-center justify-center gap-2 py-8 px-4 text-center text-neutral-400 text-sm">
+            <p className="font-medium">No signals tracked</p>
+            <p className="text-xs text-neutral-500 max-w-[240px]">
+              Use <code className="px-1 py-0.5 rounded bg-neutral-800 text-neutral-300 font-mono text-[11px]">DevTools.track(signal, label)</code> in your app to inspect signal values here.
+            </p>
+          </div>
+        }
+      >
         {(entry) => (
           <DebuggerEntryCard
             // @ts-ignore ligma
