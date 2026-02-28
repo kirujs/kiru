@@ -4,7 +4,7 @@ import {
   effect,
   Derive,
   computed,
-  Devtools,
+  DevTools,
   ElementProps,
 } from "kiru"
 
@@ -31,10 +31,10 @@ effect(() => {
 const count = signal(0)
 const double = computed(() => count.value * 2)
 if (import.meta.env.DEV) {
-  Devtools.track(count, "count")
-  Devtools.track(double, "double")
-  Devtools.track(text, "text")
-  Devtools.track(foo, "foo")
+  DevTools.track(count, "count")
+  DevTools.track(double, "double")
+  DevTools.track(text, "text")
+  DevTools.track(foo, "foo")
 }
 
 export default function HomePage() {
