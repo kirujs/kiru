@@ -34,7 +34,7 @@ interface SchedulerInterface {
 
 export type DebuggerEntry = {
   label: string
-  signal: Kiru.Signal<any>
+  signal: Kiru.Signal<unknown>
 }
 
 interface KiruGlobalContext {
@@ -49,11 +49,9 @@ interface KiruGlobalContext {
     callback: (app: AppHandle, data?: T["data"]) => void
   ): void
   devtools?: {
-    tracking: {
-      add: (signal: Kiru.Signal<any>, label?: string) => void
-      remove: (signal: Kiru.Signal<any>) => void
-      subscribe: (callback: (entries: Set<DebuggerEntry>) => void) => () => void
-    }
+    track: (signal: Kiru.Signal<unknown>, label?: string) => void
+    untrack: (signal: Kiru.Signal<unknown>) => void
+    subscribe: (callback: (entries: Set<DebuggerEntry>) => void) => () => void
   }
   HMRContext?: ReturnType<typeof createHMRContext>
   profilingContext?: ReturnType<typeof createProfilingContext>
@@ -127,27 +125,25 @@ function createKiruGlobalContext(): KiruGlobalContext {
     const subscribers = new Set<(debuggerEntries: Set<DebuggerEntry>) => void>()
 
     globalContext.devtools = {
-      tracking: {
-        add: (signal: Kiru.Signal<any>, label?: string) => {
-          debuggerEntries.add({
-            label: label ?? signal.displayName ?? "Unnamed Signal",
-            signal,
-          })
-          subscribers.forEach((cb) => cb(debuggerEntries))
-        },
-        remove: (signal: Kiru.Signal<any>) => {
-          debuggerEntries.forEach((entry) => {
-            if (entry.signal === signal) {
-              debuggerEntries.delete(entry)
-            }
-          })
-          subscribers.forEach((cb) => cb(debuggerEntries))
-        },
-        subscribe: (cb: (debuggerEntries: Set<DebuggerEntry>) => void) => {
-          subscribers.add(cb)
-          cb(debuggerEntries)
-          return () => subscribers.delete(cb)
-        },
+      track: (signal, label) => {
+        debuggerEntries.add({
+          label: label ?? signal.displayName ?? "Unnamed Signal",
+          signal,
+        })
+        subscribers.forEach((cb) => cb(debuggerEntries))
+      },
+      untrack: (signal) => {
+        debuggerEntries.forEach((entry) => {
+          if (entry.signal === signal) {
+            debuggerEntries.delete(entry)
+          }
+        })
+        subscribers.forEach((cb) => cb(debuggerEntries))
+      },
+      subscribe: (cb) => {
+        subscribers.add(cb)
+        cb(debuggerEntries)
+        return () => subscribers.delete(cb)
       },
     }
   }

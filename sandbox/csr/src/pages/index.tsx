@@ -1,4 +1,12 @@
-import { Fragment, signal, effect, Derive, Signal, computed } from "kiru"
+import {
+  Fragment,
+  signal,
+  effect,
+  Derive,
+  Signal,
+  computed,
+  Devtools,
+} from "kiru"
 
 const text = signal("Hello World!")
 const foo = signal({
@@ -23,10 +31,10 @@ effect(() => {
 const count = signal(0)
 const double = computed(() => count.value * 2)
 if (import.meta.env.DEV) {
-  window.__kiru.devtools?.tracking.add(count, "count")
-  window.__kiru.devtools?.tracking.add(double, "double")
-  window.__kiru.devtools?.tracking.add(text, "text")
-  window.__kiru.devtools?.tracking.add(foo, "foo")
+  Devtools.track(count, "count")
+  Devtools.track(double, "double")
+  Devtools.track(text, "text")
+  Devtools.track(foo, "foo")
 }
 
 export default function HomePage() {

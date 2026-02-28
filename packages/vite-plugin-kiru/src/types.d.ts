@@ -135,12 +135,6 @@ export interface SSGOptions {
 
 export interface DevtoolsOptions {
   /**
-   * Specifies the path to the devtools app displayed via popup
-   * @default "/__devtools__"
-   */
-  dtClientPathname?: string
-
-  /**
    * Formats the link displayed in devtools to the component's source code
    * @param path the path to the file that contains the component on disk
    * @param line the component's line number

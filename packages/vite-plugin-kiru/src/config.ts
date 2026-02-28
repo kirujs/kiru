@@ -78,7 +78,7 @@ export function createPluginState(
 
   let dtClientPathname = "/__devtools__"
   if (typeof opts.devtools === "object") {
-    dtClientPathname = opts.devtools.dtClientPathname ?? dtClientPathname
+    //dtClientPathname = opts.devtools.dtClientPathname ?? dtClientPathname
     fileLinkFormatter = opts.devtools.formatFileLink ?? fileLinkFormatter
   }
 

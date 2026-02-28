@@ -118,7 +118,7 @@ const DebuggerView: Kiru.FC = () => {
   const debuggerEntries = kiru.signal<DebuggerEntryWithLink[]>([])
 
   kiru.onMount(() => {
-    const unsub = kiruGlobal().devtools!.tracking.subscribe((newEntries) => {
+    const unsub = kiruGlobal().devtools!.subscribe((newEntries) => {
       debuggerEntries.value = Array.from(newEntries).map((entry) => ({
         ...entry,
         link: getFileLink(entry.signal),
