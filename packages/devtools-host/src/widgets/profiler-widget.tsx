@@ -23,6 +23,7 @@ export const ProfilingWidget: Kiru.FC<ProfilingWidgetProps> = () => {
     storage: sessionStorage,
     allowFloat: true,
     snapDistance: 50,
+    defaultPosition: { type: "floating", x: 0.5, y: 0.5 },
     getDraggableBounds: () => [window.innerWidth, window.innerHeight],
     getPadding: () => [DRAG_SNAP_PADDING, DRAG_SNAP_PADDING],
   })

@@ -32,6 +32,7 @@ export const DebuggerWidget: Kiru.FC<DebuggerWidgetProps> = () => {
     storage: sessionStorage,
     allowFloat: true,
     snapDistance: 50,
+    defaultPosition: { type: "floating", x: 0.5, y: 0.5 },
     getDraggableBounds: () => [window.innerWidth, window.innerHeight],
     getPadding: () => [DRAG_SNAP_PADDING, DRAG_SNAP_PADDING],
   })
@@ -135,7 +136,11 @@ const DebuggerView: Kiru.FC = () => {
           <div className="flex flex-col items-center justify-center gap-2 py-8 px-4 text-center text-neutral-400 text-sm">
             <p className="font-medium">No signals tracked</p>
             <p className="text-xs text-neutral-500 max-w-[240px]">
-              Use <code className="px-1 py-0.5 rounded bg-neutral-800 text-neutral-300 font-mono text-[11px]">DevTools.track(signal, label)</code> in your app to inspect signal values here.
+              Use{" "}
+              <code className="px-1 py-0.5 rounded bg-neutral-800 text-neutral-300 font-mono text-[11px]">
+                DevTools.track(signal, label)
+              </code>{" "}
+              in your app to inspect signal values here.
             </p>
           </div>
         }

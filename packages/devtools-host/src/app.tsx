@@ -21,6 +21,7 @@ export default function DevtoolsHostApp() {
   const mainMenuController = createDraggableController({
     storage: localStorage,
     key: MENU_POSITION_STORAGE_KEY,
+    defaultPosition: { type: "snapped", side: "bottom", percent: 0.5 },
     getPadding: () => [DRAG_SNAP_PADDING, DRAG_SNAP_PADDING],
     getDraggableBounds: () => [window.innerWidth, window.innerHeight],
     onclick: () => (showTooltipMenu.value = !showTooltipMenu.value),

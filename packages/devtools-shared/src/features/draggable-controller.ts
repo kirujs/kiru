@@ -9,13 +9,14 @@ type DraggablePositionInfo =
   | { type: "floating"; x: number; y: number }
 
 interface DraggableControllerConfig {
-  onclick?: () => void
   storage: Storage
   key: string
-  getPadding: (snapSide: SnapSide | null) => Vec2
-  getDraggableBounds: () => Vec2
+  defaultPosition?: DraggablePositionInfo
   allowFloat?: boolean
   snapDistance?: number
+  onclick?: () => void
+  getPadding: (snapSide: SnapSide | null) => Vec2
+  getDraggableBounds: () => Vec2
 }
 
 interface DraggableController {
@@ -38,7 +39,7 @@ export function createDraggableController(
   const handleRef = kiru.signal<HTMLElement | null>(null)
 
   const position = kiru.signal<DraggablePositionInfo>(
-    loadDraggablePosFromStorage(config.storage, config.key)
+    loadDraggablePosFromStorage(config)
   )
   const snapSide = kiru.computed<SnapSide | null>(() =>
     position.value.type === "snapped" ? position.value.side : null
@@ -232,10 +233,11 @@ export function createDraggableController(
   }
 }
 
-function loadDraggablePosFromStorage(
-  storage: Storage,
-  key: string
-): DraggablePositionInfo {
+function loadDraggablePosFromStorage({
+  storage,
+  key,
+  defaultPosition,
+}: DraggableControllerConfig): DraggablePositionInfo {
   const posStr = storage.getItem(key)
   if (posStr) {
     try {
@@ -266,10 +268,10 @@ function loadDraggablePosFromStorage(
       }
     } catch {}
   }
-  const info: DraggablePositionInfo = {
-    type: "snapped",
-    side: "bottom",
-    percent: 0.5,
+  const info: DraggablePositionInfo = defaultPosition ?? {
+    type: "floating",
+    x: 0.5,
+    y: 0.5,
   }
   storage.setItem(key, JSON.stringify(info))
   return info
