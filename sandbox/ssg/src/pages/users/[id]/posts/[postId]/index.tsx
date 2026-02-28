@@ -1,3 +1,4 @@
+import { computed } from "kiru"
 import { definePageConfig, PageProps, useFileRouter } from "kiru/router"
 
 interface GetPostResponse {
@@ -28,35 +29,33 @@ export const config = definePageConfig({
   },
 })
 
-export default function PostPage({
-  data,
-  loading,
-  error,
-}: PageProps<typeof config>) {
+const PostPage: Kiru.FC<PageProps<typeof config>> = () => {
   const router = useFileRouter()
-  if (loading) return <p>Loading...</p>
-  if (error) return <p>{String(error.cause)}</p>
-  return (
-    <div>
-      <h1>Post Page - user {router.state.params.id}</h1>
-      <p>Post ID: {router.state.params.postId}</p>
-      <p>Post Title: {data.post.title}</p>
-      <p>Post Body: {data.post.body}</p>
-      <p>Post User ID: {data.post.userId}</p>
-      <p>Post Tags: {data.post.tags.join(", ")}</p>
-      <p>
-        Post Reactions: {data.post.reactions.likes} likes,{" "}
-        {data.post.reactions.dislikes} dislikes
-      </p>
-      <div className="flex gap-2 justify-between">
-        <button
-          onclick={() =>
-            router.navigate(`/users/${router.state.params.id}/posts`)
-          }
-        >
-          Back to Posts
-        </button>
+  const userId = computed(() => router.state.params.value["id"])
+  const postId = computed(() => router.state.params.value["postId"])
+
+  return ({ data, loading, error }) => {
+    if (loading) return <p>Loading...</p>
+    if (error) return <p>{String(error.cause)}</p>
+    return (
+      <div>
+        <h1>Post Page - user {userId}</h1>
+        <p>Post ID: {postId}</p>
+        <p>Post Title: {data.post.title}</p>
+        <p>Post Body: {data.post.body}</p>
+        <p>Post User ID: {data.post.userId}</p>
+        <p>Post Tags: {data.post.tags.join(", ")}</p>
+        <p>
+          Post Reactions: {data.post.reactions.likes} likes,{" "}
+          {data.post.reactions.dislikes} dislikes
+        </p>
+        <div className="flex gap-2 justify-between">
+          <button onclick={() => router.navigate(`/users/${userId}/posts`)}>
+            Back to Posts
+          </button>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 }
+export default PostPage

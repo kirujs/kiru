@@ -74,23 +74,23 @@ export interface RouterState {
    * @example
    * "/users/[id]" -> "/users/123"
    */
-  pathname: string
+  pathname: Kiru.Signal<string>
   /**
    * The current hash
    * @example
    * "/users/123#profile" -> "#profile"
    */
-  hash: string
+  hash: Kiru.Signal<string>
   /**
    * The current route params
    * @example
    * "/foo/[id]/page.tsx" -> { id: "123" }
    */
-  params: RouteParams
+  params: Kiru.Signal<RouteParams>
   /**
    * The current route query
    */
-  query: RouteQuery
+  query: Kiru.Signal<RouteQuery>
   /**
    * The abort signal for the current route, aborted and
    * renewed each time the route changes or reloads
@@ -98,7 +98,13 @@ export interface RouterState {
   signal: AbortSignal
 }
 
-type PageDataLoaderContext = RouterState & {}
+export interface PageDataLoaderContext {
+  pathname: string
+  hash: string
+  params: RouteParams
+  query: RouteQuery
+  signal: AbortSignal
+}
 
 export interface PageDataLoaderCacheConfig {
   type: "memory" | "localStorage" | "sessionStorage"
@@ -161,6 +167,7 @@ export interface PageConfig<T = unknown> {
   generateStaticParams?: () => RouteParams[] | Promise<RouteParams[]>
 }
 
-export type PageProps<T extends PageConfig<any>> = T extends PageConfig<infer U>
-  ? AsyncTaskState<U, FileRouterDataLoadError>
-  : {}
+export type PageProps<T extends PageConfig<any>> =
+  T extends PageConfig<infer U>
+    ? AsyncTaskState<U, FileRouterDataLoadError>
+    : {}

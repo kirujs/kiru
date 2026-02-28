@@ -1,3 +1,4 @@
+import { computed } from "kiru"
 import { definePageConfig, Link, PageProps, useFileRouter } from "kiru/router"
 
 interface Post {
@@ -28,34 +29,33 @@ export const config = definePageConfig({
     },
   },
 })
-export default function PostsPage({
-  data,
-  loading,
-  error,
-}: PageProps<typeof config>) {
-  const router = useFileRouter()
-  if (loading) return <p>Loading...</p>
-  if (error) return <p>{String(error.cause)}</p>
 
-  return (
-    <>
-      <div>PostsPage</div>
-      <ul>
-        {data.posts.map((post) => (
-          <li key={post.id}>
-            <Link to={`/users/${router.state.params.id}/posts/${post.id}`}>
-              {post.title}
-            </Link>
-          </li>
-        ))}
-      </ul>
-      <div className="flex gap-2 justify-between">
-        <button
-          onclick={() => router.navigate(`/users/${router.state.params.id}`)}
-        >
-          Back to User
-        </button>
-      </div>
-    </>
-  )
+const PostsPage: Kiru.FC<PageProps<typeof config>> = () => {
+  const router = useFileRouter()
+  const id = computed(() => router.state.params.value["id"])
+
+  return ({ data, loading, error }) => {
+    if (loading) return <p>Loading...</p>
+    if (error) return <p>{String(error.cause)}</p>
+
+    return (
+      <>
+        <div>PostsPage</div>
+        <ul>
+          {data.posts.map((post) => (
+            <li key={post.id}>
+              <Link to={`/users/${id}/posts/${post.id}`}>{post.title}</Link>
+            </li>
+          ))}
+        </ul>
+        <div className="flex gap-2 justify-between">
+          <button onclick={() => router.navigate(`/users/${id}`)}>
+            Back to User
+          </button>
+        </div>
+      </>
+    )
+  }
 }
+
+export default PostsPage

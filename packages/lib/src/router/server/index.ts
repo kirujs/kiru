@@ -8,7 +8,13 @@ import {
   wrapWithLayouts,
 } from "../utils/index.js"
 import { RouterContext } from "../context.js"
-import type { PageConfig, PageProps, RouterState } from "../types.js"
+import { signal, Signal } from "../../signals/base.js"
+import type {
+  PageConfig,
+  PageDataLoaderContext,
+  PageProps,
+  RouterState,
+} from "../types.js"
 import { FormattedViteImportMap, PageModule } from "../types.internal.js"
 import { __DEV__ } from "../../env.js"
 import { FileRouterDataLoadError } from "../errors.js"
@@ -86,7 +92,7 @@ export async function render(
     if (config.loader.mode !== "static" || __DEV__) {
       props = { loading: true, data: null, error: null }
     } else {
-      const routerState: RouterState = {
+      const loaderContext: PageDataLoaderContext = {
         pathname: u.pathname,
         hash: "",
         params,
@@ -100,7 +106,7 @@ export async function render(
       }, 10000)
 
       try {
-        const data = await config.loader.load(routerState)
+        const data = await config.loader.load(loaderContext)
         props = {
           data,
           error: null,
@@ -127,6 +133,14 @@ export async function render(
     props
   )
 
+  const routerState: RouterState = {
+    pathname: signal(u.pathname),
+    hash: signal(""),
+    params: signal(params),
+    query: signal(query),
+    signal: abortController.signal,
+  }
+
   let documentShell = renderToString(createElement(ctx.Document))
 
   if (
@@ -142,12 +156,7 @@ export async function render(
     children: Fragment({ children }),
     value: {
       baseUrl: ctx.baseUrl.slice(0, -1),
-      state: {
-        params,
-        query,
-        pathname: u.pathname,
-        signal: abortController.signal, // Server-side signal (not abortable)
-      } as RouterState,
+      state: routerState,
     },
   })
 
@@ -174,6 +183,10 @@ export async function render(
     // remove head outlet element and everything within it
     documentShell = documentShell.replaceAll("<kiru-head-outlet>", "")
   }
+
+  Object.values(routerState).forEach(
+    (s) => Signal.isSignal(s) && Signal.dispose(s)
+  )
 
   const [prePageOutlet, postPageOutlet] =
     documentShell.split("<kiru-body-outlet>")

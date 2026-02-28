@@ -1,4 +1,4 @@
-import { Signal } from "../signals/base.js"
+import { signal, Signal } from "../signals/base.js"
 import { effect } from "../signals/effect.js"
 import { __DEV__ } from "../env.js"
 import { nextIdle } from "../scheduler.js"
@@ -9,7 +9,9 @@ import type {
   FileRouterConfig,
   PageConfig,
   PageDataLoaderConfig,
+  PageDataLoaderContext,
   PageProps,
+  RouteParams,
   RouteQuery,
   RouterState,
 } from "./types.js"
@@ -63,18 +65,18 @@ export class FileRouterController {
   constructor() {
     routerCache.current ??= new RouterCache()
     this.abortController = new AbortController()
-    this.currentPage = new Signal(null)
-    this.currentPageProps = new Signal({})
-    this.currentLayouts = new Signal([])
+    this.currentPage = signal(null)
+    this.currentPageProps = signal({})
+    this.currentLayouts = signal([])
     this.enableTransitions = false
     this.historyIndex = 0
     this.layouts = {}
     this.pages = {}
     this.state = {
-      pathname: window.location.pathname,
-      hash: window.location.hash,
-      params: {},
-      query: {},
+      pathname: signal(window.location.pathname),
+      hash: signal(window.location.hash),
+      params: signal<RouteParams>({}),
+      query: signal<RouteQuery>({}),
       signal: this.abortController.signal,
     }
     this.contextValue = this.createContextValue()
@@ -100,10 +102,11 @@ export class FileRouterController {
           // Check cache first if caching is enabled
           let cachedData = null
           if (loader.mode !== "static" && loader.cache) {
+            const { pathname, params, query } = this.state
             const cacheKey: CacheKey = {
-              path: this.state.pathname,
-              params: this.state.params,
-              query: this.state.query,
+              path: pathname.peek(),
+              params: params.peek(),
+              query: query.peek(),
             }
             cachedData = routerCache.current!.get(cacheKey, loader.cache)
           }
@@ -131,10 +134,18 @@ export class FileRouterController {
               this.currentPageProps.value = props
             })
 
+            const { pathname, hash, params, query, signal } = this.state
+
             this.loadRouteData(
               config as PageConfigWithLoader,
               props,
-              this.state,
+              {
+                pathname: pathname.peek(),
+                hash: hash.peek(),
+                params: params.peek(),
+                query: query.peek(),
+                signal,
+              },
               transition
             )
           }
@@ -151,7 +162,7 @@ export class FileRouterController {
         },
         navigate: this.navigate.bind(this),
         reload: () => {
-          this.invalidate(this.state.pathname)
+          this.invalidate(this.state.pathname.peek())
           return this.loadRoute()
         },
         subscribe: (callback) => {
@@ -190,13 +201,11 @@ export class FileRouterController {
         query,
         cacheData,
       } = preloaded
-      this.state = {
-        params,
-        query,
-        pathname: window.location.pathname,
-        hash: window.location.hash,
-        signal: this.abortController.signal,
-      }
+      this.state.pathname.value = window.location.pathname
+      this.state.hash.value = window.location.hash
+      this.state.params.value = params
+      this.state.query.value = query
+      this.state.signal = this.abortController.signal
       this.currentPage.value = {
         component: page.default,
         config: page.config,
@@ -220,11 +229,14 @@ export class FileRouterController {
         ((loader.mode !== "static" && pageProps.loading === true) || __DEV__)
       ) {
         if (cacheData === null) {
-          this.loadRouteData(
-            page.config as PageConfigWithLoader,
-            pageProps,
-            this.state
-          )
+          const { pathname, hash, params, query, signal } = this.state
+          this.loadRouteData(page.config as PageConfigWithLoader, pageProps, {
+            pathname: pathname.peek(),
+            hash: hash.peek(),
+            params: params.peek(),
+            query: query.peek(),
+            signal,
+          })
         } else {
           nextIdle(() => {
             const props = {
@@ -383,7 +395,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         )
       }
 
-      const routerState: RouterState = {
+      const loaderContext: PageDataLoaderContext = {
         pathname: path,
         hash: window.location.hash,
         params,
@@ -406,9 +418,9 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
           let cachedData = null
           if (loader.mode !== "static" && loader.cache) {
             const cacheKey: CacheKey = {
-              path: routerState.pathname,
-              params: routerState.params,
-              query: routerState.query,
+              path: loaderContext.pathname,
+              params: loaderContext.params,
+              query: loaderContext.query,
             }
             cachedData = routerCache.current!.get(cacheKey, loader.cache)
           }
@@ -433,7 +445,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
             this.loadRouteData(
               config as PageConfigWithLoader,
               props,
-              routerState,
+              loaderContext,
               enableTransition
             )
           }
@@ -454,8 +466,11 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       }
 
       return handleStateTransition(signal, enableTransition, () => {
-        this.state = routerState
-        this.contextValue = this.createContextValue()
+        this.state.pathname.value = path
+        this.state.hash.value = window.location.hash
+        this.state.params.value = params
+        this.state.query.value = query
+        this.state.signal = signal
         this.currentPage.value = {
           component: page.default,
           config,
@@ -475,22 +490,22 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
   private async loadRouteData(
     config: PageConfigWithLoader,
     props: Record<string, unknown>,
-    routerState: RouterState,
+    context: PageDataLoaderContext,
     enableTransition = this.enableTransitions
   ) {
     const { loader } = config
 
     // Load data from loader (cache check is now done earlier in loadRoute)
     loader
-      .load(routerState)
+      .load(context)
       .then(
         (data) => {
           // Cache the data if caching is enabled
           if (loader.mode !== "static" && loader.cache) {
             const cacheKey: CacheKey = {
-              path: routerState.pathname,
-              params: routerState.params,
-              query: routerState.query,
+              path: context.pathname,
+              params: context.params,
+              query: context.query,
             }
             routerCache.current!.set(cacheKey, data, loader.cache)
           }
@@ -506,15 +521,15 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
             data: null,
             error: new FileRouterDataLoadError(error),
             loading: false,
-          }) satisfies PageProps<PageConfig<unknown>>
+          } satisfies PageProps<PageConfig<unknown>>)
       )
       .then((state) => {
-        if (routerState.signal.aborted) return
+        if (context.signal.aborted) return
 
         const transition =
           (loader.mode !== "static" && loader.transition) ?? enableTransition
 
-        handleStateTransition(routerState.signal, transition, () => {
+        handleStateTransition(context.signal, transition, () => {
           this.currentPageProps.value = {
             ...props,
             ...state,
@@ -528,7 +543,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
     routerCache.current!.invalidate(...paths)
 
     // Check if current page matches any invalidated paths
-    const currentPath = this.state.pathname
+    const currentPath = this.state.pathname.peek()
     const shouldRefresh = routerCache.current!.pathMatchesPattern(
       currentPath,
       paths
@@ -546,7 +561,8 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
   ) {
     const url = new URL(path, "http://localhost")
     const { hash: nextHash, pathname: nextPath } = url
-    const { hash: prevHash, pathname: prevPath } = this.state
+    const prevHash = this.state.hash.peek()
+    const prevPath = this.state.pathname.peek()
     if (nextHash === prevHash && nextPath === prevPath) {
       return
     }
@@ -596,11 +612,11 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
 
   private setQuery(query: RouteQuery, options?: { replace?: boolean }) {
     const queryString = buildQueryString(query)
-    const newUrl = `${this.state.pathname}${
+    const newUrl = `${this.state.pathname.peek()}${
       queryString ? `?${queryString}` : ""
     }`
     this.updateHistoryState(newUrl, options)
-    this.state = { ...this.state, query }
+    this.state.query.value = query
     return this.loadRoute()
   }
 
@@ -610,11 +626,11 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
     } else if (hash.length && !hash.startsWith("#")) {
       hash = `#${hash}`
     }
-    if (hash === this.state.hash) {
+    if (hash === this.state.hash.peek()) {
       return
     }
-    this.updateHistoryState(`${this.state.pathname}${hash}`, options)
-    this.state = { ...this.state, hash }
+    this.updateHistoryState(`${this.state.pathname.peek()}${hash}`, options)
+    this.state.hash.value = hash
     return this.loadRoute()
   }
 
@@ -657,13 +673,13 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
         }
       },
       get state() {
-        return { ...__this.state }
+        return __this.state
       },
       navigate: this.navigate.bind(this),
       prefetchRouteModules: this.prefetchRouteModules.bind(this),
       reload: async (options?: ReloadOptions) => {
         if (options?.invalidate ?? true) {
-          this.invalidate(this.state.pathname)
+          this.invalidate(this.state.pathname.peek())
         }
         return this.loadRoute(void 0, void 0, options?.transition)
       },
