@@ -9,7 +9,7 @@ export default function CounterPage() {
         <title>Counter</title>
       </Head.Content>
       {/* used for checking that counter persists state after reordering these children */}
-      {toggled && <p>Toggled</p>}
+      {toggled.value && <p>Toggled</p>}
       <ActualCounter />
       <button id="toggle-btn" onclick={() => (toggled.value = !toggled.value)}>
         toggle
