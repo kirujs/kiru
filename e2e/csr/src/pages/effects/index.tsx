@@ -1,8 +1,8 @@
 import { createContext, useContext, onMount, ref, onBeforeMount } from "kiru"
 
-const LogCtx = createContext<(msg: string) => void>(null as any)
+const LogContext = createContext<(msg: string) => void>(null as any)
 
-const useLog = () => useContext(LogCtx)
+const useLog = () => useContext(LogContext)
 
 export default function EffectsPage() {
   const logs = ref<string[]>([])
@@ -16,9 +16,9 @@ export default function EffectsPage() {
   })
   return () => (
     <div>
-      <LogCtx.Provider value={addLog}>
+      <LogContext value={addLog}>
         <Parent />
-      </LogCtx.Provider>
+      </LogContext>
       <pre style="font-family: monospace; text-align: left; padding: .5rem; background: #111">
         <code id="output"></code>
       </pre>

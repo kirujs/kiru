@@ -1,10 +1,5 @@
 import type { ReadonlySignal, Signal as SignalClass } from "./signals"
-import type {
-  $CONTEXT,
-  $CONTEXT_PROVIDER,
-  $ERROR_BOUNDARY,
-  $FRAGMENT,
-} from "./constants"
+import type { $CONTEXT, $ERROR_BOUNDARY, $FRAGMENT } from "./constants"
 import type { KiruGlobalContext } from "./globalContext"
 import type {
   GlobalAttributes,
@@ -118,23 +113,19 @@ declare global {
   namespace Kiru {
     interface CustomEvents {}
 
-    interface ProviderProps<T> {
+    interface ContextProps<T> {
       value: T
-      children?: JSX.Children | ((value: T) => JSX.Element)
+      children?: JSX.Children
     }
-    interface Context<T> {
-      [$CONTEXT]: true
-      id: string
-      Provider: Kiru.FC<ProviderProps<T>>
-      default: () => T
-      /** Used to display the name of the context in devtools  */
-      displayName?: string
+
+    interface Context<T> extends Kiru.FC<ContextProps<T>> {
+      [$CONTEXT]: () => T
     }
 
     export interface FC<T = {}> {
-      (
-        props: T
-      ): Exclude<JSX.Element, Kiru.FC<any>> | ((props: T) => JSX.Element)
+      (props: T):
+        | Exclude<JSX.Element, Kiru.FC<any>>
+        | ((props: T) => JSX.Element)
       /** Used to display the name of the component in devtools  */
       displayName?: string
     }
@@ -167,7 +158,7 @@ declare global {
 
     type ExoticSymbol =
       | typeof $FRAGMENT
-      | typeof $CONTEXT_PROVIDER
+      | typeof $CONTEXT
       | typeof $ERROR_BOUNDARY
 
     interface Element {

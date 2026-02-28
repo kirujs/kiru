@@ -22,9 +22,9 @@ describe("renderToString", () => {
     const App = () => {
       return (
         <div>
-          <MyContext.Provider value="test123">
+          <MyContext value="test123">
             <ChildComponent />
-          </MyContext.Provider>
+          </MyContext>
         </div>
       )
     }

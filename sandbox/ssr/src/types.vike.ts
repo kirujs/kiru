@@ -10,7 +10,7 @@ declare global {
       config: {
         title: string | ((ctx: PageContext) => string)
         Page: Kiru.FC
-        Layout: Kiru.FC[]
+        Layout: Kiru.FC<{ children: JSX.Children }>[]
       }
 
       routeParams: Record<string, string>

@@ -1,15 +1,15 @@
 import "./global.css"
-import { PageContext } from "vike/types"
-import { PageContextProvider } from "$/context/pageContext"
+import { PageContext as VikePageContext } from "vike/types"
+import { PageContext } from "$/context/pageContext"
 
-export function App({ pageContext }: { pageContext: PageContext }) {
+export function App({ pageContext }: { pageContext: VikePageContext }) {
   const { Page, Layout } = pageContext.config
   return (
-    <PageContextProvider pageContext={pageContext}>
+    <PageContext value={pageContext}>
       <Layouts layouts={Layout}>
         <Page {...pageContext.data} />
       </Layouts>
-    </PageContextProvider>
+    </PageContext>
   )
 }
 
@@ -17,7 +17,7 @@ function Layouts({
   layouts,
   children,
 }: {
-  layouts: PageContext["config"]["Layout"]
+  layouts: VikePageContext["config"]["Layout"]
   children: JSX.Children
 }) {
   return layouts.reduce((children, Layout) => {

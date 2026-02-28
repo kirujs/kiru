@@ -1,55 +1,31 @@
-import { generateRandomID, noop, registerVNodeCleanup } from "./utils/index.js"
-import { $CONTEXT, $CONTEXT_PROVIDER } from "./constants.js"
+import { $CONTEXT } from "./constants.js"
 import { createElement } from "./element.js"
-import type { ContextProviderNode } from "./types.utils.js"
+import type { ContextNode } from "./types.utils.js"
 import { node } from "./globals.js"
 
 export function createContext<T>(defaultValue: T): Kiru.Context<T> {
-  const ctx: Kiru.Context<T> = {
-    [$CONTEXT]: true,
-    id: generateRandomID(),
-    Provider: () => {
-      const dependents = new Set<Kiru.VNode>()
-      return ({ value, children }) =>
-        createElement(
-          $CONTEXT_PROVIDER,
-          { value, ctx, dependents },
-          typeof children === "function" ? children(value) : children
-        )
-    },
-    default: () => defaultValue,
-    set displayName(name: string) {
-      this.Provider.displayName = name
-    },
-    get displayName() {
-      return this.Provider.displayName || "Anonymous Context"
-    },
-  }
-
-  return ctx
+  const Context: Kiru.Context<T> = Object.assign(
+    ({ value, children }: Kiru.ContextProps<T>) =>
+      createElement($CONTEXT, { value, ctx: Context }, children),
+    { [$CONTEXT]: () => defaultValue }
+  )
+  Context.displayName = "Anonymous Context"
+  return Context
 }
 
-export function isContext<T>(thing: unknown): thing is Kiru.Context<T> {
-  return typeof thing === "object" && !!thing && $CONTEXT in thing
-}
-
-export function findAndSubscribeToContext<T>(
-  vNode: Kiru.VNode,
-  context: Kiru.Context<T>
-): { value: T; cleanup: () => void } {
+function getContextValue<T>(vNode: Kiru.VNode, context: Kiru.Context<T>): T {
   let n = vNode.parent
   while (n) {
-    if (n.type === $CONTEXT_PROVIDER) {
-      const provider = n as ContextProviderNode<T>
-      const { ctx, value, dependents } = provider.props
+    if (n.type === $CONTEXT) {
+      const provider = n as ContextNode<unknown>
+      const { ctx, value } = provider.props
       if (ctx === context) {
-        dependents.add(vNode)
-        return { value, cleanup: () => dependents.delete(vNode) }
+        return value as T
       }
     }
     n = n.parent
   }
-  return { value: context.default(), cleanup: noop }
+  return context[$CONTEXT]()
 }
 
 export function useContext<T>(context: Kiru.Context<T>): T {
@@ -57,8 +33,5 @@ export function useContext<T>(context: Kiru.Context<T>): T {
   if (!n) {
     throw new Error("useContext must be called inside a Kiru component")
   }
-  const { value, cleanup } = findAndSubscribeToContext(n, context)
-  registerVNodeCleanup(n, context.id, cleanup)
-
-  return value
+  return getContextValue(n, context)
 }

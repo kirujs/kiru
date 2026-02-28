@@ -1,4 +1,4 @@
-import type { $CONTEXT_PROVIDER, $ERROR_BOUNDARY, $FRAGMENT } from "./constants"
+import type { $CONTEXT, $ERROR_BOUNDARY, $FRAGMENT } from "./constants"
 import type { Signal } from "./signals"
 import type { ErrorBoundaryProps } from "./components/errorBoundary"
 
@@ -20,12 +20,11 @@ export interface DomVNode extends Kiru.VNode {
   type: "#text" | (string & {})
 }
 
-export interface ContextProviderNode<T> extends Kiru.VNode {
-  type: typeof $CONTEXT_PROVIDER
+export interface ContextNode<T> extends Kiru.VNode {
+  type: typeof $CONTEXT
   props: Kiru.VNode["props"] & {
     value: T
     ctx: Kiru.Context<T>
-    dependents: Set<Kiru.VNode>
   }
 }
 

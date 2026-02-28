@@ -43,7 +43,7 @@ export const FileRouter: Kiru.FC<FileRouterProps> = ({ config }) => {
   return (nextProps) => (
     onUpdate(nextProps),
     createElement(
-      RouterContext.Provider,
+      RouterContext,
       { value: router.contextValue },
       router.getChildren()
     )

@@ -1,22 +1,8 @@
-import type { PageContext } from "vike/types"
+import type { PageContext as VikePageContext } from "vike/types"
 import { createContext, useContext } from "kiru"
 
-export { usePageContext, PageContextProvider }
+export const PageContext = createContext<VikePageContext>(null!)
 
-const PageContext = createContext<PageContext>(null as any)
-
-type PageContextProviderProps = {
-  pageContext: PageContext
-  children: JSX.Children
-}
-
-function PageContextProvider({
-  pageContext: value,
-  children,
-}: PageContextProviderProps) {
-  return <PageContext.Provider {...{ value, children }} />
-}
-
-function usePageContext() {
+export function usePageContext() {
   return useContext(PageContext)
 }
