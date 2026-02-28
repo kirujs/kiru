@@ -32,12 +32,7 @@ export class Effect<const Deps extends readonly Signal<unknown>[] = []> {
     this.isRunning = false
     this.cleanup = null
     if (__DEV__ && "window" in globalThis) {
-      const { isWaitingForNextEffect, pushEffect } =
-        window.__kiru.HMRContext!.signals
-
-      if (isWaitingForNextEffect()) {
-        pushEffect(this)
-      }
+      window.__kiru.HMRContext!.moduleEffects.push(this)
     }
     const n = node.current
     if (n) {

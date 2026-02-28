@@ -18,7 +18,7 @@ type HotVarDesc = {
 
 const UNNAMED_EFFECT_PREAMBLE = `\n
 if (import.meta.hot && "window" in globalThis) {
-  window.__kiru.HMRContext?.signals.registerNextEffect();
+  window.__kiru.HMRContext?.moduleEffects.registerNext();
 }
 `
 export function prepareHMR(ctx: TransformCTX) {

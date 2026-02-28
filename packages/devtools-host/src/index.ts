@@ -6,7 +6,7 @@ if ("window" in globalThis) {
     const kiru = await import("kiru")
     const { default: App } = await import("./app")
 
-    const { devtoolsEvents, devtoolsState } = await import("devtools-shared")
+    const { devtoolsState } = await import("devtools-shared")
     const pageRoot = document.createElement("kiru-devtools")
     pageRoot.setAttribute("style", "display: contents")
     pageRoot.tabIndex = -1
@@ -26,8 +26,6 @@ if ("window" in globalThis) {
     const handleMainWindowClose = () => devtoolsState.popupWindow.value?.close()
     window.addEventListener("close", handleMainWindowClose)
     window.addEventListener("beforeunload", handleMainWindowClose)
-
-    devtoolsEvents.on("open-editor", (fileLink) => window.open(fileLink))
   }
 
   window.addEventListener("kiru:ready", init, { once: true })

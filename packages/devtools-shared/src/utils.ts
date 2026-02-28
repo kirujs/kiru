@@ -15,9 +15,13 @@ export function getNodeName(node: Kiru.VNode) {
 }
 
 const $DEV_FILE_LINK = Symbol.for("kiru.devFileLink")
-export const getFileLink = (
-  fn: Function & { [$DEV_FILE_LINK]?: string }
-): string | null => fn[$DEV_FILE_LINK] ?? null
+export function getFileLink(value: unknown): string | null {
+  try {
+    return (value as any)[$DEV_FILE_LINK] ?? null
+  } catch {
+    return null
+  }
+}
 
 export function isDevtoolsApp(app: AppHandle) {
   return app.name === "kiru.devtools"

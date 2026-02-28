@@ -98,15 +98,13 @@ export function createHMRContext() {
       // @ts-ignore - this is how we tell devtools what file the hotvar is from
       newEntry.value[$DEV_FILE_LINK] = newEntry.link
 
-      if (typeof newEntry.value === "function") {
-        if (oldEntry?.value) {
-          /**
-           * this is how, when the previous function has been stored somewhere else (eg. in a Map, or by Vike),
-           * we can trace it to its latest version
-           */
-          // @ts-ignore
-          oldEntry.value.__next = newEntry.value
-        }
+      if (oldEntry?.value) {
+        /**
+         * this is how, when the previous value has been stored somewhere else (eg. in a Map, or by Vike),
+         * we can trace it to its current version by using latest(value)
+         */
+        // @ts-ignore
+        oldEntry.value.__next = newEntry.value
       }
 
       currentModuleMemory.hotVars.set(name, newEntry)
@@ -122,8 +120,8 @@ export function createHMRContext() {
         continue
       }
       if (oldEntry.type === "component" && newEntry.type === "component") {
-        window.__kiru.apps.forEach((ctx) => {
-          traverseApply(ctx.rootNode, (vNode) => {
+        window.__kiru.apps.forEach((app) => {
+          traverseApply(app.rootNode, (vNode) => {
             if (vNode.type === oldEntry.value) {
               vNode.type = newEntry.value as any
               dirtyNodes.add(vNode)
@@ -145,14 +143,12 @@ export function createHMRContext() {
     currentModuleFilePath = null
   }
 
-  const signals = {
-    registerNextEffect() {
+  const moduleEffects = {
+    registerNext() {
       isWaitingForNextEffect = true
     },
-    isWaitingForNextEffect() {
-      return isWaitingForNextEffect
-    },
-    pushEffect(effect: Effect<any>) {
+    push(effect: Effect<any>) {
+      if (!isWaitingForNextEffect) return
       currentModuleMemory!.unnamedEffects.push(effect)
       isWaitingForNextEffect = false
     },
@@ -162,7 +158,7 @@ export function createHMRContext() {
     register,
     prepare,
     isReplacement,
-    signals,
+    moduleEffects,
     onHmr,
     getCurrentFilePath() {
       return currentModuleFilePath

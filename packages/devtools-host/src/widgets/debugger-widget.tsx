@@ -12,6 +12,8 @@ import {
   collectFromRoot,
   disposeCache,
   devtoolsState,
+  getFileLink,
+  ExternalLinkIcon,
 } from "devtools-shared"
 import {
   DRAG_SNAP_PADDING,
@@ -108,33 +110,40 @@ export const DebuggerWidget: Kiru.FC<DebuggerWidgetProps> = () => {
   )
 }
 
+interface DebuggerEntryWithLink extends DebuggerEntry {
+  link: string | null
+}
+
 const DebuggerView: Kiru.FC = () => {
-  const debuggerEntries = kiru.signal<DebuggerEntry[]>([])
+  const debuggerEntries = kiru.signal<DebuggerEntryWithLink[]>([])
 
   kiru.onMount(() => {
     const unsub = kiruGlobal().devtools!.tracking.subscribe((newEntries) => {
-      debuggerEntries.value = Array.from(newEntries)
+      debuggerEntries.value = Array.from(newEntries).map((entry) => ({
+        ...entry,
+        link: getFileLink(entry.signal),
+      }))
     })
     return () => unsub()
   })
 
-  return () => (
+  return (
     <div className="flex flex-col gap-2 p-2">
-      {debuggerEntries.value.map((entry) => (
-        <SignalCard
-          // @ts-ignore ligma
-          key={`${entry.label}:${entry.signal.$id}`}
-          label={entry.label}
-          signal={entry.signal}
-        />
-      ))}
+      <kiru.For each={debuggerEntries}>
+        {(entry) => (
+          <DebuggerEntryCard
+            // @ts-ignore ligma
+            key={`${entry.signal.$id}:${entry.label}${entry.link}`}
+            entry={entry}
+          />
+        )}
+      </kiru.For>
     </div>
   )
 }
 
-const SignalCard: Kiru.FC<{ label: string; signal: Kiru.Signal<any> }> = ({
-  label,
-  signal,
+const DebuggerEntryCard: Kiru.FC<{ entry: DebuggerEntryWithLink }> = ({
+  entry,
 }) => {
   const settings = devtoolsState.viewerSettings.peek()
 
@@ -147,18 +156,23 @@ const SignalCard: Kiru.FC<{ label: string; signal: Kiru.Signal<any> }> = ({
       : { value: val }
 
   const viewerRootSig = kiru.signal(
-    buildViewerRoot(toRootData(signal.peek()), label, emptyCache(), settings)
+    buildViewerRoot(
+      toRootData(entry.signal.peek()),
+      entry.label,
+      emptyCache(),
+      settings
+    )
   )
 
   kiru.onMount(() => {
-    const unsub = signal.subscribe((newValue) => {
+    const unsub = entry.signal.subscribe((newValue) => {
       // Collect signals from the current root into prevCache so buildViewerRoot
       // can reuse collapse/page state, then dispose whatever wasn't reused.
       const prevCache = emptyCache()
-      collectFromRoot(viewerRootSig.peek(), label, prevCache)
+      collectFromRoot(viewerRootSig.peek(), entry.label, prevCache)
       viewerRootSig.value = buildViewerRoot(
         toRootData(newValue),
-        label,
+        entry.label,
         prevCache,
         settings
       )
@@ -167,17 +181,42 @@ const SignalCard: Kiru.FC<{ label: string; signal: Kiru.Signal<any> }> = ({
     return () => {
       unsub()
       const c = emptyCache()
-      collectFromRoot(viewerRootSig.peek(), label, c)
+      collectFromRoot(viewerRootSig.peek(), entry.label, c)
       disposeCache(c)
     }
   })
 
   return () => (
     <div className="rounded border border-neutral-700 text-xs">
-      <div className="px-2 py-1 border-b border-neutral-700 font-medium text-neutral-300">
-        {label}
+      <div className="flex items-center justify-between px-2 py-1 border-b border-neutral-700 font-medium text-neutral-300">
+        {entry.label}
+        <FileLink link={entry.link} />
       </div>
-      <ValueViewer root={viewerRootSig.value} />
+      <kiru.Derive from={viewerRootSig}>
+        {(root) => <ValueViewer root={root} />}
+      </kiru.Derive>
     </div>
+  )
+}
+
+const FileLink: Kiru.FC<{ link: string | null }> = ({ link }) => {
+  if (!link) return null
+
+  return (
+    <a
+      className="flex items-center gap-1 text-[10px] opacity-50 hover:opacity-100 transition-opacity"
+      href={link}
+      onclick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        window.open(link)
+      }}
+      //target="_top"
+      title="Open in editor"
+    >
+      Open in editor
+      <ExternalLinkIcon width="0.65rem" height="0.65rem" />
+    </a>
   )
 }
