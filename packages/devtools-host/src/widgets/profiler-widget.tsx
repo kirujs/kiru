@@ -79,7 +79,7 @@ export const ProfilingWidget: Kiru.FC<ProfilingWidgetProps> = () => {
           minHeight: 0,
         }}
       >
-        <ProfilingTabView />
+        <ProfilingTabView pauseWhen={dragController.isDragging} />
       </div>
       <div
         ref={resizeHandleRef}

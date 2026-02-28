@@ -9,14 +9,19 @@ import {
 } from "./profiling-tab-state.js"
 import { InfoIcon } from "../../components/icons/info-icon.jsx"
 
-export function ProfilingTabView() {
+type ProfilingTabViewProps = {
+  /** When true, chart does not update and zoom is not reset (e.g. while dragging the widget). */
+  pauseWhen?: kiru.Signal<boolean>
+}
+
+export function ProfilingTabView({ pauseWhen }: ProfilingTabViewProps) {
   const kiruGlobal = getKiruGlobal()
   kiru.onMount(() => initProfilingViewState(kiruGlobal))
 
   return (
     <div className="flex flex-col gap-2">
       <kiru.For each={profilingViewState}>
-        {(item) => <AppProfilingChart item={item} />}
+        {(item) => <AppProfilingChart item={item} pauseWhen={pauseWhen} />}
       </kiru.For>
     </div>
   )
@@ -24,15 +29,16 @@ export function ProfilingTabView() {
 
 type AppProfilingChartProps = {
   item: ProfilingViewStateItem
+  pauseWhen?: kiru.Signal<boolean>
 }
 
-function AppProfilingChart({ item }: AppProfilingChartProps) {
+function AppProfilingChart({ item, pauseWhen }: AppProfilingChartProps) {
   const hovered = kiru.signal(false)
   const chartData = kiru.signal(item.chartData.peek())
   const lineChart = createLineChart({ data: chartData })
 
   const unsub = item.chartData.subscribe((data) => {
-    if (hovered.peek()) return
+    if (hovered.peek() || pauseWhen?.peek()) return
     chartData.value = data
   })
 
@@ -45,6 +51,7 @@ function AppProfilingChart({ item }: AppProfilingChartProps) {
     hovered.value = true
   }
   const onCanvasMouseOut = () => {
+    if (pauseWhen?.peek()) return
     hovered.value = false
     chartData.value = item.chartData.peek()
     lineChart.resetZoom()
