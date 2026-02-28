@@ -20,6 +20,7 @@ import {
   DEBUGGER_MIN_WIDTH,
   DEBUGGER_MIN_HEIGHT,
 } from "../constants"
+import { widgetStackTop, WIDGET_Z_BASE } from "../state"
 const DEBUGGER_POSITION_STORAGE_KEY = "kiru.devtools.debuggerPosition"
 const DEBUGGER_SIZE_STORAGE_KEY = "kiru.devtools.debuggerSize"
 
@@ -66,10 +67,11 @@ export const DebuggerWidget: Kiru.FC<DebuggerWidgetProps> = () => {
     <div
       ref={containerRef}
       className={cls(
-        "z-50 fixed rounded-lg p-0.5 flex flex-col gap-2 select-none overflow-hidden",
+        "fixed rounded-lg p-0.5 flex flex-col gap-2 select-none overflow-hidden",
         "bg-neutral-900 opacity-75 hover:opacity-100 shadow-lg"
       )}
       style={{
+        zIndex: widgetStackTop.value === "debugger" ? WIDGET_Z_BASE + 1 : WIDGET_Z_BASE,
         minWidth: `${DEBUGGER_MIN_WIDTH}px`,
         minHeight: `${DEBUGGER_MIN_HEIGHT}px`,
         cursor: resizeController.isResizing.value
@@ -78,6 +80,7 @@ export const DebuggerWidget: Kiru.FC<DebuggerWidgetProps> = () => {
           ? "grabbing"
           : "grab",
       }}
+      onclick={() => (widgetStackTop.value = "debugger")}
     >
       <div
         style={{
