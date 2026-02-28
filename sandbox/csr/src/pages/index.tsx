@@ -3,9 +3,9 @@ import {
   signal,
   effect,
   Derive,
-  Signal,
   computed,
   Devtools,
+  ElementProps,
 } from "kiru"
 
 const text = signal("Hello World!")
@@ -42,7 +42,6 @@ export default function HomePage() {
     <>
       <div className="mb-24">
         <input bind:value={text} />
-        <CountDisplay count={count} />
         <Fragment key="test">test 123</Fragment>
         <h1>Welcome Home!</h1>
         <Derive from={text}>{(text) => <p>{text}</p>}</Derive>
@@ -52,22 +51,21 @@ export default function HomePage() {
         </p>
       </div>
       <p>Child</p>
+      <MyButton>Click me</MyButton>
     </>
   )
 }
 
-interface ChildProps {
-  count: Signal<number>
-}
-function CountDisplay({ count }: ChildProps) {
-  return (
-    <div>
-      <p>Child</p>
-      {count.value % 2 === 0 ? <CountText count={count.value} /> : null}
-    </div>
-  )
-}
+const MyButton: Kiru.FC<ElementProps<"button">> = () => {
+  const timesClicked = signal(0)
+  const handleClick = () => {
+    timesClicked.value++
+  }
 
-function CountText({ count }: { count: number }) {
-  return <p>Count: {count}</p>
+  return ({ children, ...props }) => (
+    <button onclick={(e) => (handleClick(), props.onclick?.(e))} {...props}>
+      {children}
+      {timesClicked}
+    </button>
+  )
 }

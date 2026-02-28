@@ -1,4 +1,4 @@
-import { ref, signal } from "kiru"
+import { ElementProps, ref, signal } from "kiru"
 
 export function Counter() {
   const count = signal(0)
