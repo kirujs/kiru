@@ -127,7 +127,7 @@ export default function DevtoolsHostApp() {
             ref={tooltipRef}
             style="transition: 80ms ease-in-out; transform-origin: 0 0"
             className={cls(
-              `absolute left-1/2 top-1/2 z-0 flex ${tooltipFlexDirection} p-1.5 gap-1.5`,
+              `absolute left-1/2 top-1/2 z-0 flex ${tooltipFlexDirection} p-1 gap-1`,
               "bg-neutral-900 rounded-xl shadow"
             )}
           >
@@ -190,8 +190,8 @@ function TooltipMenuButton({
   return (
     <button
       className={cls(
-        "flex items-center px-2 py-1 gap-2",
-        "text-xs rounded border border-white border-opacity-10",
+        "flex items-center px-1.5 py-0.5 gap-2",
+        "text-sm rounded-lg border border-white border-opacity-10",
         isActive && "bg-white/5 text-neutral-100",
         !isActive && "bg-white/2.5 hover:bg-white/5 text-neutral-400",
         kiru.unwrap(className)

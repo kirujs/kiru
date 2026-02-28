@@ -54,7 +54,7 @@ function AppProfilingChart({ item }: AppProfilingChartProps) {
     <div title={item.app.name} className="flex overflow-hidden">
       <canvas
         ref={lineChart.canvasRef}
-        className="w-full max-w-full h-80 bg-black bg-opacity-30 overflow-hidden"
+        className="w-full max-w-full h-80 overflow-hidden"
         onmouseover={onCanvasMouseOver}
         onmouseout={onCanvasMouseOut}
         onmousedown={(e) => {
