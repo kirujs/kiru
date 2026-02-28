@@ -1,16 +1,16 @@
 import type { ViteDevServer, IndexHtmlTransformResult } from "vite"
-import devtoolsClientBuild from "kiru-devtools-client"
+//import devtoolsClientBuild from "kiru-devtools-client"
 import devtoolsHostBuild from "kiru-devtools-host"
 import type { DevtoolsOptions } from "./types.js"
 import { ANSI } from "./ansi.js"
 
 export function setupDevtools(
   server: ViteDevServer,
-  options: Required<DevtoolsOptions>,
+  _options: Required<DevtoolsOptions>,
   dtHostScriptPath: string,
   log: (...data: any[]) => void
 ) {
-  const { dtClientPathname } = options
+  //const { dtClientPathname } = options
 
   log(`Serving devtools host at ${ANSI.magenta(dtHostScriptPath)}`)
   server.middlewares.use(dtHostScriptPath, (_, res) => {
@@ -18,10 +18,10 @@ export function setupDevtools(
     res.end(devtoolsHostBuild, "utf-8")
   })
 
-  log(`Serving devtools client at ${ANSI.magenta(dtClientPathname)}`)
-  server.middlewares.use(dtClientPathname, (_, res) => {
-    res.end(devtoolsClientBuild, "utf-8")
-  })
+  // log(`Serving devtools client at ${ANSI.magenta(dtClientPathname)}`)
+  // server.middlewares.use(dtClientPathname, (_, res) => {
+  //   res.end(devtoolsClientBuild, "utf-8")
+  // })
 }
 
 export function createDevtoolsHtmlTransform(

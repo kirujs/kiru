@@ -12,7 +12,7 @@ import {
   updatePluginState,
   type PluginState,
 } from "./config.js"
-import { setupDevtools, createDevtoolsHtmlTransform } from "./devtools.js"
+import { createDevtoolsHtmlTransform, setupDevtools } from "./devtools.js"
 import { handleSSR } from "./dev-server.js"
 import { createPreviewMiddleware } from "./preview-server.js"
 import { generateStaticSite } from "./ssg.js"

@@ -5,7 +5,6 @@ export {
   $FRAGMENT,
   $KIRU_ERROR,
   $HMR_ACCEPT,
-  $MEMO,
   $ERROR_BOUNDARY,
   $STREAM_DATA,
   $DEV_FILE_LINK,
@@ -16,8 +15,6 @@ export {
   FLAG_PLACEMENT,
   FLAG_DELETION,
   FLAG_STATIC_DOM,
-  FLAG_MEMO,
-  FLAG_NOOP,
   FLAG_DIRTY,
 }
 
@@ -29,7 +26,6 @@ const $CONTEXT_PROVIDER = Symbol.for("kiru.contextProvider")
 const $FRAGMENT = Symbol.for("kiru.fragment")
 const $KIRU_ERROR = Symbol.for("kiru.error")
 const $HMR_ACCEPT = Symbol.for("kiru.hmrAccept")
-const $MEMO = Symbol.for("kiru.memo")
 const $ERROR_BOUNDARY = Symbol.for("kiru.errorBoundary")
 const $STREAM_DATA = Symbol.for("kiru.streamData")
 const $DEV_FILE_LINK = Symbol.for("kiru.devFileLink")
@@ -41,8 +37,6 @@ const FLAG_UPDATE = 1 << 1
 const FLAG_PLACEMENT = 1 << 2
 const FLAG_DELETION = 1 << 3
 const FLAG_STATIC_DOM = 1 << 4
-const FLAG_MEMO = 1 << 5
-const FLAG_NOOP = 1 << 6
 const FLAG_DIRTY = 1 << 7
 
 const EVENT_PREFIX_REGEX = /^on:?/

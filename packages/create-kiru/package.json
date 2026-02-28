@@ -18,6 +18,7 @@
   },
   "license": "ISC",
   "devDependencies": {
-    "@types/degit": "^2.8.6"
+    "@types/degit": "^2.8.6",
+    "@types/node": "^25.3.2"
   }
 }

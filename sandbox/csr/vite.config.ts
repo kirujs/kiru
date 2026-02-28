@@ -9,6 +9,7 @@ export default defineConfig({
   },
   plugins: [
     kiru({
+      devtools: true,
       include: ["../shared/"],
       loggingEnabled: true,
       experimental: {

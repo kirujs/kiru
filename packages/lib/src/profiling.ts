@@ -1,4 +1,4 @@
-import type { AppContext } from "./appContext"
+import type { AppHandle } from "./appHandle"
 
 const MAX_TICKS = 100
 
@@ -13,27 +13,25 @@ const ProfilingEvents = [
 ] as const
 
 export type ProfilingEvent = (typeof ProfilingEvents)[number]
+export interface AppStats {
+  timestamps: TickTS[]
+  mountDuration: number
+  totalTicks: number
+}
 
 interface TickTS {
   start: number
   end: number
 }
 
-type ProfilingEventListener = (app: AppContext) => void
+type ProfilingEventListener = (app: AppHandle) => void
 
 export function createProfilingContext() {
   const eventListeners = new Map<ProfilingEvent, Set<ProfilingEventListener>>()
-  const appStats: Map<
-    AppContext,
-    {
-      timestamps: TickTS[]
-      mountDuration: number
-      totalTicks: number
-    }
-  > = new Map()
+  const appStats: Map<AppHandle, AppStats> = new Map()
   return {
     appStats,
-    emit: (event: ProfilingEvent, app: AppContext) => {
+    emit: (event: ProfilingEvent, app: AppHandle) => {
       eventListeners.get(event)?.forEach((listener) => listener(app))
     },
     addEventListener: (
@@ -52,23 +50,28 @@ export function createProfilingContext() {
       if (!eventListeners.has(event)) return
       eventListeners.get(event)!.delete(listener)
     },
-    mountDuration: (app: AppContext) => {
+    mountDuration: (app: AppHandle) => {
       const stats = appStats.get(app)
       if (!stats) return 0
       return stats.mountDuration
     },
-    totalTicks: (app: AppContext) => {
+    totalTicks: (app: AppHandle) => {
       const stats = appStats.get(app)
       if (!stats) return 0
       return stats.totalTicks
     },
-    lastTickDuration: (app: AppContext) => {
+    lastTickDuration: (app: AppHandle) => {
       const stats = appStats.get(app)
-      if (!stats) return 0
-      const last = stats.timestamps[stats.timestamps.length - 1]
+      if (!stats) return Infinity
+      let last = stats.timestamps[stats.timestamps.length - 1]
+      if (!last) return Infinity
+      if (last.end === Infinity) {
+        last = stats.timestamps[stats.timestamps.length - 2]
+      }
+      if (!last) return Infinity
       return last.end - last.start
     },
-    averageTickDuration: (app: AppContext) => {
+    averageTickDuration: (app: AppHandle) => {
       const stats = appStats.get(app)
       if (!stats) return 0
       const completeTicks = stats.timestamps.filter((ts) => ts.end !== Infinity)
@@ -77,7 +80,7 @@ export function createProfilingContext() {
         completeTicks.length
       )
     },
-    beginTick: (app: AppContext) => {
+    beginTick: (app: AppHandle) => {
       if (!appStats.has(app)) {
         appStats.set(app, {
           mountDuration: Infinity,
@@ -89,8 +92,7 @@ export function createProfilingContext() {
       stats.totalTicks++
       stats.timestamps.push({ start: performance.now(), end: Infinity })
     },
-    endTick: (app: AppContext) => {
-      if (!appStats.has(app)) return
+    endTick: (app: AppHandle) => {
       const stats = appStats.get(app)!
 
       const last = stats.timestamps[stats.timestamps.length - 1]

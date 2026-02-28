@@ -2,9 +2,7 @@ import { $HMR_ACCEPT, $DEV_FILE_LINK } from "./constants.js"
 import { traverseApply } from "./utils/index.js"
 import { flushSync, requestUpdate } from "./scheduler.js"
 import { Signal } from "./signals/base.js"
-import type { WatchEffect } from "./signals/watch.js"
-import type { Store } from "./store.js"
-import type { AppContext } from "./appContext.js"
+import type { Effect } from "./signals/effect.js"
 
 export type HMRAccept<T = {}> = {
   provide: () => T
@@ -15,7 +13,7 @@ export type HMRAccept<T = {}> = {
 export type GenericHMRAcceptor<T = {}> = {
   [$HMR_ACCEPT]: HMRAccept<T>
 }
-type HotVar = Kiru.FC | Store<any, any> | Signal<any> | Kiru.Context<any>
+type HotVar = Kiru.FC | Signal<any> | Kiru.Context<any>
 
 type HotVarDesc = {
   type: string
@@ -43,7 +41,7 @@ export function isGenericHmrAcceptor(
 
 type ModuleMemory = {
   hotVars: Map<string, HotVarDesc>
-  unnamedWatchers: Array<WatchEffect>
+  unnamedEffects: Array<Effect>
 }
 
 type HotVarRegistrationEntry = {
@@ -59,7 +57,7 @@ export function createHMRContext() {
   let currentModuleMemory: ModuleMemory | null = null
   let isModuleReplacementExecution = false
   const isReplacement = () => isModuleReplacementExecution
-  let isWaitingForNextWatchCall = false
+  let isWaitingForNextEffect = false
 
   const onHmrCallbacks: Array<() => void> = []
   const onHmr = (callback: () => void) => {
@@ -72,14 +70,15 @@ export function createHMRContext() {
     if (!mod) {
       mod = {
         hotVars: new Map(),
-        unnamedWatchers: [],
+        unnamedEffects: [],
       }
       moduleMap.set(filePath, mod)
     } else {
       while (onHmrCallbacks.length) onHmrCallbacks.shift()!()
-      for (const prevWatcher of mod.unnamedWatchers.splice(0)) {
-        prevWatcher.stop()
+      for (const effect of mod.unnamedEffects) {
+        effect.stop()
       }
+      mod.unnamedEffects.length = 0
     }
 
     currentModuleMemory = mod!
@@ -92,26 +91,20 @@ export function createHMRContext() {
     if (currentModuleMemory === null)
       throw new Error("[kiru]: HMR could not register: No active module")
 
-    let dirtiedApps: Set<AppContext> = new Set()
+    let dirtyNodes = new Set<Kiru.VNode>()
     for (const [name, newEntry] of Object.entries(hotVarRegistrationEntries)) {
       const oldEntry = currentModuleMemory.hotVars.get(name)
 
       // @ts-ignore - this is how we tell devtools what file the hotvar is from
       newEntry.value[$DEV_FILE_LINK] = newEntry.link
 
-      if (typeof newEntry.value === "function") {
-        if (oldEntry?.value) {
-          /**
-           * this is how, when the previous function has been stored somewhere else (eg. in a Map, or by Vike),
-           * we can trace it to its latest version
-           */
-          // @ts-ignore
-          oldEntry.value.__next = newEntry.value
-        }
-      }
-
-      if (newEntry.type === "createStore") {
-        window.__kiru.stores!.add(name, newEntry.value as Store<any, any>)
+      if (oldEntry?.value) {
+        /**
+         * this is how, when the previous value has been stored somewhere else (eg. in a Map, or by Vike),
+         * we can trace it to its current version by using latest(value)
+         */
+        // @ts-ignore
+        oldEntry.value.__next = newEntry.value
       }
 
       currentModuleMemory.hotVars.set(name, newEntry)
@@ -127,20 +120,20 @@ export function createHMRContext() {
         continue
       }
       if (oldEntry.type === "component" && newEntry.type === "component") {
-        window.__kiru.apps.forEach((ctx) => {
-          traverseApply(ctx.rootNode, (vNode) => {
+        window.__kiru.apps.forEach((app) => {
+          traverseApply(app.rootNode, (vNode) => {
             if (vNode.type === oldEntry.value) {
               vNode.type = newEntry.value as any
-              dirtiedApps.add(ctx)
+              dirtyNodes.add(vNode)
             }
           })
         })
       }
     }
 
-    if (dirtiedApps.size) {
+    if (dirtyNodes.size) {
       _isHmrUpdate = true
-      dirtiedApps.forEach((ctx) => requestUpdate(ctx.rootNode))
+      dirtyNodes.forEach((n) => requestUpdate(n))
       flushSync()
       _isHmrUpdate = false
     }
@@ -150,16 +143,14 @@ export function createHMRContext() {
     currentModuleFilePath = null
   }
 
-  const signals = {
-    registerNextWatch() {
-      isWaitingForNextWatchCall = true
+  const moduleEffects = {
+    registerNext() {
+      isWaitingForNextEffect = true
     },
-    isWaitingForNextWatchCall() {
-      return isWaitingForNextWatchCall
-    },
-    pushWatch(watch: WatchEffect) {
-      currentModuleMemory!.unnamedWatchers.push(watch)
-      isWaitingForNextWatchCall = false
+    push(effect: Effect<any>) {
+      if (!isWaitingForNextEffect) return
+      currentModuleMemory!.unnamedEffects.push(effect)
+      isWaitingForNextEffect = false
     },
   }
 
@@ -167,7 +158,7 @@ export function createHMRContext() {
     register,
     prepare,
     isReplacement,
-    signals,
+    moduleEffects,
     onHmr,
     getCurrentFilePath() {
       return currentModuleFilePath

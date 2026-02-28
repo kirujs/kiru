@@ -1,5 +1,5 @@
 import { Signal } from "../signals/base.js"
-import { watch } from "../signals/watch.js"
+import { effect } from "../signals/effect.js"
 import { __DEV__ } from "../env.js"
 import { nextIdle } from "../scheduler.js"
 import { ReloadOptions, type FileRouterContextType } from "./context.js"
@@ -155,11 +155,8 @@ export class FileRouterController {
           return this.loadRoute()
         },
         subscribe: (callback) => {
-          const watcher = watch(
-            [this.currentPage, this.currentPageProps],
-            callback
-          )
-          return () => watcher.stop()
+          const e = effect([this.currentPage, this.currentPageProps], callback)
+          return () => e.stop()
         },
       }
     }
@@ -509,7 +506,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
             data: null,
             error: new FileRouterDataLoadError(error),
             loading: false,
-          } satisfies PageProps<PageConfig<unknown>>)
+          }) satisfies PageProps<PageConfig<unknown>>
       )
       .then((state) => {
         if (routerState.signal.aborted) return

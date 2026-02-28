@@ -1,12 +1,4 @@
-import {
-  useSignal,
-  useComputed,
-  useWatch,
-  useRef,
-  signal,
-  computed,
-  watch,
-} from "kiru"
+import { ref, signal, computed, effect } from "kiru"
 
 // Global signals for testing global state
 const globalCounter = signal(0)
@@ -24,7 +16,7 @@ const onlineUsersCount = computed(
 
 // Global watch for testing
 const globalLogs = signal<string[]>([])
-watch([globalCounter], (counter) => {
+effect([globalCounter], (counter) => {
   const timestamp = new Date().toLocaleTimeString()
   globalLogs.value = [
     ...globalLogs.peek(),
@@ -34,52 +26,50 @@ watch([globalCounter], (counter) => {
 
 export default function SignalsTest() {
   // Component-scoped signals
-  const count = useSignal(0)
-  const name = useSignal("World")
-  const width = useSignal(10)
-  const height = useSignal(5)
-  const price = useSignal(100)
-  const username = useSignal("")
-  const theme = useSignal<"light" | "dark">("dark")
-  const clickCount = useSignal(0)
-  const logs = useSignal<string[]>([])
+  const count = signal(0)
+  const name = signal("World")
+  const width = signal(10)
+  const height = signal(5)
+  const price = signal(100)
+  const username = signal("")
+  const theme = signal<"light" | "dark">("dark")
+  const clickCount = signal(0)
+  const logs = signal<string[]>([])
 
   // Computed signals
-  const area = useComputed(() => width.value * height.value)
-  const perimeter = useComputed(() => 2 * (width.value + height.value))
-  const totalPrice = useComputed(() => area.value * price.value)
-  const isValidUsername = useComputed(() => username.value.length >= 3)
+  const area = computed(() => width.value * height.value)
+  const perimeter = computed(() => 2 * (width.value + height.value))
+  const totalPrice = computed(() => area.value * price.value)
+  const isValidUsername = computed(() => username.value.length >= 3)
 
   // Shopping cart state
-  const products = useSignal([
+  const products = signal([
     { id: 1, name: "Laptop", price: 999, quantity: 0 },
     { id: 2, name: "Mouse", price: 29, quantity: 0 },
     { id: 3, name: "Keyboard", price: 89, quantity: 0 },
   ])
-  const discountCode = useSignal("")
-  const notifications = useSignal<string[]>([])
+  const discountCode = signal("")
+  const notifications = signal<string[]>([])
 
   // Shopping cart computed
-  const cartItems = useComputed(() =>
-    products.value.filter((p) => p.quantity > 0)
-  )
-  const itemCount = useComputed(() =>
+  const cartItems = computed(() => products.value.filter((p) => p.quantity > 0))
+  const itemCount = computed(() =>
     cartItems.value.reduce((sum, item) => sum + item.quantity, 0)
   )
-  const subtotal = useComputed(() =>
+  const subtotal = computed(() =>
     cartItems.value.reduce((sum, item) => sum + item.price * item.quantity, 0)
   )
-  const discount = useComputed(() => {
+  const discount = computed(() => {
     const code = discountCode.value.toUpperCase()
     if (code === "SAVE10") return 0.1
     if (code === "SAVE20") return 0.2
     return 0
   })
-  const discountAmount = useComputed(() => subtotal.value * discount.value)
-  const total = useComputed(() => subtotal.value - discountAmount.value)
+  const discountAmount = computed(() => subtotal.value * discount.value)
+  const total = computed(() => subtotal.value - discountAmount.value)
 
   // Refs for testing DOM interactions
-  const logRef = useRef<HTMLDivElement>(null)
+  const logRef = ref<HTMLDivElement>(null)
 
   // Helper functions
   const addLog = (message: string) => {
@@ -106,36 +96,36 @@ export default function SignalsTest() {
   }
 
   // Watch effects
-  useWatch([username, isValidUsername], (username, isValid) => {
+  effect([username, isValidUsername], (username, isValid) => {
     addLog(`Username changed to: "${username}"`)
     addLog(`Username validation: ${isValid ? "valid" : "invalid"}`)
   })
 
-  useWatch(() => {
+  effect(() => {
     addLog(`Theme changed to: ${theme}`)
   })
 
-  useWatch([clickCount], (clickCount) => {
+  effect([clickCount], (clickCount) => {
     if (clickCount > 0) {
       addLog(`Button clicked ${clickCount} times`)
     }
   })
 
-  useWatch([itemCount], (itemCount) => {
+  effect([itemCount], (itemCount) => {
     if (itemCount > 0) {
       addNotification(`Cart updated: ${itemCount} items`)
     }
   })
 
-  useWatch([discount], (discount) => {
+  effect([discount], (discount) => {
     if (discount > 0) {
       addNotification(`Discount applied: ${Math.round(discount * 100)}% off!`)
     }
   })
 
-  const nullableStringSignal = useSignal<string | null>(null)
+  const nullableStringSignal = signal<string | null>(null)
 
-  return (
+  return () => (
     <div id="signals">
       <h1>Signals Test</h1>
       <span id="nullable-string">{nullableStringSignal}</span>

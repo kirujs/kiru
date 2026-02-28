@@ -22,7 +22,7 @@ import type {
   Signalable,
   SomeDom,
 } from "./types.utils"
-import type { AppContext } from "./appContext"
+import type { AppHandle } from "./appHandle"
 
 export type { AsyncTaskState, ElementProps, Prettify, Signalable, StyleObject }
 
@@ -60,10 +60,7 @@ type ElementMap = {
     SignalableAriaProps &
     Kiru.EventAttributes<HTMLTagToElement<Tag>> &
     JSX.ElementAttributes & {
-      ref?:
-        | Kiru.Ref<HTMLTagToElement<Tag> | null>
-        | SignalClass<HTMLTagToElement<Tag> | null>
-        | null
+      ref?: Kiru.Ref<Element | null> | SignalClass<Element | null> | null
     }
 } & {
   [Tag in keyof SvgElementAttributes]: SignalableSvgElementAttributes<Tag> &
@@ -72,10 +69,7 @@ type ElementMap = {
     SignalableAriaProps &
     Kiru.EventAttributes<SVGTagToElement<Tag>> &
     JSX.ElementAttributes & {
-      ref?:
-        | Kiru.Ref<SVGTagToElement<Tag> | null>
-        | SignalClass<SVGTagToElement<Tag> | null>
-        | null
+      ref?: Kiru.Ref<Element | null> | SignalClass<Element | null> | null
     }
 } & {
   [Tag in `${string}-${string}`]: Record<string, any>
@@ -110,6 +104,7 @@ declare global {
       | Kiru.Element
       | PrimitiveChild
       | Kiru.Signal<PrimitiveChild>
+      | Kiru.FC<any>
 
     interface ElementAttributes {
       key?: JSX.ElementKey
@@ -129,36 +124,23 @@ declare global {
     }
     interface Context<T> {
       [$CONTEXT]: true
-      Provider: (({ value, children }: ProviderProps<T>) => JSX.Element) & {
-        displayName?: string
-      }
+      id: string
+      Provider: Kiru.FC<ProviderProps<T>>
       default: () => T
       /** Used to display the name of the context in devtools  */
       displayName?: string
     }
 
-    interface FC<T = {}> {
-      (props: FCProps<T>): JSX.Element
+    export interface FC<T = {}> {
+      (
+        props: T
+      ): Exclude<JSX.Element, Kiru.FC<any>> | ((props: T) => JSX.Element)
       /** Used to display the name of the component in devtools  */
       displayName?: string
     }
 
-    type FCProps<T = {}> = T & { children?: JSX.Children }
     type InferProps<T> = T extends Kiru.FC<infer P> ? P : never
 
-    interface HookDevtoolsProvisions<T extends Record<string, any>> {
-      get: () => T
-      set?: (value: T) => void
-    }
-    type Hook<T> = T & {
-      cleanup?: () => void
-      name?: string
-      dev?: {
-        /** Used to perform invalidation during HMR when the hook's arguments have changed */
-        initialArgs?: any
-        devtools?: HookDevtoolsProvisions<any>
-      }
-    }
     interface RefObject<T> {
       current: T
     }
@@ -175,7 +157,7 @@ declare global {
       error?: Error
     }
 
-    interface StatefulPromise<T> extends Promise<T>, PromiseState<T> {}
+    interface StatefulPromiseBase<T> extends Promise<T>, PromiseState<T> {}
 
     type RenderMode = "dom" | "hydrate" | "string" | "stream"
 
@@ -198,8 +180,10 @@ declare global {
       }
     }
 
+    type LifecycleHookCallback = () => (() => void) | void
+
     interface VNode extends Element {
-      app?: AppContext
+      app?: AppHandle
       dom?: SomeDom
       index: number
       depth: number
@@ -209,22 +193,30 @@ declare global {
       sibling: VNode | null
       prev: VNodeSnapshot | null
       deletions: VNode[] | null
-      hooks?: Hook<unknown>[]
       subs?: Set<Function>
       cleanups?: Record<string, Function>
-      effects?: Array<Function>
-      immediateEffects?: Array<Function>
-      // dev-mode only
-      hookSig?: string[]
+
+      hooks?: {
+        pre: LifecycleHookCallback[]
+        preCleanups: (() => void)[]
+        post: LifecycleHookCallback[]
+        postCleanups: (() => void)[]
+      }
+      render?: (props: VNode["props"]) => unknown
     }
-  }
-  interface VNodeSnapshot {
-    props: Kiru.VNode["props"]
-    key: Kiru.VNode["key"]
-    index: number
+    interface VNodeSnapshot {
+      props: Kiru.VNode["props"]
+      key: Kiru.VNode["key"]
+      index: number
+    }
+
+    type ContainerElement = HTMLElement | ShadowRoot
   }
 
   interface Element {
+    __kiruNode?: Kiru.VNode
+  }
+  interface ShadowRoot {
     __kiruNode?: Kiru.VNode
   }
 }

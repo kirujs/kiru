@@ -21,6 +21,10 @@ export const config = definePageConfig({
       return { users: users.splice(0, 5) }
     },
     transition: false,
+    cache: {
+      type: "memory",
+      ttl: 1000 * 60 * 5, // 5 minutes
+    },
   },
 })
 

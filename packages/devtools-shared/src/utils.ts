@@ -1,29 +1,9 @@
-import type { AppContext } from "kiru"
-import { $DEV_FILE_LINK } from "../../lib/dist/constants.js"
+import type { AppHandle } from "kiru"
+import { devtoolsState } from "./state"
 
 export function assert(value: unknown, message: string): asserts value {
   if (!value) {
     throw new Error(message)
-  }
-}
-
-export function className(...classes: (string | false | undefined)[]) {
-  return classes.filter(Boolean).join(" ")
-}
-
-export function applyObjectChangeFromKeys(
-  obj: Record<string, any>,
-  keys: string[],
-  value: unknown
-) {
-  let o = obj
-  for (let i = 0; i < keys.length; i++) {
-    const key = keys[i]
-    if (i === keys.length - 1) {
-      o[key] = value
-    } else {
-      o = o[key]
-    }
   }
 }
 
@@ -34,11 +14,16 @@ export function getNodeName(node: Kiru.VNode) {
   )
 }
 
-export const getFileLink = (
-  fn: Function & { [$DEV_FILE_LINK]?: string }
-): string | null => fn[$DEV_FILE_LINK] ?? null
+const $DEV_FILE_LINK = Symbol.for("kiru.devFileLink")
+export function getFileLink(value: unknown): string | null {
+  try {
+    return (value as any)[$DEV_FILE_LINK] ?? null
+  } catch {
+    return null
+  }
+}
 
-export function isDevtoolsApp(app: AppContext) {
+export function isDevtoolsApp(app: AppHandle) {
   return app.name === "kiru.devtools"
 }
 
@@ -48,4 +33,59 @@ export function typedMapEntries<T extends Map<any, any>>(
   map: T
 ): InferredMapEntries<T> {
   return Array.from(map.entries()) as InferredMapEntries<T>
+}
+
+export function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}
+
+export function trapFocus(
+  e: KeyboardEvent,
+  element: Element | ShadowRoot,
+  activeElement: Element | null
+) {
+  if (e.key === "Tab") {
+    const focusableElements = element.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    const firstElement = focusableElements[0]
+    const lastElement = focusableElements[focusableElements.length - 1]
+    if (
+      activeElement &&
+      !element.contains(activeElement) &&
+      firstElement &&
+      firstElement instanceof HTMLElement
+    ) {
+      return firstElement.focus()
+    }
+    if (e.shiftKey) {
+      if (
+        activeElement === firstElement &&
+        lastElement instanceof HTMLElement
+      ) {
+        lastElement.focus()
+        e.preventDefault()
+      }
+    } else {
+      if (
+        activeElement === lastElement &&
+        firstElement instanceof HTMLElement
+      ) {
+        firstElement.focus()
+        e.preventDefault()
+      }
+    }
+  }
+}
+
+export function devtoolsAppRootHasFocus() {
+  return devtoolsState.rootRef.value?.matches(":focus-within, :focus")
+}
+
+export function ifDevtoolsAppRootHasFocus<T>(callback: (el: Element) => T) {
+  const root = devtoolsState.rootRef.value
+  if (root?.matches(":focus-within, :focus")) {
+    return callback(root)
+  }
+  return null
 }

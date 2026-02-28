@@ -1,9 +1,9 @@
-import { useState } from "kiru"
+import { signal } from "kiru"
 import { Head } from "kiru/router"
 
 export default function CounterPage() {
-  const [toggled, setToggled] = useState(false)
-  return (
+  const toggled = signal(false)
+  return () => (
     <div>
       <Head.Content>
         <title>Counter</title>
@@ -11,7 +11,7 @@ export default function CounterPage() {
       {/* used for checking that counter persists state after reordering these children */}
       {toggled && <p>Toggled</p>}
       <ActualCounter />
-      <button id="toggle-btn" onclick={() => setToggled(!toggled)}>
+      <button id="toggle-btn" onclick={() => (toggled.value = !toggled.value)}>
         toggle
       </button>
     </div>
@@ -19,22 +19,20 @@ export default function CounterPage() {
 }
 
 export const ActualCounter = () => {
-  const [count, setCount] = useState(0)
-  return (
+  const count = signal(0)
+
+  return (c = count.value) => (
     <div id="counter">
       {/** rendering.cy.ts - toggle attr check */}
-      {count % 2 === 0 ? (
+      {c % 2 === 0 ? (
         <span data-even={true}>{count}</span>
       ) : (
         <span data-odd={true}>{count}</span>
       )}
-      <button
-        ariaLabel="increment"
-        onclick={() => setCount((prev) => prev + 1)}
-      >
+      <button ariaLabel="increment" onclick={() => count.value++}>
         increment
       </button>
-      {count > 0 && count % 2 === 0 && <p>count is even</p>}
+      {c > 0 && c % 2 === 0 && <p>count is even</p>}
     </div>
   )
 }

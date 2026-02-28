@@ -1,15 +1,15 @@
-import { useSignal, useState } from "kiru"
+import { For, signal } from "kiru"
 
 export default function TodosPage() {
-  const inputText = useSignal("")
-  const [items, setItems] = useState<{ text: string }[]>([
+  const inputText = signal("")
+  const items = signal<{ text: string }[]>([
     { text: "buy coffee" },
     { text: "walk the dog" },
     { text: "push the latest commits" },
   ])
 
   function addItem() {
-    setItems((items) => [...items, { text: inputText.peek() }])
+    items.value = [...items.value, { text: inputText.peek() }]
     inputText.value = ""
   }
 
@@ -18,9 +18,7 @@ export default function TodosPage() {
       <input bind:value={inputText} />
       <button onclick={addItem} />
       <ul>
-        {items.map((item) => (
-          <li>{item.text}</li>
-        ))}
+        <For each={items}>{(item) => <li>{item.text}</li>}</For>
       </ul>
     </div>
   )

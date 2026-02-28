@@ -1,31 +1,26 @@
+import { $FRAGMENT, FLAG_PLACEMENT, FLAG_UPDATE } from "./constants.js"
 import {
-  $FRAGMENT,
-  FLAG_MEMO,
-  FLAG_PLACEMENT,
-  FLAG_UPDATE,
-} from "./constants.js"
-import {
-  getVNodeAppContext,
+  getVNodeApp,
   isElement,
   isValidTextChild,
   latest,
+  propsChanged,
 } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
 import { __DEV__ } from "./env.js"
-import type { AppContext } from "./appContext.js"
-import { isMemoFn } from "./components/memo.js"
+import type { AppHandle } from "./appHandle.js"
 import { createVNode as createBaseVNode } from "./vNode.js"
 
 type VNode = Kiru.VNode
 type KElement = Kiru.Element
-let appCtx: AppContext
+let app: AppHandle
 
 export function reconcileChildren(
   parent: VNode,
   children: unknown
 ): VNode | null {
   if (__DEV__) {
-    appCtx = getVNodeAppContext(parent)!
+    app = getVNodeApp(parent)!
   }
   if (Array.isArray(children)) {
     if (__DEV__) {
@@ -238,7 +233,7 @@ function updateNode(parent: VNode, oldChild: VNode | null, newChild: KElement) {
     oldChild.index = 0
     oldChild.sibling = null
     if (typeof type === "string") {
-      if (propsChanged(oldChild.props, props)) {
+      if (domNodePropsChanged(oldChild.props, props)) {
         oldChild.flags |= FLAG_UPDATE
       }
     } else {
@@ -344,7 +339,7 @@ function updateFromMap(
         dev_emitUpdateNode()
       }
       if (typeof type === "string") {
-        if (propsChanged(oldChild.props, props)) {
+        if (domNodePropsChanged(oldChild.props, props)) {
           oldChild.flags |= FLAG_UPDATE
         }
       } else {
@@ -380,20 +375,9 @@ function updateFromMap(
   return null
 }
 
-function propsChanged(oldProps: VNode["props"], newProps: VNode["props"]) {
-  const aKeys = Object.keys(oldProps)
-  const bKeys = Object.keys(newProps)
-  if (aKeys.length !== bKeys.length) return true
-  for (let key of aKeys) {
-    if (key === "children" || key === "key") continue
-    if (oldProps[key] !== newProps[key]) return true
-  }
-  return false
-}
-
 function dev_emitUpdateNode() {
   if (!("window" in globalThis)) return
-  window.__kiru.profilingContext?.emit("updateNode", appCtx)
+  window.__kiru.profilingContext?.emit("updateNode", app)
 }
 
 const $LIST_CHILD = Symbol("kiru:marked-list-child")
@@ -495,12 +479,16 @@ function createVNode(
   const node = createBaseVNode(type, parent, props, key, index)
   node.flags |= FLAG_PLACEMENT
 
-  if (typeof type === "function" && isMemoFn(type)) {
-    node.flags |= FLAG_MEMO
-  }
-
   if (__DEV__ && "window" in globalThis) {
-    window.__kiru.profilingContext?.emit("createNode", appCtx)
+    window.__kiru.profilingContext?.emit("createNode", app)
   }
   return node
+}
+
+const IGNORED_DOM_NODE_PROPS = ["children", "key"]
+function domNodePropsChanged(
+  oldProps: Kiru.VNode["props"],
+  newProps: Kiru.VNode["props"]
+) {
+  return propsChanged(oldProps, newProps, IGNORED_DOM_NODE_PROPS)
 }

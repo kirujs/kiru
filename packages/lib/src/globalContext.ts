@@ -3,56 +3,10 @@ import { createHMRContext } from "./hmr.js"
 import { createProfilingContext } from "./profiling.js"
 import { fileRouterInstance } from "./router/globals.js"
 import type { FileRouterController } from "./router/fileRouterController"
-import type { AppContext } from "./appContext"
-import type { Store } from "./store"
-import type { SWRCache } from "./swr"
+import type { AppHandle } from "./appHandle"
 import type { requestUpdate } from "./index.js"
 
 export { createKiruGlobalContext, type GlobalKiruEvent, type KiruGlobalContext }
-
-interface ReactiveMap<V> {
-  add(key: string, value: V): void
-  delete(key: string): void
-  subscribe(cb: (value: Record<string, V>) => void): () => void
-  readonly size: number
-}
-
-function createReactiveMap<V>(): ReactiveMap<V> {
-  const map = new Map<string, V>()
-  const listeners = new Set<(value: Record<string, V>) => void>()
-
-  function add(key: string, value: V): void {
-    if (map.has(key)) return
-    map.set(key, value)
-    notify()
-  }
-
-  function deleteKey(key: string): void {
-    if (!map.has(key)) return
-    map.delete(key)
-    notify()
-  }
-
-  function notify(): void {
-    const val = Object.fromEntries(map)
-    listeners.forEach((cb) => cb(val))
-  }
-
-  function subscribe(cb: (value: Record<string, V>) => void): () => void {
-    listeners.add(cb)
-    cb(Object.fromEntries(map))
-    return () => listeners.delete(cb)
-  }
-
-  return {
-    add,
-    delete: deleteKey,
-    subscribe,
-    get size() {
-      return map.size
-    },
-  }
-}
 
 type Evt =
   | {
@@ -78,48 +32,53 @@ interface SchedulerInterface {
   requestUpdate: (vNode: Kiru.VNode) => void
 }
 
+export type DebuggerEntry = {
+  label: string
+  signal: Kiru.Signal<unknown>
+}
+
 interface KiruGlobalContext {
-  readonly apps: AppContext[]
-  emit<T extends Evt>(event: T["name"], ctx: AppContext, data?: T["data"]): void
+  readonly apps: AppHandle[]
+  emit<T extends Evt>(event: T["name"], app: AppHandle, data?: T["data"]): void
   on<T extends Evt>(
     event: T["name"],
-    callback: (ctx: AppContext, data: T["data"]) => void
+    callback: (app: AppHandle, data: T["data"]) => void
   ): void
   off<T extends Evt>(
     event: T["name"],
-    callback: (ctx: AppContext, data?: T["data"]) => void
+    callback: (app: AppHandle, data?: T["data"]) => void
   ): void
-  stores?: ReactiveMap<Store<any, any>>
+  devtools?: {
+    track: (signal: Kiru.Signal<unknown>, label?: string) => void
+    untrack: (signal: Kiru.Signal<unknown>) => void
+    subscribe: (callback: (entries: Set<DebuggerEntry>) => void) => () => void
+  }
   HMRContext?: ReturnType<typeof createHMRContext>
   profilingContext?: ReturnType<typeof createProfilingContext>
-  SWRGlobalCache?: SWRCache
   fileRouterInstance?: {
     current: FileRouterController | null
   }
-  getSchedulerInterface?: (app: AppContext) => SchedulerInterface | null
+  getSchedulerInterface?: (app: AppHandle) => SchedulerInterface | null
 }
 
 function createKiruGlobalContext(): KiruGlobalContext {
-  const contexts = new Set<AppContext>()
-  const contextToSchedulerInterface = new WeakMap<
-    AppContext,
-    SchedulerInterface
-  >()
+  const apps = new Set<AppHandle>()
+  const appToSchedulerInterface = new WeakMap<AppHandle, SchedulerInterface>()
   const listeners = new Map<
     GlobalKiruEvent,
-    Set<(ctx: AppContext, data?: Evt["data"]) => void>
+    Set<(app: AppHandle, data?: Evt["data"]) => void>
   >()
   function emit<T extends Evt>(
     event: T["name"],
-    ctx: AppContext,
+    app: AppHandle,
     data?: T["data"]
   ): void {
-    listeners.get(event)?.forEach((cb) => cb(ctx, data))
+    listeners.get(event)?.forEach((cb) => cb(app, data))
   }
 
   function on<T extends Evt>(
     event: T["name"],
-    callback: (ctx: AppContext, data: T["data"]) => void
+    callback: (app: AppHandle, data: T["data"]) => void
   ): void {
     if (!listeners.has(event)) {
       listeners.set(event, new Set())
@@ -129,14 +88,14 @@ function createKiruGlobalContext(): KiruGlobalContext {
 
   function off<T extends Evt>(
     event: T["name"],
-    callback: (ctx: AppContext, data?: T["data"]) => void
+    callback: (ctx: AppHandle, data?: T["data"]) => void
   ): void {
     listeners.get(event)?.delete(callback)
   }
 
   const globalContext: KiruGlobalContext = {
     get apps() {
-      return Array.from(contexts)
+      return Array.from(apps)
     },
     emit,
     on,
@@ -144,24 +103,48 @@ function createKiruGlobalContext(): KiruGlobalContext {
   }
 
   // Initialize event listeners
-  on("mount", (ctx, requestUpdate) => {
-    contexts.add(ctx)
+  on("mount", (app, requestUpdate) => {
+    apps.add(app)
     if (requestUpdate && typeof requestUpdate === "function") {
-      contextToSchedulerInterface.set(ctx, { requestUpdate })
+      appToSchedulerInterface.set(app, { requestUpdate })
     }
   })
-  on("unmount", (ctx) => {
-    contexts.delete(ctx)
-    contextToSchedulerInterface.delete(ctx)
+  on("unmount", (app) => {
+    apps.delete(app)
+    appToSchedulerInterface.delete(app)
   })
-
   if (__DEV__) {
     globalContext.HMRContext = createHMRContext()
     globalContext.profilingContext = createProfilingContext()
-    globalContext.stores = createReactiveMap()
     globalContext.fileRouterInstance = fileRouterInstance
     globalContext.getSchedulerInterface = (app) => {
-      return contextToSchedulerInterface.get(app) ?? null
+      return appToSchedulerInterface.get(app) ?? null
+    }
+
+    const debuggerEntries = new Set<DebuggerEntry>()
+    const subscribers = new Set<(debuggerEntries: Set<DebuggerEntry>) => void>()
+
+    globalContext.devtools = {
+      track: (signal, label) => {
+        debuggerEntries.add({
+          label: label ?? signal.displayName ?? "Unnamed Signal",
+          signal,
+        })
+        subscribers.forEach((cb) => cb(debuggerEntries))
+      },
+      untrack: (signal) => {
+        debuggerEntries.forEach((entry) => {
+          if (entry.signal === signal) {
+            debuggerEntries.delete(entry)
+          }
+        })
+        subscribers.forEach((cb) => cb(debuggerEntries))
+      },
+      subscribe: (cb) => {
+        subscribers.add(cb)
+        cb(debuggerEntries)
+        return () => subscribers.delete(cb)
+      },
     }
   }
 

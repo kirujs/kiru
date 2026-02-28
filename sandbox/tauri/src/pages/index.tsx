@@ -1,7 +1,8 @@
-import { useSignal } from "kiru"
+import { signal } from "kiru"
 
 export default function HomePage() {
-  const count = useSignal(0)
+  const count = signal(0)
+
   return (
     <>
       <span>Count: {count}</span>{" "}

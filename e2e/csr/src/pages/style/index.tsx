@@ -1,11 +1,36 @@
-import {
-  StyleObject,
-  useRef,
-  useState,
-  useSignal,
-  useEffectEvent,
-  nextIdle,
-} from "kiru"
+import { StyleObject, ref, signal } from "kiru"
+
+export default function StylePage() {
+  const divRef = ref<HTMLButtonElement>(null)
+  const divStyle = signal<StyleObject | string | undefined>({
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+  })
+  const verified = signal("✅")
+
+  const randomizeStyle = () => {
+    divStyle.value = generateRandomStyleProp()
+    const styleAttr = divRef.current?.getAttribute("style") ?? ""
+    try {
+      compareStyles(divStyle.value, styleAttr)
+      verified.value = "✅"
+    } catch {
+      verified.value = "❌"
+    }
+  }
+
+  return () => (
+    <button
+      data-style-test-target
+      ref={divRef}
+      style={divStyle}
+      onclick={randomizeStyle}
+    >
+      {verified}
+    </button>
+  )
+}
 
 const generateRandomStyleProp = (): StyleObject | string | undefined => {
   if (Math.random() > 0.5) return undefined
@@ -67,40 +92,4 @@ const compareStyles = (
       throw new Error()
     }
   }
-}
-
-export default function StylePage() {
-  const divRef = useRef<HTMLButtonElement>(null)
-  const [divStyle, setDivstyle] = useState<StyleObject | string | undefined>({
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-  })
-  const verified = useSignal("✅")
-
-  const randomizeStyle = () => {
-    const next = generateRandomStyleProp()
-    setDivstyle(next)
-    nextIdle(verify)
-  }
-
-  const verify = useEffectEvent(() => {
-    const styleAttr = divRef.current?.getAttribute("style") ?? ""
-    try {
-      compareStyles(divStyle, styleAttr)
-      verified.value = "✅"
-    } catch {
-      verified.value = "❌"
-    }
-  })
-  return (
-    <button
-      data-style-test-target
-      ref={divRef}
-      style={divStyle}
-      onclick={randomizeStyle}
-    >
-      {verified}
-    </button>
-  )
 }

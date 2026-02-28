@@ -1,9 +1,10 @@
 import esbuild from "esbuild"
-import { options, writeFile } from "./options"
+import { options, writeFile } from "./build.options"
 
 await esbuild
   .context({
     ...options,
+    minify: false,
     plugins: [
       ...options.plugins,
       {

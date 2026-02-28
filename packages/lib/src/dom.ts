@@ -3,9 +3,11 @@ import {
   commitSnapshot,
   propFilters,
   propToHtmlAttr,
-  getVNodeAppContext,
+  getVNodeApp,
   setRef,
   isValidTextChild,
+  registerVNodeCleanup,
+  call,
 } from "./utils/index.js"
 import {
   booleanAttributes,
@@ -13,7 +15,6 @@ import {
   FLAG_UPDATE,
   FLAG_STATIC_DOM,
   svgTags,
-  FLAG_NOOP,
   EVENT_PREFIX_REGEX,
 } from "./constants.js"
 import { Signal } from "./signals/base.js"
@@ -30,7 +31,7 @@ import type {
   SomeDom,
   SomeElement,
 } from "./types.utils"
-import type { AppContext } from "./appContext.js"
+import type { AppHandle } from "./appHandle.js"
 
 export {
   commitWork,
@@ -49,6 +50,8 @@ type HostNode = {
 
 let persistingFocus = false
 let didBlurActiveElement = false
+const postHookCleanups: (() => void)[] = []
+
 const placementBlurHandler = (event: Event) => {
   event.preventDefault()
   event.stopPropagation()
@@ -73,6 +76,10 @@ function onAfterFlushDomChanges() {
     didBlurActiveElement = false
   }
   persistingFocus = false
+  queueMicrotask(() => {
+    postHookCleanups.forEach(call)
+    postHookCleanups.length = 0
+  })
 }
 
 function createDom(vNode: DomVNode): SomeDom {
@@ -81,8 +88,8 @@ function createDom(vNode: DomVNode): SomeDom {
     t == "#text"
       ? createTextNode(vNode)
       : svgTags.has(t)
-        ? document.createElementNS("http://www.w3.org/2000/svg", t)
-        : document.createElement(t)
+      ? document.createElementNS("http://www.w3.org/2000/svg", t)
+      : document.createElement(t)
 
   return dom
 }
@@ -243,15 +250,15 @@ function setSignalProp(
   prevValue: unknown
 ) {
   const [modifier, attr] = key.split(":")
-  const cleanups = (vNode.cleanups ??= {})
   if (modifier !== "bind") {
-    cleanups[key] = signal.subscribe((value, prev) => {
+    const unsub = signal.subscribe((value, prev) => {
       if (value === prev) return
       setProp(dom, key, value, prev)
       if (__DEV__) {
         emitSignalAttrUpdate(vNode)
       }
     })
+    registerVNodeCleanup(vNode, key, unsub)
   } else {
     const evtName = bindAttrToEventMap[attr]
     if (!evtName) {
@@ -262,7 +269,8 @@ function setSignalProp(
       }
       return
     }
-    cleanups[key] = bindElementProp(vNode, dom, attr, evtName, signal)
+    const cleanup = bindElementProp(vNode, dom, attr, evtName, signal)
+    registerVNodeCleanup(vNode, key, cleanup)
   }
 
   const value = signal.peek()
@@ -355,23 +363,21 @@ function createInputValueReader(
 }
 
 function emitSignalAttrUpdate(vNode: VNode) {
-  window.__kiru.profilingContext?.emit(
-    "signalAttrUpdate",
-    getVNodeAppContext(vNode)!
-  )
+  window.__kiru.profilingContext?.emit("signalAttrUpdate", getVNodeApp(vNode)!)
 }
 
 function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
-  ;(vNode.cleanups ??= {}).nodeValue = signal.subscribe((value, prev) => {
+  const cleanup = signal.subscribe((value, prev) => {
     if (value === prev) return
     textNode.nodeValue = value
     if (__DEV__) {
       window.__kiru.profilingContext?.emit(
         "signalTextUpdate",
-        getVNodeAppContext(vNode)!
+        getVNodeApp(vNode)!
       )
     }
   })
+  registerVNodeCleanup(vNode, "nodeValue", cleanup)
 }
 
 /**
@@ -684,15 +690,6 @@ function commitWork_impl(
 ) {
   let child: VNode | null = vNode.child
   while (child) {
-    if (child.flags & FLAG_NOOP) {
-      if (child.flags & FLAG_PLACEMENT) {
-        placeAndCommitNoopChildren(child, currentHostNode)
-      }
-      commitSnapshot(child)
-      child = child.sibling
-      continue
-    }
-
     if (child.dom) {
       commitWork_impl(child, { node: child as ElementVNode }, false)
       if (!(child.flags & FLAG_STATIC_DOM)) {
@@ -733,25 +730,31 @@ function commitDeletion(vNode: VNode) {
   if (vNode === vNode.parent?.child) {
     vNode.parent.child = vNode.sibling
   }
-  let ctx: AppContext
+  let app: AppHandle
   if (__DEV__) {
-    ctx = getVNodeAppContext(vNode)!
+    app = getVNodeApp(vNode)!
   }
   traverseApply(vNode, (node) => {
     const {
-      hooks,
       subs,
       cleanups,
       dom,
       props: { ref },
+      hooks,
     } = node
 
     subs?.forEach((unsub) => unsub())
     if (cleanups) Object.values(cleanups).forEach((c) => c())
-    while (hooks?.length) hooks.pop()!.cleanup?.()
+    if (hooks) {
+      const { preCleanups, postCleanups } = hooks
+
+      preCleanups.forEach(call)
+      postHookCleanups.push(...postCleanups)
+      preCleanups.length = postCleanups.length = 0
+    }
 
     if (__DEV__) {
-      window.__kiru.profilingContext?.emit("removeNode", ctx)
+      window.__kiru.profilingContext?.emit("removeNode", app)
       if (dom instanceof Element) {
         delete dom.__kiruNode
       }
@@ -769,41 +772,4 @@ function commitDeletion(vNode: VNode) {
   })
 
   vNode.parent = null
-}
-
-function placeAndCommitNoopChildren(
-  parent: VNode,
-  currentHostNode: HostNode
-): void {
-  if (!parent.child) return
-
-  const domChildren: SomeDom[] = []
-  collectDomNodes(parent.child, domChildren)
-  if (domChildren.length === 0) return
-
-  const { node, lastChild } = currentHostNode
-  if (lastChild) {
-    lastChild.after(...domChildren)
-  } else {
-    const nextSiblingDom = getNextSiblingDom(parent, node)
-    const parentDom = node.dom
-    if (nextSiblingDom) {
-      nextSiblingDom.before(...domChildren)
-    } else {
-      parentDom.append(...domChildren)
-    }
-  }
-  currentHostNode.lastChild = domChildren[domChildren.length - 1]
-}
-
-function collectDomNodes(firstChild: VNode, children: SomeDom[]): void {
-  let child: VNode | null = firstChild
-  while (child) {
-    if (child.dom) {
-      children.push(child.dom)
-    } else if (child.child) {
-      collectDomNodes(child.child, children)
-    }
-    child = child.sibling
-  }
 }

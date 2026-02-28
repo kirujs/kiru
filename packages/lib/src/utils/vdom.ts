@@ -9,9 +9,8 @@ import {
 import { createElement } from "../index.js"
 import { KiruError } from "../error.js"
 import { node } from "../globals.js"
-import type { AppContext } from "../appContext.js"
+import type { AppHandle } from "../appHandle.js"
 import type { ErrorBoundaryNode } from "../types.utils.js"
-import { isMemoFn } from "../components/memo.js"
 
 export {
   cloneElement,
@@ -22,17 +21,19 @@ export {
   isExoticType,
   isFragment,
   isLazy,
-  isMemo,
   isContextProvider,
   vNodeContains,
   getCurrentVNode,
-  getVNodeAppContext,
+  getVNodeApp,
   commitSnapshot,
   traverseApply,
   findParent,
   findParentErrorBoundary,
   assertValidElementProps,
   normalizeElementKey,
+  getVNodeId,
+  registerVNodeCleanup,
+  propsChanged,
 }
 
 function cloneElement(vNode: Kiru.VNode): Kiru.Element {
@@ -87,10 +88,6 @@ function isLazy(vNode: Kiru.VNode): boolean {
   )
 }
 
-function isMemo(vNode: Kiru.VNode): boolean {
-  return typeof vNode.type === "function" && isMemoFn(vNode.type)
-}
-
 function isContextProvider(
   thing: unknown
 ): thing is Kiru.VNode & { type: typeof $CONTEXT_PROVIDER } {
@@ -101,7 +98,7 @@ function getCurrentVNode(): Kiru.VNode | null {
   return node.current
 }
 
-function getVNodeAppContext(vNode: Kiru.VNode): AppContext | null {
+function getVNodeApp(vNode: Kiru.VNode): AppHandle | null {
   let n: Kiru.VNode | null = vNode
   while (n) {
     if (n.app) {
@@ -189,4 +186,38 @@ function normalizeElementKey(thing: unknown): JSX.ElementKey | null {
     return thing
   }
   return null
+}
+
+function getVNodeId(vNode: Kiru.VNode): string {
+  const accumulator: number[] = []
+  let n: Kiru.VNode | null = vNode
+  while (n) {
+    accumulator.push(n.index)
+    accumulator.push(n.depth)
+    n = n.parent
+  }
+  return `k:${BigInt(accumulator.join("")).toString(36)}`
+}
+
+function registerVNodeCleanup(
+  vNode: Kiru.VNode,
+  id: string,
+  callback: () => void
+) {
+  ;(vNode.cleanups ??= {})[id] = callback
+}
+
+function propsChanged(
+  oldProps: Kiru.VNode["props"],
+  newProps: Kiru.VNode["props"],
+  keysToSkip?: string[]
+) {
+  const aKeys = Object.keys(oldProps)
+  const bKeys = Object.keys(newProps)
+  if (aKeys.length !== bKeys.length) return true
+  for (let key of aKeys) {
+    if (keysToSkip?.includes(key)) continue
+    if (oldProps[key] !== newProps[key]) return true
+  }
+  return false
 }

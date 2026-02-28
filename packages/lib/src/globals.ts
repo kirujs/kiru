@@ -1,11 +1,7 @@
-export { node, hookIndex, renderMode, hydrationMode }
+export { node, renderMode, hydrationMode }
 
 const node = {
   current: null as Kiru.VNode | null,
-}
-
-const hookIndex = {
-  current: 0,
 }
 
 const renderMode = {

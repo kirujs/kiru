@@ -1,18 +1,9 @@
-import type {
-  ContextProviderNode,
-  DomVNode,
-  ErrorBoundaryNode,
-  FunctionVNode,
-} from "./types.utils"
+import type { DomVNode, ErrorBoundaryNode, FunctionVNode } from "./types.utils"
 import {
-  $CONTEXT_PROVIDER,
   $ERROR_BOUNDARY,
-  $MEMO,
   CONSECUTIVE_DIRTY_LIMIT,
   FLAG_DELETION,
   FLAG_DIRTY,
-  FLAG_MEMO,
-  FLAG_NOOP,
 } from "./constants.js"
 import {
   commitDeletion,
@@ -24,7 +15,7 @@ import {
 } from "./dom.js"
 import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
-import { hookIndex, node, renderMode } from "./globals.js"
+import { node, renderMode } from "./globals.js"
 import { hydrationStack } from "./hydration.js"
 import { reconcileChildren } from "./reconciler.js"
 import {
@@ -32,17 +23,17 @@ import {
   latest,
   traverseApply,
   isExoticType,
-  getVNodeAppContext,
+  getVNodeApp,
   findParentErrorBoundary,
   call,
+  propsChanged,
 } from "./utils/index.js"
-import type { AppContext } from "./appContext"
-import type { MemoFn } from "./components/memo"
+import type { AppHandle } from "./appHandle"
 import { isHmrUpdate } from "./hmr.js"
 
 type VNode = Kiru.VNode
 
-let appCtx: AppContext | null
+let app: AppHandle | null
 let treesInProgress: VNode[] = []
 let isRunningOrQueued = false
 let nextIdleEffects: (() => void)[] = []
@@ -51,8 +42,8 @@ let isImmediateEffectsMode = false
 let immediateEffectDirtiedRender = false
 let isRenderDirtied = false
 let consecutiveDirtyCount = 0
-let preEffects: Array<Function> = []
-let postEffects: Array<Function> = []
+let preEffects: Kiru.LifecycleHookCallback[] = []
+let postEffects: Kiru.LifecycleHookCallback[] = []
 let animationFrameHandle = -1
 
 /**
@@ -94,6 +85,14 @@ export function requestUpdate(vNode: VNode): void {
   queueUpdate(vNode)
 }
 
+export function useRequestUpdate(): () => void {
+  const n = node.current
+  if (!n) {
+    throw new Error("useRequestUpdate must be called inside a Kiru component")
+  }
+  return () => requestUpdate(n)
+}
+
 function queueBeginWork(): void {
   if (isRunningOrQueued) return
   isRunningOrQueued = true
@@ -116,7 +115,7 @@ function queueUpdate(vNode: VNode): void {
   // If this node is currently being rendered, just mark it dirty
   if (node.current === vNode) {
     if (__DEV__) {
-      window.__kiru.profilingContext?.emit("updateDirtied", appCtx!)
+      window.__kiru.profilingContext?.emit("updateDirtied", app!)
     }
     isRenderDirtied = true
     return
@@ -146,10 +145,10 @@ function doWork(): void {
   if (__DEV__) {
     const n = deletions[0] ?? treesInProgress[0]
     if (n) {
-      appCtx = getVNodeAppContext(n)!
-      window.__kiru.profilingContext?.beginTick(appCtx)
+      app = getVNodeApp(n)!
+      window.__kiru.profilingContext?.beginTick(app)
     } else {
-      appCtx = null
+      app = null
     }
   }
 
@@ -190,8 +189,8 @@ function doWork(): void {
     immediateEffectDirtiedRender = false
     consecutiveDirtyCount++
     if (__DEV__) {
-      window.__kiru.profilingContext?.endTick(appCtx!)
-      window.__kiru.profilingContext?.emit("updateDirtied", appCtx!)
+      window.__kiru.profilingContext?.endTick(app!)
+      window.__kiru.profilingContext?.emit("updateDirtied", app!)
     }
     return flushSync()
   }
@@ -200,9 +199,9 @@ function doWork(): void {
   onWorkFinished()
   queueMicrotask(() => flushEffects(postEffects))
   if (__DEV__) {
-    window.__kiru.emit("update", appCtx!)
-    window.__kiru.profilingContext?.emit("update", appCtx!)
-    window.__kiru.profilingContext?.endTick(appCtx!)
+    window.__kiru.emit("update", app!)
+    window.__kiru.profilingContext?.emit("update", app!)
+    window.__kiru.profilingContext?.endTick(app!)
   }
 }
 
@@ -221,13 +220,12 @@ function performUnitOfWork(vNode: VNode): VNode | null {
   let nextNode: VNode | null = vNode
   while (nextNode) {
     // queue effects upon ascent
-    if (nextNode.immediateEffects) {
-      preEffects.push(...nextNode.immediateEffects)
-      nextNode.immediateEffects = undefined
-    }
-    if (nextNode.effects) {
-      postEffects.push(...nextNode.effects)
-      nextNode.effects = undefined
+    const { hooks } = nextNode
+    if (hooks) {
+      preEffects.push(...hooks.pre)
+      postEffects.push(...hooks.post)
+      hooks.pre.length = 0
+      hooks.post.length = 0
     }
 
     if (nextNode === currentWorkRoot) return null
@@ -246,8 +244,13 @@ function performUnitOfWork(vNode: VNode): VNode | null {
 
 function updateVNode(vNode: VNode): VNode | null {
   const { type, props, prev, flags } = vNode
+
   if (__DEV__ && isHmrUpdate()) {
-  } else if ((flags & FLAG_DIRTY) === 0 && props === prev?.props) {
+  } else if (
+    prev &&
+    (flags & FLAG_DIRTY) === 0 &&
+    (prev.props === props || !propsChanged(prev.props, props))
+  ) {
     return null
   }
   try {
@@ -262,7 +265,7 @@ function updateVNode(vNode: VNode): VNode | null {
     if (__DEV__) {
       window.__kiru.emit(
         "error",
-        appCtx!,
+        app!,
         error instanceof Error ? error : new Error(String(error))
       )
     }
@@ -302,16 +305,7 @@ function updateExoticComponent(vNode: VNode): VNode | null {
   const { props, type } = vNode
   let children = props.children
 
-  if (type === $CONTEXT_PROVIDER) {
-    const {
-      props: { dependents, value },
-      prev,
-    } = vNode as ContextProviderNode<unknown>
-
-    if (dependents.size && prev && prev.props.value !== value) {
-      dependents.forEach(queueUpdate)
-    }
-  } else if (type === $ERROR_BOUNDARY) {
+  if (type === $ERROR_BOUNDARY) {
     const n = vNode as ErrorBoundaryNode
     const { error } = n
     if (error) {
@@ -328,18 +322,8 @@ function updateExoticComponent(vNode: VNode): VNode | null {
 }
 
 function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
-  const { type, props, subs, prev, flags } = vNode
-  if (flags & FLAG_MEMO) {
-    if (
-      prev &&
-      (type as MemoFn)[$MEMO](prev.props, props) &&
-      !(__DEV__ && isHmrUpdate())
-    ) {
-      vNode.flags |= FLAG_NOOP
-      return null
-    }
-    vNode.flags &= ~FLAG_NOOP
-  }
+  const { type, props, subs } = vNode
+
   try {
     node.current = vNode
     let newChild
@@ -347,7 +331,6 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
     do {
       vNode.flags &= ~FLAG_DIRTY
       isRenderDirtied = false
-      hookIndex.current = 0
 
       /**
        * remove previous signal subscriptions (if any) every render.
@@ -364,18 +347,29 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
       }
 
       if (__DEV__) {
-        newChild = latest(type)(props)
+        if (isHmrUpdate()) {
+          const { hooks } = vNode
+          if (vNode.cleanups) {
+            Object.values(vNode.cleanups).forEach(call)
+            delete vNode.cleanups
+          }
+          if (hooks) {
+            const { preCleanups, postCleanups } = hooks
+            preCleanups.forEach(call)
+            postCleanups.forEach(call)
+            preCleanups.length = postCleanups.length = 0
+          }
+          delete vNode.render
+        }
 
-        if (isHmrUpdate() && vNode.hooks && vNode.hookSig) {
-          const len = vNode.hooks.length
-          if (hookIndex.current < len) {
-            // clean up any hooks that were removed
-            for (let i = hookIndex.current; i < len; i++) {
-              const hook = vNode.hooks[i]
-              hook.cleanup?.()
-            }
-            vNode.hooks.length = hookIndex.current
-            vNode.hookSig.length = hookIndex.current
+        if (vNode.render) {
+          newChild = vNode.render(props)
+        } else {
+          newChild = latest(type)(props)
+          if (typeof newChild === "function") {
+            vNode.subs?.forEach(call)
+            vNode.render = newChild as (props: any) => unknown
+            newChild = vNode.render(props)
           }
         }
 
@@ -389,7 +383,16 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
         }
         continue
       }
-      newChild = type(props)
+
+      if (vNode.render) {
+        newChild = vNode.render(props)
+      } else {
+        newChild = type(props)
+        if (typeof newChild === "function") {
+          vNode.render = newChild as (props: any) => unknown
+          newChild = vNode.render(props)
+        }
+      }
     } while (isRenderDirtied)
 
     return (vNode.child = reconcileChildren(vNode, newChild))

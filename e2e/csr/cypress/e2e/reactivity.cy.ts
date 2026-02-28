@@ -5,20 +5,20 @@ describe("basic reactivity & state", () => {
   })
 
   it("updates text in the dom that was derived from state when the state changes", () => {
-    cy.get("main #counter button").click().click().click()
-    cy.get("main #counter span").should("have.text", "3")
+    cy.get("main #counter #increment").click().click().click()
+    cy.get("main #counter #count").should("have.text", "3")
   })
 
   it("can conditionaly render elements", () => {
-    cy.get("main #counter p").should("not.exist")
-    cy.get("main #counter button").click().click()
-    cy.get("main #counter p").should("exist")
+    cy.get("main #counter #toggled").should("not.exist")
+    cy.get("main #counter #toggle").click()
+    cy.get("main #counter #toggled").should("exist")
   })
 
   it("correctly persists component state when order of children changes", () => {
-    cy.get("main #counter button").click().click()
-    cy.get("main #toggle-btn").click()
-    cy.get("main #counter span").should("have.text", "2")
+    cy.get("main #counter #increment").click().click()
+    cy.get("main #counter #toggle").click()
+    cy.get("main #counter #count").should("have.text", "2")
   })
 })
 

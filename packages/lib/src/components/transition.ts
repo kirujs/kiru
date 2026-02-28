@@ -1,12 +1,11 @@
-import { useCallback } from "../hooks/useCallback.js"
-import { useEffect } from "../hooks/useEffect.js"
-import { useLayoutEffect } from "../hooks/useLayoutEffect.js"
-import { useRef } from "../hooks/useRef.js"
-import { useState } from "../hooks/useState.js"
+import { onCleanup } from "../hooks/onCleanup.js"
+import { signal, Signal } from "../signals/base.js"
+import { effect } from "../signals/effect.js"
+import { unwrap } from "../signals/utils.js"
 
 export type TransitionState = "entering" | "entered" | "exiting" | "exited"
 interface TransitionProps {
-  in: boolean
+  in: boolean | Signal<boolean>
   /**
    * Initial state of the transition
    * @default "exited"
@@ -22,43 +21,42 @@ interface TransitionProps {
   onTransitionEnd?: (state: "entered" | "exited") => void
 }
 
-export function Transition(props: TransitionProps) {
-  const [tState, setTState] = useState<TransitionState>(
-    props.initialState || "exited"
-  )
-  const timeoutRef = useRef<number | null>(null)
+export const Transition: Kiru.FC<TransitionProps> = (props) => {
+  const tState = signal<TransitionState>(props.initialState || "exited")
+  let timeoutRef: number | null = null
 
-  useLayoutEffect(() => {
-    if (props.in && tState !== "entered" && tState !== "entering") {
-      setTransitionState("entering")
-      queueStateChange("entered")
-    } else if (!props.in && tState !== "exited" && tState !== "exiting") {
-      setTransitionState("exiting")
-      queueStateChange("exited")
-    }
-  }, [props.in, tState])
-
-  useEffect(() => () => clearTimeout(timeoutRef.current), [])
-
-  const setTransitionState = useCallback((transitionState: TransitionState) => {
-    clearTimeout(timeoutRef.current)
-    setTState(transitionState)
+  const setTransitionState = (transitionState: TransitionState) => {
+    clearTimeout(timeoutRef)
+    tState.value = transitionState
     if (transitionState === "entered" || transitionState === "exited") {
       if (props.onTransitionEnd) props.onTransitionEnd(transitionState)
     }
-  }, [])
+  }
 
-  const queueStateChange = useCallback(
-    (transitionState: "entered" | "exited") => {
-      timeoutRef.current = window.setTimeout(
-        () => setTransitionState(transitionState),
-        getTiming(transitionState, props.duration)
-      )
-    },
-    [props.duration]
-  )
+  const queueStateChange = (transitionState: "entered" | "exited") => {
+    timeoutRef = window.setTimeout(
+      () => setTransitionState(transitionState),
+      getTiming(transitionState, props.duration)
+    )
+  }
 
-  return props.element(tState)
+  effect(() => {
+    const newIn = unwrap(props.in, true)
+    const current = tState.peek()
+    if (newIn && current !== "entered" && current !== "entering") {
+      setTransitionState("entering")
+      queueStateChange("entered")
+    } else if (!newIn && current !== "exited" && current !== "exiting") {
+      setTransitionState("exiting")
+      queueStateChange("exited")
+    }
+  })
+
+  onCleanup(() => clearTimeout(timeoutRef))
+
+  return (newProps: TransitionProps) => {
+    return newProps.element(tState.value)
+  }
 }
 
 const defaultDuration = 150

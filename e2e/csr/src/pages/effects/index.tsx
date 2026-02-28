@@ -1,26 +1,20 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-} from "kiru"
+import { createContext, useContext, onMount, ref, onBeforeMount } from "kiru"
 
 const LogCtx = createContext<(msg: string) => void>(null as any)
 
 const useLog = () => useContext(LogCtx)
 
 export default function EffectsPage() {
-  const logs = useRef<string[]>([])
+  const logs = ref<string[]>([])
 
   const addLog = (msg: string) => {
     logs.current.push(msg)
   }
-  useEffect(() => {
+  onMount(() => {
     const output = document.getElementById("output")
     output!.innerHTML = logs.current.join("\n")
-  }, [])
-  return (
+  })
+  return () => (
     <div>
       <LogCtx.Provider value={addLog}>
         <Parent />
@@ -34,13 +28,10 @@ export default function EffectsPage() {
 
 function Parent() {
   const log = useLog()
-  useEffect(() => {
-    log("app mounted - post")
-  }, [])
-  useLayoutEffect(() => {
-    log("app mounted - pre")
-  }, [])
-  return (
+  onMount(() => log("app mounted - post"))
+  onBeforeMount(() => log("app mounted - pre"))
+
+  return () => (
     <div>
       Parent
       <Child />
@@ -51,19 +42,11 @@ function Parent() {
 
 function Child() {
   const log = useLog()
-  useEffect(() => {
-    log("child mounted - post")
-  }, [])
-  useEffect(() => {
-    log("child mounted - post 2")
-  }, [])
-  useLayoutEffect(() => {
-    log("child mounted - pre")
-  }, [])
-  useLayoutEffect(() => {
-    log("child mounted - pre 2")
-  }, [])
-  return (
+  onMount(() => log("child mounted - post"))
+  onMount(() => log("child mounted - post 2"))
+  onBeforeMount(() => log("child mounted - pre"))
+  onBeforeMount(() => log("child mounted - pre 2"))
+  return () => (
     <div>
       Child
       <GrandChild />
@@ -73,13 +56,9 @@ function Child() {
 
 function GrandChild() {
   const log = useLog()
-  useEffect(() => {
-    log("grandchild mounted - post")
-  }, [])
-  useLayoutEffect(() => {
-    log("grandchild mounted - pre")
-  }, [])
-  return (
+  onMount(() => log("grandchild mounted - post"))
+  onBeforeMount(() => log("grandchild mounted - pre"))
+  return () => (
     <div>
       <div>GrandChild</div>
     </div>

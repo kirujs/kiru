@@ -1,6 +1,5 @@
 import type { ElementProps } from "../types"
 import { createElement } from "../element.js"
-import { useCallback } from "../hooks/index.js"
 import { useFileRouter } from "./context.js"
 
 export interface LinkProps extends ElementProps<"a"> {
@@ -40,40 +39,27 @@ export const Link: Kiru.FC<LinkProps> = ({
   const { navigate, prefetchRouteModules, baseUrl } = useFileRouter()
 
   const href = baseUrl + to
-  const handleMouseOver = useCallback(
-    (e: Kiru.MouseEvent<HTMLAnchorElement>) => {
-      if (prefetchJs !== false) {
-        prefetchRouteModules(href)
-      }
-      onmouseover?.(e)
-    },
-    [onmouseover, href]
-  )
-  const handleFocus = useCallback(
-    (e: Kiru.FocusEvent<HTMLAnchorElement>) => {
-      if (prefetchJs !== false) {
-        prefetchRouteModules(href)
-      }
-      onfocus?.(e)
-    },
-    [onfocus, href]
-  )
 
-  const handleClick = useCallback(
-    (e: Kiru.MouseEvent<HTMLAnchorElement>) => {
+  return createElement("a", {
+    href: href,
+    onclick: (e: Kiru.MouseEvent<HTMLAnchorElement>) => {
       onclick?.(e)
       if (e.defaultPrevented) return
       e.preventDefault()
       navigate(href, { replace, transition })
     },
-    [onclick, navigate, href, replace, transition]
-  )
-
-  return createElement("a", {
-    href: href,
-    onclick: handleClick,
-    onmouseover: handleMouseOver,
-    onfocus: handleFocus,
+    onmouseover: (e: Kiru.MouseEvent<HTMLAnchorElement>) => {
+      if (prefetchJs !== false) {
+        prefetchRouteModules(href)
+      }
+      onmouseover?.(e)
+    },
+    onfocus: (e: Kiru.FocusEvent<HTMLAnchorElement>) => {
+      if (prefetchJs !== false) {
+        prefetchRouteModules(href)
+      }
+      onfocus?.(e)
+    },
     ...props,
   })
 }

@@ -44,18 +44,18 @@ const createDevtoolsTask = (name) =>
     },
   })
 
-const devtoolsClient = createDevtoolsTask(
-  "devtools-client",
-  "packages/devtools-client"
-)
+// const devtoolsClient = createDevtoolsTask(
+//   "devtools-client",
+//   "packages/devtools-client"
+// )
 const devtoolsHost = createDevtoolsTask(
   "devtools-host",
   "packages/devtools-host"
 )
-const devtools = pipeline([devtoolsClient, devtoolsHost]).toTask({
-  name: "devtools",
-  dependencies: [lib],
-})
+// const devtools = pipeline([devtoolsClient, devtoolsHost]).toTask({
+//   name: "devtools",
+//   dependencies: [lib],
+// })
 
 const vitePlugin = task({
   name: "vite-plugin-kiru",
@@ -67,7 +67,7 @@ const vitePlugin = task({
         inputs: [
           "src",
           lib.artifact("build"),
-          devtoolsClient.artifact("build"),
+          //devtoolsClient.artifact("build"),
           devtoolsHost.artifact("build"),
           pnpm.package(),
         ],
@@ -76,7 +76,7 @@ const vitePlugin = task({
     },
     dev: {
       run: "pnpm dev",
-      dependencies: [lib, devtools],
+      dependencies: [lib, devtoolsHost],
     },
   },
 })
@@ -135,7 +135,7 @@ const command = argv[0]
 
 const result = await pipeline([
   lib,
-  devtools,
+  devtoolsHost,
   vitePlugin,
   csrTest,
   ssgTest,

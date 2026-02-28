@@ -1,9 +1,9 @@
 import { createElement } from "../element.js"
-import { useState, useEffect } from "../hooks/index.js"
 import { RouterContext } from "./context.js"
 import { FileRouterController } from "./fileRouterController.js"
 import type { FileRouterConfig } from "./types.js"
 import { fileRouterInstance } from "./globals.js"
+import { onCleanup } from "../hooks/onCleanup.js"
 
 export interface FileRouterProps {
   /**
@@ -24,18 +24,28 @@ export interface FileRouterProps {
   config: FileRouterConfig
 }
 
-export function FileRouter({ config }: FileRouterProps): JSX.Element {
-  const [controller] = useState(() => {
-    fileRouterInstance.current?.dispose()
-    const router = (fileRouterInstance.current = new FileRouterController())
-    router.init(config)
-    return router
-  })
-  useEffect(() => () => controller.dispose(), [controller])
+export const FileRouter: Kiru.FC<FileRouterProps> = ({ config }) => {
+  fileRouterInstance.current?.dispose()
+  let router = (fileRouterInstance.current = new FileRouterController())
+  let configStr = ""
 
-  return createElement(
-    RouterContext.Provider,
-    { value: controller.contextValue },
-    controller.getChildren()
+  onCleanup(() => router.dispose())
+
+  const onUpdate = (props: FileRouterProps) => {
+    const newConfigStr = JSON.stringify(props.config)
+    if (newConfigStr !== configStr) {
+      config = props.config
+      configStr = newConfigStr
+      router.init(config)
+    }
+  }
+
+  return (nextProps) => (
+    onUpdate(nextProps),
+    createElement(
+      RouterContext.Provider,
+      { value: router.contextValue },
+      router.getChildren()
+    )
   )
 }

@@ -1,6 +1,5 @@
-import { createContext } from "../context.js"
+import { createContext, useContext } from "../context.js"
 import { __DEV__ } from "../env.js"
-import { useContext } from "../hooks/index.js"
 import type { RouteQuery, RouterState } from "./types.js"
 
 export interface ReloadOptions {

@@ -6,8 +6,7 @@ pnpm-lock.yaml
 .env
 sandbox/*
 !sandbox/csr
-!sandbox/docs
 !sandbox/ssg
 !sandbox/ssr
 !sandbox/tauri
-!sandbox/shared
+!sandbox/primitive
