@@ -115,7 +115,7 @@ export default function DevtoolsHostApp() {
             transition: "80ms",
             opacity: mounted.value ? 1 : 0,
           }}
-          className={`z-[999999] flex ${containerFlexDirection} items-center justify-center z-50`}
+          className={`z-[999999] top-0 left-0 flex ${containerFlexDirection} items-center justify-center z-50`}
         >
           <button
             ref={mainMenuController.handleRef}

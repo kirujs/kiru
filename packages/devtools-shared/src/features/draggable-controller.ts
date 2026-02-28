@@ -203,6 +203,8 @@ export function createDraggableController(
       return console.error("container not found", new Error().stack)
 
     container.style.position = "fixed"
+    container.style.top = "0"
+    container.style.left = "0"
 
     calculatePosition()
 
