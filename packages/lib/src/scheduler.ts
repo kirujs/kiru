@@ -324,6 +324,9 @@ function updateExoticComponent(vNode: VNode): VNode | null {
 function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
   const { type, props, subs } = vNode
 
+  /** Only sync prop-derived signals when update came from parent (new props), not from internal subscription (e.g. signal). */
+  const shouldSyncProps = (vNode.flags & FLAG_DIRTY) === 0
+
   try {
     node.current = vNode
     let newChild
@@ -359,16 +362,19 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
             postCleanups.forEach(call)
             preCleanups.length = postCleanups.length = 0
           }
+          delete vNode.propSyncs
           delete vNode.render
         }
 
         if (vNode.render) {
+          if (shouldSyncProps) vNode.propSyncs?.forEach((sync) => sync(props))
           newChild = vNode.render(props)
         } else {
           newChild = latest(type)(props)
           if (typeof newChild === "function") {
             vNode.subs?.forEach(call)
             vNode.render = newChild as (props: any) => unknown
+            if (shouldSyncProps) vNode.propSyncs?.forEach((sync) => sync(props))
             newChild = vNode.render(props)
           }
         }
@@ -385,11 +391,13 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
       }
 
       if (vNode.render) {
+        if (shouldSyncProps) vNode.propSyncs?.forEach((sync) => sync(props))
         newChild = vNode.render(props)
       } else {
         newChild = type(props)
         if (typeof newChild === "function") {
           vNode.render = newChild as (props: any) => unknown
+          if (shouldSyncProps) vNode.propSyncs?.forEach((sync) => sync(props))
           newChild = vNode.render(props)
         }
       }

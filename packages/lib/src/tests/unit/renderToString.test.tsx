@@ -97,4 +97,26 @@ describe("renderToString", () => {
 
     assert.strictEqual(res, expected)
   })
+  it("useProps.synced uses prop value and default correctly", () => {
+    interface CounterProps {
+      count?: number
+    }
+    const Counter: Kiru.FC<CounterProps> = () => {
+      const { synced } = kiru.useProps<CounterProps>()
+      const count = synced((props) => props.count ?? 0)
+      return () => (
+        <div>
+          <span>Count: {count}</span>
+        </div>
+      )
+    }
+    assert.strictEqual(
+      renderToString(<Counter count={5} />),
+      `<div><span>Count: 5</span></div>`
+    )
+    assert.strictEqual(
+      renderToString(<Counter />),
+      `<div><span>Count: 0</span></div>`
+    )
+  })
 })
