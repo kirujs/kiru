@@ -20,8 +20,8 @@ interface CounterProps extends ElementProps<"button"> {
   initialCount?: number
 }
 const MyButton: Kiru.FC<CounterProps> = () => {
-  const { synced } = useProps<CounterProps>()
-  const count = synced((props) => props.initialCount ?? 0)
+  const { derive } = useProps<CounterProps>()
+  const count = derive((props) => props.initialCount ?? 0)
 
   const handleClick = () => {
     count.value++
@@ -41,8 +41,8 @@ const MyButton: Kiru.FC<CounterProps> = () => {
 const MyButton2: Kiru.FC<
   ElementProps<"button"> & { initialCount?: number }
 > = () => {
-  const { synced } = useProps<typeof MyButton2>()
-  const count = synced((props) => props.initialCount ?? 0)
+  const { derive } = useProps<typeof MyButton2>()
+  const count = derive((props) => props.initialCount ?? 0)
 
   const handleClick = () => {
     count.value++

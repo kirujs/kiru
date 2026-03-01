@@ -3,15 +3,17 @@ import { signal } from "../signals/index.js"
 import type { Signal } from "../signals/base.js"
 
 /**
- * Returns the current component props and a `synced` helper to create signals
- * that stay in sync with a prop (or derived value). Use during component setup
+ * Returns a `derive` helper to create signals that stay in sync
+ * with a prop (or derived value). Use during component setup
  * when the component returns a render function.
  *
  * @example
  * ```tsx
+ * type CounterProps = { count?: number }
+ *
  * const Counter: Kiru.FC<CounterProps> = () => {
- *   const { synced } = useProps<CounterProps>()
- *   const count = synced((props) => props.count ?? 0)
+ *   const { derive } = useProps<CounterProps>()
+ *   const count = derive((props) => props.count ?? 0)
  *
  *   return () => (
  *     <>
@@ -23,7 +25,9 @@ import type { Signal } from "../signals/base.js"
  * ```
  */
 export function useProps<P extends {}>(): {
-  synced: <T>(selector: (props: P extends Kiru.FC<infer R> ? R : P) => T) => Signal<T>
+  derive: <T>(
+    selector: (props: P extends Kiru.FC<infer R> ? R : P) => T
+  ) => Signal<T>
 } {
   const vNode = node.current
   if (!vNode) {
@@ -34,7 +38,7 @@ export function useProps<P extends {}>(): {
   type InferredProps = P extends Kiru.FC<infer R> ? R : P
 
   return {
-    synced<T>(selector: (props: InferredProps) => T): Signal<T> {
+    derive<T>(selector: (props: InferredProps) => T): Signal<T> {
       const props = vNode.props as InferredProps
       const sig = signal(selector(props))
 
