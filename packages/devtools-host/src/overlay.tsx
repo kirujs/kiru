@@ -74,7 +74,7 @@ export const EmbeddedOverlay: Kiru.FC<EmbeddedOverlayProps> = () => {
               transition: "150ms ease-in-out",
               pointerEvents: componentSelectionEnabled.value ? "none" : "auto",
             }}
-            className="rounded z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/10"
+            className="rounded-sm z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/10"
           >
             <button
               ref={overlayController.handleRef}

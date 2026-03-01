@@ -9,7 +9,7 @@ import {
 } from "devtools-shared"
 import { ComponentSelectorOverlay } from "./component-selector-overlay"
 import { isDebuggerShown, isProfilerShown } from "./state"
-import { DRAG_SNAP_PADDING } from "./constants"
+import { DRAG_SNAP_PADDING, HANDLE_TOOLTIP_GAP } from "./constants"
 import { DebuggerWidget, ProfilingWidget } from "./widgets"
 const MENU_POSITION_STORAGE_KEY = "kiru.devtools.anchorPosition"
 
@@ -56,6 +56,9 @@ export default function DevtoolsHostApp() {
           tooltip.offsetWidth,
           tooltip.offsetHeight,
         ]
+        const handleEl = mainMenuController.handleRef.value
+        const handleW = handleEl?.offsetWidth ?? 0
+        const handleH = handleEl?.offsetHeight ?? 0
 
         // left-1/2 top-1/2 places the tooltip's top-left at the container's center.
         // Subtracting half the tooltip's own size recenters it on the container.
@@ -84,15 +87,15 @@ export default function DevtoolsHostApp() {
           clampDeltaY = clampedTop - idealTop
         }
 
-        // Slide offset along the snap axis.
-        const offsetSize =
-          Math.min(tooltipWidth, tooltipHeight) + DRAG_SNAP_PADDING
+        // Slide so there is always HANDLE_TOOLTIP_GAP between handle edge and tooltip edge.
+        const offsetX = handleW / 2 + HANDLE_TOOLTIP_GAP + tooltipWidth / 2
+        const offsetY = handleH / 2 + HANDLE_TOOLTIP_GAP + tooltipHeight / 2
         let slideX = 0
         let slideY = 0
-        if (snapSide === "left") slideX = show ? offsetSize : -offsetSize
-        else if (snapSide === "right") slideX = show ? -offsetSize : offsetSize
-        else if (snapSide === "top") slideY = show ? offsetSize : -offsetSize
-        else slideY = show ? -offsetSize : offsetSize
+        if (snapSide === "left") slideX = show ? offsetX : -offsetX
+        else if (snapSide === "right") slideX = show ? -offsetX : offsetX
+        else if (snapSide === "top") slideY = show ? offsetY : -offsetY   // tooltip below handle
+        else slideY = show ? -offsetY : offsetY   // bottom: tooltip above handle
 
         const translateX = -tooltipWidth / 2 + clampDeltaX + slideX
         const translateY = -tooltipHeight / 2 + clampDeltaY + slideY
@@ -120,16 +123,16 @@ export default function DevtoolsHostApp() {
         >
           <button
             ref={mainMenuController.handleRef}
-            className="bg-crimson rounded-full p-2 z-10"
+            className="bg-[crimson]/80 rounded-full p-2 z-10"
           >
-            <FlameIcon />
+            <FlameIcon className="w-5 h-5" />
           </button>
           <div
             ref={tooltipRef}
             style="transition: 80ms ease-in-out; transform-origin: 0 0"
             className={cls(
               `absolute left-1/2 top-1/2 z-0 flex ${tooltipFlexDirection} p-1 gap-1`,
-              "bg-neutral-900 rounded-xl shadow"
+              "bg-neutral-900 rounded-xl shadow-sm"
             )}
           >
             <TooltipMenuButton
@@ -192,7 +195,7 @@ function TooltipMenuButton({
     <button
       className={cls(
         "flex items-center px-1.5 py-0.5 gap-2",
-        "text-sm rounded-lg border border-white border-opacity-10",
+        "text-sm rounded-lg border border-white/10",
         isActive && "bg-white/5 text-neutral-100",
         !isActive && "bg-white/2.5 hover:bg-white/5 text-neutral-400",
         kiru.unwrap(className)

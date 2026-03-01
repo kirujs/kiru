@@ -3,10 +3,9 @@ import fs from "node:fs"
 import path from "node:path"
 import esbuildPluginInlineImport from "esbuild-plugin-inline-import"
 import postCss from "postcss"
-import tailwindcss from "tailwindcss"
-import autoprefixer from "autoprefixer"
+import tailwindcss from "@tailwindcss/postcss"
 
-const postCssInstance = postCss([tailwindcss, autoprefixer])
+const postCssInstance = postCss([tailwindcss])
 
 type EsbuildInlineTransform = NonNullable<
   Parameters<typeof esbuildPluginInlineImport>[0]
@@ -29,7 +28,7 @@ export const options = {
   define: {
     "globalThis.__KIRU_DEVTOOLS__": "true",
   },
-  entryPoints: ["src/index.ts", "src/style.css"],
+  entryPoints: ["src/index.ts"],
   jsx: "transform",
   outdir: "dist",
   jsxFactory: "kiru.createElement",

@@ -12,7 +12,8 @@ await esbuild
         setup({ onEnd }) {
           onEnd((result) => {
             console.log("[devtools-host]: Build complete!")
-            writeFile(result.outputFiles![0].text)
+            const out = result.outputFiles?.[0]
+            if (out) writeFile(out.text)
           })
         },
       },
