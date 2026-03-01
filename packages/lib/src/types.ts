@@ -193,6 +193,8 @@ declare global {
         post: LifecycleHookCallback[]
         postCleanups: (() => void)[]
       }
+      /** Run before each render with current props to sync prop-derived signals */
+      propSyncs?: ((props: VNode["props"]) => void)[]
       render?: (props: VNode["props"]) => unknown
     }
     interface VNodeSnapshot {
