@@ -150,7 +150,7 @@ function createLineChartDatasets(
 ): LineChartData["datasets"] {
   return Object.entries(events).map(([event, { values, color }]) => ({
     label: event,
-    data: values,
+    data: [...values],
     fill: false,
     borderColor: color,
     tension: 0.1,
