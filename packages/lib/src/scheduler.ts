@@ -367,13 +367,16 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
 
       newChild = renderFunctionComponent(vNode, type, props, shouldSyncProps)
 
-      if (__DEV__ && ++renderTryCount > CONSECUTIVE_DIRTY_LIMIT) {
-        throw new KiruError({
-          message:
-            "Too many re-renders. Kiru limits the number of renders to prevent an infinite loop.",
-          fatal: true,
-          vNode,
-        })
+      if (++renderTryCount > CONSECUTIVE_DIRTY_LIMIT) {
+        if (__DEV__) {
+          throw new KiruError({
+            message:
+              "Too many re-renders. Kiru limits the number of renders to prevent an infinite loop.",
+            fatal: true,
+            vNode,
+          })
+        }
+        break
       }
     } while (isRenderDirtied)
 
