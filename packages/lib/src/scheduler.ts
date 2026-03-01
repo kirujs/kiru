@@ -349,57 +349,31 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
         subs.clear()
       }
 
-      if (__DEV__) {
-        if (isHmrUpdate()) {
-          const { hooks, cleanups } = vNode
-          if (cleanups) {
-            Object.values(cleanups).forEach(call)
-            delete vNode.cleanups
-          }
-          if (hooks) {
-            const { preCleanups, postCleanups } = hooks
-            preCleanups.forEach(call)
-            postCleanups.forEach(call)
-            preCleanups.length = postCleanups.length = 0
-          }
-          delete vNode.propSyncs
-          delete vNode.render
+      if (__DEV__ && isHmrUpdate()) {
+        const { hooks, cleanups } = vNode
+        if (cleanups) {
+          Object.values(cleanups).forEach(call)
+          delete vNode.cleanups
         }
-
-        if (vNode.render) {
-          if (shouldSyncProps) vNode.propSyncs?.forEach((sync) => sync(props))
-          newChild = vNode.render(props)
-        } else {
-          newChild = latest(type)(props)
-          if (typeof newChild === "function") {
-            vNode.subs?.forEach(call)
-            vNode.render = newChild as (props: any) => unknown
-            if (shouldSyncProps) vNode.propSyncs?.forEach((sync) => sync(props))
-            newChild = vNode.render(props)
-          }
+        if (hooks) {
+          const { preCleanups, postCleanups } = hooks
+          preCleanups.forEach(call)
+          postCleanups.forEach(call)
+          preCleanups.length = postCleanups.length = 0
         }
-
-        if (++renderTryCount > CONSECUTIVE_DIRTY_LIMIT) {
-          throw new KiruError({
-            message:
-              "Too many re-renders. Kiru limits the number of renders to prevent an infinite loop.",
-            fatal: true,
-            vNode,
-          })
-        }
-        continue
+        delete vNode.propSyncs
+        delete vNode.render
       }
 
-      if (vNode.render) {
-        if (shouldSyncProps) vNode.propSyncs?.forEach((sync) => sync(props))
-        newChild = vNode.render(props)
-      } else {
-        newChild = type(props)
-        if (typeof newChild === "function") {
-          vNode.render = newChild as (props: any) => unknown
-          if (shouldSyncProps) vNode.propSyncs?.forEach((sync) => sync(props))
-          newChild = vNode.render(props)
-        }
+      newChild = renderFunctionComponent(vNode, type, props, shouldSyncProps)
+
+      if (__DEV__ && ++renderTryCount > CONSECUTIVE_DIRTY_LIMIT) {
+        throw new KiruError({
+          message:
+            "Too many re-renders. Kiru limits the number of renders to prevent an infinite loop.",
+          fatal: true,
+          vNode,
+        })
       }
     } while (isRenderDirtied)
 
@@ -407,6 +381,30 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
   } finally {
     node.current = null
   }
+}
+
+function renderFunctionComponent(
+  vNode: FunctionVNode,
+  type: Function,
+  props: Record<string, unknown>,
+  shouldSyncProps: boolean
+): unknown {
+  const { render, propSyncs } = vNode
+
+  if (render) {
+    if (shouldSyncProps) propSyncs?.forEach((sync) => sync(props))
+    return render(props)
+  }
+
+  let newChild = latest(type)(props)
+  if (typeof newChild === "function") {
+    vNode.subs?.forEach(call) // unsub from signals observered during setup
+    vNode.render = newChild
+    if (shouldSyncProps) propSyncs?.forEach((sync) => sync(props))
+    newChild = newChild(props)
+  }
+
+  return newChild
 }
 
 function updateHostComponent(vNode: DomVNode): VNode | null {
