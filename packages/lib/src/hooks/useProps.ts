@@ -38,8 +38,8 @@ export function useProps<P extends {}>(): {
   type InferredProps = P extends Kiru.FC<infer R> ? R : P
 
   return {
-    derive<T>(selector: (props: InferredProps) => T): Signal<T> {
-      const props = vNode.props as InferredProps
+    derive(selector) {
+      const props = { ...vNode.props } as InferredProps
       const sig = signal(selector(props))
 
       propSyncs.push((currentProps) => {
