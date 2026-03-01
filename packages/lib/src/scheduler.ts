@@ -348,9 +348,9 @@ function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
 
       if (__DEV__) {
         if (isHmrUpdate()) {
-          const { hooks } = vNode
-          if (vNode.cleanups) {
-            Object.values(vNode.cleanups).forEach(call)
+          const { hooks, cleanups } = vNode
+          if (cleanups) {
+            Object.values(cleanups).forEach(call)
             delete vNode.cleanups
           }
           if (hooks) {
