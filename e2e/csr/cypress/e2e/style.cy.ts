@@ -38,4 +38,42 @@ describe("styles", () => {
       "rgb(255, 0, 0)"
     )
   })
+
+  it("updates only the changed property when multiple signals share one style object (per-property subscription)", () => {
+    const el = "[data-multi-signal-style-target]"
+    cy.get(el).should("have.css", "color", "rgb(255, 0, 0)")
+    cy.get(el).should("have.css", "font-size", "12px")
+
+    cy.get("[data-toggle-color-only]").click()
+    cy.get(el).should("have.css", "color", "rgb(0, 0, 255)")
+    cy.get(el).should("have.css", "font-size", "12px")
+
+    cy.get("[data-toggle-font-size-only]").click()
+    cy.get(el).should("have.css", "color", "rgb(0, 0, 255)")
+    cy.get(el).should("have.css", "font-size", "24px")
+
+    cy.get("[data-toggle-font-size-only]").click()
+    cy.get(el).should("have.css", "color", "rgb(0, 0, 255)")
+    cy.get(el).should("have.css", "font-size", "12px")
+
+    cy.get("[data-toggle-color-only]").click()
+    cy.get(el).should("have.css", "color", "rgb(255, 0, 0)")
+    cy.get(el).should("have.css", "font-size", "12px")
+  })
+
+  it("updates CSS custom property when driven by a signal (per-property)", () => {
+    cy.get("[data-css-var-signal-target]").then(($el) => {
+      expect($el[0].style.getPropertyValue("--dynamic-gap").trim()).to.eq("4px")
+    })
+    cy.get("[data-toggle-css-var]").click()
+    cy.get("[data-css-var-signal-target]").then(($el) => {
+      expect($el[0].style.getPropertyValue("--dynamic-gap").trim()).to.eq(
+        "16px"
+      )
+    })
+    cy.get("[data-toggle-css-var]").click()
+    cy.get("[data-css-var-signal-target]").then(($el) => {
+      expect($el[0].style.getPropertyValue("--dynamic-gap").trim()).to.eq("4px")
+    })
+  })
 })

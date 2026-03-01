@@ -9,6 +9,12 @@ export default function StylePage() {
   })
   const verified = signal("✅")
   const signalColor = signal("red")
+  const fontSize = signal("12px")
+  const cssVarFromSignal = signal("4px")
+  const multiSignalStyle: StyleObject = {
+    color: signalColor,
+    fontSize,
+  }
 
   const randomizeStyle = () => {
     divStyle.value = generateRandomStyleProp()
@@ -47,6 +53,40 @@ export default function StylePage() {
         }}
       >
         Toggle color
+      </button>
+      <span data-multi-signal-style-target style={multiSignalStyle}>
+        Multi-signal style
+      </span>
+      <button
+        data-toggle-color-only
+        onclick={() => {
+          signalColor.value = signalColor.value === "red" ? "blue" : "red"
+        }}
+      >
+        Toggle color only
+      </button>
+      <button
+        data-toggle-font-size-only
+        onclick={() => {
+          fontSize.value = fontSize.value === "12px" ? "24px" : "12px"
+        }}
+      >
+        Toggle fontSize only
+      </button>
+      <span
+        data-css-var-signal-target
+        style={{ "--dynamic-gap": cssVarFromSignal }}
+      >
+        CSS var from signal
+      </span>
+      <button
+        data-toggle-css-var
+        onclick={() => {
+          cssVarFromSignal.value =
+            cssVarFromSignal.value === "4px" ? "16px" : "4px"
+        }}
+      >
+        Toggle --dynamic-gap
       </button>
     </div>
   )

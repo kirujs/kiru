@@ -1,7 +1,6 @@
 import {
   traverseApply,
   commitSnapshot,
-  propFilters,
   propToHtmlAttr,
   getVNodeApp,
   setRef,
@@ -32,7 +31,6 @@ import type {
   SomeElement,
 } from "./types.utils"
 import type { AppHandle } from "./appHandle.js"
-import { tracking, TrackingStackObservations } from "./signals/tracking.js"
 
 export {
   commitWork,
@@ -125,6 +123,7 @@ interface VNodeEventListenerObjects {
   [key: string]: EventListenerObject
 }
 const eventListenerObjects = new WeakMap<VNode, VNodeEventListenerObjects>()
+const styleSignals = new Map<string, Signal<unknown>>()
 
 function updateDom(vNode: DomVNode) {
   const { dom, prev, props, cleanups } = vNode
@@ -153,7 +152,7 @@ function updateDom(vNode: DomVNode) {
     const prevVal = prevProps[key]
     const nextVal = nextProps[key]
 
-    if (propFilters.isEvent(key)) {
+    if (key.length >= 2 && key[0] === "o" && key[1] === "n") {
       events ??= eventListenerObjects.get(vNode)
       if (!events) eventListenerObjects.set(vNode, (events = {}))
 
@@ -184,7 +183,7 @@ function updateDom(vNode: DomVNode) {
       continue
     }
 
-    if (propFilters.isInternalProp(key) && key !== "innerHTML") {
+    if (key === "children" || key === "ref" || key === "key") {
       continue
     }
 
@@ -210,14 +209,12 @@ function updateDom(vNode: DomVNode) {
         cleanups.style()
         delete cleanups.style
       }
-      const observations: TrackingStackObservations = new Map()
-      tracking.stack.push(observations)
-      setStyleProp(dom, nextVal, prevVal)
-      tracking.stack.pop()
-      if (observations.size > 0) {
-        const apply = () => setStyleProp(dom, nextVal, undefined)
-        const unsubs = Array.from(observations.values(), (sig) =>
-          sig.subscribe(apply)
+      setStyleProp(dom, nextVal, prevVal, styleSignals)
+      if (styleSignals.size > 0) {
+        const entries = Array.from(styleSignals.entries())
+        styleSignals.clear()
+        const unsubs = entries.map(([k, sig]) =>
+          sig.subscribe((value) => applyStyleKeyValue(dom, k, value))
         )
         registerVNodeCleanup(vNode, "style", () => unsubs.forEach((u) => u()))
       }
@@ -578,14 +575,36 @@ function setClassName(element: SomeElement, value: unknown) {
 }
 
 /**
- * Applies a style value to the element. When called while a tracking context
- * is active (tracking.stack non-empty), any signal values read are recorded
- * there for the caller to subscribe to.
+ * Applies a single style key with a given value to the element. Used by
+ * per-property subscriptions when a nested style signal changes.
+ */
+function applyStyleKeyValue(
+  element: SomeElement,
+  k: string,
+  value: unknown
+): void {
+  if (k.startsWith("--")) {
+    if (value === undefined || value === null) {
+      element.style.removeProperty(k)
+    } else {
+      element.style.setProperty(k, String(value))
+    }
+    return
+  }
+  element.style[k as any] =
+    value !== undefined && value !== null ? String(value) : ""
+}
+
+/**
+ * Applies a style value to the element. When styleSignals is provided,
+ * records (key -> signal) for any signal values so the caller can subscribe
+ * per property.
  */
 function setStyleProp(
   element: SomeElement,
   value: unknown,
-  prev: unknown
+  prev: unknown,
+  styleSignals?: Map<string, Signal<unknown>>
 ): void {
   if (handleAttributeRemoval(element, "style", value)) return
 
@@ -614,21 +633,15 @@ function setStyleProp(
   ]) as Set<keyof StyleObject>
 
   keys.forEach((k) => {
-    const rawNext = (nextStyle as Record<string, unknown>)[k]
+    const rawNext = nextStyle[k]
     const prevVal = unwrap(prevStyle[k])
-    const nextVal = unwrap(rawNext, true)
+    const nextVal = unwrap(rawNext)
     if (prevVal === nextVal) return
-
-    if (k.startsWith("--")) {
-      if (nextVal === undefined || nextVal === null) {
-        element.style.removeProperty(k)
-      } else {
-        element.style.setProperty(k, String(nextVal))
-      }
-      return
+    if (Signal.isSignal(rawNext)) {
+      styleSignals?.set(k, rawNext)
     }
-    element.style[k as any] =
-      nextVal !== undefined && nextVal !== null ? String(nextVal) : ""
+
+    applyStyleKeyValue(element, k, nextVal)
   })
 }
 
