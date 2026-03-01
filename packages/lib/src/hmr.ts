@@ -13,7 +13,7 @@ export type HMRAccept<T = {}> = {
 export type GenericHMRAcceptor<T = {}> = {
   [$HMR_ACCEPT]: HMRAccept<T>
 }
-type HotVar = Kiru.FC | Signal<any> | Kiru.ContextBase<any>
+type HotVar = Kiru.FC | Signal<any> | Kiru.Context<any>
 
 type HotVarDesc = {
   type: string
