@@ -5,10 +5,11 @@ import { tick } from "./utils.js"
 import type { Signal } from "./base.js"
 import type { SignalValues } from "./types.js"
 
+export type TrackingStackObservations = Map<string, Signal<unknown>>
 export const tracking = {
   enabled: true,
-  stack: new Array<Map<string, Signal<unknown>>>(),
-  current: function (): Map<string, Signal<unknown>> | undefined {
+  stack: new Array<TrackingStackObservations>(),
+  current: function (): TrackingStackObservations | undefined {
     return this.stack[this.stack.length - 1]
   },
 }

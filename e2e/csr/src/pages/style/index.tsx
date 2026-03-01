@@ -8,6 +8,7 @@ export default function StylePage() {
     alignItems: "center",
   })
   const verified = signal("✅")
+  const signalColor = signal("red")
 
   const randomizeStyle = () => {
     divStyle.value = generateRandomStyleProp()
@@ -32,10 +33,21 @@ export default function StylePage() {
       </button>
       <span
         data-css-var-target
-        style={{ "--my-style": "12px", "--another-var": "2rem" } as StyleObject}
+        style={{ "--my-style": "12px", "--another-var": "2rem" }}
       >
         CSS variable target
       </span>
+      <span data-style-signal-target style={{ color: signalColor }}>
+        Signal in style
+      </span>
+      <button
+        data-style-signal-toggle
+        onclick={() => {
+          signalColor.value = signalColor.value === "red" ? "blue" : "red"
+        }}
+      >
+        Toggle color
+      </button>
     </div>
   )
 }

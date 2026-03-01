@@ -153,8 +153,8 @@ type AllStyleRules = Omit<
 type StyleObject = Prettify<
   Partial<{
     [Key in keyof AllStyleRules & string]: Key extends NumericStyleKeys
-      ? number | string
-      : AllStyleRules[Key]
+      ? Signalable<number | string | undefined>
+      : Signalable<AllStyleRules[Key] | undefined>
   }>
 >
 

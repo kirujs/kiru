@@ -18,4 +18,24 @@ describe("styles", () => {
       expect(style.getPropertyValue("--another-var").trim()).to.eq("2rem")
     })
   })
+
+  it("updates style when a signal inside the style object changes", () => {
+    cy.get("[data-style-signal-target]").should(
+      "have.css",
+      "color",
+      "rgb(255, 0, 0)"
+    )
+    cy.get("[data-style-signal-toggle]").click()
+    cy.get("[data-style-signal-target]").should(
+      "have.css",
+      "color",
+      "rgb(0, 0, 255)"
+    )
+    cy.get("[data-style-signal-toggle]").click()
+    cy.get("[data-style-signal-target]").should(
+      "have.css",
+      "color",
+      "rgb(255, 0, 0)"
+    )
+  })
 })

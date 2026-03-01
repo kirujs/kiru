@@ -32,6 +32,7 @@ import type {
   SomeElement,
 } from "./types.utils"
 import type { AppHandle } from "./appHandle.js"
+import { tracking, TrackingStackObservations } from "./signals/tracking.js"
 
 export {
   commitWork,
@@ -201,6 +202,25 @@ function updateDom(vNode: DomVNode) {
 
     if (Signal.isSignal(nextVal)) {
       setSignalProp(vNode, dom, key, nextVal, prevVal)
+      continue
+    }
+
+    if (key === "style" && typeof nextVal === "object" && nextVal !== null) {
+      if (cleanups?.style) {
+        cleanups.style()
+        delete cleanups.style
+      }
+      const observations: TrackingStackObservations = new Map()
+      tracking.stack.push(observations)
+      setStyleProp(dom, nextVal, prevVal)
+      tracking.stack.pop()
+      if (observations.size > 0) {
+        const apply = () => setStyleProp(dom, nextVal, undefined)
+        const unsubs = Array.from(observations.values(), (sig) =>
+          sig.subscribe(apply)
+        )
+        registerVNodeCleanup(vNode, "style", () => unsubs.forEach((u) => u()))
+      }
       continue
     }
 
@@ -557,40 +577,58 @@ function setClassName(element: SomeElement, value: unknown) {
   element.setAttribute("class", val as string)
 }
 
-function setStyleProp(element: SomeElement, value: unknown, prev: unknown) {
+/**
+ * Applies a style value to the element. When called while a tracking context
+ * is active (tracking.stack non-empty), any signal values read are recorded
+ * there for the caller to subscribe to.
+ */
+function setStyleProp(
+  element: SomeElement,
+  value: unknown,
+  prev: unknown
+): void {
   if (handleAttributeRemoval(element, "style", value)) return
 
-  if (typeof value === "string") {
-    element.setAttribute("style", value)
+  const raw = unwrap(value)
+  if (raw === null || raw === undefined) {
+    element.removeAttribute("style")
+    return
+  }
+  if (typeof raw === "string") {
+    element.setAttribute("style", raw)
     return
   }
 
   let prevStyle: StyleObject = {}
-  if (typeof prev === "string") {
+  const rawPrev = unwrap(prev)
+  if (typeof rawPrev === "string") {
     element.setAttribute("style", "")
-  } else if (typeof prev === "object" && !!prev) {
-    prevStyle = prev as StyleObject
+  } else if (typeof rawPrev === "object" && !!rawPrev) {
+    prevStyle = rawPrev as StyleObject
   }
 
-  const nextStyle = value as StyleObject
+  const nextStyle = raw as StyleObject
   const keys = new Set([
     ...Object.keys(prevStyle),
     ...Object.keys(nextStyle),
   ]) as Set<keyof StyleObject>
 
   keys.forEach((k) => {
-    const prev = prevStyle[k] as string | undefined
-    const next = nextStyle[k] as string | undefined
-    if (prev === next) return
+    const rawNext = (nextStyle as Record<string, unknown>)[k]
+    const prevVal = unwrap(prevStyle[k])
+    const nextVal = unwrap(rawNext, true)
+    if (prevVal === nextVal) return
 
     if (k.startsWith("--")) {
-      if (next === undefined) {
-        return element.style.removeProperty(k)
+      if (nextVal === undefined || nextVal === null) {
+        element.style.removeProperty(k)
+      } else {
+        element.style.setProperty(k, String(nextVal))
       }
-      return element.style.setProperty(k, next)
+      return
     }
-
-    element.style[k as any] = next ?? ""
+    element.style[k as any] =
+      nextVal !== undefined && nextVal !== null ? String(nextVal) : ""
   })
 }
 
