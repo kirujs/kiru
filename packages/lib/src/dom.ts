@@ -579,16 +579,18 @@ function setStyleProp(element: SomeElement, value: unknown, prev: unknown) {
   ]) as Set<keyof StyleObject>
 
   keys.forEach((k) => {
-    const prev = prevStyle[k]
-    const next = nextStyle[k]
+    const prev = prevStyle[k] as string | undefined
+    const next = nextStyle[k] as string | undefined
     if (prev === next) return
 
-    if (next === undefined) {
-      element.style[k as any] = ""
-      return
+    if (k.startsWith("--")) {
+      if (next === undefined) {
+        return element.style.removeProperty(k)
+      }
+      return element.style.setProperty(k, next)
     }
 
-    element.style[k as any] = next as any
+    element.style[k as any] = next ?? ""
   })
 }
 

@@ -10,4 +10,12 @@ describe("styles", () => {
       cy.get("[data-style-test-target]").click().should("have.text", "✅")
     })
   })
+
+  it("applies CSS custom properties (variables) from style object", () => {
+    cy.get("[data-css-var-target]").then(($el) => {
+      const style = $el[0].style as CSSStyleDeclaration
+      expect(style.getPropertyValue("--my-style").trim()).to.eq("12px")
+      expect(style.getPropertyValue("--another-var").trim()).to.eq("2rem")
+    })
+  })
 })

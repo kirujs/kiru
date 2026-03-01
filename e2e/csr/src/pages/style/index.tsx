@@ -21,14 +21,22 @@ export default function StylePage() {
   }
 
   return () => (
-    <button
-      data-style-test-target
-      ref={divRef}
-      style={divStyle}
-      onclick={randomizeStyle}
-    >
-      {verified}
-    </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      <button
+        data-style-test-target
+        ref={divRef}
+        style={divStyle}
+        onclick={randomizeStyle}
+      >
+        {verified}
+      </button>
+      <span
+        data-css-var-target
+        style={{ "--my-style": "12px", "--another-var": "2rem" } as StyleObject}
+      >
+        CSS variable target
+      </span>
+    </div>
   )
 }
 
