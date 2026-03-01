@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Scan devtools-shared so Tailwind includes classes used by shared components */
+@source "../../devtools-shared/src";
+
 @layer base {
 
   button:not(:disabled),
