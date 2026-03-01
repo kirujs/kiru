@@ -36,24 +36,3 @@ const MyButton: Kiru.FC<CounterProps> = () => {
     )
   }
 }
-
-// we can also use the component type:
-const MyButton2: Kiru.FC<
-  ElementProps<"button"> & { initialCount?: number }
-> = () => {
-  const { derive } = useProps<typeof MyButton2>()
-  const count = derive((props) => props.initialCount ?? 0)
-
-  const handleClick = () => {
-    count.value++
-  }
-
-  return ({ children, ...props }) => {
-    return (
-      <button onclick={(e) => (handleClick(), props.onclick?.(e))} {...props}>
-        {children}
-        {count}
-      </button>
-    )
-  }
-}
