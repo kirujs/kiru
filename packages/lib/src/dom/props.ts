@@ -1,137 +1,33 @@
 import {
-  traverseApply,
-  commitSnapshot,
   propToHtmlAttr,
   getVNodeApp,
   setRef,
-  isValidTextChild,
   registerVNodeCleanup,
-  call,
-} from "./utils/index.js"
-import {
-  booleanAttributes,
-  FLAG_PLACEMENT,
-  FLAG_UPDATE,
-  FLAG_STATIC_DOM,
-  svgTags,
-  EVENT_PREFIX_REGEX,
-} from "./constants.js"
-import { Signal } from "./signals/base.js"
-import { unwrap } from "./signals/utils.js"
-import { renderMode } from "./globals.js"
-import { hydrationStack } from "./hydration.js"
-import { StyleObject } from "./types.dom.js"
-import { __DEV__ } from "./env.js"
-import { KiruError } from "./error.js"
-import type {
-  DomVNode,
-  ElementVNode,
-  MaybeDom,
-  SomeDom,
-  SomeElement,
-} from "./types.utils"
-import type { AppHandle } from "./appHandle.js"
-
-export {
-  commitWork,
-  onBeforeFlushDomChanges,
-  onAfterFlushDomChanges,
-  commitDeletion,
-  createDom,
-  hydrateDom,
-}
+} from "../utils/index.js"
+import { booleanAttributes, EVENT_PREFIX_REGEX } from "../constants.js"
+import { Signal } from "../signals/base.js"
+import { unwrap } from "../signals/utils.js"
+import { renderMode } from "../globals.js"
+import { __DEV__ } from "../env.js"
+import { wrapFocusEventHandler } from "./focus.js"
+import type { StyleObject } from "../types.dom.js"
+import type { DomVNode, SomeDom, SomeElement } from "../types.utils.js"
 
 type VNode = Kiru.VNode
-type HostNode = {
-  node: ElementVNode
-  lastChild?: SomeDom
-}
-
-let persistingFocus = false
-let didBlurActiveElement = false
-const postHookCleanups: (() => void)[] = []
-
-const placementBlurHandler = (event: Event) => {
-  event.preventDefault()
-  event.stopPropagation()
-  didBlurActiveElement = true
-}
-
-let currentActiveElement: Element | null = null
-function onBeforeFlushDomChanges() {
-  persistingFocus = true
-  currentActiveElement = document.activeElement
-  if (currentActiveElement && currentActiveElement !== document.body) {
-    currentActiveElement.addEventListener("blur", placementBlurHandler)
-  }
-}
-
-function onAfterFlushDomChanges() {
-  if (didBlurActiveElement) {
-    currentActiveElement!.removeEventListener("blur", placementBlurHandler)
-    if (currentActiveElement!.isConnected) {
-      ;(currentActiveElement as any).focus()
-    }
-    didBlurActiveElement = false
-  }
-  persistingFocus = false
-  queueMicrotask(() => {
-    postHookCleanups.forEach(call)
-    postHookCleanups.length = 0
-  })
-}
-
-function createDom(vNode: DomVNode): SomeDom {
-  const t = vNode.type
-  const dom =
-    t == "#text"
-      ? createTextNode(vNode)
-      : svgTags.has(t)
-        ? document.createElementNS("http://www.w3.org/2000/svg", t)
-        : document.createElement(t)
-
-  return dom
-}
-function createTextNode(vNode: VNode): Text {
-  const { nodeValue } = vNode.props
-  if (Signal.isSignal(nodeValue)) {
-    return createSignalTextNode(vNode, nodeValue)
-  }
-
-  return document.createTextNode(nodeValue)
-}
-
-function createSignalTextNode(vNode: VNode, nodeValue: Signal<string>): Text {
-  const value = nodeValue.peek() ?? ""
-  const textNode = document.createTextNode(value)
-  subTextNode(vNode, textNode, nodeValue)
-  return textNode
-}
-
-function wrapFocusEventHandler(callback: (event: FocusEvent) => void) {
-  return (event: FocusEvent) => {
-    if (persistingFocus) {
-      event.preventDefault()
-      event.stopPropagation()
-      return
-    }
-    callback(event)
-  }
-}
 
 interface VNodeEventListenerObjects {
   [key: string]: EventListenerObject
 }
+
 const eventListenerObjects = new WeakMap<VNode, VNodeEventListenerObjects>()
 const styleKeyToSignal = new Map<string, Signal<unknown>>()
 
-function updateDom(vNode: DomVNode) {
+export function updateDom(vNode: DomVNode) {
   const { dom, prev, props, cleanups } = vNode
   const prevProps = prev?.props ?? {}
   const nextProps = props ?? {}
   const isHydration = renderMode.current === "hydrate"
 
-  // TEXT NODE SHORT-PATH
   if (dom instanceof Text) {
     const nextVal = nextProps.nodeValue
     if (!Signal.isSignal(nextVal) && dom.nodeValue !== nextVal) {
@@ -264,9 +160,10 @@ const bindAttrToEventMap: Record<string, string> = {
   playbackRate: "ratechange",
   currentTime: "timeupdate",
 }
+
 const numericValueInputTypes = new Set(["progress", "meter", "number", "range"])
 
-function setSignalProp(
+export function setSignalProp(
   vNode: VNode,
   dom: Exclude<SomeDom, Text>,
   key: string,
@@ -348,12 +245,6 @@ function bindElementProp(
   } else {
     evtHandler = () => {
       const val = (dom as any)[attr]
-      /**
-       * the 'timeupdate' event is fired when the currentTime property is
-       * set (from code OR playback), so we need to prevent unnecessary
-       * signal updates to avoid a feedback loop when there are multiple
-       * elements with the same signal bound to 'currentTime'
-       */
       if (attr === "currentTime" && signal.peek() === val) return
       writeToSignal(val)
     }
@@ -390,7 +281,11 @@ function emitSignalAttrUpdate(vNode: VNode) {
   window.__kiru.profilingContext?.emit("signalAttrUpdate", getVNodeApp(vNode)!)
 }
 
-function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
+export function subTextNode(
+  vNode: VNode,
+  textNode: Text,
+  signal: Signal<string>
+) {
   const cleanup = signal.subscribe((value, prev) => {
     if (value === prev) return
     textNode.nodeValue = value
@@ -402,81 +297,6 @@ function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
     }
   })
   registerVNodeCleanup(vNode, "nodeValue", cleanup)
-}
-
-/**
- * Creates and inserts an empty signal-bound text node into
- * the dom tree if the signal value is null or undefined.
- */
-function getOrCreateTextNode(vNode: VNode): MaybeDom {
-  const sig = vNode.props.nodeValue
-  if (!Signal.isSignal(sig)) {
-    return hydrationStack.getCurrentChild()
-  }
-
-  const value = sig.peek()
-  if (isValidTextChild(value)) {
-    return hydrationStack.getCurrentChild()
-  }
-
-  const dom = createSignalTextNode(vNode, sig)
-  const currentChild = hydrationStack.getCurrentChild()
-
-  if (!currentChild) {
-    return hydrationStack.getCurrentParent().appendChild(dom)
-  }
-
-  currentChild.before(dom)
-  return dom
-}
-
-function hydrateDom(vNode: VNode) {
-  const dom =
-    vNode.type === "#text"
-      ? getOrCreateTextNode(vNode)
-      : hydrationStack.getCurrentChild()
-
-  hydrationStack.bumpChildIndex()
-
-  if (!dom) {
-    throw new KiruError({
-      message: `Hydration mismatch - no node found`,
-      vNode,
-    })
-  }
-  let nodeName = dom.nodeName
-  if (!svgTags.has(nodeName)) {
-    nodeName = nodeName.toLowerCase()
-  }
-  if ((vNode.type as string) !== nodeName) {
-    throw new KiruError({
-      message: `Hydration mismatch - expected node of type ${vNode.type.toString()} but received ${nodeName}`,
-      vNode,
-    })
-  }
-  vNode.dom = dom
-  if (vNode.type !== "#text" && !(vNode.flags & FLAG_STATIC_DOM)) {
-    updateDom(vNode as DomVNode)
-    return
-  }
-  if (Signal.isSignal(vNode.props.nodeValue)) {
-    subTextNode(vNode, dom as Text, vNode.props.nodeValue)
-  }
-
-  let prev = vNode
-  let sibling = vNode.sibling
-  while (sibling && sibling.type === "#text") {
-    const sib = sibling
-    hydrationStack.bumpChildIndex()
-    const prevText = String(unwrap(prev.props.nodeValue) ?? "")
-    const dom = (prev.dom as Text).splitText(prevText.length)
-    sib.dom = dom
-    if (Signal.isSignal(sib.props.nodeValue)) {
-      subTextNode(sib, dom, sib.props.nodeValue)
-    }
-    prev = sibling
-    sibling = sibling.sibling
-  }
 }
 
 function handleAttributeRemoval(
@@ -526,7 +346,7 @@ const needsExplicitValueSet = (
   return explicitValueElementTags.indexOf(element.nodeName) > -1
 }
 
-function setProp(
+export function setProp(
   element: SomeElement,
   key: string,
   value: unknown,
@@ -602,11 +422,6 @@ function setCSSStyleDecValue(
     value !== undefined && value !== null ? String(value) : ""
 }
 
-/**
- * Applies a style value to the element. When styleSignals is provided,
- * records (key -> signal) for any signal values so the caller can subscribe
- * per property.
- */
 function setStyleProp(
   element: SomeElement,
   value: unknown,
@@ -654,186 +469,4 @@ function setStyleProp(
 
     setCSSStyleDecValue(element, k, nextVal)
   })
-}
-
-function getDomParent(vNode: VNode): ElementVNode {
-  let parentNode: VNode | null = vNode.parent
-  let parentNodeElement = parentNode?.dom
-  while (parentNode && !parentNodeElement) {
-    parentNode = parentNode.parent
-    parentNodeElement = parentNode?.dom
-  }
-
-  if (!parentNodeElement || !parentNode) {
-    // handle app entry
-    if (!vNode.parent && vNode.dom) {
-      return vNode as ElementVNode
-    }
-
-    throw new KiruError({
-      message: "No DOM parent found while attempting to place node.",
-      vNode: vNode,
-    })
-  }
-  return parentNode as ElementVNode
-}
-
-function placeDom(vNode: DomVNode, hostNode: HostNode) {
-  const { node: parentVNodeWithDom, lastChild } = hostNode
-  const dom = vNode.dom
-  if (lastChild) {
-    lastChild.after(dom)
-    return
-  }
-  // TODO: we can probably skip the 'next sibling search' if we're appending
-  const nextSiblingDom = getNextSiblingDom(vNode, parentVNodeWithDom)
-  if (nextSiblingDom) {
-    parentVNodeWithDom.dom.insertBefore(dom, nextSiblingDom)
-    return
-  }
-
-  parentVNodeWithDom.dom.appendChild(dom)
-}
-
-function getNextSiblingDom(vNode: VNode, parent: ElementVNode): MaybeDom {
-  let node: VNode | null = vNode
-
-  while (node) {
-    let sibling = node.sibling
-
-    while (sibling) {
-      // Skip unmounted, to-be-placed & static nodes
-      if (!(sibling.flags & (FLAG_PLACEMENT | FLAG_STATIC_DOM))) {
-        // Descend into the child to find host dom
-        const dom = findFirstHostDom(sibling)
-        if (dom?.isConnected) return dom
-      }
-      sibling = sibling.sibling
-    }
-
-    // Move up to parent — but don't escape portal boundary
-    node = node.parent
-    if (!node || node.flags & FLAG_STATIC_DOM || node === parent) {
-      return
-    }
-  }
-
-  return
-}
-
-function findFirstHostDom(vNode: VNode): MaybeDom {
-  let node: VNode | null = vNode
-
-  while (node) {
-    if (node.dom) return node.dom
-    if (node.flags & FLAG_STATIC_DOM) return // Don't descend into portals
-    node = node.child
-  }
-  return
-}
-
-function commitWork(vNode: VNode) {
-  if (renderMode.current === "hydrate") {
-    return traverseApply(vNode, commitSnapshot)
-  }
-
-  const host: HostNode = {
-    node: vNode.dom ? (vNode as ElementVNode) : getDomParent(vNode),
-  }
-  commitWork_impl(vNode, host, (vNode.flags & FLAG_PLACEMENT) > 0)
-  if (vNode.dom && !(vNode.flags & FLAG_STATIC_DOM)) {
-    commitDom(vNode as DomVNode, host, false)
-  }
-  commitSnapshot(vNode)
-}
-
-function commitWork_impl(
-  vNode: VNode,
-  currentHostNode: HostNode,
-  inheritsPlacement: boolean
-) {
-  let child: VNode | null = vNode.child
-  while (child) {
-    if (child.dom) {
-      commitWork_impl(child, { node: child as ElementVNode }, false)
-      if (!(child.flags & FLAG_STATIC_DOM)) {
-        commitDom(child as DomVNode, currentHostNode, inheritsPlacement)
-      }
-    } else {
-      commitWork_impl(
-        child,
-        currentHostNode,
-        (child.flags & FLAG_PLACEMENT) > 0 || inheritsPlacement
-      )
-    }
-
-    commitSnapshot(child)
-    child = child.sibling
-  }
-}
-
-function commitDom(
-  vNode: DomVNode,
-  hostNode: HostNode,
-  inheritsPlacement: boolean
-) {
-  if (
-    inheritsPlacement ||
-    !vNode.dom.isConnected ||
-    vNode.flags & FLAG_PLACEMENT
-  ) {
-    placeDom(vNode, hostNode)
-  }
-  if (!vNode.prev || vNode.flags & FLAG_UPDATE) {
-    updateDom(vNode)
-  }
-  hostNode.lastChild = vNode.dom
-}
-
-function commitDeletion(vNode: VNode) {
-  if (vNode === vNode.parent?.child) {
-    vNode.parent.child = vNode.sibling
-  }
-  let app: AppHandle
-  if (__DEV__) {
-    app = getVNodeApp(vNode)!
-  }
-  traverseApply(vNode, (node) => {
-    const {
-      subs,
-      cleanups,
-      dom,
-      props: { ref },
-      hooks,
-    } = node
-
-    subs?.forEach((unsub) => unsub())
-    if (cleanups) Object.values(cleanups).forEach((c) => c())
-    if (hooks) {
-      const { preCleanups, postCleanups } = hooks
-
-      preCleanups.forEach(call)
-      postHookCleanups.push(...postCleanups)
-      preCleanups.length = postCleanups.length = 0
-    }
-
-    if (__DEV__) {
-      window.__kiru.profilingContext?.emit("removeNode", app)
-      if (dom instanceof Element) {
-        delete dom.__kiruNode
-      }
-    }
-
-    if (dom) {
-      if (dom.isConnected && !(node.flags & FLAG_STATIC_DOM)) {
-        dom.remove()
-      }
-      if (ref) {
-        setRef(ref, null)
-      }
-      delete node.dom
-    }
-  })
-
-  vNode.parent = null
 }
