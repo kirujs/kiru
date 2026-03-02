@@ -87,8 +87,8 @@ function createDom(vNode: DomVNode): SomeDom {
     t == "#text"
       ? createTextNode(vNode)
       : svgTags.has(t)
-      ? document.createElementNS("http://www.w3.org/2000/svg", t)
-      : document.createElement(t)
+        ? document.createElementNS("http://www.w3.org/2000/svg", t)
+        : document.createElement(t)
 
   return dom
 }
@@ -123,7 +123,7 @@ interface VNodeEventListenerObjects {
   [key: string]: EventListenerObject
 }
 const eventListenerObjects = new WeakMap<VNode, VNodeEventListenerObjects>()
-const styleSignals = new Map<string, Signal<unknown>>()
+const styleKeyToSignal = new Map<string, Signal<unknown>>()
 
 function updateDom(vNode: DomVNode) {
   const { dom, prev, props, cleanups } = vNode
@@ -152,7 +152,7 @@ function updateDom(vNode: DomVNode) {
     const prevVal = prevProps[key]
     const nextVal = nextProps[key]
 
-    if (key.length >= 2 && key[0] === "o" && key[1] === "n") {
+    if (key.length >= 2 && key.startsWith("on")) {
       events ??= eventListenerObjects.get(vNode)
       if (!events) eventListenerObjects.set(vNode, (events = {}))
 
@@ -209,13 +209,20 @@ function updateDom(vNode: DomVNode) {
         cleanups.style()
         delete cleanups.style
       }
-      setStyleProp(dom, nextVal, prevVal, styleSignals)
-      if (styleSignals.size > 0) {
-        const entries = Array.from(styleSignals.entries())
-        styleSignals.clear()
-        const unsubs = entries.map(([k, sig]) =>
-          sig.subscribe((value) => applyStyleKeyValue(dom, k, value))
-        )
+      setStyleProp(dom, nextVal, prevVal, true)
+      if (styleKeyToSignal.size > 0) {
+        const unsubs: (() => void)[] = []
+        styleKeyToSignal.forEach((sig, k) => {
+          let cb
+          if (k.startsWith("--")) {
+            cb = sig.subscribe((v) => setCustomCSSStyleDecValue(dom, k, v))
+          } else {
+            cb = sig.subscribe((v) => setCSSStyleDecValue(dom, k, v))
+          }
+
+          unsubs.push(cb)
+        })
+        styleKeyToSignal.clear()
         registerVNodeCleanup(vNode, "style", () => unsubs.forEach((u) => u()))
       }
       continue
@@ -574,24 +581,24 @@ function setClassName(element: SomeElement, value: unknown) {
   element.setAttribute("class", val as string)
 }
 
-/**
- * Applies a single style key with a given value to the element. Used by
- * per-property subscriptions when a nested style signal changes.
- */
-function applyStyleKeyValue(
+function setCustomCSSStyleDecValue(
   element: SomeElement,
-  k: string,
+  key: string,
   value: unknown
 ): void {
-  if (k.startsWith("--")) {
-    if (value === undefined || value === null) {
-      element.style.removeProperty(k)
-    } else {
-      element.style.setProperty(k, String(value))
-    }
+  if (value === undefined || value === null) {
+    element.style.removeProperty(key)
     return
   }
-  element.style[k as any] =
+  element.style.setProperty(key, String(value))
+}
+
+function setCSSStyleDecValue(
+  element: SomeElement,
+  key: string,
+  value: unknown
+): void {
+  element.style[key as any] =
     value !== undefined && value !== null ? String(value) : ""
 }
 
@@ -604,7 +611,7 @@ function setStyleProp(
   element: SomeElement,
   value: unknown,
   prev: unknown,
-  styleSignals?: Map<string, Signal<unknown>>
+  trackSignals = false
 ): void {
   if (handleAttributeRemoval(element, "style", value)) return
 
@@ -637,11 +644,15 @@ function setStyleProp(
     const prevVal = unwrap(prevStyle[k])
     const nextVal = unwrap(rawNext)
     if (prevVal === nextVal) return
-    if (Signal.isSignal(rawNext)) {
-      styleSignals?.set(k, rawNext)
+    if (trackSignals && Signal.isSignal(rawNext)) {
+      styleKeyToSignal?.set(k, rawNext)
     }
 
-    applyStyleKeyValue(element, k, nextVal)
+    if (k.startsWith("--")) {
+      return setCustomCSSStyleDecValue(element, k, nextVal)
+    }
+
+    setCSSStyleDecValue(element, k, nextVal)
   })
 }
 
