@@ -42,6 +42,7 @@ export function isGenericHmrAcceptor(
 type ModuleMemory = {
   hotVars: Map<string, HotVarDesc>
   unnamedEffects: Array<Effect>
+  hmrCallbacks: Array<() => void>
 }
 
 type HotVarRegistrationEntry = {
@@ -50,7 +51,7 @@ type HotVarRegistrationEntry = {
   link: string
 }
 
-export function createHMRContext() {
+export function createHmrContext() {
   type FilePath = string
   const moduleMap = new Map<FilePath, ModuleMemory>()
   let currentModuleFilePath: string | null = null
@@ -59,9 +60,13 @@ export function createHMRContext() {
   const isReplacement = () => isModuleReplacementExecution
   let isWaitingForNextEffect = false
 
-  const onHmrCallbacks: Array<() => void> = []
+  const globalHmrCallbacks: Array<() => void> = []
   const onHmr = (callback: () => void) => {
-    onHmrCallbacks.push(callback)
+    if (currentModuleMemory) {
+      currentModuleMemory.hmrCallbacks.push(callback)
+      return
+    }
+    globalHmrCallbacks.push(callback)
   }
 
   const prepare = (filePath: string) => {
@@ -71,10 +76,12 @@ export function createHMRContext() {
       mod = {
         hotVars: new Map(),
         unnamedEffects: [],
+        hmrCallbacks: [],
       }
       moduleMap.set(filePath, mod)
     } else {
-      while (onHmrCallbacks.length) onHmrCallbacks.shift()!()
+      while (mod.hmrCallbacks.length) mod.hmrCallbacks.shift()!()
+      while (globalHmrCallbacks.length) globalHmrCallbacks.shift()!()
       for (const effect of mod.unnamedEffects) {
         effect.stop()
       }
@@ -163,5 +170,25 @@ export function createHMRContext() {
     getCurrentFilePath() {
       return currentModuleFilePath
     },
+  }
+}
+
+/**
+ * Queues a callback to be fired when HMR is triggered. This is a no-op in non-browser environments or in production.
+ * - If called during current module evaluation, the callback will be fired the next time the current module is evaluated.
+ * - If called at any other time, the callback will be fired the next time HMR is triggered.
+ * @see https://kirujs.dev/docs/api/lifecycles#onHmr
+ * 
+ * ```ts
+ * import { onHmr } from "kiru"
+ * // start an interval in the module scope
+ * const interval = setInterval(() => {...}, 1000)
+ * // stop the interval when this file is reloaded
+ * onHmr(() => clearInterval(interval))
+ ```
+ */
+export function onHmr(callback: () => void): void {
+  if ("window" in globalThis && window.__kiru.HMRContext) {
+    window.__kiru.HMRContext.onHmr(callback)
   }
 }

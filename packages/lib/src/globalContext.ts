@@ -1,17 +1,16 @@
 import { __DEV__ } from "./env.js"
-import { createHMRContext } from "./hmr.js"
+import { createHmrContext } from "./hmr.js"
 import { createProfilingContext } from "./profiling.js"
 import { fileRouterInstance } from "./router/globals.js"
 import type { FileRouterController } from "./router/fileRouterController"
 import type { AppHandle } from "./appHandle"
-import type { requestUpdate } from "./index.js"
 
 export { createKiruGlobalContext, type GlobalKiruEvent, type KiruGlobalContext }
 
 type Evt =
   | {
       name: "mount"
-      data?: typeof requestUpdate
+      data?: undefined
     }
   | {
       name: "unmount"
@@ -27,10 +26,6 @@ type Evt =
     }
 
 type GlobalKiruEvent = Evt["name"]
-
-interface SchedulerInterface {
-  requestUpdate: (vNode: Kiru.VNode) => void
-}
 
 export type DebuggerEntry = {
   label: string
@@ -53,17 +48,15 @@ interface KiruGlobalContext {
     untrack: (signal: Kiru.Signal<unknown>) => void
     subscribe: (callback: (entries: Set<DebuggerEntry>) => void) => () => void
   }
-  HMRContext?: ReturnType<typeof createHMRContext>
+  HMRContext?: ReturnType<typeof createHmrContext>
   profilingContext?: ReturnType<typeof createProfilingContext>
   fileRouterInstance?: {
     current: FileRouterController | null
   }
-  getSchedulerInterface?: (app: AppHandle) => SchedulerInterface | null
 }
 
 function createKiruGlobalContext(): KiruGlobalContext {
   const apps = new Set<AppHandle>()
-  const appToSchedulerInterface = new WeakMap<AppHandle, SchedulerInterface>()
   const listeners = new Map<
     GlobalKiruEvent,
     Set<(app: AppHandle, data?: Evt["data"]) => void>
@@ -103,23 +96,13 @@ function createKiruGlobalContext(): KiruGlobalContext {
   }
 
   // Initialize event listeners
-  on("mount", (app, requestUpdate) => {
-    apps.add(app)
-    if (requestUpdate && typeof requestUpdate === "function") {
-      appToSchedulerInterface.set(app, { requestUpdate })
-    }
-  })
-  on("unmount", (app) => {
-    apps.delete(app)
-    appToSchedulerInterface.delete(app)
-  })
+  on("mount", (app) => apps.add(app))
+  on("unmount", (app) => apps.delete(app))
+
   if (__DEV__) {
-    globalContext.HMRContext = createHMRContext()
+    globalContext.HMRContext = createHmrContext()
     globalContext.profilingContext = createProfilingContext()
     globalContext.fileRouterInstance = fileRouterInstance
-    globalContext.getSchedulerInterface = (app) => {
-      return appToSchedulerInterface.get(app) ?? null
-    }
 
     const debuggerEntries = new Set<DebuggerEntry>()
     const subscribers = new Set<(debuggerEntries: Set<DebuggerEntry>) => void>()
