@@ -6,8 +6,8 @@ export const toggleOverlayShown = () =>
 export const hideOverlay = () => (isOverlayShown.value = false)
 
 export const isProfilerShown = kiru.signal(false)
-
 export const isDebuggerShown = kiru.signal(false)
+export const isComponentSelectorEnabled = kiru.signal(false)
 
 /** Widget stack: last-hovered widget is on top. Main menu is always above widgets. */
 export type WidgetStackId = "profiler" | "debugger"

@@ -5,12 +5,20 @@ import {
   FlameIcon,
   clamp,
   GaugeIcon,
+  MouseIcon,
   RadioIcon,
 } from "devtools-shared"
-import { ComponentSelectorOverlay } from "./component-selector-overlay"
-import { isDebuggerShown, isProfilerShown } from "./state"
+import {
+  isComponentSelectorEnabled,
+  isDebuggerShown,
+  isProfilerShown,
+} from "./state"
 import { DRAG_SNAP_PADDING, HANDLE_TOOLTIP_GAP } from "./constants"
-import { DebuggerWidget, ProfilingWidget } from "./widgets"
+import {
+  ComponentSelectorWidget,
+  DebuggerWidget,
+  ProfilingWidget,
+} from "./widgets"
 const MENU_POSITION_STORAGE_KEY = "kiru.devtools.anchorPosition"
 
 const mounted = kiru.signal(false)
@@ -30,15 +38,15 @@ export default function DevtoolsHostApp() {
   const tooltipFlexDirection = kiru.computed(() => {
     return mainMenuController.snapSide.value === "left" ||
       mainMenuController.snapSide.value === "right"
-      ? "flex-col"
-      : "flex-row"
+      ? "column"
+      : "row"
   })
 
   const containerFlexDirection = kiru.computed(() => {
     return mainMenuController.snapSide.value === "left" ||
       mainMenuController.snapSide.value === "right"
-      ? "flex-row"
-      : "flex-col"
+      ? "row"
+      : "column"
   })
 
   kiru.onMount(() => {
@@ -94,8 +102,9 @@ export default function DevtoolsHostApp() {
         let slideY = 0
         if (snapSide === "left") slideX = show ? offsetX : -offsetX
         else if (snapSide === "right") slideX = show ? -offsetX : offsetX
-        else if (snapSide === "top") slideY = show ? offsetY : -offsetY   // tooltip below handle
-        else slideY = show ? -offsetY : offsetY   // bottom: tooltip above handle
+        else if (snapSide === "top")
+          slideY = show ? offsetY : -offsetY // tooltip below handle
+        else slideY = show ? -offsetY : offsetY // bottom: tooltip above handle
 
         const translateX = -tooltipWidth / 2 + clampDeltaX + slideX
         const translateY = -tooltipHeight / 2 + clampDeltaY + slideY
@@ -118,20 +127,29 @@ export default function DevtoolsHostApp() {
           style={{
             transition: "80ms",
             opacity: mounted.value ? 1 : 0,
+            flexDirection: containerFlexDirection,
           }}
-          className={`z-[999999] top-0 left-0 flex ${containerFlexDirection} items-center justify-center z-50`}
+          className={`z-999999 top-0 left-0 flex items-center justify-center`}
         >
           <button
             ref={mainMenuController.handleRef}
-            className="bg-[crimson]/80 rounded-full p-2 z-10"
+            className="rounded-full p-2 z-10"
+            style={{
+              background:
+                "linear-gradient(135deg, rgb(143 1 1 / 90%) 0%, rgba(119, 14, 103, 0.89) 75%)",
+            }}
           >
             <FlameIcon className="w-5 h-5" />
           </button>
           <div
             ref={tooltipRef}
-            style="transition: 80ms ease-in-out; transform-origin: 0 0"
+            style={{
+              transition: "80ms ease-in-out",
+              transformOrigin: "0 0",
+              flexDirection: tooltipFlexDirection,
+            }}
             className={cls(
-              `absolute left-1/2 top-1/2 z-0 flex ${tooltipFlexDirection} p-1 gap-1`,
+              `absolute left-1/2 top-1/2 z-0 flex p-1 gap-1`,
               "bg-neutral-900 rounded-xl shadow-sm"
             )}
           >
@@ -150,6 +168,17 @@ export default function DevtoolsHostApp() {
             >
               <RadioIcon className="w-4 h-4 pointer-events-none" />
               <small>Tracking</small>
+            </TooltipMenuButton>
+            <TooltipMenuButton
+              active={isComponentSelectorEnabled}
+              title="Select Component"
+              onclick={() => {
+                isComponentSelectorEnabled.value =
+                  !isComponentSelectorEnabled.value
+              }}
+            >
+              <MouseIcon className="w-4 h-4 pointer-events-none" />
+              <small>Inspect</small>
             </TooltipMenuButton>
           </div>
         </div>
@@ -175,7 +204,17 @@ export default function DevtoolsHostApp() {
             return <DebuggerWidget state={state} />
           }}
         />
-        <ComponentSelectorOverlay />
+        <kiru.Transition
+          in={isComponentSelectorEnabled}
+          duration={{
+            in: 0,
+            out: 150,
+          }}
+          element={(state) => {
+            if (state === "exited") return null
+            return <ComponentSelectorWidget state={state} />
+          }}
+        />
       </>
     )
   }
