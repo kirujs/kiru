@@ -6,12 +6,12 @@ import {
   FLAG_DIRTY,
 } from "./constants.js"
 import {
+  captureFocus,
   commitDeletion,
   commitWork,
   createDom,
   hydrateDom,
-  onAfterFlushDomChanges,
-  onBeforeFlushDomChanges,
+  reinstateFocus,
 } from "./dom/index.js"
 import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
@@ -154,7 +154,7 @@ function doWork(): void {
 
   let len = 1
 
-  onBeforeFlushDomChanges()
+  captureFocus()
   while (treesInProgress.length) {
     if (treesInProgress.length > len) {
       treesInProgress.sort(depthSort)
@@ -177,7 +177,7 @@ function doWork(): void {
       currentWorkRoot.flags &= ~FLAG_DIRTY
     }
   }
-  onAfterFlushDomChanges()
+  reinstateFocus()
 
   isImmediateEffectsMode = true
   flushEffects(preEffects)

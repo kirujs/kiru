@@ -2,10 +2,16 @@ import { svgTags, FLAG_PLACEMENT, FLAG_STATIC_DOM } from "../constants.js"
 import { Signal } from "../signals/base.js"
 import { unwrap } from "../signals/utils.js"
 import { hydrationStack } from "../hydration.js"
-import { isValidTextChild } from "../utils/index.js"
+import {
+  getVNodeApp,
+  isValidTextChild,
+  registerVNodeCleanup,
+} from "../utils/index.js"
 import { KiruError } from "../error.js"
-import { subTextNode } from "./props.js"
+import { __DEV__, isBrowser } from "../env.js"
 import type { DomVNode, ElementVNode, MaybeDom, SomeDom } from "../types.utils"
+
+export { createDom, hydrateDom, getDomParent, placeDom }
 
 type VNode = Kiru.VNode
 
@@ -14,7 +20,7 @@ export type HostNode = {
   lastChild?: SomeDom
 }
 
-export function createDom(vNode: DomVNode): SomeDom {
+function createDom(vNode: DomVNode): SomeDom {
   const t = vNode.type
   const dom =
     t == "#text"
@@ -26,45 +32,7 @@ export function createDom(vNode: DomVNode): SomeDom {
   return dom
 }
 
-function createTextNode(vNode: VNode): Text {
-  const { nodeValue } = vNode.props
-  if (Signal.isSignal(nodeValue)) {
-    return createSignalTextNode(vNode, nodeValue)
-  }
-
-  return document.createTextNode(nodeValue)
-}
-
-function createSignalTextNode(vNode: VNode, nodeValue: Signal<string>): Text {
-  const value = nodeValue.peek() ?? ""
-  const textNode = document.createTextNode(value)
-  subTextNode(vNode, textNode, nodeValue)
-  return textNode
-}
-
-export function getOrCreateTextNode(vNode: VNode): MaybeDom {
-  const sig = vNode.props.nodeValue
-  if (!Signal.isSignal(sig)) {
-    return hydrationStack.getCurrentChild()
-  }
-
-  const value = sig.peek()
-  if (isValidTextChild(value)) {
-    return hydrationStack.getCurrentChild()
-  }
-
-  const dom = createSignalTextNode(vNode, sig)
-  const currentChild = hydrationStack.getCurrentChild()
-
-  if (!currentChild) {
-    return hydrationStack.getCurrentParent().appendChild(dom)
-  }
-
-  currentChild.before(dom)
-  return dom
-}
-
-export function hydrateDom(vNode: VNode) {
+function hydrateDom(vNode: VNode) {
   const dom =
     vNode.type === "#text"
       ? getOrCreateTextNode(vNode)
@@ -113,7 +81,7 @@ export function hydrateDom(vNode: VNode) {
   }
 }
 
-export function getDomParent(vNode: VNode): ElementVNode {
+function getDomParent(vNode: VNode): ElementVNode {
   let parentNode: VNode | null = vNode.parent
   let parentNodeElement = parentNode?.dom
   while (parentNode && !parentNodeElement) {
@@ -134,7 +102,7 @@ export function getDomParent(vNode: VNode): ElementVNode {
   return parentNode as ElementVNode
 }
 
-export function placeDom(vNode: DomVNode, hostNode: HostNode) {
+function placeDom(vNode: DomVNode, hostNode: HostNode) {
   const { node: parentVNodeWithDom, lastChild } = hostNode
   const dom = vNode.dom
   if (lastChild) {
@@ -150,10 +118,7 @@ export function placeDom(vNode: DomVNode, hostNode: HostNode) {
   parentVNodeWithDom.dom.appendChild(dom)
 }
 
-export function getNextSiblingDom(
-  vNode: VNode,
-  parent: ElementVNode
-): MaybeDom {
+function getNextSiblingDom(vNode: VNode, parent: ElementVNode): MaybeDom {
   let node: VNode | null = vNode
 
   while (node) {
@@ -176,9 +141,8 @@ export function getNextSiblingDom(
   return
 }
 
-export function findFirstHostDom(vNode: VNode): MaybeDom {
+function findFirstHostDom(vNode: VNode): MaybeDom {
   let node: VNode | null = vNode
-
   while (node) {
     if (node.dom) return node.dom
     if (node.flags & FLAG_STATIC_DOM) return
@@ -187,3 +151,54 @@ export function findFirstHostDom(vNode: VNode): MaybeDom {
   return
 }
 
+function getOrCreateTextNode(vNode: VNode): MaybeDom {
+  const sig = vNode.props.nodeValue
+  if (!Signal.isSignal(sig)) {
+    return hydrationStack.getCurrentChild()
+  }
+
+  const value = sig.peek()
+  if (isValidTextChild(value)) {
+    return hydrationStack.getCurrentChild()
+  }
+
+  const dom = createSignalTextNode(vNode, sig)
+  const currentChild = hydrationStack.getCurrentChild()
+
+  if (!currentChild) {
+    return hydrationStack.getCurrentParent().appendChild(dom)
+  }
+
+  currentChild.before(dom)
+  return dom
+}
+
+function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
+  const cleanup = signal.subscribe((value, prev) => {
+    if (value === prev) return
+    textNode.nodeValue = value
+    if (__DEV__ && isBrowser) {
+      window.__kiru?.profilingContext?.emit(
+        "signalTextUpdate",
+        getVNodeApp(vNode)!
+      )
+    }
+  })
+  registerVNodeCleanup(vNode, "nodeValue", cleanup)
+}
+
+function createTextNode(vNode: VNode): Text {
+  const { nodeValue } = vNode.props
+  if (Signal.isSignal(nodeValue)) {
+    return createSignalTextNode(vNode, nodeValue)
+  }
+
+  return document.createTextNode(nodeValue)
+}
+
+function createSignalTextNode(vNode: VNode, nodeValue: Signal<string>): Text {
+  const value = nodeValue.peek() ?? ""
+  const textNode = document.createTextNode(value)
+  subTextNode(vNode, textNode, nodeValue)
+  return textNode
+}

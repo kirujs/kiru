@@ -8,15 +8,17 @@ import {
 import { FLAG_PLACEMENT, FLAG_STATIC_DOM, FLAG_UPDATE } from "../constants.js"
 import { renderMode } from "../globals.js"
 import { __DEV__ } from "../env.js"
+import { updateDomProps } from "./props.js"
+import { HostNode, getDomParent, placeDom } from "./nodes.js"
+import { queuePostWorkCleanups } from "./focus.js"
 import type { AppHandle } from "../appHandle.js"
 import type { DomVNode, ElementVNode } from "../types.utils"
-import { updateDom } from "./props.js"
-import { HostNode, getDomParent, placeDom } from "./nodes.js"
-import { postHookCleanups } from "./focus.js"
+
+export { commitWork, commitDeletion }
 
 type VNode = Kiru.VNode
 
-export function commitWork(vNode: VNode) {
+function commitWork(vNode: VNode) {
   if (renderMode.current === "hydrate") {
     return traverseApply(vNode, commitSnapshot)
   }
@@ -69,12 +71,12 @@ function commitDom(
     placeDom(vNode, hostNode)
   }
   if (!vNode.prev || vNode.flags & FLAG_UPDATE) {
-    updateDom(vNode)
+    updateDomProps(vNode)
   }
   hostNode.lastChild = vNode.dom
 }
 
-export function commitDeletion(vNode: VNode) {
+function commitDeletion(vNode: VNode) {
   if (vNode === vNode.parent?.child) {
     vNode.parent.child = vNode.sibling
   }
@@ -97,7 +99,7 @@ export function commitDeletion(vNode: VNode) {
       const { preCleanups, postCleanups } = hooks
 
       preCleanups.forEach(call)
-      postHookCleanups.push(...postCleanups)
+      queuePostWorkCleanups(...postCleanups)
       preCleanups.length = postCleanups.length = 0
     }
 

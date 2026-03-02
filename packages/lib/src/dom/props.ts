@@ -12,6 +12,8 @@ import { wrapFocusEventHandler } from "./focus.js"
 import type { StyleObject } from "../types.dom.js"
 import type { DomVNode, SomeDom, SomeElement } from "../types.utils.js"
 
+export { updateDomProps }
+
 type VNode = Kiru.VNode
 
 interface VNodeEventListenerObjects {
@@ -25,20 +27,26 @@ const skippedProps = new Set(["children", "ref", "key"])
 // Safe because JS is single-threaded.
 const _buckets: string[][] = [[], [], [], [], [], [], []]
 
-function isElement(dom: SomeDom): dom is HTMLElement | SVGElement {
-  return dom.nodeType === 1
+const bindAttrToEventMap: Record<string, string> = {
+  value: "input",
+  checked: "change",
+  open: "toggle",
+  volume: "volumechange",
+  playbackRate: "ratechange",
+  currentTime: "timeupdate",
 }
 
-function isText(dom: SomeDom): dom is Text {
-  return dom.nodeType === 3
-}
+const numericValueInputTypes = new Set(["progress", "meter", "number", "range"])
 
-export function updateDom(vNode: DomVNode) {
+// Reuse a Set for explicit-value element tag lookup (faster than indexOf on array)
+const explicitValueElementTags = new Set(["INPUT", "TEXTAREA"])
+
+function updateDomProps(vNode: DomVNode) {
   const { dom, prev, props, cleanups } = vNode
   const prevProps = prev?.props ?? {}
   const nextProps = props ?? {}
 
-  if (isText(dom)) {
+  if (isTextNode(dom)) {
     const nextVal = nextProps.nodeValue
     if (!Signal.isSignal(nextVal) && dom.nodeValue !== nextVal) {
       dom.nodeValue = nextVal
@@ -107,7 +115,7 @@ export function updateDom(vNode: DomVNode) {
   const execKeys = Array.from(execKeySet)
 
   // Analyze for constraint/value hazards only if multiple keys changed.
-  if (isElement(dom) && execKeys.length > 1) {
+  if (isElementNode(dom) && execKeys.length > 1) {
     const changedSet = execKeySet // reuse the same set
     let seenConstraint = false
     let constraintChanged = false
@@ -243,7 +251,7 @@ function mountDomProps(
   cleanups?: DomVNode["cleanups"]
 ) {
   const keys = Object.keys(props)
-  if (isElement(dom) && keys.length > 1) {
+  if (isElementNode(dom) && keys.length > 1) {
     maybeOrderPropKeys(keys)
   }
 
@@ -400,13 +408,6 @@ function getBasePropPriority(baseKey: string, isEvent: boolean): number {
   }
 }
 
-function getSelectElementValue(dom: HTMLSelectElement) {
-  if (dom.multiple) {
-    return Array.from(dom.selectedOptions).map((option) => option.value)
-  }
-  return dom.value
-}
-
 function setSelectElementValue(dom: HTMLSelectElement, value: any) {
   if (!dom.multiple || value === undefined || value === null || value === "") {
     dom.value = value
@@ -420,21 +421,7 @@ function setSelectElementValue(dom: HTMLSelectElement, value: any) {
   }
 }
 
-const bindAttrToEventMap: Record<string, string> = {
-  value: "input",
-  checked: "change",
-  open: "toggle",
-  volume: "volumechange",
-  playbackRate: "ratechange",
-  currentTime: "timeupdate",
-}
-
-const numericValueInputTypes = new Set(["progress", "meter", "number", "range"])
-
-// Reuse a Set for explicit-value element tag lookup (faster than indexOf on array)
-const explicitValueElementTags = new Set(["INPUT", "TEXTAREA"])
-
-export function setSignalProp(
+function setSignalProp(
   vNode: VNode,
   dom: Exclude<SomeDom, Text>,
   key: string,
@@ -474,16 +461,6 @@ export function setSignalProp(
   if (modifier !== "bind" && value !== prev) {
     setProp(dom, attr ?? modifier, value, prev)
   }
-}
-
-function createElementValueReader(dom: Exclude<SomeDom, Text>) {
-  if (dom.nodeName === "INPUT") {
-    return createInputValueReader(dom as HTMLInputElement)
-  }
-  if (dom.nodeName === "SELECT") {
-    return () => getSelectElementValue(dom as HTMLSelectElement)
-  }
-  return () => (dom as any).value
 }
 
 function bindElementProp(
@@ -553,80 +530,7 @@ function bindElementProp(
   }
 }
 
-function createInputValueReader(dom: HTMLInputElement): () => any {
-  const t = dom.type
-  if (numericValueInputTypes.has(t)) {
-    return () => dom.valueAsNumber
-  }
-  return () => dom.value
-}
-
-function emitSignalAttrUpdate(vNode: VNode) {
-  if (!isBrowser) return
-  window.__kiru?.profilingContext?.emit(
-    "signalAttrUpdate",
-    getVNodeApp(vNode)!
-  )
-}
-
-export function subTextNode(
-  vNode: VNode,
-  textNode: Text,
-  signal: Signal<string>
-) {
-  const cleanup = signal.subscribe((value, prev) => {
-    if (value === prev) return
-    textNode.nodeValue = value
-    if (__DEV__ && isBrowser) {
-      window.__kiru?.profilingContext?.emit(
-        "signalTextUpdate",
-        getVNodeApp(vNode)!
-      )
-    }
-  })
-  registerVNodeCleanup(vNode, "nodeValue", cleanup)
-}
-
-function handleAttributeRemoval(
-  element: Element,
-  key: string,
-  value: unknown,
-  isBoolAttr = false
-) {
-  if (value === null) {
-    element.removeAttribute(key)
-    return true
-  }
-  switch (typeof value) {
-    case "undefined":
-    case "function":
-    case "symbol": {
-      element.removeAttribute(key)
-      return true
-    }
-    case "boolean": {
-      if (isBoolAttr && !value) {
-        element.removeAttribute(key)
-        return true
-      }
-    }
-  }
-
-  return false
-}
-
-function setDomAttribute(element: Element, key: string, value: unknown) {
-  const isBoolAttr = booleanAttributes.has(key)
-
-  if (handleAttributeRemoval(element, key, value, isBoolAttr)) return
-
-  element.setAttribute(
-    key,
-    isBoolAttr && typeof value === "boolean" ? "" : String(value)
-  )
-}
-
-export function setProp(
+function setProp(
   element: SomeElement,
   key: string,
   value: unknown,
@@ -663,6 +567,17 @@ export function setProp(
     default:
       return setDomAttribute(element, propToHtmlAttr(key), value)
   }
+}
+
+function setDomAttribute(element: Element, key: string, value: unknown) {
+  const isBoolAttr = booleanAttributes.has(key)
+
+  if (handleAttributeRemoval(element, key, value, isBoolAttr)) return
+
+  element.setAttribute(
+    key,
+    isBoolAttr && typeof value === "boolean" ? "" : String(value)
+  )
 }
 
 function setInnerHTML(element: SomeElement, value: unknown) {
@@ -781,4 +696,70 @@ function setStyleProp(
       setCSSStyleDecValue(element, k as string, nextVal)
     }
   }
+}
+
+function handleAttributeRemoval(
+  element: Element,
+  key: string,
+  value: unknown,
+  isBoolAttr = false
+) {
+  if (value === null) {
+    element.removeAttribute(key)
+    return true
+  }
+  switch (typeof value) {
+    case "undefined":
+    case "function":
+    case "symbol": {
+      element.removeAttribute(key)
+      return true
+    }
+    case "boolean": {
+      if (isBoolAttr && !value) {
+        element.removeAttribute(key)
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+function createElementValueReader(dom: Exclude<SomeDom, Text>) {
+  if (dom.nodeName === "INPUT") {
+    return createInputValueReader(dom as HTMLInputElement)
+  }
+  if (dom.nodeName === "SELECT") {
+    return () => getSelectElementValue(dom as HTMLSelectElement)
+  }
+  return () => (dom as any).value
+}
+
+function createInputValueReader(dom: HTMLInputElement): () => any {
+  const t = dom.type
+  if (numericValueInputTypes.has(t)) {
+    return () => dom.valueAsNumber
+  }
+  return () => dom.value
+}
+
+function getSelectElementValue(dom: HTMLSelectElement) {
+  if (dom.multiple) {
+    return Array.from(dom.selectedOptions).map((option) => option.value)
+  }
+  return dom.value
+}
+
+function emitSignalAttrUpdate(vNode: VNode) {
+  if (!isBrowser) return
+  window.__kiru?.profilingContext?.emit("signalAttrUpdate", getVNodeApp(vNode)!)
+}
+
+function isElementNode(dom: SomeDom): dom is HTMLElement | SVGElement {
+  return dom.nodeType === 1
+}
+
+function isTextNode(dom: SomeDom): dom is Text {
+  return dom.nodeType === 3
 }
