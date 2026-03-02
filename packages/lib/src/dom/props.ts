@@ -12,7 +12,7 @@ import { wrapFocusEventHandler } from "./focus.js"
 import type { StyleObject } from "../types.dom.js"
 import type { DomVNode, SomeDom, SomeElement } from "../types.utils.js"
 
-export { updateDomProps }
+export { updateDomProps, setSignalProp }
 
 type VNode = Kiru.VNode
 

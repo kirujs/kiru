@@ -64,14 +64,24 @@ describe("DOM bindings (CSR-like behavior)", () => {
 
     const input1 = new FakeRangeInput()
     input1.max = "5"
-    setSignalProp({ cleanups: {} } as any, input1 as any, "bind:value", n, undefined)
+    setSignalProp(
+      { cleanups: {} } as any,
+      input1 as any,
+      "bind:value",
+      n,
+      undefined
+    )
     assert.strictEqual(n.peek(), 5)
 
     const input2 = new FakeRangeInput()
     input2.min = "69"
-    setSignalProp({ cleanups: {} } as any, input2 as any, "bind:value", n, undefined)
+    setSignalProp(
+      { cleanups: {} } as any,
+      input2 as any,
+      "bind:value",
+      n,
+      undefined
+    )
     assert.strictEqual(n.peek(), 69)
   })
 })
-
-
