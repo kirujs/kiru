@@ -97,4 +97,35 @@ describe("renderToString", () => {
 
     assert.strictEqual(res, expected)
   })
+
+  it("normalizes bind:value to a value attribute in SSR", () => {
+    const n = kiru.signal(42)
+    const App = () => {
+      return (
+        <div>
+          <input type="range" bind:value={n} max={5} />
+        </div>
+      )
+    }
+    const res = renderToString(<App />)
+
+    assert.ok(res.includes('type="range"'))
+    assert.ok(res.includes('max="5"'))
+    assert.ok(res.includes('value="42"'))
+  })
+
+  it("normalizes bind:checked to a checked attribute in SSR", () => {
+    const checked = kiru.signal(true)
+    const App = () => {
+      return (
+        <div>
+          <input type="checkbox" bind:checked={checked} />
+        </div>
+      )
+    }
+    const res = renderToString(<App />)
+
+    assert.ok(res.includes('type="checkbox"'))
+    assert.ok(res.includes("checked"))
+  })
 })
