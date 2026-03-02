@@ -1,7 +1,7 @@
 import { $STREAM_DATA, STREAMED_DATA_EVENT } from "./constants.js"
 import { hydrationMode, node, renderMode } from "./globals.js"
 import { Signal, signal } from "./signals/base.js"
-import { getVNodeId } from "./utils/vdom.js"
+import { createVNodeId } from "./utils/vdom.js"
 import { onCleanup } from "./hooks/onCleanup.js"
 
 export interface StreamDataThrowValue {
@@ -42,7 +42,7 @@ export function statefulPromise<T>(
   if (!vNode) {
     throw new Error("statefulPromise must be called inside a Kiru component")
   }
-  const id = getVNodeId(vNode)
+  const id = createVNodeId(vNode)
   const isPending = signal(true)
 
   isPending.value = true

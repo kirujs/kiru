@@ -31,7 +31,7 @@ export {
   findParentErrorBoundary,
   assertValidElementProps,
   normalizeElementKey,
-  getVNodeId,
+  createVNodeId,
   registerVNodeCleanup,
   propsChanged,
 }
@@ -186,7 +186,7 @@ function normalizeElementKey(thing: unknown): JSX.ElementKey | null {
   return null
 }
 
-function getVNodeId(vNode: Kiru.VNode): string {
+function createVNodeId(vNode: Kiru.VNode): string {
   const accumulator: number[] = []
   let n: Kiru.VNode | null = vNode
   while (n) {

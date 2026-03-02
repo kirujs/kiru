@@ -1,4 +1,4 @@
-import { signal, computed, DevTools, ElementProps, useProps } from "kiru"
+import { signal, computed, DevTools, setup } from "kiru"
 
 const count = signal(0)
 const double = computed(() => count.value * 2)
@@ -7,32 +7,33 @@ if (import.meta.env.DEV) {
   DevTools.track(double, "double")
 }
 
+const showChild = computed(() => count.value % 2 === 0)
+
 export default function HomePage() {
-  return (
+  const showSibling = signal(false)
+  return () => (
     <>
       <button onclick={() => count.value++}>Increment ({count})</button>
-      <MyButton initialCount={count.value}>Click me</MyButton>
+      <button onclick={() => (showSibling.value = !showSibling.value)}>
+        Show sibling
+      </button>
+      {showSibling.value && showChild.value ? (
+        [<div>Sibling</div>, <Child />]
+      ) : showSibling.value ? (
+        <div>Sibling</div>
+      ) : showChild.value ? (
+        <Child />
+      ) : null}
     </>
   )
 }
 
-interface CounterProps extends ElementProps<"button"> {
-  initialCount?: number
-}
-const MyButton: Kiru.FC<CounterProps> = () => {
-  const { derive } = useProps<CounterProps>()
-  const count = derive((props) => props.initialCount ?? 0)
+const Child: Kiru.FC = () => {
+  const { id } = setup()
 
-  const handleClick = () => {
-    count.value++
-  }
-
-  return ({ children, ...props }) => {
-    return (
-      <button onclick={(e) => (handleClick(), props.onclick?.(e))} {...props}>
-        {children}
-        {count}
-      </button>
-    )
-  }
+  return () => (
+    <div>
+      <p>ID: {id}</p>
+    </div>
+  )
 }

@@ -1,4 +1,5 @@
-export { node, renderMode, hydrationMode }
+import { Setup } from "./hooks/index.js"
+export { node, renderMode, hydrationMode, setups }
 
 const node = {
   current: null as Kiru.VNode | null,
@@ -11,3 +12,5 @@ const renderMode = {
 const hydrationMode = {
   current: "dynamic" as "static" | "dynamic",
 }
+
+const setups: WeakMap<Kiru.VNode, Setup<any>> = new WeakMap()

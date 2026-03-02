@@ -15,7 +15,7 @@ import {
 } from "./dom.js"
 import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
-import { node, renderMode } from "./globals.js"
+import { node, renderMode, setups } from "./globals.js"
 import { hydrationStack } from "./hydration.js"
 import { reconcileChildren } from "./reconciler.js"
 import {
@@ -395,7 +395,10 @@ function renderFunctionComponent(
   const { render, propSyncs } = vNode
 
   if (render) {
-    if (shouldSyncProps) propSyncs?.forEach((sync) => sync(props))
+    if (shouldSyncProps) {
+      const p = { ...props }
+      propSyncs?.forEach((sync) => sync(p))
+    }
     return render(props)
   }
 
@@ -403,8 +406,13 @@ function renderFunctionComponent(
   if (typeof newChild === "function") {
     vNode.subs?.forEach(call) // unsub from signals observered during setup
     vNode.render = newChild
-    if (shouldSyncProps) propSyncs?.forEach((sync) => sync(props))
+    if (shouldSyncProps) {
+      const p = { ...props }
+      propSyncs?.forEach((sync) => sync(p))
+    }
     newChild = newChild(props)
+  } else if (__DEV__ && setups.has(vNode)) {
+    throw new Error("setup() must not be called inside a render function")
   }
 
   return newChild
