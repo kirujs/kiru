@@ -12,7 +12,7 @@ import {
   hydrateDom,
   onAfterFlushDomChanges,
   onBeforeFlushDomChanges,
-} from "./dom.js"
+} from "./dom/index.js"
 import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
 import { node, renderMode, setups } from "./globals.js"

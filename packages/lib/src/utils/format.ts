@@ -84,8 +84,10 @@ function propToHtmlAttr(key: string): string {
 function styleObjectToString(obj: Partial<CSSStyleDeclaration>): string {
   let cssString = ""
   for (const key in obj) {
+    const val = unwrap((obj as Record<string, unknown>)[key])
+    if (val === null || val === undefined) continue
     const cssKey = key.replace(REGEX_ALPHA_UPPER, "-$&").toLowerCase()
-    cssString += `${cssKey}:${obj[key]};`
+    cssString += `${cssKey}:${val};`
   }
   return cssString
 }
