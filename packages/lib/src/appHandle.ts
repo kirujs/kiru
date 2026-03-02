@@ -1,6 +1,6 @@
 import { FLAG_STATIC_DOM } from "./constants.js"
 import { __DEV__ } from "./env.js"
-import { renderRootSync, requestUpdate } from "./scheduler.js"
+import { renderRootSync } from "./scheduler.js"
 import { createVNode } from "./vNode.js"
 import type { SomeDom } from "./types.utils.js"
 
@@ -65,7 +65,7 @@ export function mount(
   }
 
   render(children)
-  window.__kiru.emit("mount", app, requestUpdate)
+  window.__kiru.emit("mount", app)
   // @ts-expect-error
   if (__DEV__ && !globalThis.__KIRU_READY__) {
     // @ts-expect-error
