@@ -7,7 +7,7 @@ import {
   propsChanged,
 } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
-import { __DEV__ } from "./env.js"
+import { __DEV__, isBrowser } from "./env.js"
 import type { AppHandle } from "./appHandle.js"
 import { createVNode as createBaseVNode } from "./vNode.js"
 
@@ -376,7 +376,7 @@ function updateFromMap(
 }
 
 function dev_emitUpdateNode() {
-  if (!("window" in globalThis)) return
+  if (!isBrowser) return
   window.__kiru.profilingContext?.emit("updateNode", app)
 }
 
@@ -479,7 +479,7 @@ function createVNode(
   const node = createBaseVNode(type, parent, props, key, index)
   node.flags |= FLAG_PLACEMENT
 
-  if (__DEV__ && "window" in globalThis) {
+  if (__DEV__ && isBrowser) {
     window.__kiru.profilingContext?.emit("createNode", app)
   }
   return node

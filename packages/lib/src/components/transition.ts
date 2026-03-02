@@ -23,7 +23,7 @@ interface TransitionProps {
 
 export const Transition: Kiru.FC<TransitionProps> = (props) => {
   const tState = signal<TransitionState>(props.initialState || "exited")
-  let timeoutRef: number | null = null
+  let timeoutRef: number | undefined
 
   const setTransitionState = (transitionState: TransitionState) => {
     clearTimeout(timeoutRef)
@@ -54,7 +54,7 @@ export const Transition: Kiru.FC<TransitionProps> = (props) => {
 
   onCleanup(() => clearTimeout(timeoutRef))
 
-  return (newProps: TransitionProps) => {
+  return (newProps) => {
     return newProps.element(tState.value)
   }
 }
@@ -71,8 +71,4 @@ function getTiming(
     case "exited":
       return duration?.out ?? defaultDuration
   }
-}
-
-function clearTimeout(id: number | null) {
-  if (id != null) window.clearTimeout(id)
 }

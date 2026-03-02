@@ -1,4 +1,5 @@
 import { createKiruGlobalContext } from "./globalContext.js"
+import { isBrowser } from "./env.js"
 
 export type * from "./types"
 export * from "./signals/index.js"
@@ -23,6 +24,6 @@ export {
 export * from "./statefulPromise.js"
 export * from "./viewTransitions.js"
 
-if ("window" in globalThis) {
-  globalThis.window.__kiru ??= createKiruGlobalContext()
+if (isBrowser) {
+  window.__kiru ??= createKiruGlobalContext()
 }

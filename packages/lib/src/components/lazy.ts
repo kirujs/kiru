@@ -1,5 +1,5 @@
 import { createElement } from "../element.js"
-import { __DEV__ } from "../env.js"
+import { __DEV__, isBrowser } from "../env.js"
 import { sideEffectsEnabled } from "../utils/runtime.js"
 import { node } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"
@@ -23,11 +23,10 @@ type LazyComponentProps<T extends LazyImportValue> = InferLazyImportProps<T> & {
   fallback?: JSX.Element
 }
 
-const lazyCache: Map<string, LazyState> =
-  "window" in globalThis
-    ? // @ts-ignore - we're shamefully polluting the global scope here and hiding it 🥲
-      (window.__KIRU_LAZY_CACHE ??= new Map<string, LazyState>())
-    : new Map<string, LazyState>()
+const lazyCache: Map<string, LazyState> = isBrowser
+  ? // @ts-ignore - we're shamefully polluting the global scope here and hiding it 🥲
+    (window.__KIRU_LAZY_CACHE ??= new Map<string, LazyState>())
+  : new Map<string, LazyState>()
 
 export function lazy<T extends LazyImportValue>(
   componentPromiseFn: () => Promise<T>

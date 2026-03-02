@@ -6,7 +6,7 @@ import {
   registerVNodeCleanup,
 } from "../utils/index.js"
 import { $HMR_ACCEPT, $SIGNAL } from "../constants.js"
-import { __DEV__ } from "../env.js"
+import { __DEV__, isBrowser } from "../env.js"
 import { node } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"
 import { signalSubsMap } from "./globals.js"
@@ -39,7 +39,7 @@ export class Signal<T> {
           return this as Signal<any>
         },
         inject: (prev) => {
-          if ("window" in globalThis) window.__kiru.devtools?.untrack(prev)
+          if (isBrowser) window.__kiru.devtools?.untrack(prev)
           signalSubsMap.get(this.$id)?.clear?.()
           signalSubsMap.delete(this.$id)
           this.$id = prev.$id
@@ -201,7 +201,7 @@ export class Signal<T> {
     signal.$isDisposed = true
     if (__DEV__) {
       signalSubsMap.delete(signal.$id)
-      if ("window" in globalThis) window.__kiru.devtools?.untrack(signal)
+      if (isBrowser) window.__kiru.devtools?.untrack(signal)
       return
     }
     signal.$subs!.clear()

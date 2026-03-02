@@ -1,12 +1,13 @@
 import { Setup } from "./hooks/index.js"
 export { node, renderMode, hydrationMode, setups }
+import { isBrowser } from "./env.js"
 
 const node = {
   current: null as Kiru.VNode | null,
 }
 
 const renderMode = {
-  current: ("window" in globalThis ? "dom" : "string") as Kiru.RenderMode,
+  current: (isBrowser ? "dom" : "string") as Kiru.RenderMode,
 }
 
 const hydrationMode = {

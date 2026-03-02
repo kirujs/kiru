@@ -4,3 +4,6 @@ if (NODE_ENV !== "development" && NODE_ENV !== "production") {
 }
 
 export const __DEV__ = NODE_ENV === "development"
+
+export const isBrowser = "window" in globalThis && typeof window !== "undefined"
+export const isServer = !isBrowser

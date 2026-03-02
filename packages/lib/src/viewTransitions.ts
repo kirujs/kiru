@@ -1,4 +1,5 @@
 import { flushSync } from "./scheduler.js"
+import { isBrowser } from "./env.js"
 
 export namespace ViewTransitions {
   type ViewTransitionJob = () => Promise<void>
@@ -8,7 +9,7 @@ export namespace ViewTransitions {
   let scheduled = false
   let transition: ViewTransition | null = null
   const supported =
-    "window" in globalThis && typeof document.startViewTransition === "function"
+    isBrowser && typeof document.startViewTransition === "function"
 
   export function run<T>(
     callback: () => T | Promise<T>,

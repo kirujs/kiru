@@ -1,4 +1,4 @@
-import { __DEV__ } from "../env.js"
+import { __DEV__, isBrowser } from "../env.js"
 import { effectQueue } from "./globals.js"
 import { executeWithTracking } from "./tracking.js"
 import {
@@ -6,6 +6,7 @@ import {
   generateRandomID,
   call,
   registerVNodeCleanup,
+  sideEffectsEnabled,
 } from "../utils/index.js"
 import type { Signal } from "./base.js"
 import type { SignalValues } from "./types.js"
@@ -31,11 +32,12 @@ export class Effect<const Deps extends readonly Signal<unknown>[] = []> {
     this.unsubs = new Map()
     this.isRunning = false
     this.cleanup = null
-    if (__DEV__ && "window" in globalThis) {
+    if (__DEV__ && isBrowser) {
       window.__kiru.HMRContext!.moduleEffects.push(this)
     }
     const n = node.current
     if (n) {
+      if (!sideEffectsEnabled()) return // prevent side effects in non-browser environments
       registerVNodeCleanup(n, this.id, this.stop.bind(this))
     }
     this.start()
@@ -49,11 +51,7 @@ export class Effect<const Deps extends readonly Signal<unknown>[] = []> {
     this.isRunning = true
 
     // postpone execution during HMR
-    if (
-      __DEV__ &&
-      "window" in globalThis &&
-      window.__kiru.HMRContext?.isReplacement()
-    ) {
+    if (__DEV__ && isBrowser && window.__kiru.HMRContext?.isReplacement()) {
       return queueMicrotask(() => {
         if (this.isRunning) {
           Effect.run(this as Effect)

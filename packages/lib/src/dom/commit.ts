@@ -5,21 +5,13 @@ import {
   setRef,
   call,
 } from "../utils/index.js"
-import {
-  FLAG_PLACEMENT,
-  FLAG_STATIC_DOM,
-  FLAG_UPDATE,
-} from "../constants.js"
+import { FLAG_PLACEMENT, FLAG_STATIC_DOM, FLAG_UPDATE } from "../constants.js"
 import { renderMode } from "../globals.js"
 import { __DEV__ } from "../env.js"
 import type { AppHandle } from "../appHandle.js"
 import type { DomVNode, ElementVNode } from "../types.utils"
 import { updateDom } from "./props.js"
-import {
-  HostNode,
-  getDomParent,
-  placeDom,
-} from "./nodes.js"
+import { HostNode, getDomParent, placeDom } from "./nodes.js"
 import { postHookCleanups } from "./focus.js"
 
 type VNode = Kiru.VNode
@@ -112,7 +104,7 @@ export function commitDeletion(vNode: VNode) {
     if (__DEV__) {
       window.__kiru.profilingContext?.emit("removeNode", app)
       if (dom instanceof Element) {
-        delete (dom as any).__kiruNode
+        delete dom.__kiruNode
       }
     }
 
@@ -129,4 +121,3 @@ export function commitDeletion(vNode: VNode) {
 
   vNode.parent = null
 }
-

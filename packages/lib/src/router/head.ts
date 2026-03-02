@@ -1,7 +1,7 @@
 import { Signal } from "../signals/base.js"
 import { isValidTextChild, isVNode } from "../utils/index.js"
 import { createElement } from "../element.js"
-import { __DEV__ } from "../env.js"
+import { __DEV__, isBrowser } from "../env.js"
 import { KiruError } from "../error.js"
 import { node } from "../globals.js"
 
@@ -28,7 +28,7 @@ function HeadContent({ children }: { children: JSX.Children }): JSX.Element {
       })
     }
   }
-  if ("window" in globalThis) {
+  if (isBrowser) {
     const asArray = Array.isArray(children) ? children : [children]
     const titleNode = asArray.find(
       (c) => isVNode(c) && c.type === "title"
