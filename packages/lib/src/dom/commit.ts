@@ -6,11 +6,10 @@ import {
   call,
 } from "../utils/index.js"
 import { FLAG_PLACEMENT, FLAG_STATIC_DOM, FLAG_UPDATE } from "../constants.js"
-import { renderMode } from "../globals.js"
+import { postEffectCleanups, renderMode } from "../globals.js"
 import { __DEV__ } from "../env.js"
 import { updateDomProps } from "./props.js"
 import { HostNode, getDomParent, placeDom } from "./nodes.js"
-import { queuePostWorkCleanups } from "./focus.js"
 import type { AppHandle } from "../appHandle.js"
 import type { DomVNode, ElementVNode } from "../types.utils"
 
@@ -98,8 +97,8 @@ function commitDeletion(vNode: VNode) {
     if (hooks) {
       const { preCleanups, postCleanups } = hooks
 
+      postEffectCleanups.push(...postCleanups)
       preCleanups.forEach(call)
-      queuePostWorkCleanups(...postCleanups)
       preCleanups.length = postCleanups.length = 0
     }
 

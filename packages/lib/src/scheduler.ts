@@ -13,11 +13,6 @@ import {
   hydrateDom,
   reinstateFocus,
 } from "./dom/index.js"
-import { __DEV__ } from "./env.js"
-import { KiruError } from "./error.js"
-import { node, renderMode, setups } from "./globals.js"
-import { hydrationStack } from "./hydration.js"
-import { reconcileChildren } from "./reconciler.js"
 import {
   assertValidElementProps,
   latest,
@@ -28,8 +23,13 @@ import {
   call,
   propsChanged,
 } from "./utils/index.js"
-import type { AppHandle } from "./appHandle"
+import { __DEV__ } from "./env.js"
+import { KiruError } from "./error.js"
+import { node, postEffectCleanups, renderMode, setups } from "./globals.js"
+import { hydrationStack } from "./hydration.js"
+import { reconcileChildren } from "./reconciler.js"
 import { isHmrUpdate } from "./hmr.js"
+import type { AppHandle } from "./appHandle"
 
 type VNode = Kiru.VNode
 
@@ -93,21 +93,8 @@ export function useRequestUpdate(): () => void {
   return () => requestUpdate(n)
 }
 
-function queueBeginWork(): void {
-  if (isRunningOrQueued) return
-  isRunningOrQueued = true
-  animationFrameHandle = window.requestAnimationFrame(doWork)
-}
-
-function onWorkFinished(): void {
-  isRunningOrQueued = false
-  while (nextIdleEffects.length) {
-    nextIdleEffects.shift()!()
-  }
-}
-
 function queueUpdate(vNode: VNode): void {
-  // In immediate effect mode (useLayoutEffect), immediately mark the render as dirty
+  // In immediate effect mode (onBeforeMount), immediately mark the render as dirty
   if (isImmediateEffectsMode) {
     immediateEffectDirtiedRender = true
   }
@@ -126,7 +113,12 @@ function queueUpdate(vNode: VNode): void {
 
   if (!treesInProgress.length) {
     treesInProgress.push(vNode)
-    return queueBeginWork()
+
+    if (!isRunningOrQueued) {
+      isRunningOrQueued = true
+      animationFrameHandle = window.requestAnimationFrame(doWork)
+    }
+    return
   }
 
   treesInProgress.push(vNode)
@@ -196,8 +188,14 @@ function doWork(): void {
   }
   consecutiveDirtyCount = 0
 
-  onWorkFinished()
-  queueMicrotask(() => flushEffects(postEffects))
+  isRunningOrQueued = false
+  while (nextIdleEffects.length) {
+    nextIdleEffects.shift()!()
+  }
+  queueMicrotask(() => {
+    flushEffects(postEffectCleanups)
+    flushEffects(postEffects)
+  })
   if (__DEV__) {
     window.__kiru.emit("update", app!)
     window.__kiru.profilingContext?.emit("update", app!)

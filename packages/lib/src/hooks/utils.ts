@@ -1,32 +1,27 @@
 import { node } from "../globals.js"
-import { sideEffectsEnabled } from "../utils/index.js"
 
-export function queueSetupEffect(
-  effect: Kiru.LifecycleHookCallback,
-  opts?: { immediate?: boolean }
-): void {
-  if (!sideEffectsEnabled()) return
+export function getVNodeLifecycleHooks(): null | NonNullable<
+  Kiru.VNode["hooks"]
+> {
   const vNode = node.current!
-  if (!vNode)
-    throw new Error("Cannot queue setup effect outside of a component")
+  if (!vNode) return null
 
-  const hooks = (vNode.hooks ??= {
+  return (vNode.hooks ??= {
     pre: [],
     preCleanups: [],
     post: [],
     postCleanups: [],
   })
+}
 
-  const [bag, cleanups] = opts?.immediate
-    ? [hooks.pre, hooks.preCleanups]
-    : [hooks.post, hooks.postCleanups]
-
-  const wrapped = () => {
-    const ret = effect()
-    if (typeof ret === "function") {
-      cleanups.push(ret)
+export function wrapLifecycleHookCallback(
+  callback: Kiru.LifecycleHookCallback,
+  cleanups: (() => void)[]
+): Kiru.LifecycleHookCallback {
+  return () => {
+    const cleanup = callback()
+    if (typeof cleanup === "function") {
+      cleanups.push(cleanup)
     }
   }
-
-  bag.push(wrapped)
 }

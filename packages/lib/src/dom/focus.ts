@@ -1,11 +1,4 @@
-import { call } from "../utils/index.js"
-
 let focussedElement: HTMLElement | null = null
-const postHookCleanups: (() => void)[] = []
-
-export function queuePostWorkCleanups(...cleanups: (() => void)[]) {
-  postHookCleanups.push(...cleanups)
-}
 
 export function captureFocus() {
   const el = document.activeElement
@@ -22,10 +15,6 @@ export function reinstateFocus() {
     if (focussedElement.isConnected) focussedElement.focus()
     focussedElement = null
   }
-  queueMicrotask(() => {
-    postHookCleanups.forEach(call)
-    postHookCleanups.length = 0
-  })
 }
 
 export function wrapFocusEventHandler(callback: (event: FocusEvent) => void) {

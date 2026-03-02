@@ -15,31 +15,7 @@ export interface Setup<Props extends {}> {
  * Creates a per‑VNode setup context that can be used during
  * component setup to derive props into signals.
  *
- * The returned object exposes:
- * - `derive`: creates signals that stay in sync with props (or
- *   any value derived from props).
- * - `id`: a signal that identifies the current VNode and will
- *   change when that VNode moves in the tree.
- *
- * Call this from a component's setup phase (before returning a
- * render function), not inside the render function itself.
- *
- * @example
- * ```tsx
- * type CounterProps = { count?: number }
- *
- * const Counter: Kiru.FC<CounterProps> = () => {
- *   const { derive, id } = setup<CounterProps>()
- *   const count = derive((props) => props.count ?? 0)
- *
- *   return () => (
- *     <>
- *       <p>Count: {count}</p>
- *       <button onclick={() => count.value++}>Increment</button>
- *     </>
- *   )
- * }
- * ```
+ * @see https://kirujs.dev/docs/api/lifecycles#setup
  */
 export function setup<Props extends {}>(): Setup<Props> {
   const vNode = node.current!
