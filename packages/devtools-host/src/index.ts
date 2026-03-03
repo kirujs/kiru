@@ -5,8 +5,8 @@ if ("window" in globalThis) {
   async function init() {
     const kiru = await import("kiru")
     const { default: App } = await import("./app")
-
     const { devtoolsState } = await import("devtools-shared")
+
     const pageRoot = document.createElement("kiru-devtools")
     pageRoot.setAttribute("style", "display: contents")
     pageRoot.tabIndex = -1

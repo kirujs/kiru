@@ -16,6 +16,7 @@ export interface ComponentInfoPanelState {
   component: Kiru.VNode
   unmounted: boolean
   hash: string
+  pulseGeneration: number
 }
 
 /** All open component info panels. */

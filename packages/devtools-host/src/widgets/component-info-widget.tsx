@@ -28,10 +28,12 @@ import {
   WIDGET_Z_BASE,
   type ComponentInfoPanelState,
 } from "../state"
+import { SelectionBox } from "../components/selection-box"
 
 const COMPONENT_INFO_POSITION_STORAGE_KEY =
   "kiru.devtools.componentInfoPosition"
 const COMPONENT_INFO_SIZE_STORAGE_KEY = "kiru.devtools.componentInfoSize"
+const PULSE_DURATION = 300
 
 interface ComponentInfoWidgetProps {
   state: kiru.TransitionState
@@ -100,6 +102,8 @@ const ComponentInfoPanel: Kiru.FC<{
   const selectedHash = kiru.signal<string | null>(null)
   const panelId = kiru.signal<string | null>(null)
   const isHovered = kiru.signal(false)
+  const isPulsing = kiru.signal(false)
+  let lastPulseGeneration = -1
 
   kiru.effect(() => {
     const id = panelId.value
@@ -121,6 +125,18 @@ const ComponentInfoPanel: Kiru.FC<{
         propsViewerRoot.value = null
       }
       return
+    }
+
+    if (current.pulseGeneration !== lastPulseGeneration) {
+      lastPulseGeneration = current.pulseGeneration
+      if (current.pulseGeneration > 0) {
+        isPulsing.value = true
+        setTimeout(() => {
+          if (lastPulseGeneration === current.pulseGeneration) {
+            isPulsing.value = false
+          }
+        }, PULSE_DURATION)
+      }
     }
 
     if (!current.unmounted) {
@@ -156,7 +172,7 @@ const ComponentInfoPanel: Kiru.FC<{
   })
 
   const dragController = createDraggableController({
-    key: `${COMPONENT_INFO_POSITION_STORAGE_KEY}:${crypto.randomUUID()}`,
+    key: COMPONENT_INFO_POSITION_STORAGE_KEY,
     storage: sessionStorage,
     allowFloat: true,
     snapDistance: 50,
@@ -166,7 +182,7 @@ const ComponentInfoPanel: Kiru.FC<{
   })
 
   const resizeController = createResizableController({
-    key: `${COMPONENT_INFO_SIZE_STORAGE_KEY}:${crypto.randomUUID()}`,
+    key: COMPONENT_INFO_SIZE_STORAGE_KEY,
     storage: sessionStorage,
     minSize: [COMPONENT_INFO_MIN_WIDTH, COMPONENT_INFO_MIN_HEIGHT],
   })
@@ -256,6 +272,7 @@ const ComponentInfoPanel: Kiru.FC<{
       widgetStackTop.value = "componentInfo"
     }
     const hovered = isHovered.value
+    const pulsing = isPulsing.value
     const overlayBox =
       hovered && !current.unmounted
         ? getComponentBoundingBox(current.component)
@@ -264,28 +281,20 @@ const ComponentInfoPanel: Kiru.FC<{
     return (
       <>
         {overlayBox && (
-          <div
-            style={{
-              position: "absolute",
-              zIndex: 1000,
-              top: overlayBox.top + window.scrollY + "px",
-              left: overlayBox.left + window.scrollX + "px",
-              width: overlayBox.width + "px",
-              height: overlayBox.height + "px",
-              pointerEvents: "none",
-              opacity: state === "entered" ? 1 : 0.9,
-              transition: "80ms ease-in-out",
-              background:
-                "linear-gradient(135deg, rgb(164 11 32 / 66%) 0%, rgb(82 14 47 / 80%) 80%)",
-            }}
+          <SelectionBox
+            top={overlayBox.top + window.scrollY}
+            left={overlayBox.left + window.scrollX}
+            width={overlayBox.width}
+            height={overlayBox.height}
+            className={cls(
+              "pointer-events-none",
+              state === "entered" ? "opacity-100" : "opacity-90"
+            )}
           />
         )}
         <div
           ref={containerRef}
-          className={cls(
-            "fixed rounded-lg p-0.5 flex flex-col gap-2 select-none overflow-hidden",
-            "bg-neutral-900 opacity-75 hover:opacity-100 shadow-lg"
-          )}
+          className="fixed p-0.5 flex flex-col gap-2 select-none z-index-1001"
           style={{
             zIndex:
               widgetStackTop.value === "componentInfo"
@@ -293,6 +302,7 @@ const ComponentInfoPanel: Kiru.FC<{
                 : WIDGET_Z_BASE,
             minWidth: `${COMPONENT_INFO_MIN_WIDTH}px`,
             minHeight: `${COMPONENT_INFO_MIN_HEIGHT}px`,
+            opacity: state === "entered" ? 1 : 0,
             cursor: resizeController.isResizing.value
               ? "se-resize"
               : dragController.isDragging.value
@@ -307,14 +317,16 @@ const ComponentInfoPanel: Kiru.FC<{
           <div
             style={{
               transition: "80ms ease-in-out",
-              opacity: state === "entered" ? 1 : 0,
+              opacity: pulsing ? 1 : 0.75,
               flex: 1,
-              overflow: "auto",
               scrollbarWidth: "thin",
               minHeight: 0,
+              overflow: "hidden",
+              boxShadow: pulsing ? "0 0 8px crimson" : undefined,
             }}
+            className="rounded-lg bg-neutral-900 opacity-75 hover:opacity-100! shadow-lg"
           >
-            <div className="flex flex-col text-sm">
+            <div className="flex flex-col text-sm overflow-auto">
               <div className="flex items-center justify-between gap-2 p-2">
                 <a
                   href={current.link}

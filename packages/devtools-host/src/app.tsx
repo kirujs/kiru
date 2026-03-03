@@ -38,17 +38,13 @@ export default function DevtoolsHostApp() {
   })
 
   const tooltipFlexDirection = kiru.computed(() => {
-    return mainMenuController.snapSide.value === "left" ||
-      mainMenuController.snapSide.value === "right"
-      ? "column"
-      : "row"
+    const snapSide = mainMenuController.snapSide.value
+    return snapSide === "left" || snapSide === "right" ? "column" : "row"
   })
 
   const containerFlexDirection = kiru.computed(() => {
-    return mainMenuController.snapSide.value === "left" ||
-      mainMenuController.snapSide.value === "right"
-      ? "row"
-      : "column"
+    const snapSide = mainMenuController.snapSide.value
+    return snapSide === "left" || snapSide === "right" ? "row" : "column"
   })
 
   kiru.onMount(() => {

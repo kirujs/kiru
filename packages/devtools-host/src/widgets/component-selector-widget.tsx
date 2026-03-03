@@ -7,7 +7,13 @@ import {
   kiruGlobal,
   computeComponentHash,
 } from "devtools-shared"
-import { componentInfoPanels, isComponentSelectorEnabled } from "../state"
+import {
+  componentInfoPanels,
+  isComponentSelectorEnabled,
+  widgetStackTop,
+} from "../state"
+import { SelectionBox } from "../components/selection-box"
+import { className as cls } from "kiru/utils"
 
 interface HoverInfo {
   name: string
@@ -114,13 +120,25 @@ export const ComponentSelectorWidget: Kiru.FC<
     const hash = computeComponentHash(component)
     isComponentSelectorEnabled.value = false
 
-    const existing = componentInfoPanels.value.find(
+    const panels = componentInfoPanels.value
+    const existingIndex = panels.findIndex(
       (panel) => panel.hash === hash && panel.link === link
     )
-    if (existing) return
+
+    if (existingIndex !== -1) {
+      const existing = panels[existingIndex]
+      const updated = {
+        ...existing,
+        pulseGeneration: (existing.pulseGeneration ?? 0) + 1,
+      }
+      const others = panels.filter((p) => p.id !== existing.id)
+      componentInfoPanels.value = [...others, updated]
+      widgetStackTop.value = "componentInfo"
+      return
+    }
 
     componentInfoPanels.value = [
-      ...componentInfoPanels.value,
+      ...panels,
       {
         id: crypto.randomUUID(),
         name,
@@ -128,8 +146,10 @@ export const ComponentSelectorWidget: Kiru.FC<
         component,
         unmounted: false,
         hash,
+        pulseGeneration: 0,
       },
     ]
+    widgetStackTop.value = "componentInfo"
   }
 
   const onAppUpdate = (updatedApp: kiru.AppHandle) => {
@@ -162,29 +182,23 @@ export const ComponentSelectorWidget: Kiru.FC<
     if (!enabled || !info || state === "exited") return null
 
     return (
-      <div
-        style={{
-          position: "absolute",
-          zIndex: 1000,
-          top: info.top + window.scrollY + "px",
-          left: info.left + window.scrollX + "px",
-          width: info.width + "px",
-          height: info.height + "px",
-          cursor: "pointer",
-          opacity: state === "entered" ? 1 : 0,
-          scale: state === "entered" ? 1 : 0,
-          transition: "80ms ease-in-out",
-          background:
-            "linear-gradient(135deg, rgb(164 11 32 / 66%) 0%, rgb(82 14 47 / 80%) 80%)",
-        }}
+      <SelectionBox
+        top={info.top + window.scrollY}
+        left={info.left + window.scrollX}
+        width={info.width}
+        height={info.height}
+        className={cls(
+          "text-white flex items-center justify-center",
+          state === "entered" ? "opacity-100" : "opacity-90",
+          state === "entered" ? "scale-100" : "scale-90"
+        )}
         title="Click to open in editor"
         onclick={handleClick}
-        className="text-white flex items-center justify-center"
       >
         <span className="font-medium text-sm truncate max-w-full">
           {`<${info.name}>`}
         </span>
-      </div>
+      </SelectionBox>
     )
   }
 }
