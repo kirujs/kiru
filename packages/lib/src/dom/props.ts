@@ -214,7 +214,7 @@ function updateDomProps(vNode: DomVNode) {
       if (!styleKeyToSignal) {
         styleKeyToSignal = new Map<string, Signal<unknown>>()
       }
-      setStyleProp(dom, nextVal, prevVal, true, styleKeyToSignal)
+      setStyleProp(dom, nextVal, prevVal, true)
       if (styleKeyToSignal.size > 0) {
         const unsubs: (() => void)[] = []
         for (const [k, sig] of styleKeyToSignal.entries()) {
@@ -307,6 +307,7 @@ function unmountDomProps(
   if (prevRef) setRef(prevRef, null)
 }
 
+const styleKeyToSignal = new Map<string, Signal<unknown>>()
 function mountDomProps(
   vNode: DomVNode,
   dom: SomeDom,
@@ -319,7 +320,6 @@ function mountDomProps(
   }
 
   let events: VNodeEventListenerObjects | undefined
-  let styleKeyToSignal: Map<string, Signal<unknown>> | undefined
 
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i]
@@ -363,27 +363,19 @@ function mountDomProps(
 
     // Style
     if (key === "style" && typeof value === "object" && value !== null) {
-      if (cleanups?.style) {
-        cleanups.style()
-        delete cleanups.style
-      }
-      if (!styleKeyToSignal) {
-        styleKeyToSignal = new Map<string, Signal<unknown>>()
-      }
-      setStyleProp(dom as SomeElement, value, undefined, true, styleKeyToSignal)
+      setStyleProp(dom as SomeElement, value, undefined, true)
       if (styleKeyToSignal.size > 0) {
-        const unsubs: (() => void)[] = []
+        cleanups ??= {}
         for (const [k, sig] of styleKeyToSignal.entries()) {
-          unsubs.push(
-            sig.subscribe(
-              k.startsWith("--")
-                ? (v) => setCustomCSSStyleDecValue(dom as SomeElement, k, v)
-                : (v) => setCSSStyleDecValue(dom as SomeElement, k, v)
-            )
+          const cleanupKey = `style-${k}`
+          cleanups[cleanupKey]?.()
+          cleanups[cleanupKey] = sig.subscribe(
+            k.startsWith("--")
+              ? (v) => setCustomCSSStyleDecValue(dom as SomeElement, k, v)
+              : (v) => setCSSStyleDecValue(dom as SomeElement, k, v)
           )
         }
         styleKeyToSignal.clear()
-        registerVNodeCleanup(vNode, "style", () => unsubs.forEach((u) => u()))
       }
       continue
     }
@@ -684,9 +676,7 @@ function setStyleProp(
   element: SomeElement,
   value: unknown,
   prev: unknown,
-  trackSignals = false,
-  // Passed in from updateDom to avoid allocating a new Map per style update
-  signalMap?: Map<string, Signal<unknown>>
+  trackSignals = false
 ): void {
   if (handleAttributeRemoval(element, "style", value)) return
 
@@ -719,7 +709,7 @@ function setStyleProp(
       const rawNext = nextStyle[k]
       const nextVal = unwrap(rawNext)
       if (trackSignals && Signal.isSignal(rawNext)) {
-        signalMap?.set(k, rawNext)
+        styleKeyToSignal.set(k, rawNext)
       }
       if (k.startsWith("--")) {
         setCustomCSSStyleDecValue(element, k, nextVal)
@@ -749,10 +739,10 @@ function setStyleProp(
     const rawNext = nextStyle[k]
     const prevVal = unwrap(prevStyle[k])
     const nextVal = unwrap(rawNext)
-    if (prevVal === nextVal) continue
     if (trackSignals && Signal.isSignal(rawNext)) {
-      signalMap?.set(k, rawNext)
+      styleKeyToSignal.set(k, rawNext)
     }
+    if (prevVal === nextVal) continue
     if ((k as string).startsWith("--")) {
       setCustomCSSStyleDecValue(element, k as string, nextVal)
     } else {
