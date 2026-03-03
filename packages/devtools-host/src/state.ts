@@ -9,16 +9,20 @@ export const isProfilerShown = kiru.signal(false)
 export const isDebuggerShown = kiru.signal(false)
 export const isComponentSelectorEnabled = kiru.signal(false)
 
-/** When non-null, the component info panel is open for this component. */
-export const selectedComponentForPanel = kiru.signal<{
+export interface ComponentInfoPanelState {
+  id: string
   name: string
   link: string
   component: Kiru.VNode
   unmounted: boolean
-} | null>(null)
+  hash: string
+}
+
+/** All open component info panels. */
+export const componentInfoPanels = kiru.signal<ComponentInfoPanelState[]>([])
 
 export const isComponentInfoPanelShown = kiru.computed(
-  () => selectedComponentForPanel.value !== null
+  () => componentInfoPanels.value.length > 0
 )
 
 /** Widget stack: last-hovered widget is on top. Main menu is always above widgets. */

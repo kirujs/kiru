@@ -14,6 +14,8 @@ import {
   devtoolsState,
   isDevtoolsApp,
   kiruGlobal,
+  computeComponentHash,
+  findComponentByHash,
 } from "devtools-shared"
 import {
   COMPONENT_INFO_MIN_HEIGHT,
@@ -21,9 +23,10 @@ import {
   DRAG_SNAP_PADDING,
 } from "../constants"
 import {
-  selectedComponentForPanel,
+  componentInfoPanels,
   widgetStackTop,
   WIDGET_Z_BASE,
+  type ComponentInfoPanelState,
 } from "../state"
 
 const COMPONENT_INFO_POSITION_STORAGE_KEY =
@@ -46,13 +49,61 @@ function disposeViewerRoot(root: ReturnType<typeof buildViewerRoot>) {
   disposeCache(cache)
 }
 
-export const ComponentInfoWidget: Kiru.FC<ComponentInfoWidgetProps> = () => {
+function collectDomNodes(
+  firstChild: Kiru.VNode | null,
+  elements: Set<Element> = new Set()
+): Set<Element> {
+  let child: Kiru.VNode | null = firstChild
+  while (child) {
+    if (child.dom && child.dom instanceof Element) {
+      elements.add(child.dom)
+    } else if (child.child) {
+      collectDomNodes(child.child, elements)
+    }
+    child = child.sibling
+  }
+  return elements
+}
+
+function getComponentBoundingBox(component: Kiru.VNode) {
+  if (!component.child) return null
+  const elements = collectDomNodes(component.child)
+  if (elements.size === 0) return null
+
+  let minLeft = Infinity,
+    minTop = Infinity,
+    maxRight = -Infinity,
+    maxBottom = -Infinity
+
+  for (const element of elements) {
+    const { top, left, width, height } = element.getBoundingClientRect()
+    minLeft = Math.min(minLeft, left)
+    minTop = Math.min(minTop, top)
+    maxRight = Math.max(maxRight, left + width)
+    maxBottom = Math.max(maxBottom, top + height)
+  }
+
+  const width = maxRight - minLeft
+  const height = maxBottom - minTop
+  return { top: minTop, left: minLeft, width, height }
+}
+
+const ComponentInfoPanel: Kiru.FC<{
+  panel: ComponentInfoPanelState
+  index: number
+  state: kiru.TransitionState
+}> = () => {
   const propsViewerRoot = kiru.signal<ReturnType<
     typeof buildViewerRoot
   > | null>(null)
 
-  kiru.effect([selectedComponentForPanel], (selected) => {
-    if (!selected) {
+  const selectedHash = kiru.signal<string | null>(null)
+  const panelId = kiru.signal<string | null>(null)
+  const isHovered = kiru.signal(false)
+
+  kiru.effect(() => {
+    const id = panelId.value
+    if (!id) {
       const prev = propsViewerRoot.peek()
       if (prev) {
         disposeViewerRoot(prev)
@@ -60,20 +111,40 @@ export const ComponentInfoWidget: Kiru.FC<ComponentInfoWidgetProps> = () => {
       }
       return
     }
-    if (selected.unmounted) return
-    const prev = propsViewerRoot.peek()
-    if (prev) {
-      disposeViewerRoot(prev)
-      propsViewerRoot.value = null
+
+    const currentPanels = componentInfoPanels.value
+    const current = currentPanels.find((p) => p.id === id)
+    if (!current) {
+      const prev = propsViewerRoot.peek()
+      if (prev) {
+        disposeViewerRoot(prev)
+        propsViewerRoot.value = null
+      }
+      return
     }
+
+    if (!current.unmounted) {
+      const hash = computeComponentHash(current.component)
+      selectedHash.value = hash
+      if (current.hash !== hash) {
+        componentInfoPanels.value = currentPanels.map((p) =>
+          p.id === id ? { ...p, hash } : p
+        )
+      }
+    }
+    if (current.unmounted) return
+
+    const prev = propsViewerRoot.peek()
+    const prevCache = emptyCache()
+    if (prev) {
+      collectFromRoot(prev, "props", prevCache)
+    }
+
     const settings = devtoolsState.viewerSettings.peek()
-    const nodeProps = getPropsForViewer(selected.component)
-    propsViewerRoot.value = buildViewerRoot(
-      nodeProps,
-      "props",
-      emptyCache(),
-      settings
-    )
+    const nodeProps = getPropsForViewer(current.component)
+    const nextRoot = buildViewerRoot(nodeProps, "props", prevCache, settings)
+    propsViewerRoot.value = nextRoot
+    disposeCache(prevCache)
   })
 
   kiru.onCleanup(() => {
@@ -85,7 +156,7 @@ export const ComponentInfoWidget: Kiru.FC<ComponentInfoWidgetProps> = () => {
   })
 
   const dragController = createDraggableController({
-    key: COMPONENT_INFO_POSITION_STORAGE_KEY,
+    key: `${COMPONENT_INFO_POSITION_STORAGE_KEY}:${crypto.randomUUID()}`,
     storage: sessionStorage,
     allowFloat: true,
     snapDistance: 50,
@@ -95,7 +166,7 @@ export const ComponentInfoWidget: Kiru.FC<ComponentInfoWidgetProps> = () => {
   })
 
   const resizeController = createResizableController({
-    key: COMPONENT_INFO_SIZE_STORAGE_KEY,
+    key: `${COMPONENT_INFO_SIZE_STORAGE_KEY}:${crypto.randomUUID()}`,
     storage: sessionStorage,
     minSize: [COMPONENT_INFO_MIN_WIDTH, COMPONENT_INFO_MIN_HEIGHT],
   })
@@ -105,25 +176,41 @@ export const ComponentInfoWidget: Kiru.FC<ComponentInfoWidgetProps> = () => {
     resizeController.init()
 
     const onAppUpdate = (updatedApp: kiru.AppHandle) => {
-      const selected = selectedComponentForPanel.value
-      if (!selected || selected.unmounted) return
+      const id = panelId.value
+      if (!id) return
+
+      const currentPanels = componentInfoPanels.value
+      const current = currentPanels.find((p) => p.id === id)
+      if (!current) return
       if (isDevtoolsApp(updatedApp)) return
-      const vNodeApp = getVNodeApp(selected.component)
+      const vNodeApp = getVNodeApp(current.component)
       if (vNodeApp && vNodeApp !== updatedApp) return
-      if (isVNodeDeleted(selected.component)) {
-        selectedComponentForPanel.value = {
-          ...selected,
-          unmounted: true,
-        }
+
+      if (current.unmounted) {
+        const hash = selectedHash.value
+        if (!hash) return
+        const remounted = findComponentByHash(updatedApp.rootNode, hash)
+        if (!remounted) return
+        componentInfoPanels.value = currentPanels.map((p) =>
+          p.id === id ? { ...p, component: remounted, unmounted: false } : p
+        )
         return
       }
+
+      if (isVNodeDeleted(current.component)) {
+        componentInfoPanels.value = currentPanels.map((p) =>
+          p.id === id ? { ...p, unmounted: true } : p
+        )
+        return
+      }
+
       const prev = propsViewerRoot.peek()
       if (!prev) return
       const settings = devtoolsState.viewerSettings.peek()
       const prevCache = emptyCache()
       collectFromRoot(prev, "props", prevCache)
       propsViewerRoot.value = buildViewerRoot(
-        getPropsForViewer(selected.component),
+        getPropsForViewer(current.component),
         "props",
         prevCache,
         settings
@@ -149,45 +236,88 @@ export const ComponentInfoWidget: Kiru.FC<ComponentInfoWidgetProps> = () => {
     resizeController.handleRef.value = current
   }
 
-  return ({ state }) => {
-    const selected = selectedComponentForPanel.value
+  return ({ panel, state }) => {
+    if (!panelId.value) {
+      panelId.value = panel.id
+    }
+
+    const currentPanels = componentInfoPanels.value
+    const current = currentPanels.find((p) => p.id === panel.id)
+    if (!current) return null
+
+    const bringToFront = () => {
+      const panels = componentInfoPanels.value
+      const target = panels.find((p) => p.id === panel.id)
+      if (!target) return
+      componentInfoPanels.value = [
+        ...panels.filter((p) => p.id !== panel.id),
+        target,
+      ]
+      widgetStackTop.value = "componentInfo"
+    }
+    const hovered = isHovered.value
+    const overlayBox =
+      hovered && !current.unmounted
+        ? getComponentBoundingBox(current.component)
+        : null
+
     return (
-      <div
-        ref={containerRef}
-        className={cls(
-          "fixed rounded-lg p-0.5 flex flex-col gap-2 select-none overflow-hidden",
-          "bg-neutral-900 opacity-75 hover:opacity-100 shadow-lg"
+      <>
+        {overlayBox && (
+          <div
+            style={{
+              position: "absolute",
+              zIndex: 1000,
+              top: overlayBox.top + window.scrollY + "px",
+              left: overlayBox.left + window.scrollX + "px",
+              width: overlayBox.width + "px",
+              height: overlayBox.height + "px",
+              pointerEvents: "none",
+              opacity: state === "entered" ? 1 : 0.9,
+              transition: "80ms ease-in-out",
+              background:
+                "linear-gradient(135deg, rgb(164 11 32 / 66%) 0%, rgb(82 14 47 / 80%) 80%)",
+            }}
+          />
         )}
-        style={{
-          zIndex:
-            widgetStackTop.value === "componentInfo"
-              ? WIDGET_Z_BASE + 1
-              : WIDGET_Z_BASE,
-          minWidth: `${COMPONENT_INFO_MIN_WIDTH}px`,
-          minHeight: `${COMPONENT_INFO_MIN_HEIGHT}px`,
-          cursor: resizeController.isResizing.value
-            ? "se-resize"
-            : dragController.isDragging.value
-            ? "grabbing"
-            : "grab",
-        }}
-        onclick={() => (widgetStackTop.value = "componentInfo")}
-      >
         <div
+          ref={containerRef}
+          className={cls(
+            "fixed rounded-lg p-0.5 flex flex-col gap-2 select-none overflow-hidden",
+            "bg-neutral-900 opacity-75 hover:opacity-100 shadow-lg"
+          )}
           style={{
-            transition: "80ms ease-in-out",
-            opacity: state === "entered" ? 1 : 0,
-            flex: 1,
-            overflow: "auto",
-            scrollbarWidth: "thin",
-            minHeight: 0,
+            zIndex:
+              widgetStackTop.value === "componentInfo"
+                ? WIDGET_Z_BASE + 1
+                : WIDGET_Z_BASE,
+            minWidth: `${COMPONENT_INFO_MIN_WIDTH}px`,
+            minHeight: `${COMPONENT_INFO_MIN_HEIGHT}px`,
+            cursor: resizeController.isResizing.value
+              ? "se-resize"
+              : dragController.isDragging.value
+              ? "grabbing"
+              : "grab",
           }}
+          onclick={bringToFront}
+          onmousedown={bringToFront}
+          onmouseenter={() => (isHovered.value = true)}
+          onmouseleave={() => (isHovered.value = false)}
         >
-          {selected && (
+          <div
+            style={{
+              transition: "80ms ease-in-out",
+              opacity: state === "entered" ? 1 : 0,
+              flex: 1,
+              overflow: "auto",
+              scrollbarWidth: "thin",
+              minHeight: 0,
+            }}
+          >
             <div className="flex flex-col text-sm">
               <div className="flex items-center justify-between gap-2 p-2">
                 <a
-                  href={selected.link}
+                  href={current.link}
                   className={cls(
                     "flex items-center justify-center gap-2",
                     "text-neutral-400 hover:text-neutral-200"
@@ -195,16 +325,16 @@ export const ComponentInfoWidget: Kiru.FC<ComponentInfoWidgetProps> = () => {
                   onclick={(e: Kiru.MouseEvent) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    window.open(selected.link)
+                    window.open(current.link)
                   }}
                   onmousedown={(e) => e.stopPropagation()}
                   title="Open in editor"
                 >
-                  {`<${selected.name}>`}
+                  {`<${current.name}>`}
                   <ExternalLinkIcon className="w-4 h-4 shrink-0 pointer-events-none" />
                 </a>
                 <div className="flex items-center gap-2">
-                  {selected.unmounted && (
+                  {current.unmounted && (
                     <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
                       Unmounted
                     </span>
@@ -212,7 +342,12 @@ export const ComponentInfoWidget: Kiru.FC<ComponentInfoWidgetProps> = () => {
                   <button
                     type="button"
                     className="p-1 text-neutral-400 hover:text-neutral-200"
-                    onclick={() => (selectedComponentForPanel.value = null)}
+                    onclick={() => {
+                      componentInfoPanels.value =
+                        componentInfoPanels.value.filter(
+                          (p) => p.id !== panel.id
+                        )
+                    }}
                     title="Close"
                   >
                     <CloseIcon className="w-4 h-4 shrink-0 pointer-events-none" />
@@ -239,25 +374,40 @@ export const ComponentInfoWidget: Kiru.FC<ComponentInfoWidgetProps> = () => {
                 </kiru.Derive>
               </div>
             </div>
-          )}
+          </div>
+          <div
+            ref={resizeHandleRef}
+            style={{
+              position: "absolute",
+              bottom: "4px",
+              right: "4px",
+              width: "16px",
+              height: "16px",
+              cursor: "se-resize",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ResizeGripIcon className="text-neutral-500" />
+          </div>
         </div>
-        <div
-          ref={resizeHandleRef}
-          style={{
-            position: "absolute",
-            bottom: "4px",
-            right: "4px",
-            width: "16px",
-            height: "16px",
-            cursor: "se-resize",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <ResizeGripIcon className="text-neutral-500" />
-        </div>
-      </div>
+      </>
     )
   }
 }
+
+export const ComponentInfoWidget: Kiru.FC<ComponentInfoWidgetProps> = ({
+  state,
+}) => (
+  <kiru.For each={componentInfoPanels}>
+    {(panel, index) => (
+      <ComponentInfoPanel
+        key={panel.id}
+        panel={panel}
+        index={index}
+        state={state}
+      />
+    )}
+  </kiru.For>
+)

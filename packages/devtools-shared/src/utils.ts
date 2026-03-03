@@ -89,3 +89,42 @@ export function ifDevtoolsAppRootHasFocus<T>(callback: (el: Element) => T) {
   }
   return null
 }
+
+export function computeComponentHash(component: Kiru.VNode): string {
+  const segments: string[] = []
+  let n: Kiru.VNode | null = component
+  while (n) {
+    if (typeof n.type === "function") {
+      const anyType = n.type as any
+      const name =
+        anyType.displayName ??
+        ((anyType as Function).name || "AnonymousFunction")
+      const key =
+        n.key != null && n.key !== undefined
+          ? `k:${String(n.key)}`
+          : `i:${n.index}`
+      segments.push(`${name}[${key}]`)
+    }
+    n = n.parent
+  }
+  return `ch:${segments.join("/")}`
+}
+
+export function findComponentByHash(
+  root: Kiru.VNode | null,
+  targetHash: string
+): Kiru.VNode | null {
+  if (!root) return null
+  const stack: Kiru.VNode[] = [root]
+  while (stack.length) {
+    const node = stack.pop()!
+    if (typeof node.type === "function") {
+      if (computeComponentHash(node) === targetHash) {
+        return node
+      }
+    }
+    if (node.child) stack.push(node.child)
+    if (node.sibling) stack.push(node.sibling)
+  }
+  return null
+}

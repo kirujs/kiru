@@ -15,7 +15,7 @@ const backgroundColor = computed(() =>
 )
 
 export default function HomePage() {
-  const showChild = signal(false)
+  const showChild = signal(true)
 
   return () => (
     <div className="flex flex-col gap-4">
@@ -26,7 +26,7 @@ export default function HomePage() {
       <input type="color" bind:value={color} />
       <input type="range" bind:value={lightness} min={-1} max={1} step={0.1} />
       <input type="checkbox" bind:checked={showChild} />
-      {<ChildComponent foo={{ bar: text }} />}
+      {showChild.value && <ChildComponent foo={{ bar: text }} />}
     </div>
   )
 }

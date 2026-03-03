@@ -1,13 +1,13 @@
 import * as kiru from "kiru"
 import {
   createMousePositionTracker,
-  ExternalLinkIcon,
   getFileLink,
   getNodeName,
   isDevtoolsApp,
   kiruGlobal,
+  computeComponentHash,
 } from "devtools-shared"
-import { isComponentSelectorEnabled, selectedComponentForPanel } from "../state"
+import { componentInfoPanels, isComponentSelectorEnabled } from "../state"
 
 interface HoverInfo {
   name: string
@@ -47,7 +47,9 @@ export const ComponentSelectorWidget: Kiru.FC<
 
     let searchResult: ComponentSearchResult | null = null
     for (const element of elements) {
-      searchResult = findElementNearestComponentWithLink(element)
+      const node = element.__kiruNode
+      if (!node) continue
+      searchResult = findNearestComponentWithLink(node)
       if (searchResult) break
     }
     if (!searchResult) {
@@ -109,8 +111,25 @@ export const ComponentSelectorWidget: Kiru.FC<
       return
     const { name, link, component } = currentComponentHover.value
     if (!link) return
+    const hash = computeComponentHash(component)
     isComponentSelectorEnabled.value = false
-    selectedComponentForPanel.value = { name, link, component, unmounted: false }
+
+    const existing = componentInfoPanels.value.find(
+      (panel) => panel.hash === hash && panel.link === link
+    )
+    if (existing) return
+
+    componentInfoPanels.value = [
+      ...componentInfoPanels.value,
+      {
+        id: crypto.randomUUID(),
+        name,
+        link,
+        component,
+        unmounted: false,
+        hash,
+      },
+    ]
   }
 
   const onAppUpdate = (updatedApp: kiru.AppHandle) => {
@@ -176,41 +195,26 @@ interface ComponentSearchResult {
   link: string
 }
 
-function findElementNearestComponentWithLink(
-  el: Element
+function findNearestComponentWithLink(
+  node: Kiru.VNode
 ): ComponentSearchResult | null {
-  if (!(el as any).__kiruNode) return null
-
   // find the nearest component
-  let component: Kiru.VNode | null = null
-  let n: Kiru.VNode | null = (el as any).__kiruNode
+  let match: null | { component: Kiru.VNode; link: string } = null
+  let n: Kiru.VNode | null = node
   while (n) {
     if (typeof n.type === "function") {
-      component = n
-      break
+      const c = n,
+        l = getFileLink(c.type)
+      if (l) {
+        match = { component: c, link: l }
+        break
+      }
     }
     n = n.parent
   }
-  if (!component) return null
+  if (!match) return null
 
-  const link = getComponentFileLink(component)
-  if (!link) return null
-
-  // traverse & collect all of the first-of-branch elements
-  const elements = collectDomNodes(component.child!)
-
-  return { elements, component, link }
-}
-
-function getComponentFileLink(component: Kiru.VNode): string | null {
-  const anyComponent = component as any
-  // Try common places where the dev file link symbol may be attached.
-  return (
-    getFileLink(anyComponent.type) ??
-    (anyComponent.component && getFileLink(anyComponent.component)) ??
-    (anyComponent.component && getFileLink(anyComponent.component.type)) ??
-    null
-  )
+  return { ...match, elements: collectDomNodes(match.component.child!) }
 }
 
 function collectDomNodes(
