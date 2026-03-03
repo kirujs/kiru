@@ -63,18 +63,11 @@ export class ComputedSignal<T> extends Signal<T> {
     Signal.dispose(signal)
   }
 
-  static updateGetter<T>(signal: ComputedSignal<T>, getter: (prev?: T) => T) {
-    const $computed = latest(signal)
-    $computed.$getter = getter
-    $computed.$isDirty = true
-
-    ComputedSignal.run($computed)
-    if (Object.is($computed.$value, $computed.$prevValue)) return
-    $computed.notify()
-  }
-
   private static stop<T>(computed: ComputedSignal<T>) {
-    const { $id, $unsubs } = latest(computed)
+    if (__DEV__) {
+      computed = latest(computed)
+    }
+    const { $id, $unsubs } = computed
 
     effectQueue.delete($id)
     $unsubs.forEach(call)
@@ -83,31 +76,46 @@ export class ComputedSignal<T> extends Signal<T> {
   }
 
   private static run<T>(computed: ComputedSignal<T>) {
-    const $computed = latest(computed)
-    const { $id: id, $getter, $unsubs: subs } = $computed
+    if (__DEV__) {
+      computed = latest(computed)
+    }
+    const { $id: id, $getter, $unsubs: subs } = computed
 
     const value = executeWithTracking({
       id,
       subs,
-      fn: () => $getter($computed.$value),
+      fn: () => $getter(computed.$value),
       onDepChanged: () => {
-        $computed.$isDirty = true
+        computed.$isDirty = true
         if (__DEV__) {
           if (!signalSubsMap?.get(id)?.size) return
         } else {
           if (!computed.$subs!.size) return
         }
-        ComputedSignal.run($computed)
-        if (Object.is($computed.$value, $computed.$prevValue)) return
-        $computed.notify()
+        ComputedSignal.run(computed)
+        if (Object.is(computed.$value, computed.$prevValue)) return
+        computed.notify()
       },
     })
-    $computed.sneak(value)
-    $computed.$isDirty = false
+    computed.sneak(value)
+    computed.$isDirty = false
   }
 
   private ensureNotDirty() {
-    if (!this.$isDirty) return
+    let computed = this
+    if (__DEV__) {
+      computed = latest(this)
+    }
+
+    if (!computed.$isDirty) {
+      const pending = effectQueue.get(computed.$id)
+      if (pending) {
+        pending()
+        effectQueue.delete(computed.$id)
+      }
+    }
+
+    if (!computed.$isDirty) return
     if (__DEV__) {
       /**
        * This is a safeguard for dev-mode only, where a 'read' on an
@@ -118,9 +126,9 @@ export class ComputedSignal<T> extends Signal<T> {
        * the previous signal's ID and not disposing it / deleting the
        * map entry.
        */
-      if (this.$isDisposed) return
+      if (computed.$isDisposed) return
     }
-    ComputedSignal.run(this)
+    ComputedSignal.run(computed)
   }
 }
 
