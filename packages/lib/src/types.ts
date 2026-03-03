@@ -162,7 +162,11 @@ declare global {
       | typeof $ERROR_BOUNDARY
 
     interface Element {
-      type: Function | ExoticSymbol | "#text" | (string & {})
+      type:
+        | (Function & { displayName?: string })
+        | ExoticSymbol
+        | "#text"
+        | (string & {})
       key: JSX.ElementKey | null
       props: {
         [key: string]: any
