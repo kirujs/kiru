@@ -8,11 +8,12 @@ if (import.meta.env.DEV) {
 }
 
 const text = signal("Hello World")
-const color = signal("#23a964")
-const lightness = signal(0)
+const color = signal("#ff0066")
+const lightness = signal(-0.5)
 const backgroundColor = computed(() =>
   ColorLuminance(color.value, lightness.value)
 )
+
 export default function HomePage() {
   const showChild = signal(false)
 

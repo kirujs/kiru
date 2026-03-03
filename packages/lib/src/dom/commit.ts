@@ -6,9 +6,10 @@ import {
   call,
 } from "../utils/index.js"
 import { FLAG_PLACEMENT, FLAG_STATIC_DOM, FLAG_UPDATE } from "../constants.js"
-import { postEffectCleanups, renderMode } from "../globals.js"
 import { __DEV__ } from "../env.js"
-import { updateDomProps } from "./props.js"
+import { postEffectCleanups, renderMode } from "../globals.js"
+import { isHmrUpdate } from "../hmr.js"
+import { unmountDomProps, updateDomProps } from "./props.js"
 import { HostNode, getDomParent, placeDom } from "./nodes.js"
 import type { AppHandle } from "../appHandle.js"
 import type { DomVNode, ElementVNode } from "../types.utils"
@@ -68,6 +69,14 @@ function commitDom(
     vNode.flags & FLAG_PLACEMENT
   ) {
     placeDom(vNode, hostNode)
+  }
+  // During HMR we want to fully unmount previous props (events, signal
+  // subscriptions, style listeners, refs, etc.) before applying the new ones,
+  // so that we don't merge stale props with the new shape.
+  if (__DEV__ && vNode.prev && isHmrUpdate()) {
+    const { dom, prev, cleanups } = vNode
+    unmountDomProps(vNode, dom, prev.props, cleanups)
+    vNode.prev = null
   }
   if (!vNode.prev || vNode.flags & FLAG_UPDATE) {
     updateDomProps(vNode)

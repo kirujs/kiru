@@ -4,15 +4,15 @@ import {
   setRef,
   registerVNodeCleanup,
 } from "../utils/index.js"
-import { booleanAttributes, EVENT_PREFIX_REGEX } from "../constants.js"
 import { Signal } from "../signals/base.js"
 import { unwrap } from "../signals/utils.js"
+import { booleanAttributes, EVENT_PREFIX_REGEX } from "../constants.js"
 import { __DEV__, isBrowser } from "../env.js"
 import { wrapFocusEventHandler } from "./focus.js"
 import type { StyleObject } from "../types.dom.js"
 import type { DomVNode, SomeDom, SomeElement } from "../types.utils.js"
 
-export { updateDomProps, setSignalProp }
+export { updateDomProps, unmountDomProps, setSignalProp }
 
 type VNode = Kiru.VNode
 
@@ -242,6 +242,69 @@ function updateDomProps(vNode: DomVNode) {
     if (prevRef) setRef(prevRef, null)
     if (nextRef) setRef(nextRef, dom)
   }
+}
+
+function unmountDomProps(
+  vNode: DomVNode,
+  dom: SomeDom,
+  prevProps: Record<string, any>,
+  cleanups?: DomVNode["cleanups"]
+) {
+  let events: VNodeEventListenerObjects | undefined
+
+  for (const key in prevProps) {
+    const prevVal = prevProps[key]
+
+    // Skip structural props early
+    if (skippedProps.has(key)) continue
+
+    // Events
+    if (
+      key.length >= 2 &&
+      key.charCodeAt(0) === 111 &&
+      key.charCodeAt(1) === 110
+    ) {
+      // "on"
+      events ??= eventListenerObjects.get(vNode) ?? {}
+      eventListenerObjects.set(vNode, events)
+
+      const evtName = key.replace(EVENT_PREFIX_REGEX, "")
+      const evtObj = events[evtName]
+      if (evtObj) {
+        dom.removeEventListener(evtName, evtObj)
+        delete events[evtName]
+      }
+      continue
+    }
+
+    // Signals (including bind: props) – invoke their registered cleanups.
+    if (Signal.isSignal(prevVal) && cleanups?.[key]) {
+      cleanups[key]!()
+      delete cleanups[key]
+      continue
+    }
+
+    // Style object: clear any style listeners and remove the style attribute.
+    if (key === "style") {
+      if (cleanups?.style) {
+        cleanups.style()
+        delete cleanups.style
+      }
+      if (isElementNode(dom)) {
+        setStyleProp(dom as SomeElement, undefined, prevVal)
+      }
+      continue
+    }
+
+    // Other props: remove/reset attributes based on previous value.
+    if (isElementNode(dom)) {
+      setProp(dom as SomeElement, key, undefined, prevVal)
+    }
+  }
+
+  // Clear previous ref
+  const prevRef = prevProps.ref
+  if (prevRef) setRef(prevRef, null)
 }
 
 function mountDomProps(
