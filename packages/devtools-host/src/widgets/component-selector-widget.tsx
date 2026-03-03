@@ -7,7 +7,7 @@ import {
   isDevtoolsApp,
   kiruGlobal,
 } from "devtools-shared"
-import { isComponentSelectorEnabled } from "../state"
+import { isComponentSelectorEnabled, selectedComponentForPanel } from "../state"
 
 interface HoverInfo {
   name: string
@@ -16,6 +16,7 @@ interface HoverInfo {
   width: number
   height: number
   link: string
+  component: Kiru.VNode
 }
 
 interface ComponentSelectorWidgetProps {
@@ -83,6 +84,7 @@ export const ComponentSelectorWidget: Kiru.FC<
       width: width,
       height: height,
       link: searchResult.link,
+      component: searchResult.component,
     }
   }
 
@@ -105,10 +107,10 @@ export const ComponentSelectorWidget: Kiru.FC<
     e.stopImmediatePropagation()
     if (!isComponentSelectorEnabled.value || !currentComponentHover.value)
       return
-    const { link } = currentComponentHover.value
+    const { name, link, component } = currentComponentHover.value
     if (!link) return
     isComponentSelectorEnabled.value = false
-    window.open(link)
+    selectedComponentForPanel.value = { name, link, component, unmounted: false }
   }
 
   const onAppUpdate = (updatedApp: kiru.AppHandle) => {
@@ -160,13 +162,9 @@ export const ComponentSelectorWidget: Kiru.FC<
         onclick={handleClick}
         className="text-white flex items-center justify-center"
       >
-        <div className="flex flex-col items-center justify-center gap-1 p-1 text-center pointer-events-none">
-          <span className="font-medium truncate max-w-full">{info.name}</span>
-          <span className="flex items-center gap-1 text-[10px] opacity-90 whitespace-nowrap">
-            Open in editor
-            <ExternalLinkIcon className="w-3 h-3 shrink-0" />
-          </span>
-        </div>
+        <span className="font-medium text-sm truncate max-w-full">
+          {`<${info.name}>`}
+        </span>
       </div>
     )
   }

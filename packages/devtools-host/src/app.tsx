@@ -9,12 +9,14 @@ import {
   RadioIcon,
 } from "devtools-shared"
 import {
+  isComponentInfoPanelShown,
   isComponentSelectorEnabled,
   isDebuggerShown,
   isProfilerShown,
 } from "./state"
 import { DRAG_SNAP_PADDING, HANDLE_TOOLTIP_GAP } from "./constants"
 import {
+  ComponentInfoWidget,
   ComponentSelectorWidget,
   DebuggerWidget,
   ProfilingWidget,
@@ -213,6 +215,17 @@ export default function DevtoolsHostApp() {
           element={(state) => {
             if (state === "exited") return null
             return <ComponentSelectorWidget state={state} />
+          }}
+        />
+        <kiru.Transition
+          in={isComponentInfoPanelShown}
+          duration={{
+            in: 0,
+            out: 150,
+          }}
+          element={(state) => {
+            if (state === "exited") return null
+            return <ComponentInfoWidget state={state} />
           }}
         />
       </>

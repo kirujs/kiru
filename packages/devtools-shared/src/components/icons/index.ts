@@ -1,5 +1,6 @@
 export * from "./apps-icon.js"
 export * from "./chevron-right-icon.js"
+export * from "./close-icon.js"
 export * from "./cog-icon.js"
 export * from "./component-icon.js"
 export * from "./external-link-icon.js"

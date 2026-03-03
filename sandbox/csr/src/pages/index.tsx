@@ -7,20 +7,25 @@ if (import.meta.env.DEV) {
   DevTools.track(double, "double")
 }
 
+const text = signal("Hello World")
+const color = signal("#23a964")
+const lightness = signal(0)
+const backgroundColor = computed(() =>
+  ColorLuminance(color.value, lightness.value)
+)
 export default function HomePage() {
-  const color = signal("#23a964")
-  const lightness = signal(0)
-  const backgroundColor = computed(() =>
-    ColorLuminance(color.value, lightness.value)
-  )
+  const showChild = signal(false)
 
   return () => (
     <div className="flex flex-col gap-4">
       <span className="p-2 rounded-lg" style={{ color, backgroundColor }}>
         Hello World
       </span>
+      <input type="text" bind:value={text} />
       <input type="color" bind:value={color} />
       <input type="range" bind:value={lightness} min={-1} max={1} step={0.1} />
+      <input type="checkbox" bind:checked={showChild} />
+      {<ChildComponent foo={{ bar: text }} />}
     </div>
   )
 }
@@ -40,4 +45,12 @@ function ColorLuminance(hex: string, lum: number) {
   }
 
   return rgb
+}
+
+function ChildComponent(props: { foo: { bar: Kiru.Signal<string> } }) {
+  return (
+    <div>
+      <span>{props.foo.bar}</span>
+    </div>
+  )
 }
