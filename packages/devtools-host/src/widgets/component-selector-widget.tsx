@@ -192,7 +192,6 @@ export const ComponentSelectorWidget: Kiru.FC<
           state === "entered" ? "opacity-100" : "opacity-90",
           state === "entered" ? "scale-100" : "scale-90"
         )}
-        title="Click to open in editor"
         onclick={handleClick}
       >
         <span className="font-medium text-sm truncate max-w-full">
