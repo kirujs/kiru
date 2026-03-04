@@ -23,8 +23,8 @@ export function SelectionBox({
         ...style,
         position: "absolute",
         zIndex: 50,
-        top: top + window.scrollY + "px",
-        left: left + window.scrollX + "px",
+        top: top + "px",
+        left: left + "px",
         width: width + "px",
         height: height + "px",
         background:
