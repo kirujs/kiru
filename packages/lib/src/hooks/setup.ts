@@ -1,8 +1,8 @@
-import { node, setups } from "../globals.js"
-import { signal } from "../signals/index.js"
-import type { Signal } from "../signals/base.js"
+import { computed, signal } from "../signals/index.js"
 import { createVNodeId } from "../utils/vdom.js"
 import { __DEV__ } from "../env.js"
+import { node, setups } from "../globals.js"
+import type { Signal } from "../signals/base.js"
 
 export interface Setup<Props extends {}> {
   readonly derive: <T>(
@@ -48,7 +48,7 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
   return {
     derive(selector) {
       const props = { ...vNode.props } as InferredProps
-      const sig = signal(selector(props))
+      const sig = computed(() => selector(props))
       propSyncs.push((p) => (sig.value = selector(p)))
       return sig
     },
