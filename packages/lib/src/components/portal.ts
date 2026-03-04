@@ -9,6 +9,10 @@ interface PortalProps {
   container: HTMLElement | (() => HTMLElement)
 }
 
+/**
+ * Escapes the application DOM tree and renders a child component in the given container.
+ * @see https://kirujs.dev/docs/api/components/portal
+ */
 export function Portal({ children, container }: PortalProps) {
   const vNode = node.current!
   if (!vNode.dom) {

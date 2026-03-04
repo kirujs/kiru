@@ -21,6 +21,10 @@ interface TransitionProps {
   onTransitionEnd?: (state: "entered" | "exited") => void
 }
 
+/**
+ * Animates the DOM in a procedural/coroutine-like fashion. Useful for modals, drawers, dialogs and more.
+ * @see https://kirujs.dev/docs/api/components/transition
+ */
 export const Transition: Kiru.FC<TransitionProps> = (props) => {
   const tState = signal<TransitionState>(props.initialState || "exited")
   let timeoutRef: number | undefined

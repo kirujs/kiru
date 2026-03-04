@@ -28,6 +28,10 @@ const lazyCache: Map<string, LazyState> = isBrowser
     (window.__KIRU_LAZY_CACHE ??= new Map<string, LazyState>())
   : new Map<string, LazyState>()
 
+/**
+ * Lazy loads a component and renders it when it is ready.
+ * @see https://kirujs.dev/docs/api/components/lazy
+ */
 export function lazy<T extends LazyImportValue>(
   componentPromiseFn: () => Promise<T>
 ): Kiru.FC<LazyComponentProps<T>> {

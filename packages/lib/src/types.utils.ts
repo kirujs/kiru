@@ -74,3 +74,6 @@ export type RecordHas<T extends Record<string, any>, U> = [
 ] extends [never]
   ? false
   : true
+
+export type Falsy = false | 0 | 0n | "" | null | undefined
+export type Truthy<T> = Exclude<T, Falsy>

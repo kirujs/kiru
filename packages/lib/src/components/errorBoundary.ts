@@ -7,6 +7,10 @@ export interface ErrorBoundaryProps {
   onError?: (error: Error) => void
 }
 
+/**
+ * Catches errors in the children and renders a fallback component.
+ * @see https://kirujs.dev/docs/api/components/error-boundary
+ */
 export function ErrorBoundary({
   children,
   fallback,
