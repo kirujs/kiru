@@ -38,6 +38,10 @@ export class ComputedSignal<T> extends Signal<T> {
     return super.value
   }
 
+  set value(next: T) {
+    super.value = next
+  }
+
   toString() {
     this.ensureNotDirty()
     return super.toString()
@@ -47,9 +51,6 @@ export class ComputedSignal<T> extends Signal<T> {
     this.ensureNotDirty()
     return super.peek()
   }
-
-  // @ts-expect-error
-  set value(next: T) {}
 
   subscribe(cb: (state: T, prevState?: T) => void): () => void {
     if (this.$isDirty) {
