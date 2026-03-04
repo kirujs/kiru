@@ -11,7 +11,7 @@ interface PortalProps {
 
 /**
  * Escapes the application DOM tree and renders a child component in the given container.
- * @see https://kirujs.dev/docs/api/components/portal
+ * @see https://kirujs.dev/docs/components/portal
  */
 export function Portal({ children, container }: PortalProps) {
   const vNode = node.current!

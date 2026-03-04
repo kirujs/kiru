@@ -30,7 +30,7 @@ const lazyCache: Map<string, LazyState> = isBrowser
 
 /**
  * Lazy loads a component and renders it when it is ready.
- * @see https://kirujs.dev/docs/api/components/lazy
+ * @see https://kirujs.dev/docs/components/lazy
  */
 export function lazy<T extends LazyImportValue>(
   componentPromiseFn: () => Promise<T>

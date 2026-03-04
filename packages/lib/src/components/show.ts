@@ -15,7 +15,7 @@ export interface ShowProps<T> {
  * If the 'when' prop is truthy, the child component is rendered.
  * If the 'when' prop is falsy, the fallback component is rendered.
  * If the 'when' prop is a Signal, it creates an automatically-updating component with fine-grained reactivity.
- * @see https://kirujs.dev/docs/api/components/show
+ * @see https://kirujs.dev/docs/components/show
  */
 export function Show<T>({
   children,

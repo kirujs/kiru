@@ -12,11 +12,12 @@ export type Derivable =
   | Kiru.StatefulPromiseBase<unknown>
   | Record<string, Kiru.Signal<unknown> | Kiru.StatefulPromiseBase<unknown>>
 
-type InnerOf<T> = T extends Kiru.Signal<infer V>
-  ? V
-  : T extends Kiru.StatefulPromiseBase<infer P>
-  ? P
-  : never
+type InnerOf<T> =
+  T extends Kiru.Signal<infer V>
+    ? V
+    : T extends Kiru.StatefulPromiseBase<infer P>
+      ? P
+      : never
 
 type UnwrapDerive<T extends Derivable> = T extends
   | Kiru.Signal<unknown>
@@ -36,7 +37,7 @@ export type DeriveFallbackMode = "swr" | "fallback"
 
 export interface DeriveProps<
   T extends Derivable,
-  Mode extends DeriveFallbackMode = "fallback"
+  Mode extends DeriveFallbackMode = "fallback",
 > {
   from: T
   mode?: Mode
@@ -45,19 +46,19 @@ export interface DeriveProps<
       ? ChildFnWithStale<U>
       : ChildFn<U>
     : T extends Record<string, any>
-    ? RecordHasPromise<T> extends true
-      ? Mode extends "swr"
-        ? ChildFnWithStale<UnwrapDerive<T>>
+      ? RecordHasPromise<T> extends true
+        ? Mode extends "swr"
+          ? ChildFnWithStale<UnwrapDerive<T>>
+          : ChildFn<UnwrapDerive<T>>
         : ChildFn<UnwrapDerive<T>>
       : ChildFn<UnwrapDerive<T>>
-    : ChildFn<UnwrapDerive<T>>
   fallback?: T extends Kiru.StatefulPromiseBase<any>
     ? JSX.Element
     : T extends Record<string, any>
-    ? RecordHasPromise<T> extends true
-      ? JSX.Element
+      ? RecordHasPromise<T> extends true
+        ? JSX.Element
+        : never
       : never
-    : never
 }
 
 type Derive = {
@@ -68,7 +69,7 @@ type Derive = {
 
 /**
  * Derives a value from a signal or stateful promise and renders a child component.
- * @see https://kirujs.dev/docs/api/components/derive
+ * @see https://kirujs.dev/docs/components/derive
  */
 export const Derive: Derive = () => {
   return (props) => {

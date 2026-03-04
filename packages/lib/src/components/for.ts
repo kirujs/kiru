@@ -6,12 +6,12 @@ type InferArraySignalItemType<T extends Signal<any[]> | readonly unknown[]> =
       ? W
       : never
     : T extends unknown[]
-    ? T[number]
-    : never
+      ? T[number]
+      : never
 
 type ForProps<
   T extends Signal<any[]> | readonly unknown[],
-  U = InferArraySignalItemType<T>
+  U = InferArraySignalItemType<T>,
 > = {
   each: T
   fallback?: JSX.Element
@@ -21,7 +21,7 @@ type ForProps<
 /**
  * Renders a list of items. If the list a Signal, it creates an automatically-updating list with fine-grained reactivity.
  * If the list is empty, the fallback is rendered.
- * @see https://kirujs.dev/docs/api/components/for
+ * @see https://kirujs.dev/docs/components/for
  */
 export function For<T extends Signal<any[]> | unknown[]>({
   each,
