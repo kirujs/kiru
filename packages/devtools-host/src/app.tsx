@@ -27,6 +27,10 @@ const mounted = kiru.signal(false)
 const showTooltipMenu = kiru.signal(false)
 const tooltipRef = kiru.ref<HTMLDivElement>(null)
 
+const containerOpacity = kiru.computed(() => {
+  return mounted.value ? 1 : 0
+})
+
 export default function DevtoolsHostApp() {
   const mainMenuController = createDraggableController({
     storage: localStorage,
@@ -124,7 +128,7 @@ export default function DevtoolsHostApp() {
           ref={mainMenuController.containerRef}
           style={{
             transition: "80ms",
-            opacity: mounted.value ? 1 : 0,
+            opacity: containerOpacity,
             flexDirection: containerFlexDirection,
           }}
           className={`z-999999 top-0 left-0 flex items-center justify-center`}
@@ -233,22 +237,30 @@ interface TooltipMenuButtonProps extends kiru.ElementProps<"button"> {
   active?: kiru.Signal<boolean>
 }
 
-function TooltipMenuButton({
-  className,
-  active,
-  ...props
-}: TooltipMenuButtonProps) {
-  const isActive = !!active?.value
-  return (
-    <button
-      className={cls(
-        "flex items-center px-1.5 py-0.5 gap-2",
-        "text-sm rounded-lg border border-white/10",
-        isActive && "bg-white/5 text-neutral-100",
-        !isActive && "bg-white/2.5 hover:bg-white/5 text-neutral-400",
-        kiru.unwrap(className)
-      )}
-      {...props}
-    />
-  )
+const TooltipMenuButton: Kiru.FC<TooltipMenuButtonProps> = () => {
+  const { derive } = kiru.setup<TooltipMenuButtonProps>()
+
+  const $class = derive(({ className, active }) => {
+    const isActive = !!active?.value
+    return cls(
+      "flex items-center px-1.5 py-0.5 gap-2",
+      "text-sm rounded-lg border border-white/10",
+      isActive
+        ? "text-neutral-100"
+        : "bg-white/2.5 hover:bg-white/5 text-neutral-400",
+      "transition-colors duration-150",
+      kiru.unwrap(className, true)
+    )
+  })
+
+  const background = derive(({ active }) => {
+    const isActive = !!active?.value
+    return isActive
+      ? "linear-gradient(135deg, rgb(143 1 1 / 75%) 0%, rgba(119, 14, 103, 0.89) 65%)"
+      : "transparent"
+  })
+
+  return ({ className, active, ...props }: TooltipMenuButtonProps) => {
+    return <button className={$class} style={{ background }} {...props} />
+  }
 }
