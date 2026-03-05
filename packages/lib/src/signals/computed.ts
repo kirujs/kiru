@@ -25,8 +25,16 @@ export class ComputedSignal<T> extends Signal<T> {
         },
         inject: (prev) => {
           inject(prev)
+          // Stop any pending reactions on the previous instance and mark
+          // this computed as dirty so it will recompute with the latest
+          // dependencies after HMR.
           ComputedSignal.stop(prev)
-          this.$isDirty = prev.$isDirty
+          this.$isDirty = true
+          // Force a recompute immediately so any active subscribers (like
+          // text nodes bound to a computed signal) see the updated value
+          // after a hot reload where only its dependencies changed.
+          ComputedSignal.run(this)
+          this.notify()
         },
         destroy: () => {},
       } satisfies HMRAccept<ComputedSignal<T>>
