@@ -3,6 +3,7 @@ import {
   getVNodeApp,
   setRef,
   registerVNodeCleanup,
+  latest,
 } from "../utils/index.js"
 import { Signal } from "../signals/base.js"
 import { unwrap } from "../signals/utils.js"
@@ -47,9 +48,33 @@ function updateDomProps(vNode: DomVNode) {
   const nextProps = props ?? {}
 
   if (isTextNode(dom)) {
-    const nextVal = nextProps.nodeValue
-    if (!Signal.isSignal(nextVal) && dom.nodeValue !== nextVal) {
-      dom.nodeValue = nextVal
+    let nextVal = nextProps.nodeValue
+    if (__DEV__ && Signal.isSignal(nextVal)) nextVal = latest(nextVal)
+
+    if (!Signal.isSignal(nextVal)) {
+      if (dom.nodeValue !== nextVal) {
+        dom.nodeValue = nextVal
+      }
+      return
+    }
+    if (prevProps.nodeValue === nextVal) return
+    dom.nodeValue = String(nextVal.peek() ?? "")
+    if (__DEV__) {
+      cleanups?.nodeValue?.()
+      registerVNodeCleanup(
+        vNode,
+        "nodeValue",
+        nextVal.subscribe((value, prev) => {
+          if (value === prev) return
+          dom.nodeValue = String(value ?? "")
+          if (isBrowser) {
+            window.__kiru?.profilingContext?.emit(
+              "signalTextUpdate",
+              getVNodeApp(vNode)!
+            )
+          }
+        })
+      )
     }
     return
   }

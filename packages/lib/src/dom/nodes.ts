@@ -5,6 +5,7 @@ import { hydrationStack } from "../hydration.js"
 import {
   getVNodeApp,
   isValidTextChild,
+  latest,
   registerVNodeCleanup,
 } from "../utils/index.js"
 import { KiruError } from "../error.js"
@@ -27,8 +28,8 @@ function createDom(vNode: DomVNode): SomeDom {
     t == "#text"
       ? createTextNode(vNode)
       : svgTags.has(t)
-        ? document.createElementNS("http://www.w3.org/2000/svg", t)
-        : document.createElement(t)
+      ? document.createElementNS("http://www.w3.org/2000/svg", t)
+      : document.createElement(t)
 
   return dom
 }
@@ -175,6 +176,7 @@ function getOrCreateTextNode(vNode: VNode): MaybeDom {
 }
 
 function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
+  if (__DEV__) signal = latest(signal)
   const cleanup = signal.subscribe((value, prev) => {
     if (value === prev) return
     textNode.nodeValue = value
@@ -198,6 +200,7 @@ function createTextNode(vNode: VNode): Text {
 }
 
 function createSignalTextNode(vNode: VNode, nodeValue: Signal<string>): Text {
+  if (__DEV__) nodeValue = latest(nodeValue) as Signal<string>
   const value = nodeValue.peek() ?? ""
   const textNode = document.createTextNode(value)
   subTextNode(vNode, textNode, nodeValue)
