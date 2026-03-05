@@ -135,7 +135,7 @@ export default function DevtoolsHostApp() {
         >
           <button
             ref={mainMenuController.handleRef}
-            className="rounded-full p-2 z-10"
+            className="rounded-full p-2 z-10 text-white"
             style={{
               background:
                 "linear-gradient(135deg, rgb(143 1 1 / 90%) 0%, rgba(119, 14, 103, 0.89) 75%)",
