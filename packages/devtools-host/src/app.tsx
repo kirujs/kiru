@@ -55,6 +55,9 @@ export default function DevtoolsHostApp() {
     mainMenuController.init()
     const container = mainMenuController.containerRef.value!
     const tooltip = tooltipRef.current!
+    setTimeout(() => {
+      mounted.value = true
+    }, 50)
     kiru.effect(
       [
         showTooltipMenu,
@@ -110,13 +113,10 @@ export default function DevtoolsHostApp() {
 
         const translateX = -tooltipWidth / 2 + clampDeltaX + slideX
         const translateY = -tooltipHeight / 2 + clampDeltaY + slideY
+
         tooltip.style.transform = `scale(${
           show ? 1 : 0
         }) translate(${translateX}px, ${translateY}px)`
-
-        setTimeout(() => {
-          mounted.value = true
-        }, 50)
       }
     )
   })

@@ -46,6 +46,7 @@ export function createDraggableController(
   )
   const containerPos = kiru.signal<Vec2>([0, 0])
   const dragging = kiru.signal(false)
+  let containerSize: { width: number; height: number } | null = null
 
   cleanups.push(
     containerPos.subscribe(([x, y]) => {
@@ -58,6 +59,10 @@ export function createDraggableController(
     if (e.button !== 0) return
 
     const container = containerRef.value!
+    if (!containerSize) {
+      const rect = container.getBoundingClientRect()
+      containerSize = { width: rect.width, height: rect.height }
+    }
     const [initialX, initialY] = [e.clientX, e.clientY]
     const initialContainerRect = container.getBoundingClientRect()
     const [initialOffsetX, initialOffsetY] = [
@@ -65,7 +70,15 @@ export function createDraggableController(
       initialY - initialContainerRect.top,
     ]
     dragging.value = false
-    const onMouseMove = (e: MouseEvent) => {
+    let lastMoveEvent: MouseEvent | null = null
+    let moveScheduled = false
+
+    const processMove = () => {
+      moveScheduled = false
+      const e = lastMoveEvent
+      lastMoveEvent = null
+      if (!e) return
+
       // once our delta is greater than 5px, we start dragging
       if (
         !dragging.peek() &&
@@ -83,7 +96,7 @@ export function createDraggableController(
       ]
       const [boundsW, boundsH] = config.getDraggableBounds()
       const { width: containerW, height: containerH } =
-        container.getBoundingClientRect()
+        containerSize ?? container.getBoundingClientRect()
 
       const distLeft = currentX
       const distRight = boundsW - (currentX + containerW)
@@ -129,6 +142,13 @@ export function createDraggableController(
       calculatePosition()
     }
 
+    const onMouseMove = (e: MouseEvent) => {
+      lastMoveEvent = e
+      if (moveScheduled) return
+      moveScheduled = true
+      requestAnimationFrame(processMove)
+    }
+
     const onMouseUp = () => {
       window.removeEventListener("mousemove", onMouseMove)
       window.removeEventListener("mouseup", onMouseUp)
@@ -145,8 +165,11 @@ export function createDraggableController(
 
   const calculatePosition = () => {
     const container = containerRef.value!
-    const { width: containerW, height: containerH } =
-      container.getBoundingClientRect()
+    if (!containerSize) {
+      const rect = container.getBoundingClientRect()
+      containerSize = { width: rect.width, height: rect.height }
+    }
+    const { width: containerW, height: containerH } = containerSize
 
     const [boundsW, boundsH] = config.getDraggableBounds()
     const pos = position.value
@@ -203,13 +226,20 @@ export function createDraggableController(
     if (!container)
       return console.error("container not found", new Error().stack)
 
+    const rect = container.getBoundingClientRect()
+    containerSize = { width: rect.width, height: rect.height }
+
     container.style.position = "fixed"
     container.style.top = "0"
     container.style.left = "0"
 
     calculatePosition()
 
-    const resizeObserver = new ResizeObserver(calculatePosition)
+    const resizeObserver = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect
+      containerSize = { width, height }
+      calculatePosition()
+    })
     resizeObserver.observe(container)
 
     window.addEventListener("resize", calculatePosition)
