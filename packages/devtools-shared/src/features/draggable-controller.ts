@@ -44,7 +44,12 @@ export function createDraggableController(
   const snapSide = kiru.computed<SnapSide | null>(() =>
     position.value.type === "snapped" ? position.value.side : null
   )
-  const containerPos = kiru.signal<Vec2>([0, 0])
+  const containerX = kiru.signal(0)
+  const containerY = kiru.signal(0)
+  const containerPos = kiru.computed<Vec2>(() => [
+    containerX.value,
+    containerY.value,
+  ])
   const dragging = kiru.signal(false)
   let containerSize: { width: number; height: number } | null = null
 
@@ -98,6 +103,8 @@ export function createDraggableController(
       const { width: containerW, height: containerH } =
         containerSize ?? container.getBoundingClientRect()
 
+      const centerX = currentX + containerW / 2
+      const centerY = currentY + containerH / 2
       const distLeft = currentX
       const distRight = boundsW - (currentX + containerW)
       const distTop = currentY
@@ -105,39 +112,40 @@ export function createDraggableController(
 
       const minDist = Math.min(distLeft, distRight, distTop, distBottom)
 
-      const centerX = currentX + containerW / 2
-      const centerY = currentY + containerH / 2
-
       if (config.allowFloat && minDist > (config.snapDistance ?? 0)) {
         position.value = {
           type: "floating",
           x: centerX / boundsW,
           y: centerY / boundsH,
         }
-      } else if (minDist === distLeft) {
-        position.value = {
-          type: "snapped",
-          side: "left",
-          percent: centerY / boundsH,
-        }
-      } else if (minDist === distRight) {
-        position.value = {
-          type: "snapped",
-          side: "right",
-          percent: centerY / boundsH,
-        }
-      } else if (minDist === distTop) {
-        position.value = {
-          type: "snapped",
-          side: "top",
-          percent: centerX / boundsW,
-        }
       } else {
-        position.value = {
-          type: "snapped",
-          side: "bottom",
-          percent: centerX / boundsW,
+        const prev = position.peek()
+        const prevSide = prev.type === "snapped" ? prev.side : null
+
+        const distances: Record<SnapSide, number> = {
+          top: distTop,
+          right: distRight,
+          bottom: distBottom,
+          left: distLeft,
         }
+
+        let side: SnapSide
+        if (prevSide && distances[prevSide] <= minDist) {
+          side = prevSide
+        } else {
+          // Deterministic priority order for ties: top, bottom, left, right.
+          if (distTop === minDist) side = "top"
+          else if (distBottom === minDist) side = "bottom"
+          else if (distLeft === minDist) side = "left"
+          else side = "right"
+        }
+
+        const percent =
+          side === "left" || side === "right"
+            ? centerY / boundsH
+            : centerX / boundsW
+
+        position.value = { type: "snapped", side, percent }
       }
       calculatePosition()
     }
@@ -176,18 +184,16 @@ export function createDraggableController(
 
     if (pos.type === "floating") {
       const [xPad, yPad] = config.getPadding(null)
-      containerPos.value = [
-        clamp(
-          pos.x * boundsW - containerW / 2,
-          xPad,
-          boundsW - xPad - containerW
-        ),
-        clamp(
-          pos.y * boundsH - containerH / 2,
-          yPad,
-          boundsH - yPad - containerH
-        ),
-      ]
+      containerX.value = clamp(
+        pos.x * boundsW - containerW / 2,
+        xPad,
+        boundsW - xPad - containerW
+      )
+      containerY.value = clamp(
+        pos.y * boundsH - containerH / 2,
+        yPad,
+        boundsH - yPad - containerH
+      )
       return
     }
 
@@ -213,10 +219,8 @@ export function createDraggableController(
         break
     }
 
-    containerPos.value = [
-      clamp(targetX, xPad, boundsW - xPad - containerW),
-      clamp(targetY, yPad, boundsH - yPad - containerH),
-    ]
+    containerX.value = clamp(targetX, xPad, boundsW - xPad - containerW)
+    containerY.value = clamp(targetY, yPad, boundsH - yPad - containerH)
   }
 
   const init = () => {
