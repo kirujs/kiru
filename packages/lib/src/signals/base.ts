@@ -5,7 +5,7 @@ import {
   generateRandomID,
   registerVNodeCleanup,
 } from "../utils/index.js"
-import { $HMR_ACCEPT, $SIGNAL } from "../constants.js"
+import { $DEV_FILE_LINK, $HMR_ACCEPT, $SIGNAL } from "../constants.js"
 import { __DEV__, isBrowser } from "../env.js"
 import { node } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"
@@ -120,9 +120,19 @@ export class Signal<T> {
 
   subscribe(cb: (state: T, prevState?: T) => void): () => void {
     if (__DEV__) {
-      const subs = signalSubsMap.get(this.$id)!
-      subs!.add(cb)
-      return () => signalSubsMap.get(this.$id)?.delete(cb)
+      const tgt = latest(this)
+      const subs = signalSubsMap.get(tgt.$id)!
+      if (__DEV__ && !subs) {
+        const name = tgt.displayName ?? tgt.$id
+        let message = `Attempting to subscribe to a signal that has been disposed: ${name}`
+        if ($DEV_FILE_LINK in tgt) {
+          message += `\nFile: ${tgt[$DEV_FILE_LINK]}`
+        }
+        message += `\nInitial value: ${tgt.$initialValue}`
+        throw new Error(message)
+      }
+      subs.add(cb)
+      return () => subs.delete(cb)
     }
     this.$subs!.add(cb)
     return () => this.$subs!.delete(cb)
@@ -130,7 +140,8 @@ export class Signal<T> {
 
   notify(filter?: (sub: SignalSubscriber) => boolean) {
     if (__DEV__) {
-      return signalSubsMap.get(this.$id)?.forEach((sub) => {
+      const tgt = latest(this)
+      return signalSubsMap.get(tgt.$id)?.forEach((sub) => {
         if (filter && !filter(sub)) return
         const { $value, $prevValue } = latest(this)
         return sub($value, $prevValue)
@@ -148,12 +159,14 @@ export class Signal<T> {
 
   static subscribers(signal: Signal<any>) {
     if (__DEV__) {
+      signal = latest(signal)
       return signalSubsMap.get(signal.$id)!
     }
     return signal.$subs
   }
 
   static makeReadonly<T>(signal: Signal<T>): ReadonlySignal<T> {
+    if (__DEV__) signal = latest(signal)
     const desc = Object.getOwnPropertyDescriptor(signal, "value")
     if (desc && !desc.writable) return signal
     return Object.defineProperty(signal, "value", {
@@ -166,6 +179,7 @@ export class Signal<T> {
   }
 
   static makeWritable<T>(signal: Signal<T>): Signal<T> {
+    if (__DEV__) signal = latest(signal)
     const desc = Object.getOwnPropertyDescriptor(signal, "value")
     if (desc && desc.writable) return signal
     return Object.defineProperty(signal, "value", {
@@ -183,6 +197,7 @@ export class Signal<T> {
 
   static entangle<T>(signal: Signal<T>) {
     if (tracking.enabled === false) return
+    if (__DEV__) signal = latest(signal)
 
     const vNode = node.current
     const trackedSignalObservations = tracking.current()
@@ -200,6 +215,7 @@ export class Signal<T> {
   static dispose(signal: Signal<any>) {
     signal.$isDisposed = true
     if (__DEV__) {
+      signal = latest(signal)
       signalSubsMap.delete(signal.$id)
       if (isBrowser) window.__kiru.devtools?.untrack(signal)
       return
