@@ -28,18 +28,17 @@ export function mount(
   container: Kiru.ContainerElement,
   options?: AppHandleOptions
 ): AppHandle {
-  if (__DEV__) {
-    if (container.__kiruNode) {
-      throw new Error(
-        "[kiru]: container in use - call unmount on the previous app first."
-      )
-    }
+  if (__DEV__ && container.__kiruNode) {
+    return container.__kiruNode.app!
   }
+
   const rootNode = createRootNode(container)
   const id = appId++
+  const name = options?.name ?? `App-${id}`
+
   const app: AppHandle = {
     id,
-    name: options?.name ?? `App-${id}`,
+    name,
     rootNode,
     render,
     unmount,

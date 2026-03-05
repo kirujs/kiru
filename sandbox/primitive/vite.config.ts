@@ -9,11 +9,11 @@ export default defineConfig({
   },
   plugins: [
     kiru({
-      devtools: false,
-      include: ["../shared/"],
       loggingEnabled: true,
       experimental: {
-        staticHoisting: true,
+        // TODO: static hoisting is not working with the primitive app...
+        // good thing it's still experimental 😅
+        staticHoisting: false,
       },
     }),
   ],
