@@ -58,7 +58,7 @@ function AppProfilingChart({ item, pauseWhen }: AppProfilingChartProps) {
   }
 
   return () => (
-    <div title={item.app.name} className="flex overflow-hidden">
+    <div className="flex overflow-hidden">
       <canvas
         ref={lineChart.canvasRef}
         className="w-full max-w-full h-80 overflow-hidden"
@@ -71,7 +71,10 @@ function AppProfilingChart({ item, pauseWhen }: AppProfilingChartProps) {
           e.stopImmediatePropagation()
         }}
       />
-      <div className="absolute top-1 right-1 flex flex-col gap-1 items-end">
+      <div
+        onmousedown={(e) => e.stopPropagation()}
+        className="absolute top-1 right-1 flex flex-col gap-1 items-end text-neutral-300"
+      >
         <button
           className="p-1"
           onclick={() => (showStatsTooltip.value = !showStatsTooltip.value)}
@@ -82,18 +85,21 @@ function AppProfilingChart({ item, pauseWhen }: AppProfilingChartProps) {
         <kiru.Derive from={{ stats: item.stats, showStatsTooltip }}>
           {({ stats, showStatsTooltip }) =>
             showStatsTooltip && (
-              <div
-                className="text-xs grid grid-cols-2 gap-x-4 bg-neutral-800 bg-opacity-60 hover:bg-opacity-80 rounded-md p-2"
-                style="grid-template-columns: auto auto;"
-              >
-                <span className="text-right">Mount duration:</span>
-                {stats.mountDuration} ms
-                <span className="text-right">Total updates:</span>
-                <span>{stats.totalTicks}</span>
-                <span className="text-right">Avg. update duration:</span>
-                {stats.avgTickDuration} ms
-                <span className="text-right">Latest update:</span>
-                <span>{stats.lastTickDuration} ms</span>
+              <div className="bg-neutral-800 bg-opacity-60 hover:bg-opacity-80 rounded-md p-2 flex flex-col gap-2 cursor-auto">
+                <div className="text-xs font-medium">{item.app.name}</div>
+                <div
+                  className="text-xs grid grid-cols-2 gap-x-4 text-neutral-400"
+                  style="grid-template-columns: auto auto;"
+                >
+                  <span>Mount duration:</span>
+                  <span>{stats.mountDuration} ms</span>
+                  <span>Total updates:</span>
+                  <span>{stats.totalTicks}</span>
+                  <span>Avg. update duration:</span>
+                  <span>{stats.avgTickDuration} ms</span>
+                  <span>Latest update:</span>
+                  <span>{stats.lastTickDuration} ms</span>
+                </div>
               </div>
             )
           }

@@ -59,11 +59,14 @@ export const ProfilingWidget: Kiru.FC<ProfilingWidgetProps> = () => {
     <div
       ref={containerRef}
       className={cls(
-        "fixed rounded-lg p-0.5 flex flex-col gap-2 select-none overflow-hidden",
+        "fixed rounded-lg p-0.5 flex flex-col gap-2 overflow-hidden",
         "bg-neutral-900 opacity-75 hover:opacity-100 shadow-lg"
       )}
       style={{
-        zIndex: widgetStackTop.value === "profiler" ? WIDGET_Z_BASE + 1 : WIDGET_Z_BASE,
+        zIndex:
+          widgetStackTop.value === "profiler"
+            ? WIDGET_Z_BASE + 1
+            : WIDGET_Z_BASE,
         minWidth: `${PROFILER_MIN_WIDTH}px`,
         minHeight: `${PROFILER_MIN_HEIGHT}px`,
         cursor: resizeController.isResizing.value

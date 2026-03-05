@@ -68,7 +68,7 @@ export function createLineChart(config: LineChartConfig): LineChartController {
       data: config.data.peek(),
       options: {
         scales: {
-          y: { min: 0 },
+          y: { min: 0, suggestedMax: 10 },
         },
         animation: false,
         responsive: true,
