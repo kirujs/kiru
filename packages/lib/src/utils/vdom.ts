@@ -34,6 +34,7 @@ export {
   createVNodeId,
   registerVNodeCleanup,
   propsChanged,
+  depthSort,
 }
 
 function cloneElement(vNode: Kiru.VNode): Kiru.Element {
@@ -218,4 +219,8 @@ function propsChanged(
     if (oldProps[key] !== newProps[key]) return true
   }
   return false
+}
+
+function depthSort(a: Kiru.VNode, b: Kiru.VNode): number {
+  return a.depth - b.depth
 }

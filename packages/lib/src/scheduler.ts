@@ -22,6 +22,7 @@ import {
   findParentErrorBoundary,
   call,
   propsChanged,
+  depthSort,
 } from "./utils/index.js"
 import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
@@ -128,8 +129,6 @@ function queueDelete(vNode: VNode): void {
   traverseApply(vNode, (n) => (n.flags |= FLAG_DELETION))
   deletions.push(vNode)
 }
-
-const depthSort = (a: VNode, b: VNode): number => b.depth - a.depth
 
 let currentWorkRoot: VNode | null = null
 
@@ -402,7 +401,7 @@ function renderFunctionComponent(
 
   let newChild = latest(type)(props)
   if (typeof newChild === "function") {
-    vNode.subs?.forEach(call) // unsub from signals observered during setup
+    vNode.subs?.forEach(call) // unsub from signals observed during setup
     vNode.render = newChild
     if (shouldSyncProps) {
       const p = { ...props }
