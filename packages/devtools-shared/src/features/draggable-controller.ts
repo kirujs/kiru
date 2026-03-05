@@ -50,7 +50,7 @@ export function createDraggableController(
     containerX.value,
     containerY.value,
   ])
-  const dragging = kiru.signal(false)
+  const isDragging = kiru.signal(false)
   let containerSize: { width: number; height: number } | null = null
 
   cleanups.push(
@@ -74,26 +74,27 @@ export function createDraggableController(
       initialX - initialContainerRect.left,
       initialY - initialContainerRect.top,
     ]
-    dragging.value = false
+    isDragging.value = false
     let lastMoveEvent: MouseEvent | null = null
     let moveScheduled = false
+    let isMouseDown = true
 
     const processMove = () => {
       moveScheduled = false
       const e = lastMoveEvent
       lastMoveEvent = null
-      if (!e) return
+      if (!e || !isMouseDown) return
 
       // once our delta is greater than 5px, we start dragging
       if (
-        !dragging.peek() &&
+        !isDragging.peek() &&
         (Math.abs(e.clientX - initialX) > 5 ||
           Math.abs(e.clientY - initialY) > 5)
       ) {
-        dragging.value = true
+        isDragging.value = true
       }
 
-      if (!dragging.peek()) return
+      if (!isDragging.peek()) return
 
       const [currentX, currentY] = [
         e.clientX - initialOffsetX,
@@ -158,12 +159,13 @@ export function createDraggableController(
     }
 
     const onMouseUp = () => {
+      isMouseDown = false
       window.removeEventListener("mousemove", onMouseMove)
       window.removeEventListener("mouseup", onMouseUp)
 
-      if (!dragging.peek()) return config.onclick?.()
+      if (!isDragging.peek()) return config.onclick?.()
 
-      dragging.value = false
+      isDragging.value = false
       config.storage.setItem(config.key, JSON.stringify(position.value))
     }
 
@@ -258,7 +260,7 @@ export function createDraggableController(
 
   return {
     init,
-    isDragging: dragging,
+    isDragging,
     handleRef,
     containerRef,
     snapSide,
