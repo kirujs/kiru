@@ -1,57 +1,36 @@
-import { signal, computed, DevTools } from "kiru"
+import { signal, resource, ErrorBoundary, Derive, DevTools } from "kiru"
 
-const count = signal(0)
-const double = computed(() => count.value * 2)
-if (import.meta.env.DEV) {
-  DevTools.track(count, "count")
-  DevTools.track(double, "double")
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  age: number
 }
 
-const text = signal("Hello World")
-const color = signal("#ff0066")
-const lightness = signal(-0.5)
-const backgroundColor = computed(() =>
-  ColorLuminance(color.value, lightness.value)
-)
+const userId = signal(1)
+const user = resource<User>(async (signal) => {
+  const res = await fetch(`https://dummyjson.com/users/${userId}`, {
+    signal,
+  })
+  return res.json()
+})
+
+DevTools.track(user, "User")
 
 export default function HomePage() {
-  const showChild = signal(true)
-
-  return () => (
-    <div className="flex flex-col gap-4">
-      <span className="p-2 rounded-lg" style={{ color, backgroundColor }}>
-        Hello World
-      </span>
-      <input type="text" bind:value={text} />
-      <input type="color" bind:value={color} />
-      <input type="range" bind:value={lightness} min={-1} max={1} step={0.1} />
-      <input type="checkbox" bind:checked={showChild} />
-      {showChild.value && <ChildComponent foo={{ bar: text }} />}
-    </div>
-  )
-}
-
-function ColorLuminance(hex: string, lum: number) {
-  hex = String(hex).replace(/[^0-9a-f]/gi, "")
-
-  let rgb = "#",
-    c,
-    i
-  for (i = 0; i < 3; i++) {
-    c = parseInt(hex.substr(i * 2, 2), 16)
-    // Apply luminosity factor and clamp values between 0 and 255
-    c = Math.round(Math.min(Math.max(0, c + c * lum), 255)).toString(16)
-    // Pad with leading zero if necessary
-    rgb += ("00" + c).substr(c.length)
-  }
-
-  return rgb
-}
-
-function ChildComponent(props: { foo: { bar: Kiru.Signal<string> } }) {
   return (
-    <div>
-      <span>{props.foo.bar}</span>
-    </div>
+    <>
+      <ErrorBoundary fallback={<div>Error!</div>}>
+        <Derive from={user} fallback={<div>Loading...</div>}>
+          {(user, isStale) => (
+            <div style={{ opacity: isStale ? 0.5 : 1 }}>
+              Hello {`${user.firstName} ${user.lastName}`} (age: {user.age})
+            </div>
+          )}
+        </Derive>
+      </ErrorBoundary>
+      <button onclick={() => userId.value++}>Next User</button>
+      <button onclick={() => user.refetch()}>Refetch</button>
+    </>
   )
 }

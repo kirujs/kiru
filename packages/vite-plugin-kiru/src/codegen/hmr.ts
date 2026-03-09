@@ -116,8 +116,8 @@ function findHotVars(
   const hotVars = new Set<HotVarDesc>()
 
   const aliasHandlers = [
-    "createStore",
     "signal",
+    "resource",
     "computed",
     "effect",
     "createContext",

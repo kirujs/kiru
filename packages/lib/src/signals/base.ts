@@ -213,6 +213,8 @@ export class Signal<T> {
   }
 
   static dispose(signal: Signal<any>) {
+    if (signal.$isDisposed) return
+
     signal.$isDisposed = true
     if (__DEV__) {
       signal = latest(signal)
