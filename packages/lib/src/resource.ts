@@ -32,19 +32,18 @@ export function isResource(thing: unknown): thing is Resource<unknown> {
   )
 }
 
-const nodeToPromiseIndex = new WeakMap<Kiru.VNode, number>()
+const resourceMeta = new WeakMap<Kiru.VNode, { id: string; index: number }>()
+const observedSignals: TrackingStackObservations = new Map()
 
 interface ResourceState<T> {
-  state: "fulfilled" | "pending" | "rejected"
   error: Signal<Error | null>
   isPending: Signal<boolean>
   promise: Kiru.StatefulPromise<T>
-  id: string
   refetch: () => void
   dispose: () => void
 }
 
-type Resource<T> = Kiru.Signal<T> & ResourceState<T>
+export type Resource<T> = Kiru.Signal<T> & ResourceState<T>
 
 export function resource<T>(
   callback: (signal: AbortSignal) => Promise<T>
@@ -52,25 +51,36 @@ export function resource<T>(
   const data = signal(void 0 as T)
   const error = signal<Error | null>(null)
   const isPending = signal(true)
-  const observedSignals: TrackingStackObservations = new Map()
-  const cleanups: Record<string, () => void> = {}
+  const observedSignalCleanups: (() => void)[] = []
 
-  let promiseId: string
+  let promiseId = ""
   const vNode = node.current
   if (!vNode) {
-    promiseId = `global:resource:${generateRandomID()}`
+    // todo: investigate streaming global resources via SSR
+    // likely cooked since we can't ensure modules are loaded in the same order,
+  } else if (
+    renderMode.current === "hydrate" ||
+    renderMode.current === "stream"
+  ) {
+    // hydrate or stream - create a deterministic id + index offset to use for promise hydration
+    const { id, index } = resourceMeta.get(vNode) ?? {
+      id: createVNodeId(vNode),
+      index: 0,
+    }
+    promiseId = `${id}:resource:${index}`
+    resourceMeta.set(vNode, { id, index: index + 1 })
   } else {
-    const index = nodeToPromiseIndex.get(vNode) ?? 0
-    nodeToPromiseIndex.set(vNode, index + 1)
-    promiseId = `${createVNodeId(vNode)}:resource:${index}`
+    // could be improved. For now, just use a random id to prevent collisions on the cleanups map.
+    // in future, we could implement a cached id based on the vNode for use across other modules too.
+    promiseId = generateRandomID()
   }
 
   let controller = new AbortController()
   const dispose = () => {
-    controller.signal.aborted || controller.abort()
+    if (!controller.signal.aborted) controller.abort()
     Signal.dispose(data)
     Signal.dispose(isPending)
-    Object.values(cleanups).forEach((c) => c())
+    Object.values(observedSignalCleanups).forEach((c) => c())
   }
 
   if (vNode) {
@@ -80,11 +90,7 @@ export function resource<T>(
   const resource: Resource<T> = Object.assign(data, {
     error,
     isPending,
-    get state() {
-      return this.promise.state
-    },
     promise: createPromise(),
-    id: promiseId,
     refetch() {
       data.value = void 0 as T
       this.promise = createPromise()
@@ -100,6 +106,8 @@ export function resource<T>(
     if (renderMode.current === "string") {
       // if we're rendering to a string, there's no need to fire the callback
       newPromise = Promise.resolve() as Promise<T>
+    } else if (renderMode.current === "stream") {
+      newPromise = callback(controller.signal)
     } else if (
       renderMode.current === "hydrate" &&
       hydrationMode.current === "dynamic"
@@ -108,19 +116,22 @@ export function resource<T>(
       // we need to resolve the promise from cache/event
       newPromise = resolveDeferredPromise<T>(promiseId, controller.signal)
     } else {
-      // dom / stream / (hydrate + static)
+      observedSignalCleanups.forEach((c) => c())
+
+      // dom / (hydrate + static)
       observedSignals.clear()
       tracking.stack.push(observedSignals)
       newPromise = callback(controller.signal)
       tracking.stack.pop()
 
-      observedSignals.forEach((sig, id) => {
-        if (id in cleanups) return
-        cleanups[id] = sig.subscribe(() => {
+      // todo: implement batching via queueMicroTask
+      for (const [_, sig] of observedSignals) {
+        const unsub = sig.subscribe(() => {
           resource.promise = createPromise()
           data.notify()
         })
-      })
+        observedSignalCleanups.push(unsub)
+      }
     }
 
     const statefulPromise: Kiru.StatefulPromise<T> = Object.assign(newPromise, {

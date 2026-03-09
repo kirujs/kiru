@@ -4,30 +4,23 @@ import { $STREAM_DATA } from "../constants.js"
 import { node } from "../globals.js"
 import { ref } from "../ref.js"
 import { requestUpdate } from "../scheduler.js"
-import { isResource, StreamDataThrowValue } from "../resource.js"
+import { isResource, Resource, StreamDataThrowValue } from "../resource.js"
 import type { RecordHas } from "../types.utils"
 
 export type Derivable =
   | Kiru.Signal<unknown>
-  | Kiru.StatefulPromise<unknown>
-  | Record<string, Kiru.Signal<unknown> | Kiru.StatefulPromise<unknown>>
+  | Record<string, Kiru.Signal<unknown>>
 
-type InnerOf<T> =
-  T extends Kiru.Signal<infer V>
-    ? V
-    : T extends Kiru.StatefulPromise<infer P>
-      ? P
-      : never
+type InnerOf<T> = T extends Kiru.Signal<infer V> ? V : never
 
-type UnwrapDerive<T extends Derivable> = T extends
-  | Kiru.Signal<unknown>
-  | Kiru.StatefulPromise<any>
-  ? InnerOf<T>
-  : { [K in keyof T]: InnerOf<T[K]> }
+type UnwrapDerivable<T extends Derivable> =
+  T extends Kiru.Signal<unknown>
+    ? InnerOf<T>
+    : { [K in keyof T]: InnerOf<T[K]> }
 
-type RecordHasPromise<T extends Record<string, any>> = RecordHas<
+type RecordHasResource<T extends Record<string, any>> = RecordHas<
   T,
-  Kiru.StatefulPromise<any>
+  Resource<any>
 >
 
 type ChildFn<T> = (value: T) => JSX.Children
@@ -41,21 +34,21 @@ export interface DeriveProps<
 > {
   from: T
   mode?: Mode
-  children: T extends Kiru.StatefulPromise<infer U>
+  children: T extends Resource<infer U>
     ? Mode extends "swr"
       ? ChildFnWithStale<U>
       : ChildFn<U>
     : T extends Record<string, any>
-      ? RecordHasPromise<T> extends true
+      ? RecordHasResource<T> extends true
         ? Mode extends "swr"
-          ? ChildFnWithStale<UnwrapDerive<T>>
-          : ChildFn<UnwrapDerive<T>>
-        : ChildFn<UnwrapDerive<T>>
-      : ChildFn<UnwrapDerive<T>>
-  fallback?: T extends Kiru.StatefulPromise<any>
+          ? ChildFnWithStale<UnwrapDerivable<T>>
+          : ChildFn<UnwrapDerivable<T>>
+        : ChildFn<UnwrapDerivable<T>>
+      : ChildFn<UnwrapDerivable<T>>
+  fallback?: T extends Resource<any>
     ? JSX.Element
     : T extends Record<string, any>
-      ? RecordHasPromise<T> extends true
+      ? RecordHasResource<T> extends true
         ? JSX.Element
         : never
       : never
