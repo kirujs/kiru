@@ -1,7 +1,7 @@
 import { __DEV__ } from "../env.js"
 import { $HMR_ACCEPT } from "../constants.js"
 import { call, latest } from "../utils/index.js"
-import { effectQueue, signalSubsMap } from "./globals.js"
+import { effectQueue } from "./globals.js"
 import { executeWithTracking } from "./tracking.js"
 import { Signal } from "./base.js"
 import type { HMRAccept } from "../hmr.js"
@@ -17,14 +17,14 @@ export class ComputedSignal<T> extends Signal<T> {
     this.$isDirty = true
 
     if (__DEV__) {
-      const inject = this[$HMR_ACCEPT]!.inject!
+      const { inject: baseInject } = this[$HMR_ACCEPT]!
       // @ts-expect-error this is fine 😅
       this[$HMR_ACCEPT] = {
         provide: () => {
           return this
         },
         inject: (prev) => {
-          inject(prev)
+          baseInject(prev)
           // Stop any pending reactions on the previous instance and mark
           // this computed as dirty so it will recompute with the latest
           // dependencies after HMR.
@@ -96,11 +96,7 @@ export class ComputedSignal<T> extends Signal<T> {
       fn: () => $getter(computed.$value),
       onDepChanged: () => {
         computed.$isDirty = true
-        if (__DEV__) {
-          if (!signalSubsMap?.get(id)?.size) return
-        } else {
-          if (!computed.$subs!.size) return
-        }
+        if (!computed.$subs.size) return
         ComputedSignal.run(computed)
         if (Object.is(computed.$value, computed.$prevValue)) return
         computed.notify()
