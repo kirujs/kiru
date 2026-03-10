@@ -166,12 +166,13 @@ export function resource<T, Source>(
         statefulPromise.value = value
         data.value = value
         isPending.value = false
+        error.value = null
       })
       .catch((e) => {
+        if (ctrl !== controller) return // prevent setting pending=false if new controller was recreated (new promise)
         statefulPromise.state = "rejected"
         statefulPromise.error = e instanceof Error ? e : new Error(e)
         error.value = statefulPromise.error
-        if (ctrl !== controller) return // prevent setting pending=false if new controller was recreated (new promise)
         isPending.value = false
       })
     return statefulPromise
