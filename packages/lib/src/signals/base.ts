@@ -9,16 +9,15 @@ import { $DEV_FILE_LINK, $HMR_ACCEPT, $SIGNAL } from "../constants.js"
 import { __DEV__, isBrowser } from "../env.js"
 import { node } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"
-import { signalSubsMap } from "./globals.js"
 import { tracking } from "./tracking.js"
-import type { SignalSubscriber, ReadonlySignal } from "./types.js"
+import type { SignalSubscriber } from "./types.js"
 import type { HMRAccept } from "../hmr.js"
 
 export class Signal<T> {
   [$SIGNAL] = true;
   [$HMR_ACCEPT]?: HMRAccept<Signal<any>>
   displayName?: string
-  protected $subs?: Set<SignalSubscriber<any>>
+  protected $subs: Set<SignalSubscriber<any>>
   protected $id: string
   protected $value: T
   protected $prevValue?: T
@@ -29,10 +28,10 @@ export class Signal<T> {
   constructor(initial: T, displayName?: string) {
     this.$id = generateRandomID()
     this.$value = initial
+    this.$subs = new Set()
     if (displayName) this.displayName = displayName
 
     if (__DEV__) {
-      signalSubsMap.set(this.$id, new Set())
       this.$initialValue = safeStringify(initial)
       this[$HMR_ACCEPT] = {
         provide: () => {
@@ -40,12 +39,8 @@ export class Signal<T> {
         },
         inject: (prev) => {
           if (isBrowser) window.__kiru.devtools?.untrack(prev)
-          signalSubsMap.get(this.$id)?.clear?.()
-          signalSubsMap.delete(this.$id)
           this.$id = prev.$id
-          // @ts-ignore - this handles scenarios where a reference to the prev has been encapsulated
-          // and we need to be able to refer to the latest version of the signal.
-          prev.__next = this
+          this.$subs = prev.$subs
 
           if (this.$initialValue === prev.$initialValue) {
             this.$value = prev.$value
@@ -55,8 +50,6 @@ export class Signal<T> {
         },
         destroy: () => {},
       } satisfies HMRAccept<Signal<any>>
-    } else {
-      this.$subs = new Set()
     }
 
     const n = node.current
@@ -121,33 +114,30 @@ export class Signal<T> {
   subscribe(cb: (state: T, prevState?: T) => void): () => void {
     if (__DEV__) {
       const tgt = latest(this)
-      const subs = signalSubsMap.get(tgt.$id)!
-      if (__DEV__ && !subs) {
+      if (__DEV__ && tgt.$isDisposed) {
         const name = tgt.displayName ?? tgt.$id
-        let message = `Attempting to subscribe to a signal that has been disposed: ${name}`
+        let message = `Attempted to subscribe to a signal that has been disposed: ${name}`
         if ($DEV_FILE_LINK in tgt) {
           message += `\nFile: ${tgt[$DEV_FILE_LINK]}`
         }
         message += `\nInitial value: ${tgt.$initialValue}`
         throw new Error(message)
       }
-      subs.add(cb)
-      return () => subs.delete(cb)
     }
-    this.$subs!.add(cb)
-    return () => this.$subs!.delete(cb)
+    this.$subs.add(cb)
+    return () => this.$subs.delete(cb)
   }
 
   notify(filter?: (sub: SignalSubscriber) => boolean) {
     if (__DEV__) {
       const tgt = latest(this)
-      return signalSubsMap.get(tgt.$id)?.forEach((sub) => {
+      return tgt.$subs.forEach((sub) => {
         if (filter && !filter(sub)) return
         const { $value, $prevValue } = latest(this)
         return sub($value, $prevValue)
       })
     }
-    this.$subs!.forEach((sub) => {
+    this.$subs.forEach((sub) => {
       if (filter && !filter(sub)) return
       return sub(this.$value, this.$prevValue)
     })
@@ -158,41 +148,7 @@ export class Signal<T> {
   }
 
   static subscribers(signal: Signal<any>) {
-    if (__DEV__) {
-      signal = latest(signal)
-      return signalSubsMap.get(signal.$id)!
-    }
     return signal.$subs
-  }
-
-  static makeReadonly<T>(signal: Signal<T>): ReadonlySignal<T> {
-    if (__DEV__) signal = latest(signal)
-    const desc = Object.getOwnPropertyDescriptor(signal, "value")
-    if (desc && !desc.writable) return signal
-    return Object.defineProperty(signal, "value", {
-      get: function (this: Signal<T>) {
-        Signal.entangle(this)
-        return this.$value
-      },
-      configurable: true,
-    })
-  }
-
-  static makeWritable<T>(signal: Signal<T>): Signal<T> {
-    if (__DEV__) signal = latest(signal)
-    const desc = Object.getOwnPropertyDescriptor(signal, "value")
-    if (desc && desc.writable) return signal
-    return Object.defineProperty(signal, "value", {
-      get: function (this: Signal<T>) {
-        Signal.entangle(this)
-        return this.$value
-      },
-      set: function (this: Signal<T>, value) {
-        this.$value = value
-        this.notify()
-      },
-      configurable: true,
-    })
   }
 
   static entangle<T>(signal: Signal<T>) {
@@ -202,6 +158,7 @@ export class Signal<T> {
     const vNode = node.current
     const trackedSignalObservations = tracking.current()
     if (trackedSignalObservations) {
+      // track non-rendering access, only track rendering access if renderMode is DOM/hydrate
       if (!vNode || (vNode && sideEffectsEnabled())) {
         trackedSignalObservations.set(signal.$id, signal)
       }
@@ -217,12 +174,10 @@ export class Signal<T> {
 
     signal.$isDisposed = true
     if (__DEV__) {
-      signal = latest(signal)
-      signalSubsMap.delete(signal.$id)
-      if (isBrowser) window.__kiru.devtools?.untrack(signal)
+      if (isBrowser) window.__kiru.devtools?.untrack(latest(signal))
       return
     }
-    signal.$subs!.clear()
+    signal.$subs.clear()
   }
 }
 
