@@ -98,6 +98,8 @@ export function createHmrContext() {
     if (currentModuleMemory === null)
       throw new Error("[kiru]: HMR could not register: No active module")
 
+    // TODO: we should call destroy() on unmatched old entries
+
     let dirtyNodes = new Set<Kiru.VNode>()
     for (const [name, newEntry] of Object.entries(hotVarRegistrationEntries)) {
       const oldEntry = currentModuleMemory.hotVars.get(name)
@@ -120,10 +122,10 @@ export function createHmrContext() {
         isGenericHmrAcceptor(oldEntry.value) &&
         isGenericHmrAcceptor(newEntry.value)
       ) {
-        newEntry.value[$HMR_ACCEPT].inject(
-          oldEntry.value[$HMR_ACCEPT].provide()
+        performHmrAccept(
+          oldEntry.value[$HMR_ACCEPT],
+          newEntry.value[$HMR_ACCEPT]
         )
-        oldEntry.value[$HMR_ACCEPT].destroy()
         continue
       }
       if (oldEntry.type === "component" && newEntry.type === "component") {
@@ -191,4 +193,12 @@ export function onHmr(callback: () => void): void {
   if ("window" in globalThis && window.__kiru.HMRContext) {
     window.__kiru.HMRContext.onHmr(callback)
   }
+}
+
+export function performHmrAccept<T>(
+  oldThing: HMRAccept<T>,
+  newThing: HMRAccept<T>
+) {
+  newThing.inject(oldThing.provide())
+  oldThing.destroy()
 }

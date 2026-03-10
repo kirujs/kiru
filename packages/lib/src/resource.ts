@@ -1,9 +1,10 @@
-import { $STREAM_DATA, STREAMED_DATA_EVENT } from "./constants.js"
+import { $HMR_ACCEPT, $STREAM_DATA, STREAMED_DATA_EVENT } from "./constants.js"
 import { hydrationMode, node, renderMode } from "./globals.js"
 import { Signal, signal } from "./signals/base.js"
 import { createVNodeId, registerVNodeCleanup } from "./utils/vdom.js"
 import { generateRandomID } from "./utils/generateId.js"
-import { tracking, TrackingStackObservations } from "./signals/tracking.js"
+import { __DEV__, isBrowser } from "./env.js"
+import { GenericHMRAcceptor, performHmrAccept } from "./hmr.js"
 
 export interface StreamDataThrowValue {
   [$STREAM_DATA]: {
@@ -33,7 +34,6 @@ export function isResource(thing: unknown): thing is Resource<unknown> {
 }
 
 const resourceMeta = new WeakMap<Kiru.VNode, { id: string; index: number }>()
-const observedSignals: TrackingStackObservations = new Map()
 
 interface ResourceState<T> {
   error: Signal<Error | null>
@@ -44,14 +44,17 @@ interface ResourceState<T> {
 }
 
 export type Resource<T> = Kiru.Signal<T> & ResourceState<T>
+export interface ResourceLoaderContext {
+  signal: AbortSignal
+}
 
-export function resource<T>(
-  callback: (signal: AbortSignal) => Promise<T>
+export function resource<T, Source>(
+  source: Kiru.Signal<Source>,
+  callback: (source: Source, ctx: ResourceLoaderContext) => Promise<T>
 ): Resource<T> {
   const data = signal(void 0 as T)
   const error = signal<Error | null>(null)
   const isPending = signal(true)
-  const observedSignalCleanups: (() => void)[] = []
 
   let promiseId = ""
   const vNode = node.current
@@ -75,12 +78,17 @@ export function resource<T>(
     promiseId = generateRandomID()
   }
 
+  const unsub = source.subscribe((src) => {
+    resource.promise = createPromise(src)
+    resource.notify()
+  })
+
   let controller = new AbortController()
   const dispose = () => {
     if (!controller.signal.aborted) controller.abort()
     Signal.dispose(data)
     Signal.dispose(isPending)
-    Object.values(observedSignalCleanups).forEach((c) => c())
+    unsub()
   }
 
   if (vNode) {
@@ -90,48 +98,61 @@ export function resource<T>(
   const resource: Resource<T> = Object.assign(data, {
     error,
     isPending,
-    promise: createPromise(),
+    promise: undefined as unknown as Kiru.StatefulPromise<T>,
     refetch() {
       data.value = void 0 as T
-      this.promise = createPromise()
+      this.promise = createPromise(source.peek())
     },
     dispose,
   })
 
-  function createPromise(): Kiru.StatefulPromise<T> {
+  if (__DEV__) {
+    const { inject: baseInject, destroy: baseDestroy } = data[$HMR_ACCEPT]!
+
+    ;(resource as any as GenericHMRAcceptor<Resource<T>>)[$HMR_ACCEPT] = {
+      provide: () => {
+        return resource
+      },
+      destroy: () => {
+        baseDestroy()
+        controller.abort()
+      },
+      inject: (prev) => {
+        baseInject(prev)
+        const { isPending: prevPending, error: prevError } = prev
+        const { isPending, error } = resource
+        performHmrAccept(prevPending[$HMR_ACCEPT]!, isPending[$HMR_ACCEPT]!)
+        performHmrAccept(prevError[$HMR_ACCEPT]!, error[$HMR_ACCEPT]!)
+      },
+    }
+  }
+
+  if (__DEV__ && isBrowser && window.__kiru.HMRContext?.isReplacement()) {
+    queueMicrotask(() => {
+      resource.promise = createPromise(source.peek())
+    })
+  } else {
+    resource.promise = createPromise(source.peek())
+  }
+
+  function createPromise(source: Source): Kiru.StatefulPromise<T> {
     controller.abort()
-    controller = new AbortController()
+    const ctrl = (controller = new AbortController())
     isPending.value = true
     let newPromise: Promise<T>
     if (renderMode.current === "string") {
       // if we're rendering to a string, there's no need to fire the callback
       newPromise = Promise.resolve() as Promise<T>
-    } else if (renderMode.current === "stream") {
-      newPromise = callback(controller.signal)
     } else if (
       renderMode.current === "hydrate" &&
       hydrationMode.current === "dynamic"
     ) {
       // if we're hydrating and the hydration mode is not static,
       // we need to resolve the promise from cache/event
-      newPromise = resolveDeferredPromise<T>(promiseId, controller.signal)
+      newPromise = resolveDeferredPromise<T>(promiseId, ctrl.signal)
     } else {
-      observedSignalCleanups.forEach((c) => c())
-
-      // dom / (hydrate + static)
-      observedSignals.clear()
-      tracking.stack.push(observedSignals)
-      newPromise = callback(controller.signal)
-      tracking.stack.pop()
-
-      // todo: implement batching via queueMicroTask
-      for (const [_, sig] of observedSignals) {
-        const unsub = sig.subscribe(() => {
-          resource.promise = createPromise()
-          data.notify()
-        })
-        observedSignalCleanups.push(unsub)
-      }
+      // stream / dom / (hydrate + static)
+      newPromise = callback(source, { signal: ctrl.signal })
     }
 
     const statefulPromise: Kiru.StatefulPromise<T> = Object.assign(newPromise, {
@@ -146,11 +167,11 @@ export function resource<T>(
         data.value = value
         isPending.value = false
       })
-      .catch((error) => {
+      .catch((e) => {
         statefulPromise.state = "rejected"
-        statefulPromise.error =
-          error instanceof Error ? error : new Error(error)
+        statefulPromise.error = e instanceof Error ? e : new Error(e)
         error.value = statefulPromise.error
+        if (ctrl !== controller) return // prevent setting pending=false if new controller was recreated (new promise)
         isPending.value = false
       })
     return statefulPromise

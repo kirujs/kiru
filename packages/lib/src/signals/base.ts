@@ -41,6 +41,10 @@ export class Signal<T> {
           if (isBrowser) window.__kiru.devtools?.untrack(prev)
           this.$id = prev.$id
           this.$subs = prev.$subs
+          // this is a nice-to-have so that implementations of signal-on-signal don't need to do it themselves.
+          // eg. Object.assign(signal, { nestedSignal })
+          // it's only done by our HMR pass for top-level signals.
+          prev.__next = this
 
           if (this.$initialValue === prev.$initialValue) {
             this.$value = prev.$value
