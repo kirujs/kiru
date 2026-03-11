@@ -1,4 +1,4 @@
-import type { ReadonlySignal, Signal as SignalClass } from "./signals"
+import type { Signal as SignalClass } from "./signals"
 import type { $CONTEXT, $ERROR_BOUNDARY, $FRAGMENT } from "./constants"
 import type { KiruGlobalContext } from "./globalContext"
 import type {
@@ -154,7 +154,7 @@ declare global {
 
     type StateSetter<T> = T | ((prev: T) => T)
 
-    type Signal<T> = SignalClass<T> | ReadonlySignal<T>
+    type Signal<T> = SignalClass<T>
 
     type ExoticSymbol =
       | typeof $FRAGMENT

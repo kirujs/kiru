@@ -1,11 +1,10 @@
-import { onCleanup } from "../hooks/onCleanup.js"
-import { Signal } from "../signals/base.js"
+import { onMount } from "../hooks/onMount.js"
 import { unwrap } from "../signals/utils.js"
 import { setup } from "../hooks/setup.js"
 
 export type TransitionState = "entering" | "entered" | "exiting" | "exited"
 interface TransitionProps {
-  in: boolean | Signal<boolean>
+  in: boolean | Kiru.Signal<boolean>
   /**
    * Initial state of the transition
    * @default "exited"
@@ -48,20 +47,29 @@ export const Transition: Kiru.FC<TransitionProps> = (props) => {
     )
   }
 
-  const unsub = inState.subscribe((newIn) => {
-    const current = tState.peek()
-    if (newIn && current !== "entered" && current !== "entering") {
+  const onInChange = (currentIn: boolean) => {
+    const t = tState.peek()
+    if (currentIn && t !== "entered" && t !== "entering") {
       setTransitionState("entering")
       queueStateChange("entered")
-    } else if (!newIn && current !== "exited" && current !== "exiting") {
+    } else if (!currentIn && t !== "exited" && t !== "exiting") {
       setTransitionState("exiting")
       queueStateChange("exited")
     }
+  }
+
+  const unsub = inState.subscribe(onInChange)
+
+  onMount(() => {
+    onInChange(inState.peek())
+    return () => {
+      unsub()
+      clearTimeout(timeoutRef)
+    }
   })
 
-  onCleanup(() => (unsub(), clearTimeout(timeoutRef)))
-
   return (props) => {
+    console.log("tState", tState.value)
     duration = props.duration
     onTransitionEnd = props.onTransitionEnd
     return props.element(tState.value)

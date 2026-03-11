@@ -1,8 +1,5 @@
 import type { Signal } from "./base.js"
 
-export type ReadonlySignal<T> = Signal<T> & {
-  readonly value: T
-}
 export type SignalSubscriber<T = unknown> = (value: T, prevValue?: T) => void
 
 export type SignalValues<T extends readonly Signal<unknown>[]> = {
