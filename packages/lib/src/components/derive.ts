@@ -5,7 +5,6 @@ import {
 import { Signal } from "../signals/index.js"
 import { $STREAM_DATA } from "../constants.js"
 import { node } from "../globals.js"
-import { ref } from "../ref.js"
 import { requestUpdate } from "../scheduler.js"
 import { isResource, Resource } from "../resource.js"
 import type { RecordHas } from "../types.utils"
@@ -68,7 +67,7 @@ type Derive = {
  * @see https://kirujs.dev/docs/components/derive
  */
 export const Derive: Derive = () => {
-  const prevSuccess = ref<unknown>(null)
+  let prevSuccess: unknown
   return (props) => {
     const { from, children, fallback, mode } = props
 
@@ -110,7 +109,7 @@ export const Derive: Derive = () => {
         const nodeRef = node.current!
         Promise.allSettled(promises).then(() => requestUpdate(nodeRef))
 
-        const prev = prevSuccess.current!
+        const prev = prevSuccess
         if (mode !== "fallback" && prev) {
           return (children as ChildFnWithStale<unknown>)(prev, true)
         }
@@ -118,7 +117,7 @@ export const Derive: Derive = () => {
       }
     }
 
-    prevSuccess.current = value
+    prevSuccess = value
     return (children as ChildFnWithStale<unknown>)(value, false)
   }
 }
