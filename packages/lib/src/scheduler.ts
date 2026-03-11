@@ -280,11 +280,6 @@ function updateVNode(vNode: VNode): VNode | null {
     }
 
     if (KiruError.isKiruError(error)) {
-      if (error.customNodeStack) {
-        setTimeout(() => {
-          throw new Error(error.customNodeStack)
-        })
-      }
       if (error.fatal) {
         throw error
       }
@@ -389,7 +384,7 @@ function renderFunctionComponent(
   props: Record<string, unknown>,
   shouldSyncProps: boolean
 ): unknown {
-  const { render, propSyncs } = vNode
+  let { render, propSyncs } = vNode
 
   if (render) {
     if (shouldSyncProps) {
@@ -399,7 +394,18 @@ function renderFunctionComponent(
     return render(props)
   }
 
-  let newChild = latest(type)(props)
+  if (__DEV__) {
+    type = latest(type)
+    if (typeof type !== "function") {
+      throw new KiruError({
+        message: `received invalid component type: ${type}`,
+        fatal: true,
+        vNode,
+      })
+    }
+  }
+
+  let newChild = type(props)
   if (typeof newChild === "function") {
     vNode.subs?.forEach(call) // unsub from signals observed during setup
     vNode.render = newChild
@@ -444,7 +450,7 @@ function updateHostComponent(vNode: DomVNode): VNode | null {
 function checkForTooManyConsecutiveDirtyRenders(): void {
   if (consecutiveDirtyCount > CONSECUTIVE_DIRTY_LIMIT) {
     throw new KiruError(
-      "Maximum update depth exceeded. This can happen when a component repeatedly calls setState during render or in useLayoutEffect. Kiru limits the number of nested updates to prevent infinite loops."
+      "Maximum update depth exceeded. This can happen when a component repeatedly updates during render or in onBeforeMount. Kiru limits the number of nested updates to prevent infinite loops."
     )
   }
 }

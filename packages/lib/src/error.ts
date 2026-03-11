@@ -1,6 +1,5 @@
-import { $KIRU_ERROR } from "./constants.js"
+import { $DEV_FILE_LINK, $KIRU_ERROR } from "./constants.js"
 import { __DEV__ } from "./env.js"
-import { findParent, noop } from "./utils/index.js"
 
 type KiruErrorOptions =
   | string
@@ -16,8 +15,6 @@ export class KiruError extends Error {
   [$KIRU_ERROR] = true
   /** Indicates whether the error is fatal and should crash the application */
   fatal?: boolean
-  /** Present if vNode is provided */
-  customNodeStack?: string
   constructor(optionsOrMessage: KiruErrorOptions) {
     const message =
       typeof optionsOrMessage === "string"
@@ -26,18 +23,21 @@ export class KiruError extends Error {
     super(message)
     if (typeof optionsOrMessage !== "string") {
       if (__DEV__ && optionsOrMessage?.vNode) {
-        this.customNodeStack = captureErrorStack(optionsOrMessage.vNode)
+        const stack = createVNodeStack(optionsOrMessage.vNode)
+        this.message = `${message}
+${stack.map((item) => `    at ${item}`).join("\n")}
+`
       }
       this.fatal = optionsOrMessage?.fatal
     }
   }
 
   static isKiruError(error: unknown): error is KiruError {
-    return error instanceof Error && (error as KiruError)[$KIRU_ERROR] === true
+    return error instanceof Error && $KIRU_ERROR in error
   }
 }
 
-function captureErrorStack(vNode: Kiru.VNode) {
+function createVNodeStack(vNode: Kiru.VNode) {
   let n = vNode
   let componentFns: string[] = []
   while (n) {
@@ -45,24 +45,16 @@ function captureErrorStack(vNode: Kiru.VNode) {
     if (typeof n.type === "function") {
       componentFns.push(getComponentErrorDisplayText(n.type))
     } else if (typeof n.type === "string") {
-      componentFns.push(n.type)
+      componentFns.push(`<${n.type}>`)
     }
     n = n.parent
   }
-  const componentNode = (
-    typeof vNode.type === "function"
-      ? vNode
-      : findParent(vNode, (n) => typeof n.type === "function")
-  ) as (Kiru.VNode & { type: Function }) | null
-  return `The above error occurred in the <${getFunctionName(
-    componentNode?.type || noop
-  )}> component:
 
-${componentFns.map((x) => `   at ${x}`).join("\n")}\n`
+  return componentFns
 }
 
 function getComponentErrorDisplayText(fn: Function) {
-  let str = getFunctionName(fn)
+  let str = `<${getFunctionName(fn)}>`
   if (__DEV__) {
     const fileLink = getComponentFileLink(fn)
     if (fileLink) {
@@ -77,5 +69,5 @@ function getFunctionName(fn: Function) {
 }
 
 function getComponentFileLink(fn: Function) {
-  return fn.toString().match(/\/\/ \[kiru_devtools\]:(.*)/)?.[1] ?? null
+  return (fn as any)[$DEV_FILE_LINK] ?? null
 }
