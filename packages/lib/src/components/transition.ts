@@ -1,7 +1,7 @@
 import { onCleanup } from "../hooks/onCleanup.js"
-import { signal, Signal } from "../signals/base.js"
-import { effect } from "../signals/effect.js"
+import { Signal } from "../signals/base.js"
 import { unwrap } from "../signals/utils.js"
+import { setup } from "../hooks/setup.js"
 
 export type TransitionState = "entering" | "entered" | "exiting" | "exited"
 interface TransitionProps {
@@ -26,26 +26,29 @@ interface TransitionProps {
  * @see https://kirujs.dev/docs/components/transition
  */
 export const Transition: Kiru.FC<TransitionProps> = (props) => {
-  const tState = signal<TransitionState>(props.initialState || "exited")
+  const $ = setup<typeof Transition>()
+  const tState = $.derive<TransitionState>((p) => p.initialState || "exited")
+  const inState = $.derive((p) => unwrap(p.in, true))
   let timeoutRef: number | undefined
+  let onTransitionEnd = props.onTransitionEnd
+  let duration = props.duration
 
   const setTransitionState = (transitionState: TransitionState) => {
     clearTimeout(timeoutRef)
     tState.value = transitionState
     if (transitionState === "entered" || transitionState === "exited") {
-      if (props.onTransitionEnd) props.onTransitionEnd(transitionState)
+      onTransitionEnd?.(transitionState)
     }
   }
 
   const queueStateChange = (transitionState: "entered" | "exited") => {
     timeoutRef = window.setTimeout(
       () => setTransitionState(transitionState),
-      getTiming(transitionState, props.duration)
+      getTiming(transitionState, duration)
     )
   }
 
-  effect(() => {
-    const newIn = unwrap(props.in, true)
+  const unsub = inState.subscribe((newIn) => {
     const current = tState.peek()
     if (newIn && current !== "entered" && current !== "entering") {
       setTransitionState("entering")
@@ -56,10 +59,12 @@ export const Transition: Kiru.FC<TransitionProps> = (props) => {
     }
   })
 
-  onCleanup(() => clearTimeout(timeoutRef))
+  onCleanup(() => (unsub(), clearTimeout(timeoutRef)))
 
-  return (newProps) => {
-    return newProps.element(tState.value)
+  return (props) => {
+    duration = props.duration
+    onTransitionEnd = props.onTransitionEnd
+    return props.element(tState.value)
   }
 }
 
