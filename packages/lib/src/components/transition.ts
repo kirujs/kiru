@@ -69,7 +69,6 @@ export const Transition: Kiru.FC<TransitionProps> = (props) => {
   })
 
   return (props) => {
-    console.log("tState", tState.value)
     duration = props.duration
     onTransitionEnd = props.onTransitionEnd
     return props.element(tState.value)
