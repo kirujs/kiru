@@ -1,10 +1,13 @@
-import { sideEffectsEnabled } from "../utils/index.js"
+import {
+  sideEffectsEnabled,
+  type StreamDataThrowValue,
+} from "../utils/index.js"
 import { Signal } from "../signals/index.js"
 import { $STREAM_DATA } from "../constants.js"
 import { node } from "../globals.js"
 import { ref } from "../ref.js"
 import { requestUpdate } from "../scheduler.js"
-import { isResource, Resource, StreamDataThrowValue } from "../resource.js"
+import { isResource, Resource } from "../resource.js"
 import type { RecordHas } from "../types.utils"
 
 export type Derivable =

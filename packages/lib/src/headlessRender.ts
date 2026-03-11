@@ -7,8 +7,8 @@ import {
   assertValidElementProps,
   isPrimitiveChild,
   isValidTextChild,
+  isStreamDataThrowValue,
 } from "./utils/index.js"
-import { isStreamDataThrowValue } from "./resource.js"
 import { Signal } from "./signals/base.js"
 import { $ERROR_BOUNDARY, voidElements, $STREAM_DATA } from "./constants.js"
 import { __DEV__ } from "./env.js"

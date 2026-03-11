@@ -1,26 +1,10 @@
-import { $HMR_ACCEPT, $STREAM_DATA, STREAMED_DATA_EVENT } from "./constants.js"
+import { $HMR_ACCEPT, STREAMED_DATA_EVENT } from "./constants.js"
 import { hydrationMode, node, renderMode } from "./globals.js"
 import { Signal, signal } from "./signals/base.js"
 import { createVNodeId, registerVNodeCleanup } from "./utils/vdom.js"
 import { generateRandomID } from "./utils/generateId.js"
 import { __DEV__, isBrowser } from "./env.js"
 import { GenericHMRAcceptor, performHmrAccept } from "./hmr.js"
-
-export interface StreamDataThrowValue {
-  [$STREAM_DATA]: {
-    fallback?: JSX.Element
-    data: Kiru.StatefulPromise<unknown>[]
-  }
-}
-
-/**
- * Returns true if the value is a {@link StreamDataThrowValue}
- */
-export function isStreamDataThrowValue(
-  value: unknown
-): value is StreamDataThrowValue {
-  return typeof value === "object" && !!value && $STREAM_DATA in value
-}
 
 /**
  * Returns true if the value is a {@link Resource}
