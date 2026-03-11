@@ -4,30 +4,23 @@ import { $STREAM_DATA } from "../constants.js"
 import { node } from "../globals.js"
 import { ref } from "../ref.js"
 import { requestUpdate } from "../scheduler.js"
-import { isStatefulPromise, StreamDataThrowValue } from "../statefulPromise.js"
+import { isResource, Resource, StreamDataThrowValue } from "../resource.js"
 import type { RecordHas } from "../types.utils"
 
 export type Derivable =
   | Kiru.Signal<unknown>
-  | Kiru.StatefulPromiseBase<unknown>
-  | Record<string, Kiru.Signal<unknown> | Kiru.StatefulPromiseBase<unknown>>
+  | Record<string, Kiru.Signal<unknown>>
 
-type InnerOf<T> =
-  T extends Kiru.Signal<infer V>
-    ? V
-    : T extends Kiru.StatefulPromiseBase<infer P>
-      ? P
-      : never
+type InnerOf<T> = T extends Kiru.Signal<infer V> ? V : never
 
-type UnwrapDerive<T extends Derivable> = T extends
-  | Kiru.Signal<unknown>
-  | Kiru.StatefulPromiseBase<any>
-  ? InnerOf<T>
-  : { [K in keyof T]: InnerOf<T[K]> }
+type UnwrapDerivable<T extends Derivable> =
+  T extends Kiru.Signal<unknown>
+    ? InnerOf<T>
+    : { [K in keyof T]: InnerOf<T[K]> }
 
-type RecordHasPromise<T extends Record<string, any>> = RecordHas<
+type RecordHasResource<T extends Record<string, any>> = RecordHas<
   T,
-  Kiru.StatefulPromiseBase<any>
+  Resource<any>
 >
 
 type ChildFn<T> = (value: T) => JSX.Children
@@ -41,21 +34,21 @@ export interface DeriveProps<
 > {
   from: T
   mode?: Mode
-  children: T extends Kiru.StatefulPromiseBase<infer U>
+  children: T extends Resource<infer U>
     ? Mode extends "swr"
       ? ChildFnWithStale<U>
       : ChildFn<U>
     : T extends Record<string, any>
-      ? RecordHasPromise<T> extends true
+      ? RecordHasResource<T> extends true
         ? Mode extends "swr"
-          ? ChildFnWithStale<UnwrapDerive<T>>
-          : ChildFn<UnwrapDerive<T>>
-        : ChildFn<UnwrapDerive<T>>
-      : ChildFn<UnwrapDerive<T>>
-  fallback?: T extends Kiru.StatefulPromiseBase<any>
+          ? ChildFnWithStale<UnwrapDerivable<T>>
+          : ChildFn<UnwrapDerivable<T>>
+        : ChildFn<UnwrapDerivable<T>>
+      : ChildFn<UnwrapDerivable<T>>
+  fallback?: T extends Resource<any>
     ? JSX.Element
     : T extends Record<string, any>
-      ? RecordHasPromise<T> extends true
+      ? RecordHasResource<T> extends true
         ? JSX.Element
         : never
       : never
@@ -72,15 +65,15 @@ type Derive = {
  * @see https://kirujs.dev/docs/components/derive
  */
 export const Derive: Derive = () => {
+  const prevSuccess = ref<unknown>(null)
   return (props) => {
     const { from, children, fallback, mode } = props
-    const prevSuccess = ref<unknown>(null)
 
-    const promises = new Set<Kiru.StatefulPromiseBase<any>>()
+    const promises = new Set<Kiru.StatefulPromise<any>>()
     let value: unknown
 
-    if (isStatefulPromise(from)) {
-      promises.add(from)
+    if (isResource(from)) {
+      promises.add(from.promise)
       value = from.value as unknown
     } else if (Signal.isSignal(from)) {
       value = from.value as unknown
@@ -88,10 +81,8 @@ export const Derive: Derive = () => {
       const out: Record<string, any> = {}
       for (const key in from) {
         const v = from[key]
-        if (isStatefulPromise(v)) promises.add(v)
-        out[key] = (
-          v as Signal<unknown> | Kiru.StatefulPromiseBase<unknown>
-        ).value
+        if (isResource(v)) promises.add(v.promise)
+        out[key] = (v as Signal<unknown> | Kiru.StatefulPromise<unknown>).value
       }
       value = out as unknown
     }

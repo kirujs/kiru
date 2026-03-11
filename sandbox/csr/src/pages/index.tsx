@@ -1,57 +1,55 @@
-import { signal, computed, DevTools } from "kiru"
+import { signal, computed, resource, Derive } from "kiru"
 
-const count = signal(0)
-const double = computed(() => count.value * 2)
-if (import.meta.env.DEV) {
-  DevTools.track(count, "count")
-  DevTools.track(double, "double")
+interface User {
+  id: number
+  firstName: string
+  lastName: string
+  age: number
 }
 
-const text = signal("Hello World")
-const color = signal("#ff0066")
-const lightness = signal(-0.5)
-const backgroundColor = computed(() =>
-  ColorLuminance(color.value, lightness.value)
-)
+const search = signal("")
+const limit = signal(10)
+const searchParams = computed(() => {
+  return {
+    search: search.value,
+    limit: limit.value,
+  }
+})
+
+// able to be created globally _or_ within components
+const users = resource(searchParams, async (src, ctx) => {
+  const res = await fetch(
+    `https://dummyjson.com/users/search?q=${src.search}&limit=${src.limit}`,
+    { signal: ctx.signal }
+  )
+  return res.json() as Promise<{ users: User[] }>
+})
 
 export default function HomePage() {
-  const showChild = signal(true)
-
-  return () => (
-    <div className="flex flex-col gap-4">
-      <span className="p-2 rounded-lg" style={{ color, backgroundColor }}>
-        Hello World
-      </span>
-      <input type="text" bind:value={text} />
-      <input type="color" bind:value={color} />
-      <input type="range" bind:value={lightness} min={-1} max={1} step={0.1} />
-      <input type="checkbox" bind:checked={showChild} />
-      {showChild.value && <ChildComponent foo={{ bar: text }} />}
-    </div>
-  )
-}
-
-function ColorLuminance(hex: string, lum: number) {
-  hex = String(hex).replace(/[^0-9a-f]/gi, "")
-
-  let rgb = "#",
-    c,
-    i
-  for (i = 0; i < 3; i++) {
-    c = parseInt(hex.substr(i * 2, 2), 16)
-    // Apply luminosity factor and clamp values between 0 and 255
-    c = Math.round(Math.min(Math.max(0, c + c * lum), 255)).toString(16)
-    // Pad with leading zero if necessary
-    rgb += ("00" + c).substr(c.length)
-  }
-
-  return rgb
-}
-
-function ChildComponent(props: { foo: { bar: Kiru.Signal<string> } }) {
   return (
-    <div>
-      <span>{props.foo.bar}</span>
-    </div>
+    <>
+      <Derive from={users} fallback={<div>Loading...</div>}>
+        {(data, isStale) => (
+          <div style={{ opacity: isStale ? 0.5 : 1 }}>
+            <ul>
+              {data.users.map((user) => (
+                <li key={user.id}>
+                  {user.firstName} {user.lastName}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Derive>
+      <button onclick={() => users.refetch()}>Refetch</button>
+      <input placeholder={"search"} bind:value={search} />
+      <input
+        type="range"
+        min={1}
+        max={10}
+        placeholder={"limit"}
+        bind:value={limit}
+      />
+    </>
   )
 }

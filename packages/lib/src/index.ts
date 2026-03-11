@@ -22,7 +22,7 @@ export {
   requestUpdate,
   useRequestUpdate,
 } from "./scheduler.js"
-export * from "./statefulPromise.js"
+export * from "./resource.js"
 export * from "./viewTransitions.js"
 
 if (isBrowser) {

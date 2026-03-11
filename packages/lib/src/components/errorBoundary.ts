@@ -3,7 +3,9 @@ import { createElement } from "../index.js"
 
 export interface ErrorBoundaryProps {
   children?: JSX.Children
-  fallback?: JSX.Element | ((error: Error) => JSX.Element)
+  fallback?:
+    | Exclude<JSX.Element, (props: any) => JSX.Element>
+    | ((error: Error) => JSX.Element)
   onError?: (error: Error) => void
 }
 
