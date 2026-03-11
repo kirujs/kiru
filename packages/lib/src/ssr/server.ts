@@ -1,4 +1,3 @@
-import { Readable } from "node:stream"
 import { Fragment } from "../element.js"
 import { renderMode } from "../globals.js"
 import { STREAMED_DATA_EVENT } from "../constants.js"
@@ -20,11 +19,19 @@ d.currentScript.remove()
 </script>
 `
 
-export function renderToReadableStream(element: JSX.Element): {
+export interface ReadableStreamRenderResult {
   immediate: string
-  stream: Readable
-} {
-  const stream = new Readable({ read() {} })
+  stream: ReadableStream
+}
+
+export function renderToReadableStream(element: JSX.Element): ReadableStreamRenderResult {
+  let controller!: ReadableStreamDefaultController<string>
+  const stream = new ReadableStream<string>({
+    start(c) {
+      controller = c
+    },
+  })
+  
   const rootNode = Fragment({ children: element })
   const streamPromises = new Set<Kiru.StatefulPromise<unknown>>()
   const pendingWritePromises: Promise<void>[] = []
@@ -43,7 +50,7 @@ export function renderToReadableStream(element: JSX.Element): {
           .catch(() => ({ error: promise.error?.message }))
           .then((value) => {
             const content = JSON.stringify(value)
-            stream.push(
+            controller.enqueue(
               `<script id="${promise.id}" k-data type="application/json">${content}</script>`
             )
           })
@@ -55,16 +62,16 @@ export function renderToReadableStream(element: JSX.Element): {
 
   const prev = renderMode.current
   renderMode.current = "stream"
-  headlessRender(ctx, rootNode, null, 0)
+  headlessRender(ctx, rootNode)
   renderMode.current = prev
 
   if (pendingWritePromises.length > 0) {
     Promise.all(pendingWritePromises).then(() => {
-      stream.push(STREAMED_DATA_SETUP)
-      stream.push(null)
+      controller.enqueue(STREAMED_DATA_SETUP)
+      controller.close()
     })
   } else {
-    stream.push(null)
+    controller.close()
   }
 
   return { immediate, stream }

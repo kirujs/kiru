@@ -22,8 +22,8 @@ export interface HeadlessRenderContext {
 export function headlessRender(
   ctx: HeadlessRenderContext,
   el: unknown,
-  parent: Kiru.VNode | null,
-  idx: number
+  parent: Kiru.VNode | null = null,
+  idx: number = 0
 ): void {
   if (el === null) return
   if (el === undefined) return

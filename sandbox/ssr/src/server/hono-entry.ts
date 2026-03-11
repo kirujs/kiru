@@ -20,8 +20,12 @@ app.all("*", async (c, next) => {
 
     // write lazy content as it resolves
     if (stream) {
-      stream.on("data", (chunk) => res.write(chunk))
-      await new Promise((resolve) => stream.on("end", resolve))
+      const reader = stream.getReader()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        await res.write(value)
+      }
     }
   })
 })

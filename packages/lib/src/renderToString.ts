@@ -11,7 +11,7 @@ export function renderToString(element: JSX.Element) {
       result += chunk
     },
   }
-  headlessRender(ctx, Fragment({ children: element }), null, 0)
+  headlessRender(ctx, Fragment({ children: element }))
   renderMode.current = prev
   return result
 }
