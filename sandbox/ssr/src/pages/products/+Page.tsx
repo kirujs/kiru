@@ -17,6 +17,7 @@ interface ProductsResponse {
 }
 
 export function Page() {
+  const count = signal(0)
   const limit = signal(10)
   const products = resource<ProductsResponse, number>(
     limit,
@@ -33,6 +34,7 @@ export function Page() {
 
   return () => (
     <>
+      <button onclick={() => count.value++}>Count: {count}</button>
       <input type="range" min={1} max={50} bind:value={limit} />
       <Derive from={products} fallback={<div>Loading...</div>}>
         {(data, isStale) => (
