@@ -84,7 +84,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       if (devtoolsEnabled) {
         setupDevtools(
           server,
-          { dtClientPathname, formatFileLink: fileLinkFormatter },
+          { formatFileLink: fileLinkFormatter },
           dtHostScriptPath,
           log
         )

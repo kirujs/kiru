@@ -1,4 +1,4 @@
-import type { ESBuildOptions, Plugin } from "vite"
+import type { ESBuildOptions } from "vite"
 
 export type FileLinkFormatter = (path: string, line: number) => string
 
@@ -222,4 +222,8 @@ export const defaultEsBuildOptions: ESBuildOptions
  */
 export function onHMR(callback: () => void): void
 
-export default function kiru(opts?: KiruPluginOptions): Plugin
+type PluginInterop = Record<string, unknown> & {
+  name: string
+}
+
+export default function kiru(opts?: KiruPluginOptions): PluginInterop
