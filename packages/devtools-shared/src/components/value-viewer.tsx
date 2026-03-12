@@ -175,18 +175,12 @@ function ObjectNodeView({ node }: { node: ViewerObjectNode }) {
 
   return (
     <NodeWrapper>
-      <button
-        className="text-xs flex items-center gap-1 cursor-pointer w-full"
+      <NodeExpanderButton
+        node={node}
         title={node.path}
-        onclick={() => (node.collapsed.value = !node.collapsed.value)}
-      >
-        {node.label}
-        <ChevronRightIcon
-          width={10}
-          height={10}
-          className={`transition ${isCollapsed ? "" : "rotate-90"}`}
-        />
-      </button>
+        lable={node.label}
+        isCollapsed={isCollapsed}
+      />
       {children !== null && (
         <ValueViewer root={{ children, page: node.page }} />
       )}
@@ -201,18 +195,12 @@ function ArrayNodeView({ node }: { node: ViewerArrayNode }) {
 
   return (
     <NodeWrapper>
-      <button
-        className="text-xs flex items-center gap-1 cursor-pointer w-full"
+      <NodeExpanderButton
+        node={node}
         title={node.path}
-        onclick={() => (node.collapsed.value = !node.collapsed.value)}
-      >
-        {node.label}
-        <ChevronRightIcon
-          width={10}
-          height={10}
-          className={`transition ${isCollapsed ? "" : "rotate-90"}`}
-        />
-      </button>
+        lable={node.label}
+        isCollapsed={isCollapsed}
+      />
       {isCollapsed ? (
         <small className="text-neutral-300">{`Array(${node.length})`}</small>
       ) : (
@@ -235,17 +223,12 @@ function ArrayChunkView({ node }: { node: ViewerArrayChunkNode }) {
 
   return (
     <div className="flex flex-col items-start gap-1 w-full">
-      <button
-        className="text-xs flex items-center gap-1 cursor-pointer w-full"
-        onclick={() => (node.collapsed.value = !node.collapsed.value)}
-      >
-        {node.label}
-        <ChevronRightIcon
-          width={10}
-          height={10}
-          className={`transition ${isCollapsed ? "" : "rotate-90"}`}
-        />
-      </button>
+      <NodeExpanderButton
+        node={node}
+        title={node.path}
+        lable={node.label}
+        isCollapsed={isCollapsed}
+      />
       {children && (
         <div className="flex flex-col items-start gap-1 w-full">
           {children.map((child) => (
@@ -280,5 +263,42 @@ function SignalNodeView({ node }: { node: ViewerSignalNode }) {
 function NodeWrapper({ children }: { children: JSX.Element }) {
   return (
     <div className="flex flex-col items-start gap-1 w-full">{children}</div>
+  )
+}
+
+interface NodeExpanderButtonProps {
+  node: { collapsed: Kiru.Signal<boolean> }
+  title: string
+  lable: string
+  isCollapsed: boolean
+}
+function NodeExpanderButton({
+  node,
+  title,
+  lable: label,
+  isCollapsed,
+}: NodeExpanderButtonProps) {
+  return (
+    <button
+      className="text-xs flex items-center gap-1 cursor-pointer w-full"
+      title={title}
+      onmousedown={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+      }}
+      onclick={(e) => {
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        node.collapsed.value = !node.collapsed.value
+      }}
+    >
+      {label}
+      <ChevronRightIcon
+        width={10}
+        height={10}
+        className={`transition ${isCollapsed ? "" : "rotate-90"}`}
+      />
+    </button>
   )
 }
