@@ -30,7 +30,10 @@ export function ValueViewer({ root, className }: ValueViewerProps) {
   return (
     <>
       <div
-        className={cls("flex flex-col items-start w-full", unwrap(className))}
+        className={cls(
+          "flex flex-col items-start w-full text-neutral-400",
+          unwrap(className)
+        )}
       >
         {visibleChildren.map((child) => (
           <div
