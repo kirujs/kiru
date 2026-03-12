@@ -193,7 +193,13 @@ function buildNode(
       // new build so collapse/page state is preserved across value changes
       const prevCache = emptyCache()
       collectFromNodes([viewerNode.peek()], prevCache)
-      viewerNode.value = buildNode(newValue, "value", innerPath, prevCache, settings)
+      viewerNode.value = buildNode(
+        newValue,
+        "value",
+        innerPath,
+        prevCache,
+        settings
+      )
       disposeCache(prevCache)
     })
 
@@ -205,6 +211,10 @@ function buildNode(
     cache.collapsed.delete(path)
     // Children signal is always fresh — old signal (if any) stays in cache for disposal
     const children = kiru.signal<ViewerNode[] | null>(null)
+
+    // Extract child signals from cache before it gets disposed
+    const childCache = emptyCache()
+    extractNestedSignals(cache, childCache, path)
 
     const node: ViewerArrayNode = {
       kind: "array",
@@ -225,7 +235,9 @@ function buildNode(
               raw.length
             )
             const chunkPath = `${path}[${start}..${end - 1}]`
-            const chunkCollapsed = kiru.signal(true)
+            const chunkCollapsed =
+              childCache.collapsed.get(chunkPath) ?? kiru.signal(true)
+            childCache.collapsed.delete(chunkPath)
             const chunkChildren = kiru.signal<ViewerNode[] | null>(null)
             const rawSlice = raw.slice(start, end)
             const chunk: ViewerArrayChunkNode = {
@@ -242,7 +254,7 @@ function buildNode(
                     item,
                     (start + i).toString(),
                     `${path}[${start + i}]`,
-                    emptyCache(),
+                    childCache,
                     settings
                   )
                 )
@@ -256,7 +268,7 @@ function buildNode(
               item,
               idx.toString(),
               `${path}[${idx}]`,
-              emptyCache(),
+              childCache,
               settings
             )
           )
@@ -275,6 +287,25 @@ function buildNode(
   const children = kiru.signal<ViewerNode[] | null>(null)
   const rawObj = raw as Record<string, unknown>
 
+  // Extract child signals from cache before it gets disposed
+  // This ensures lazy buildChildren() can access them later
+  const childCache = emptyCache()
+  for (const key of Object.keys(rawObj)) {
+    const childPath = `${path}.${key}`
+    const childCollapsed = cache.collapsed.get(childPath)
+    if (childCollapsed) {
+      childCache.collapsed.set(childPath, childCollapsed)
+      cache.collapsed.delete(childPath)
+    }
+    const childPage = cache.page.get(childPath)
+    if (childPage) {
+      childCache.page.set(childPath, childPage)
+      cache.page.delete(childPath)
+    }
+    // Recursively extract nested paths
+    extractNestedSignals(cache, childCache, childPath)
+  }
+
   const node: ViewerObjectNode = {
     kind: "object",
     label,
@@ -284,10 +315,36 @@ function buildNode(
     children,
     buildChildren: () => {
       if (children.peek() !== null) return
-      children.value = buildObjectChildren(rawObj, path, emptyCache(), settings)
+      children.value = buildObjectChildren(rawObj, path, childCache, settings)
     },
   }
   return node
+}
+
+function extractNestedSignals(
+  sourceCache: SignalCache,
+  targetCache: SignalCache,
+  parentPath: string
+) {
+  // Extract all signals that start with parentPath
+  for (const [path, signal] of sourceCache.collapsed.entries()) {
+    if (
+      path.startsWith(parentPath + ".") ||
+      path.startsWith(parentPath + "[")
+    ) {
+      targetCache.collapsed.set(path, signal)
+      sourceCache.collapsed.delete(path)
+    }
+  }
+  for (const [path, signal] of sourceCache.page.entries()) {
+    if (
+      path.startsWith(parentPath + ".") ||
+      path.startsWith(parentPath + "[")
+    ) {
+      targetCache.page.set(path, signal)
+      sourceCache.page.delete(path)
+    }
+  }
 }
 
 function buildObjectChildren(
