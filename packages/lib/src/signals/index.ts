@@ -1,5 +1,5 @@
 export { Signal, signal } from "./base.js"
 export { ComputedSignal, computed } from "./computed.js"
 export { Effect, effect } from "./effect.js"
-export { unwrap, tick } from "./utils.js"
+export { tick, untrack, unwrap } from "./utils.js"
 export * from "./types.js"
