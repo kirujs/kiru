@@ -17,6 +17,7 @@ type InferLazyImportProps<T extends LazyImportValue> = T extends FCModule
 interface LazyState {
   promise: Promise<LazyImportValue>
   result: Kiru.FC | null
+  error?: Error
 }
 
 type LazyComponentProps<T extends LazyImportValue> = InferLazyImportProps<T> & {
@@ -46,28 +47,37 @@ export function lazy<T extends LazyImportValue>(
     const cachedState = lazyCache.get(fn)
 
     if (!cachedState) {
-      const promise = componentPromiseFn()
+      const promise = new Promise<T>((r) => r(componentPromiseFn()))
       const state: LazyState = {
         promise,
         result: null,
       }
       lazyCache.set(fn, state)
-      promise.then((componentOrModule) => {
-        state.result =
-          typeof componentOrModule === "function"
-            ? componentOrModule
-            : componentOrModule.default
-        requestUpdate(nodeRef)
-      })
+      promise
+        .then((componentOrModule) => {
+          state.result =
+            typeof componentOrModule === "function"
+              ? componentOrModule
+              : componentOrModule.default
+        })
+        .catch((e) => {
+          state.error = e instanceof Error ? e : new Error(String(e))
+        })
+        .finally(() => requestUpdate(nodeRef))
       return fallback
     }
 
-    if (cachedState.result === null) {
-      cachedState.promise.then(() => requestUpdate(nodeRef))
+    const { error, result, promise } = cachedState
+
+    if (error) {
+      throw error
+    }
+    if (result === null) {
+      promise.then(() => requestUpdate(nodeRef))
       return fallback
     }
 
-    return createElement(cachedState.result, rest)
+    return createElement(result, rest)
   }
 
   if (__DEV__) {

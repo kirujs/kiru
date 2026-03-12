@@ -269,6 +269,7 @@ function updateVNode(vNode: VNode): VNode | null {
 
     const handler = findParentErrorBoundary(vNode)
     if (handler) {
+      handler.flags |= FLAG_DIRTY
       const e = (handler.error =
         error instanceof Error ? error : new Error(String(error)))
 
