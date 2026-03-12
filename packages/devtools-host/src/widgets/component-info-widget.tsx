@@ -306,8 +306,8 @@ const ComponentInfoPanel: Kiru.FC<{
             cursor: resizeController.isResizing.value
               ? "se-resize"
               : dragController.isDragging.value
-              ? "grabbing"
-              : "grab",
+                ? "grabbing"
+                : "grab",
           }}
           onclick={bringToFront}
           onmousedown={bringToFront}
@@ -319,72 +319,70 @@ const ComponentInfoPanel: Kiru.FC<{
               transition: "80ms ease-in-out",
               opacity: pulsing ? 1 : 0.75,
               flex: 1,
-              scrollbarWidth: "thin",
               minHeight: 0,
-              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
               boxShadow: pulsing ? "0 0 8px crimson" : undefined,
             }}
             className="rounded-lg bg-neutral-900 opacity-75 hover:opacity-100! shadow-lg"
           >
-            <div className="flex flex-col text-sm overflow-auto">
-              <div className="flex items-center justify-between gap-2 p-2">
-                <a
-                  href={current.link}
-                  className={cls(
-                    "flex items-center justify-center gap-2",
-                    "text-neutral-400 hover:text-neutral-200"
-                  )}
-                  onclick={(e: Kiru.MouseEvent) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    window.open(current.link)
+            <div className="flex items-center justify-between gap-2 p-2 shrink-0">
+              <a
+                href={current.link}
+                className={cls(
+                  "flex items-center justify-center gap-2",
+                  "text-neutral-400 hover:text-neutral-200"
+                )}
+                onclick={(e: Kiru.MouseEvent) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  window.open(current.link)
+                }}
+                onmousedown={(e) => e.stopPropagation()}
+                title="Open in editor"
+              >
+                {`<${current.name}>`}
+                <ExternalLinkIcon className="w-4 h-4 shrink-0 pointer-events-none" />
+              </a>
+              <div className="flex items-center gap-2">
+                {current.unmounted && (
+                  <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                    Unmounted
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="p-1 text-neutral-400 hover:text-neutral-200"
+                  onclick={() => {
+                    componentInfoPanels.value =
+                      componentInfoPanels.value.filter((p) => p.id !== panel.id)
                   }}
-                  onmousedown={(e) => e.stopPropagation()}
-                  title="Open in editor"
+                  title="Close"
                 >
-                  {`<${current.name}>`}
-                  <ExternalLinkIcon className="w-4 h-4 shrink-0 pointer-events-none" />
-                </a>
-                <div className="flex items-center gap-2">
-                  {current.unmounted && (
-                    <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
-                      Unmounted
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="p-1 text-neutral-400 hover:text-neutral-200"
-                    onclick={() => {
-                      componentInfoPanels.value =
-                        componentInfoPanels.value.filter(
-                          (p) => p.id !== panel.id
-                        )
-                    }}
-                    title="Close"
-                  >
-                    <CloseIcon className="w-4 h-4 shrink-0 pointer-events-none" />
-                  </button>
-                </div>
+                  <CloseIcon className="w-4 h-4 shrink-0 pointer-events-none" />
+                </button>
               </div>
+            </div>
 
-              <div className="pt-2 px-4">
-                <div className="mb-1.5 font-medium text-neutral-300 text-xs">
-                  Props
-                </div>
-                <kiru.Derive from={propsViewerRoot}>
-                  {(root) => {
-                    if (!root) return null
-                    if (root.children.length === 0) {
-                      return (
-                        <div className="text-neutral-500 text-xs italic py-1">
-                          No props
-                        </div>
-                      )
-                    }
-                    return <ValueViewer root={root} className="text-xs" />
-                  }}
-                </kiru.Derive>
+            <div
+              className="flex-1 overflow-y-auto text-sm pt-2 px-4 pb-4 mb-6"
+              style={{ scrollbarWidth: "thin", minHeight: 0 }}
+            >
+              <div className="mb-1.5 font-medium text-neutral-300 text-xs">
+                Props
               </div>
+              <kiru.Show when={propsViewerRoot}>
+                {(root) => {
+                  if (root.children.length === 0) {
+                    return (
+                      <div className="text-neutral-500 text-xs italic py-1">
+                        No props
+                      </div>
+                    )
+                  }
+                  return <ValueViewer root={root} className="text-xs" />
+                }}
+              </kiru.Show>
             </div>
           </div>
           <div
