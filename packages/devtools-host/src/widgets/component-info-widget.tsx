@@ -366,7 +366,7 @@ const ComponentInfoPanel: Kiru.FC<{
 
             <div
               className="flex-1 overflow-y-auto text-sm pt-2 px-4 pb-4 mb-6"
-              style={{ scrollbarWidth: "thin", minHeight: 0 }}
+              style={{ minHeight: 0 }}
             >
               <div className="mb-1.5 font-medium text-neutral-300 text-xs">
                 Props
