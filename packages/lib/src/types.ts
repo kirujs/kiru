@@ -244,6 +244,7 @@ declare global {
       text: SVGElementProps<"text">
       textPath: SVGElementProps<"textPath">
       tspan: SVGElementProps<"tspan">
+      svg: SVGElementProps<"svg">
       // use: SVGElementProps<"use">
       // view: SVGElementProps<"view">
     }
