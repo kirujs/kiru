@@ -5,6 +5,7 @@ import {
   registerVNodeCleanup,
   latest,
 } from "../utils/index.js"
+import { isHmrUpdate } from "../hmr.js"
 import { Signal } from "../signals/base.js"
 import { unwrap } from "../signals/utils.js"
 import { booleanAttributes, EVENT_PREFIX_REGEX } from "../constants.js"
@@ -538,7 +539,9 @@ function setSignalProp(
 
   const value = signal.peek()
   const prev = unwrap(prevValue)
-  if (modifier !== "bind" && value !== prev) {
+  if (__DEV__ && isHmrUpdate() && modifier !== "bind") {
+    setProp(dom, attr ?? modifier, value, prev)
+  } else if (modifier !== "bind" && value !== prev) {
     setProp(dom, attr ?? modifier, value, prev)
   }
 }
