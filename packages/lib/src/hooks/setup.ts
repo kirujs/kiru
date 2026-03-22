@@ -13,6 +13,7 @@ export interface Setup<Props extends {}> {
     selector: (props: Props extends Kiru.FC<infer P> ? P : Props) => T
   ) => Signal<T>
   readonly id: Signal<string>
+  readonly props: Readonly<Props extends Kiru.FC<infer P> ? P : Props>
 }
 
 /**
@@ -145,6 +146,9 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
       }
 
       return id
+    },
+    get props() {
+      return currentProps.current
     },
   }
   return setupResult
