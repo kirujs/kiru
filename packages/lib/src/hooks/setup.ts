@@ -1,5 +1,5 @@
 import { signal, Signal } from "../signals/base.js"
-import { createVNodeId } from "../utils/vdom.js"
+import { createVNodeId, isVNodeDeleted } from "../utils/vdom.js"
 import { __DEV__ } from "../env.js"
 import { node, setups } from "../globals.js"
 import {
@@ -136,6 +136,14 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
     get id() {
       if (!id) {
         id = signal(createVNodeId(vNode))
+        if (isVNodeDeleted(vNode)) {
+          Signal.dispose(id)
+          return id
+        }
+        if (node.current !== vNode) {
+          // @ts-expect-error
+          registerVNodeCleanup(vNode, id.$id, Signal.dispose.bind(null, id))
+        }
         prevIndex = vNode.index
         propSyncs.push(() => {
           if (prevIndex !== vNode.index) {
