@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+
+    // Other Outputs
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    //"noEmit": true,
+
+    "outDir": "dist",
+    "baseUrl": ".",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "jsx": "react",
+    "jsxFactory": "Kiru.createElement",
+    "jsxFragmentFactory": "Kiru.Fragment"
+  },
+  "include": ["src"],
+  "exclude": ["dist"]
+}

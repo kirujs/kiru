@@ -25,6 +25,24 @@ const lib = task({
   },
 })
 
+const headlessUi = task({
+  name: "headless-ui",
+  cwd: "packages/headless-ui",
+  commands: {
+    build: {
+      run: "pnpm build",
+      cache: {
+        inputs: ["src", lib.artifact("build"), pnpm.package()],
+        outputs: ["dist"],
+      },
+    },
+    dev: {
+      run: "pnpm dev",
+      readyWhen: (output) => output.includes("Watching for file changes."),
+    },
+  },
+})
+
 const createDevtoolsTask = (name) =>
   task({
     name,
@@ -135,6 +153,7 @@ const command = argv[0]
 
 const result = await pipeline([
   lib,
+  headlessUi,
   devtoolsHost,
   vitePlugin,
   csrTest,

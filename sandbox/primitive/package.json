@@ -9,7 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "kiru": "workspace:^"
+    "kiru": "workspace:^",
+    "@kirujs/headless-ui": "workspace:^"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
