@@ -1,5 +1,5 @@
 import * as Kiru from "kiru"
-import { assignCustomStylePropertiesForSize, createRefProxy } from "../utils.js"
+import { createRefProxy } from "../utils/ref-proxy.js"
 import type { HtmlOrSvgElement } from "../types"
 
 /**
@@ -83,4 +83,10 @@ export function useContentPanel(isOpen: Kiru.Signal<boolean>) {
   })
 
   return { hidden, refProxy }
+}
+
+function assignCustomStylePropertiesForSize(element: HtmlOrSvgElement) {
+  const { height, width } = element.getBoundingClientRect()
+  element.style.setProperty(`--content-height`, `${height}px`)
+  element.style.setProperty(`--content-width`, `${width}px`)
 }

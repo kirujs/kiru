@@ -1,6 +1,6 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
-import { createRefProxy } from "../utils.js"
+import { createRefProxy } from "../utils/ref-proxy.js"
 import {
   createTriggerController,
   type TriggerController,

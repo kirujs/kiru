@@ -1,5 +1,4 @@
 import { setRef } from "kiru/utils"
-import type { HtmlOrSvgElement } from "./types"
 
 export function createRefProxy<T>(callback: Kiru.RefCallback<T>) {
   let propsRef: Kiru.Ref<T> | undefined
@@ -21,10 +20,4 @@ export function createRefProxy<T>(callback: Kiru.RefCallback<T>) {
     }
   }
   return { ref, update }
-}
-
-export function assignCustomStylePropertiesForSize(element: HtmlOrSvgElement) {
-  const { height, width } = element.getBoundingClientRect()
-  element.style.setProperty(`--content-height`, `${height}px`)
-  element.style.setProperty(`--content-width`, `${width}px`)
 }

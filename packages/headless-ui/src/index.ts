@@ -1,41 +1,6 @@
-import { Accordion } from "./components/accordion.js"
-import type {
-  AccordionRootProps,
-  AccordionItemProps,
-  AccordionHeaderProps,
-  AccordionTriggerProps,
-  AccordionContentProps,
-} from "./components/accordion"
-
-import { Tabs } from "./components/tabs.js"
-import type {
-  TabsRootProps,
-  TabsListProps,
-  TabsTriggerProps,
-  TabsContentProps,
-} from "./components/tabs"
-
-import { Collapsible } from "./components/collapsible.js"
-import type {
-  CollapsibleRootProps,
-  CollapsibleTriggerProps,
-  CollapsibleContentProps,
-} from "./components/collapsible"
-
-export { Accordion, Tabs, Collapsible }
-export type {
-  AccordionRootProps,
-  AccordionItemProps,
-  AccordionHeaderProps,
-  AccordionTriggerProps,
-  AccordionContentProps,
-  TabsRootProps,
-  TabsListProps,
-  TabsTriggerProps,
-  TabsContentProps,
-  CollapsibleRootProps,
-  CollapsibleTriggerProps,
-  CollapsibleContentProps,
-}
-
+export * from "./components/accordion.js"
+export * from "./components/checkbox.js"
+export * from "./components/collapsible.js"
+export * from "./components/radio-group.js"
+export * from "./components/tabs.js"
 export type { Orientation } from "./types"
