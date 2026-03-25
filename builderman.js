@@ -18,6 +18,10 @@ const lib = task({
     },
     test: {
       run: "pnpm test",
+      cache: {
+        inputs: ["src", pnpm.package()],
+        outputs: ["dist"],
+      },
       env: {
         NODE_ENV: "development",
       },
@@ -42,9 +46,16 @@ const headlessUi = task({
     },
     test: {
       run: "pnpm test",
+      cache: {
+        inputs: ["src", lib.artifact("build"), pnpm.package()],
+        outputs: ["dist"],
+      },
       env: {
         NODE_ENV: "development",
       },
+    },
+    env: {
+      NODE_ENV: "development",
     },
   },
 })
@@ -105,7 +116,7 @@ const vitePlugin = task({
   },
 })
 
-const csrTest = task({
+const e2eCSR = task({
   name: "e2e:csr",
   cwd: "e2e/csr",
   commands: {
@@ -121,7 +132,18 @@ const csrTest = task({
         outputs: ["dist"],
       },
     },
-    test: "pnpm test",
+    test: {
+      run: "pnpm test",
+      cache: {
+        inputs: [
+          "src",
+          lib.artifact("build"),
+          vitePlugin.artifact("build"),
+          pnpm.package(),
+        ],
+        outputs: ["dist"],
+      },
+    },
   },
   dependencies: [lib],
   env: {
@@ -129,7 +151,7 @@ const csrTest = task({
   },
 })
 
-const ssgTest = task({
+const e2eSSG = task({
   name: "e2e:ssg",
   cwd: "e2e/ssg",
   commands: {
@@ -145,10 +167,21 @@ const ssgTest = task({
         outputs: ["dist"],
       },
     },
-    test: "pnpm test",
+    test: {
+      run: "pnpm test",
+      cache: {
+        inputs: [
+          "src",
+          lib.artifact("build"),
+          vitePlugin.artifact("build"),
+          pnpm.package(),
+        ],
+        outputs: ["dist"],
+      },
+    },
   },
   // github can't run two cypress tests in parallel
-  dependencies: (process.env.GITHUB ? [csrTest] : []).concat(lib),
+  dependencies: (process.env.GITHUB ? [e2eCSR] : []).concat(lib),
   env: {
     NODE_ENV: "development",
   },
@@ -156,12 +189,9 @@ const ssgTest = task({
 
 const argv = process.argv.slice(2)
 const command = argv[0]
-let skipE2E = false
-if (command === "test") {
-  skipE2E = argv.includes("--skip-e2e")
-  if (skipE2E) {
-    console.log("~~~~~ Skipping E2E tests")
-  }
+const includeE2E = command !== "test" || argv.includes("--e2e")
+if (!includeE2E) {
+  console.log("~~~~~ Skipping E2E tests")
 }
 
 const result = await pipeline([
@@ -169,7 +199,7 @@ const result = await pipeline([
   headlessUi,
   devtoolsHost,
   vitePlugin,
-  ...(skipE2E ? [] : [csrTest, ssgTest]),
+  ...(includeE2E ? [e2eCSR, e2eSSG] : []),
 ]).run({
   command,
   onTaskBegin: (taskName) => console.log(`~~~~~ Task begin: ${taskName}`),
@@ -180,6 +210,6 @@ const result = await pipeline([
 
 //console.log(JSON.stringify(result, null, 2))
 console.log(result)
-if (skipE2E) {
+if (!includeE2E) {
   console.log("~~~~~ E2E tests skipped")
 }
