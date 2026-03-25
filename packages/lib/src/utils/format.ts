@@ -1,5 +1,6 @@
 import { unwrap } from "../signals/utils.js"
 import { booleanAttributes, snakeCaseAttributes } from "../constants.js"
+import type { StyleObject } from "../types.dom.js"
 
 export {
   className,
@@ -7,7 +8,6 @@ export {
   propFilters,
   propToHtmlAttr,
   styleObjectToString,
-  propValueToHtmlAttrValue,
   propsToElementAttributes,
   safeStringify,
 }
@@ -81,10 +81,16 @@ function propToHtmlAttr(key: string): string {
   }
 }
 
-function styleObjectToString(obj: Partial<CSSStyleDeclaration>): string {
+function styleObjectToString(
+  obj: StyleObject,
+  opts?: { reactiveRead?: boolean }
+): string {
   let cssString = ""
   for (const key in obj) {
-    const val = unwrap((obj as Record<string, unknown>)[key])
+    const val = unwrap(
+      (obj as Record<string, unknown>)[key],
+      opts?.reactiveRead
+    )
     if (val === null || val === undefined) continue
     const cssKey = key.replace(REGEX_ALPHA_UPPER, "-$&").toLowerCase()
     cssString += `${cssKey}:${val};`
@@ -92,17 +98,6 @@ function styleObjectToString(obj: Partial<CSSStyleDeclaration>): string {
   return cssString
 }
 
-function stylePropToString(style: unknown) {
-  if (typeof style === "string") return style
-  if (typeof style === "object" && !!style) return styleObjectToString(style)
-  return ""
-}
-
-function propValueToHtmlAttrValue(key: string, value: unknown): string {
-  return key === "style" && typeof value === "object" && !!value
-    ? styleObjectToString(value)
-    : String(value)
-}
 function propsToElementAttributes(props: Record<string, unknown>): string {
   const attrs: string[] = []
   const { className, style, ...rest } = props
@@ -111,8 +106,13 @@ function propsToElementAttributes(props: Record<string, unknown>): string {
     if (!!val) attrs.push(`class="${val}"`)
   }
   if (style) {
-    const val = unwrap(style)
-    if (!!val) attrs.push(`style="${stylePropToString(val)}"`)
+    let val = unwrap(style)
+    if (!!val) {
+      if (typeof val === "object") {
+        val = styleObjectToString(val as StyleObject)
+      }
+      attrs.push(`style="${val}"`)
+    }
   }
 
   const keys = Object.keys(rest).filter(propFilters.isStringRenderableProperty)
