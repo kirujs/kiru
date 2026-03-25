@@ -5,14 +5,7 @@ import type { HtmlOrSvgElement } from "../types"
 /**
  * Shared logic for animated expand/collapse content panels.
  *
- * Used by both `CollapsibleContent` and `AccordionContent` — they are
- * identical in behaviour: the only differences are the CSS custom-property
- * prefix and which open-signal they subscribe to.
- *
  * @param isOpen  - reactive signal that drives open/closed state
- * @param sizePropertyPrefix  - CSS custom-property prefix passed to
- *                  `assignCustomStylePropertiesForSize`
- *                  (e.g. `"collapsible-content"` | `"accordion-content"`)
  */
 export function useContentPanel(isOpen: Kiru.Signal<boolean>) {
   const wasOpenInitially = isOpen.peek()
