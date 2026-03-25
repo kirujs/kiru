@@ -1,6 +1,7 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
 import { createRefProxy } from "../utils/ref-proxy.js"
+import { createContext } from "../utils/create-context.js"
 import {
   createTriggerController,
   type TriggerController,
@@ -19,10 +20,8 @@ interface RadioGroupRootContextType {
   select: (value: string) => void
   triggers: TriggerController
 }
-const RadioGroupRootContext = Kiru.createContext<RadioGroupRootContextType>(
-  null!
-)
-const useRadioGroupRoot = () => Kiru.useContext(RadioGroupRootContext)
+const [RadioGroupRootContext, useRadioGroupRoot] =
+  createContext<RadioGroupRootContextType>("RadioGroupRootContext")
 
 // ─── Item Context ─────────────────────────────────────────────────────────────
 
@@ -37,10 +36,8 @@ interface RadioGroupItemContextType {
   }
   select: () => void
 }
-const RadioGroupItemContext = Kiru.createContext<RadioGroupItemContextType>(
-  null!
-)
-const useRadioGroupItem = () => Kiru.useContext(RadioGroupItemContext)
+const [RadioGroupItemContext, useRadioGroupItem] =
+  createContext<RadioGroupItemContextType>("RadioGroupItemContext")
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -331,8 +328,6 @@ const RadioGroupIndicator: RadioGroupIndicator = () => {
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-RadioGroupRootContext.displayName = "RadioGroupRootContext"
-RadioGroupItemContext.displayName = "RadioGroupItemContext"
 RadioGroupRoot.displayName = "RadioGroupRoot"
 RadioGroupItem.displayName = "RadioGroupItem"
 RadioGroupIndicator.displayName = "RadioGroupIndicator"

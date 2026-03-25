@@ -6,6 +6,7 @@ import {
   type TriggerController,
 } from "./trigger-controller.js"
 import type { KiruGlobal, Orientation } from "../types.js"
+import { createContext } from "../utils/create-context.js"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
 
@@ -16,9 +17,8 @@ interface TabsRootContextType {
   orientation: Kiru.Signal<Orientation>
   triggers: TriggerController
 }
-const TabsRootContext = Kiru.createContext<TabsRootContextType>(null!)
-const useTabsRoot = () => Kiru.useContext(TabsRootContext)
-
+const [TabsRootContext, useTabsRoot] =
+  createContext<TabsRootContextType>("TabsRootContext")
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type TabsRootProps<AsChild extends boolean = false> = {
@@ -269,7 +269,6 @@ const TabsContent: TabsContent = () => {
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
-TabsRootContext.displayName = "TabsRootContext"
 TabsRoot.displayName = "TabsRoot"
 TabsList.displayName = "TabsList"
 TabsTrigger.displayName = "TabsTrigger"

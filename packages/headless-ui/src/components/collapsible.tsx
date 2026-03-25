@@ -1,6 +1,7 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
 import { useContentPanel } from "../hooks/use-content-panel.js"
+import { createContext } from "../utils/create-context.js"
 import type { KiruGlobal } from "../types"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
@@ -14,10 +15,8 @@ interface CollapsibleRootContextType {
   toggle: () => void
 }
 
-const CollapsibleRootContext = Kiru.createContext<CollapsibleRootContextType>(
-  null!
-)
-const useCollapsibleRoot = () => Kiru.useContext(CollapsibleRootContext)
+const [CollapsibleRootContext, useCollapsibleRoot] =
+  createContext<CollapsibleRootContextType>("CollapsibleRootContext")
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -216,7 +215,6 @@ const CollapsibleContent: CollapsibleContent = () => {
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-CollapsibleRootContext.displayName = "CollapsibleRootContext"
 CollapsibleRoot.displayName = "CollapsibleRoot"
 CollapsibleTrigger.displayName = "CollapsibleTrigger"
 CollapsibleContent.displayName = "CollapsibleContent"

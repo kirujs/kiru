@@ -6,23 +6,23 @@ import type { KiruGlobal } from "../types"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
 
-interface CheckboxRootContextType {
+interface SwitchRootContextType {
   id: Kiru.Signal<string>
-  checked: Kiru.Signal<boolean | "indeterminate">
+  checked: Kiru.Signal<boolean>
   disabled: Kiru.Signal<boolean>
   toggle: () => void
   sharedAttrs: {
-    "data-state": Kiru.Signal<"checked" | "unchecked" | "indeterminate">
+    "data-state": Kiru.Signal<"checked" | "unchecked">
     "data-disabled": Kiru.Signal<string | undefined>
   }
 }
-const [CheckboxRootContext, useCheckboxRoot] =
-  createContext<CheckboxRootContextType>("CheckboxRootContext")
+const [SwitchRootContext, useSwitchRoot] =
+  createContext<SwitchRootContextType>("SwitchRootContext")
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type CheckboxRootProps<AsChild extends boolean = false> = {
-  onCheckedChange?: (checked: boolean | "indeterminate") => void
+export type SwitchRootProps<AsChild extends boolean = false> = {
+  onCheckedChange?: (checked: boolean) => void
   disabled?: Kiru.Signalable<boolean>
   required?: Kiru.Signalable<boolean>
   name?: string
@@ -31,32 +31,32 @@ export type CheckboxRootProps<AsChild extends boolean = false> = {
   asChild?: AsChild
 } & (
   | {
-      checked: Kiru.Signal<boolean | "indeterminate">
+      checked: Kiru.Signal<boolean>
       defaultChecked?: never
     }
   | {
       checked?: never
-      defaultChecked?: boolean | "indeterminate"
+      defaultChecked?: boolean
     }
 ) &
   (AsChild extends true ? {} : JSX.IntrinsicElements["button"])
 
-export type CheckboxIndicatorProps<AsChild extends boolean = false> = {
+export type SwitchThumbProps<AsChild extends boolean = false> = {
   children?: JSX.Children
   asChild?: AsChild
 } & (AsChild extends true ? {} : JSX.IntrinsicElements["span"])
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
-interface CheckboxRoot {
+interface SwitchRoot {
   <AsChild extends boolean = false>(
-    props: CheckboxRootProps<AsChild>
-  ): (props: CheckboxRootProps<AsChild>) => JSX.Element
+    props: SwitchRootProps<AsChild>
+  ): (props: SwitchRootProps<AsChild>) => JSX.Element
   displayName?: string
 }
 
-const CheckboxRoot: CheckboxRoot = () => {
-  const $ = Kiru.setup<typeof CheckboxRoot>()
+const SwitchRoot: SwitchRoot = () => {
+  const $ = Kiru.setup<typeof SwitchRoot>()
 
   const checked = $.derive(({ checked, defaultChecked }) => {
     if (Kiru.Signal.isSignal(checked)) {
@@ -70,12 +70,16 @@ const CheckboxRoot: CheckboxRoot = () => {
     return d ?? false
   })
 
+  const required = $.derive((p) => {
+    const r = Kiru.unwrap(p.required, true) as boolean | undefined
+    return r ?? false
+  })
+
   const toggle = () => {
     if (disabled.peek()) return
 
     const currentChecked = checked.peek()
-    const nextChecked =
-      currentChecked === "indeterminate" ? true : !currentChecked
+    const nextChecked = !currentChecked
 
     const { checked: propsChecked } = $.props
     if (Kiru.Signal.isSignal(propsChecked)) {
@@ -86,19 +90,14 @@ const CheckboxRoot: CheckboxRoot = () => {
     $.props.onCheckedChange?.(nextChecked)
   }
 
-  const sharedAttrs: CheckboxRootContextType["sharedAttrs"] = {
-    "data-state": Kiru.computed(() => {
-      const c = checked.value
-      return c === "indeterminate"
-        ? "indeterminate"
-        : c
-          ? "checked"
-          : "unchecked"
-    }),
+  const sharedAttrs: SwitchRootContextType["sharedAttrs"] = {
+    "data-state": Kiru.computed(() =>
+      checked.value ? "checked" : "unchecked"
+    ),
     "data-disabled": Kiru.computed(() => (disabled.value ? "" : undefined)),
   }
 
-  const ctx: CheckboxRootContextType = {
+  const ctx: SwitchRootContextType = {
     id: $.id,
     checked,
     disabled,
@@ -124,7 +123,7 @@ const CheckboxRoot: CheckboxRoot = () => {
     try {
       props.onkeydown?.(e)
     } finally {
-      if (!e.defaultPrevented && e.key === " ") {
+      if (!e.defaultPrevented && (e.key === " " || e.key === "Enter")) {
         e.preventDefault()
         if (!disabled.peek()) {
           toggle()
@@ -135,22 +134,15 @@ const CheckboxRoot: CheckboxRoot = () => {
 
   const attrs = {
     ref: refProxy.ref,
-    role: "checkbox",
+    role: "switch",
     type: "button" as const,
     onclick: handleClick,
     onkeydown: handleKeydown,
-    "aria-checked": Kiru.computed(() => {
-      const c = checked.value
-      return c === "indeterminate" ? "mixed" : c ? "true" : "false"
-    }),
-    "aria-disabled": Kiru.computed(() => (disabled.value ? "true" : "false")),
+    "aria-checked": Kiru.computed(() => (checked.value ? "true" : "false")),
+    "aria-disabled": Kiru.computed(() => (disabled.value ? "true" : undefined)),
+    disabled: disabled,
     ...sharedAttrs,
   }
-
-  const checkedBool = Kiru.computed(() => {
-    const c = checked.value
-    return c === true
-  })
 
   return ({
     children,
@@ -171,9 +163,9 @@ const CheckboxRoot: CheckboxRoot = () => {
       "aria-hidden": "true",
       tabindex: -1,
       value: valueProp ?? "on",
-      checked: checkedBool,
+      checked: checked,
       disabled: disabled,
-      required: requiredProp,
+      required: required,
       name: name,
       style: {
         position: "absolute" as const,
@@ -188,57 +180,53 @@ const CheckboxRoot: CheckboxRoot = () => {
 
     if (asChild && isElement(children)) {
       return (
-        <CheckboxRootContext value={ctx}>
+        <SwitchRootContext value={ctx}>
           {{ ...children, props: { ...children.props, ...props, ...attrs } }}
           {name && <input {...hiddenInputAttrs} />}
-        </CheckboxRootContext>
+        </SwitchRootContext>
       )
     }
     return (
-      <CheckboxRootContext value={ctx}>
+      <SwitchRootContext value={ctx}>
         <button {...props} {...attrs}>
           {children}
         </button>
         {name && <input {...hiddenInputAttrs} />}
-      </CheckboxRootContext>
+      </SwitchRootContext>
     )
   }
 }
 
-// ─── Indicator ────────────────────────────────────────────────────────────────
+// ─── Thumb ────────────────────────────────────────────────────────────────────
 
-interface CheckboxIndicator {
+interface SwitchThumb {
   <AsChild extends boolean = false>(
-    props: CheckboxIndicatorProps<AsChild>
-  ): (props: CheckboxIndicatorProps<AsChild>) => JSX.Element
+    props: SwitchThumbProps<AsChild>
+  ): (props: SwitchThumbProps<AsChild>) => JSX.Element
   displayName?: string
 }
 
-const CheckboxIndicator: CheckboxIndicator = () => {
-  const { checked, sharedAttrs } = useCheckboxRoot()
+const SwitchThumb: SwitchThumb = () => {
+  const { sharedAttrs } = useSwitchRoot()
 
   const attrs = {
     ...sharedAttrs,
   }
 
   return ({ children, asChild, ...props }) => {
-    const isVisible =
-      checked.value === true || checked.value === "indeterminate"
     if (asChild && isElement(children)) {
-      const { children: childChildren, ...childProps } = children.props
       return {
         ...children,
         props: {
-          ...childProps,
+          ...children.props,
           ...props,
           ...attrs,
-          children: isVisible ? childChildren : null,
         },
       }
     }
     return (
       <span {...props} {...attrs}>
-        {isVisible ? children : null}
+        {children}
       </span>
     )
   }
@@ -246,10 +234,10 @@ const CheckboxIndicator: CheckboxIndicator = () => {
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-CheckboxRoot.displayName = "CheckboxRoot"
-CheckboxIndicator.displayName = "CheckboxIndicator"
+SwitchRoot.displayName = "SwitchRoot"
+SwitchThumb.displayName = "SwitchThumb"
 
-export const Checkbox = {
-  Root: CheckboxRoot,
-  Indicator: CheckboxIndicator,
+export const Switch = {
+  Root: SwitchRoot,
+  Thumb: SwitchThumb,
 }

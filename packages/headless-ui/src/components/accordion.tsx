@@ -1,12 +1,13 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
 import { createRefProxy } from "../utils/ref-proxy.js"
+import { useContentPanel } from "../hooks/use-content-panel.js"
+import { createContext } from "../utils/create-context.js"
 import {
   createTriggerController,
   type TriggerController,
 } from "./trigger-controller.js"
 import type { HtmlOrSvgElement, Orientation, KiruGlobal } from "../types"
-import { useContentPanel } from "../hooks/use-content-panel.js"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
 
@@ -17,8 +18,8 @@ interface AccordionRootContextType {
   orientation: Kiru.Signal<Orientation>
   triggers: TriggerController
 }
-const AccordionRootContext = Kiru.createContext<AccordionRootContextType>(null!)
-const useAccordionRoot = () => Kiru.useContext(AccordionRootContext)
+const [AccordionRootContext, useAccordionRoot] =
+  createContext<AccordionRootContextType>("AccordionRootContext")
 
 // ─── Item Context ─────────────────────────────────────────────────────────────
 
@@ -35,8 +36,8 @@ interface AccordionItemContextType {
   contentId: Kiru.Signal<string>
   toggle: () => void
 }
-const AccordionItemContext = Kiru.createContext<AccordionItemContextType>(null!)
-const useAccordionItem = () => Kiru.useContext(AccordionItemContext)
+const [AccordionItemContext, useAccordionItem] =
+  createContext<AccordionItemContextType>("AccordionItemContext")
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AccordionMode = "single" | "multiple"
@@ -364,8 +365,6 @@ const AccordionContent: AccordionContent = () => {
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-AccordionRootContext.displayName = "AccordionRootContext"
-AccordionItemContext.displayName = "AccordionItemContext"
 AccordionRoot.displayName = "AccordionRoot"
 AccordionItem.displayName = "AccordionItem"
 AccordionHeader.displayName = "AccordionHeader"
