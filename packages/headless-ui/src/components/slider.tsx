@@ -1,7 +1,7 @@
 import * as Kiru from "kiru"
 import { isElement, styleObjectToString } from "kiru/utils"
 import { createRefProxy } from "../utils/ref-proxy.js"
-import { createContext } from "../utils/create-context"
+import { createContext } from "../utils/create-context.js"
 import type { Direction, Orientation } from "../types"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
@@ -25,9 +25,8 @@ interface SliderRootContextType {
     "data-disabled": Kiru.Signal<string | undefined>
   }
 }
-const [SliderRootContext, useSliderRoot] = createContext<SliderRootContextType>(
-  null!
-)
+const [SliderRootContext, useSliderRoot] =
+  createContext<SliderRootContextType>("SliderRootContext")
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -403,10 +402,7 @@ interface SliderThumb {
 }
 
 const SliderThumb: SliderThumb = () => {
-  const ctx = Kiru.useContext(SliderRootContext)
-  if (!ctx) {
-    throw new Error("Slider.Thumb must be used within Slider.Root")
-  }
+  const ctx = useSliderRoot()
 
   const $ = Kiru.setup<typeof SliderThumb>()
 

@@ -218,10 +218,9 @@ describe("Slider.Track - Error When Used Outside Context", () => {
       return <Slider.Track />
     }
 
-    assert.throws(
-      () => renderToString(<App />),
-      /Slider\.Track must be used within Slider\.Root/
-    )
+    assert.throws(() => renderToString(<App />), {
+      message: `Expected context "SliderRootContext" to be present`,
+    })
   })
 })
 
@@ -360,9 +359,8 @@ describe("Slider.Range - Error When Used Outside Context", () => {
       return <Slider.Range />
     }
 
-    assert.throws(
-      () => renderToString(<App />),
-      /Slider\.Range must be used within Slider\.Root/
-    )
+    assert.throws(() => renderToString(<App />), {
+      message: `Expected context "SliderRootContext" to be present`,
+    })
   })
 })
