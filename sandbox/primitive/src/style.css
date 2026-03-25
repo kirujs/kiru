@@ -110,6 +110,10 @@ button:focus-visible {
   display: flex;
   gap: 4px;
   padding: 4px;
+}
+
+.accordion,
+.collapsible {
   --animation-speed: 300ms;
   --animation-type: cubic-bezier(0.87, 0, 0.13, 1);
 }
@@ -165,7 +169,8 @@ button:focus-visible {
   transform: rotate(180deg);
 }
 
-.accordion-content {
+.accordion-content,
+.collapsible-content {
   overflow: hidden;
 }
 
@@ -173,11 +178,13 @@ button:focus-visible {
   padding: 0.5rem;
 }
 
-.accordion-content[data-state="open"] {
+.accordion-content[data-state="open"],
+.collapsible-content[data-state="open"] {
   animation: slideDown var(--animation-speed) var(--animation-type);
 }
 
-.accordion-content[data-state="closed"] {
+.accordion-content[data-state="closed"],
+.collapsible-content[data-state="closed"] {
   animation: slideUp var(--animation-speed) var(--animation-type);
 }
 
@@ -187,13 +194,13 @@ button:focus-visible {
   }
 
   to {
-    height: var(--accordion-content-height);
+    height: var(--content-height);
   }
 }
 
 @keyframes slideUp {
   from {
-    height: var(--accordion-content-height);
+    height: var(--content-height);
   }
 
   to {

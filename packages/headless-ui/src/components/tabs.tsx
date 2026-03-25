@@ -1,12 +1,11 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
-import { createRefProxy, type KiruGlobal, type Orientation } from "./utils.js"
+import { createRefProxy } from "../utils.js"
 import {
   createTriggerController,
   type TriggerController,
 } from "./trigger-controller.js"
-
-export type { Orientation }
+import type { KiruGlobal, Orientation } from "../types.js"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
 
@@ -45,14 +44,14 @@ export type TabsListProps<AsChild extends boolean = false> = {
 } & (AsChild extends true ? {} : JSX.IntrinsicElements["div"])
 
 export type TabsTriggerProps<AsChild extends boolean = false> = {
-  value: string | Kiru.Signal<string>
-  disabled?: boolean | Kiru.Signal<boolean>
+  value: Kiru.Signalable<string>
+  disabled?: Kiru.Signalable<boolean>
   children?: JSX.Children
   asChild?: AsChild
 } & (AsChild extends true ? {} : JSX.IntrinsicElements["button"])
 
 export type TabsContentProps<AsChild extends boolean = false> = {
-  value: string | Kiru.Signal<string>
+  value: Kiru.Signalable<string>
   children?: JSX.Children
   asChild?: AsChild
 } & (AsChild extends true ? {} : JSX.IntrinsicElements["div"])

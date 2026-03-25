@@ -1,18 +1,12 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
-import {
-  assignCustomStylePropertiesForSize,
-  createRefProxy,
-  type HtmlOrSvgElement,
-  type KiruGlobal,
-  type Orientation,
-} from "./utils.js"
+import { createRefProxy } from "../utils.js"
 import {
   createTriggerController,
   type TriggerController,
 } from "./trigger-controller.js"
-
-export type { Orientation }
+import type { HtmlOrSvgElement, Orientation, KiruGlobal } from "../types"
+import { useContentPanel } from "../hooks/use-content-panel.js"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
 
@@ -72,8 +66,8 @@ export type AccordionRootProps<
   (AsChild extends true ? {} : JSX.IntrinsicElements["div"])
 
 export type AccordionItemProps<AsChild extends boolean = false> = {
-  value: string | Kiru.Signal<string>
-  disabled?: boolean | Kiru.Signal<boolean>
+  value: Kiru.Signalable<string>
+  disabled?: Kiru.Signalable<boolean>
   children?: JSX.Children
   asChild?: AsChild
 } & (AsChild extends true ? {} : JSX.IntrinsicElements["div"])
@@ -334,61 +328,7 @@ interface AccordionContent {
 
 const AccordionContent: AccordionContent = () => {
   const { isOpen, sharedAttrs, triggerId, contentId } = useAccordionItem()
-  const wasOpenInitially = isOpen.peek()
-  const hidden = Kiru.signal(!wasOpenInitially)
-  const refProxy = createRefProxy<HtmlOrSvgElement>((el) => (element = el))
-  let element: HtmlOrSvgElement | null = null
-
-  let capturedAnimationStyles: {
-    animationName: string
-    transitionDuration: string
-  } | null = null
-
-  const captureAndPreventAnimationStyles = (element: HtmlOrSvgElement) => {
-    const { animationName, transitionDuration } = element.style
-    capturedAnimationStyles = { animationName, transitionDuration }
-    element.style.animationName = "none"
-    element.style.transitionDuration = "0s"
-  }
-
-  const assignCapturedAnimationStyles = (element: HtmlOrSvgElement) => {
-    if (capturedAnimationStyles === null) return
-    element.style.animationName = capturedAnimationStyles.animationName
-    element.style.transitionDuration =
-      capturedAnimationStyles.transitionDuration
-    capturedAnimationStyles = null
-  }
-
-  Kiru.onBeforeMount(() => {
-    if (!element) return
-    if (isOpen.peek()) {
-      captureAndPreventAnimationStyles(element)
-      assignCustomStylePropertiesForSize(element, "accordion-content")
-    }
-  })
-
-  let epoch = 0
-  isOpen.subscribe(async (open) => {
-    if (!element) return (hidden.value = true)
-    const e = ++epoch
-
-    if (!capturedAnimationStyles) captureAndPreventAnimationStyles(element)
-    hidden.value = false
-
-    // wait for browser recalculation
-    await new Promise<any>(requestAnimationFrame)
-
-    assignCustomStylePropertiesForSize(element, "accordion-content")
-    assignCapturedAnimationStyles(element)
-
-    if (open) return
-
-    const animations = element.getAnimations()
-    await Promise.allSettled(animations.map((a) => a.finished))
-    if (e === epoch) {
-      hidden.value = true
-    }
-  })
+  const { hidden, refProxy } = useContentPanel(isOpen)
 
   const attrs = {
     id: contentId,

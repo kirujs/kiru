@@ -1,6 +1,7 @@
 import { Show, signal } from "kiru"
 import {
   Accordion,
+  Collapsible,
   Tabs,
   type AccordionContentProps,
   type AccordionHeaderProps,
@@ -92,7 +93,14 @@ export const App = () => {
           <p>Content for tab 3</p>
         </Tabs.Content>
       </Tabs.Root>
+
       <button onclick={switchTab}>Switch Tab</button>
+      <Collapsible.Root defaultOpen className="collapsible">
+        <Collapsible.Trigger>Collapsible Trigger</Collapsible.Trigger>
+        <Collapsible.Content className="collapsible-content">
+          <p>Collapsible Content</p>
+        </Collapsible.Content>
+      </Collapsible.Root>
     </>
   )
 }

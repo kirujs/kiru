@@ -1,5 +1,5 @@
 import type { Signal } from "kiru"
-import type { HtmlOrSvgElement, Orientation } from "./utils"
+import type { HtmlOrSvgElement, Orientation } from "../types"
 
 export interface TriggerController {
   register: (id: string, el: HtmlOrSvgElement | null) => void

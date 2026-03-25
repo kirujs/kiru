@@ -40,6 +40,12 @@ const headlessUi = task({
       run: "pnpm dev",
       readyWhen: (output) => output.includes("Watching for file changes."),
     },
+    test: {
+      run: "pnpm test",
+      env: {
+        NODE_ENV: "development",
+      },
+    },
   },
 })
 
@@ -150,14 +156,20 @@ const ssgTest = task({
 
 const argv = process.argv.slice(2)
 const command = argv[0]
+let skipE2E = false
+if (command === "test") {
+  skipE2E = argv.includes("--skip-e2e")
+  if (skipE2E) {
+    console.log("~~~~~ Skipping E2E tests")
+  }
+}
 
 const result = await pipeline([
   lib,
   headlessUi,
   devtoolsHost,
   vitePlugin,
-  csrTest,
-  ssgTest,
+  ...(skipE2E ? [] : [csrTest, ssgTest]),
 ]).run({
   command,
   onTaskBegin: (taskName) => console.log(`~~~~~ Task begin: ${taskName}`),
@@ -168,3 +180,6 @@ const result = await pipeline([
 
 //console.log(JSON.stringify(result, null, 2))
 console.log(result)
+if (skipE2E) {
+  console.log("~~~~~ E2E tests skipped")
+}

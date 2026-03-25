@@ -1,4 +1,4 @@
-import { Accordion } from "./components/accordion"
+import { Accordion } from "./components/accordion.js"
 import type {
   AccordionRootProps,
   AccordionItemProps,
@@ -7,7 +7,7 @@ import type {
   AccordionContentProps,
 } from "./components/accordion"
 
-import { Tabs } from "./components/tabs"
+import { Tabs } from "./components/tabs.js"
 import type {
   TabsRootProps,
   TabsListProps,
@@ -15,7 +15,14 @@ import type {
   TabsContentProps,
 } from "./components/tabs"
 
-export { Accordion, Tabs }
+import { Collapsible } from "./components/collapsible.js"
+import type {
+  CollapsibleRootProps,
+  CollapsibleTriggerProps,
+  CollapsibleContentProps,
+} from "./components/collapsible"
+
+export { Accordion, Tabs, Collapsible }
 export type {
   AccordionRootProps,
   AccordionItemProps,
@@ -26,4 +33,9 @@ export type {
   TabsListProps,
   TabsTriggerProps,
   TabsContentProps,
+  CollapsibleRootProps,
+  CollapsibleTriggerProps,
+  CollapsibleContentProps,
 }
+
+export type { Orientation } from "./types"
