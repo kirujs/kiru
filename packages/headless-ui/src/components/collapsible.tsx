@@ -95,7 +95,7 @@ const CollapsibleRoot: CollapsibleRoot = () => {
     if (asChild && isElement(children)) {
       return (
         <CollapsibleRootContext value={ctx}>
-          {{ ...children, props: { ...children.props, ...attrs } }}
+          {{ ...children, props: { ...children.props, ...props, ...attrs } }}
         </CollapsibleRootContext>
       )
     }
@@ -158,7 +158,7 @@ const CollapsibleTrigger: CollapsibleTrigger = () => {
 
   return ({ children, asChild, ...props }) => {
     if (asChild && isElement(children)) {
-      return { ...children, props: { ...children.props, ...attrs } }
+      return { ...children, props: { ...children.props, ...props, ...attrs } }
     }
     return (
       <button type="button" disabled={disabled.value} {...props} {...attrs}>
@@ -184,6 +184,7 @@ const CollapsibleContent: CollapsibleContent = () => {
   const attrs = {
     id: contentId,
     ref: refProxy.ref,
+    hidden,
     role: "region",
     "aria-labelledby": triggerId,
     "data-state": Kiru.computed(() => (open.value ? "open" : "closed")),
@@ -199,8 +200,8 @@ const CollapsibleContent: CollapsibleContent = () => {
         ...children,
         props: {
           ...childProps,
+          ...props,
           ...attrs,
-          hidden: isHidden,
           children: isHidden ? null : childChildren,
         },
       }

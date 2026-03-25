@@ -161,7 +161,7 @@ const AccordionRoot: AccordionRoot = () => {
     if (asChild && isElement(children)) {
       return (
         <AccordionRootContext value={ctx}>
-          {{ ...children, props: { ...children.props, ...attrs } }}
+          {{ ...children, props: { ...children.props, ...props, ...attrs } }}
         </AccordionRootContext>
       )
     }
@@ -213,7 +213,7 @@ const AccordionItem: AccordionItem = () => {
         <AccordionItemContext value={ctx}>
           {{
             ...children,
-            props: { ...children.props, ...sharedAttrs },
+            props: { ...children.props, ...props, ...sharedAttrs },
           }}
         </AccordionItemContext>
       )
@@ -307,7 +307,7 @@ const AccordionTrigger: AccordionTrigger = () => {
   return ({ children, asChild, ...props }) => {
     refProxy.update(props)
     if (asChild && isElement(children)) {
-      return { ...children, props: { ...children.props, ...attrs } }
+      return { ...children, props: { ...children.props, ...props, ...attrs } }
     }
     return (
       <button type="button" {...props} {...attrs}>
@@ -333,6 +333,7 @@ const AccordionContent: AccordionContent = () => {
   const attrs = {
     id: contentId,
     ref: refProxy.ref,
+    hidden,
     role: "region",
     "aria-labelledby": triggerId,
     ...sharedAttrs,
@@ -347,8 +348,8 @@ const AccordionContent: AccordionContent = () => {
         ...children,
         props: {
           ...childProps,
+          ...props,
           ...attrs,
-          hidden: isHidden,
           children: isHidden ? null : childChildren,
         },
       }

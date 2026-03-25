@@ -109,7 +109,7 @@ const TabsRoot: TabsRoot = () => {
     if (asChild && isElement(children)) {
       return (
         <TabsRootContext value={ctx}>
-          {{ ...children, props: { ...children.props, ...attrs } }}
+          {{ ...children, props: { ...children.props, ...props, ...attrs } }}
         </TabsRootContext>
       )
     }
@@ -142,7 +142,7 @@ const TabsList: TabsList = () => {
 
   return ({ children, asChild, ...props }) => {
     if (asChild && isElement(children)) {
-      return { ...children, props: { ...children.props, ...attrs } }
+      return { ...children, props: { ...children.props, ...props, ...attrs } }
     }
     return (
       <div {...props} {...attrs}>
@@ -209,7 +209,7 @@ const TabsTrigger: TabsTrigger = () => {
   return ({ children, asChild, value, disabled, ...props }) => {
     refProxy.update(props)
     if (asChild && isElement(children)) {
-      return { ...children, props: { ...children.props, ...attrs } }
+      return { ...children, props: { ...children.props, ...props, ...attrs } }
     }
     return (
       <button type="button" {...props} {...attrs}>
@@ -238,6 +238,7 @@ const TabsContent: TabsContent = () => {
   const attrs = {
     id: Kiru.computed(() => `${id}:content:${value}`),
     role: "tabpanel",
+    hidden,
     tabIndex: Kiru.computed(() => (isActive.value ? 0 : -1)),
     "data-state": Kiru.computed(() => (isActive.value ? "active" : "inactive")),
     "data-orientation": orientation,
@@ -252,8 +253,8 @@ const TabsContent: TabsContent = () => {
         ...children,
         props: {
           ...childProps,
+          ...props,
           ...attrs,
-          hidden: isHidden,
           children: isHidden ? null : childChildren,
         },
       }
