@@ -1,13 +1,4 @@
-import { computed, signal } from "kiru"
-
-const x = signal(0)
-const y = computed(() => {
-  console.log("run y")
-  return x.value * 2
-})
-debugger
-
-y.subscribe((v) => console.log(v))
+import { signal } from "kiru"
 
 export const Counter = () => {
   const count = signal(0)

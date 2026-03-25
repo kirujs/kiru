@@ -8,11 +8,15 @@ import {
 } from "../signals/tracking.js"
 import { registerVNodeCleanup } from "../utils/index.js"
 
+let currentAccessedPaths: Set<string[]> | null = null
+const OWN_KEYS = `__KEYS__`
+
 export interface Setup<Props extends {}> {
   readonly derive: <T>(
     selector: (props: Props extends Kiru.FC<infer P> ? P : Props) => T
   ) => Signal<T>
   readonly id: Signal<string>
+  // Not reactive — for use in render functions only
   readonly props: Readonly<Props extends Kiru.FC<infer P> ? P : Props>
 }
 
@@ -41,8 +45,10 @@ export function setup<Props extends {}>(): Setup<Props> {
   setups.set(vNode, setup)
   return setup
 }
+
 function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
   let id: Signal<string>
+  let propsProxy: InferredProps
 
   type InferredProps = Props extends Kiru.FC<infer R> ? R : Props
   const propSyncs = (vNode.propSyncs = []) as ((props: InferredProps) => void)[]
@@ -53,7 +59,7 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
   const currentProps = { current: { ...vNode.props } as InferredProps }
   const deriveCleanups: Array<() => void> = []
 
-  type DeriveEntry = { run: () => void; accessedPaths: Set<string> }
+  type DeriveEntry = { run: () => void; paths: Set<string[]> }
   const deriveEntries: DeriveEntry[] = []
 
   propSyncs.push((p) => {
@@ -61,12 +67,8 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
     const skip = new Set<DeriveEntry>()
     for (const entry of deriveEntries) {
       if (
-        entry.accessedPaths.size > 0 &&
-        propsUnchangedAtPaths(
-          old,
-          p as Record<string, unknown>,
-          entry.accessedPaths
-        )
+        entry.paths.size > 0 &&
+        propsUnchangedAtPaths(old, p as Record<string, unknown>, entry.paths)
       ) {
         skip.add(entry)
       }
@@ -88,17 +90,18 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
     ) {
       const resultSig = signal(undefined!) as Signal<T>
       const unsubs = new Map<string, () => void>()
-      const accessedPaths = new Set<string>()
+      const accessedPaths = new Set<string[]>()
 
       function sync() {
         accessedPaths.clear()
-        const propsProxy = createPropsProxy(
-          currentProps.current as Record<string, unknown>,
-          accessedPaths
+        const propsProxy = createProxy(
+          currentProps.current as Record<string, unknown>
         ) as InferredProps
         const observations: TrackingStackObservations = new Map()
         tracking.stack.push(observations)
+        currentAccessedPaths = accessedPaths
         const value = selector(propsProxy)
+        currentAccessedPaths = null
         tracking.stack.pop()
         // Always assign and notify so the component re-renders when the derived value changes
         // (e.g. when parent passes a different signal ref like toggle switching count/double).
@@ -122,7 +125,7 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
       }
 
       sync()
-      const entry: DeriveEntry = { run: sync, accessedPaths }
+      const entry: DeriveEntry = { run: sync, paths: accessedPaths }
       deriveEntries.push(entry)
       deriveCleanups.push(() => {
         unsubs.forEach((u) => u())
@@ -137,7 +140,6 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
       if (!id) {
         id = signal(createVNodeId(vNode))
         if (isVNodeDeleted(vNode)) {
-          Signal.dispose(id)
           return id
         }
         if (node.current !== vNode) {
@@ -156,61 +158,118 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
       return id
     },
     get props() {
-      return currentProps.current
+      return (propsProxy ??= new Proxy(
+        {},
+        {
+          get(_, key) {
+            if (typeof key === "symbol")
+              return Reflect.get(currentProps.current as any, key)
+            const v = (currentProps.current as any)[key]
+            if (v !== null && typeof v === "object" && !Signal.isSignal(v)) {
+              return createProxy(v)
+            }
+            return v
+          },
+        }
+      ) as InferredProps)
     },
   }
   return setupResult
 }
+
 function propsUnchangedAtPaths(
   oldProps: Record<string, unknown>,
   newProps: Record<string, unknown>,
-  paths: Set<string>
+  accessedPaths: Set<string[]>
 ): boolean {
-  for (const path of paths) {
-    if (!Object.is(getAtPath(oldProps, path), getAtPath(newProps, path))) {
-      return false
+  outer: for (const path of accessedPaths) {
+    let a: unknown = oldProps
+    let b: unknown = newProps
+
+    for (let i = 0; i < path.length; i++) {
+      const key = path[i]
+
+      // Sentinel: caller iterated keys of the object at this path —
+      // re-run if the key sets differ
+      if (key === OWN_KEYS) {
+        if (a === b) continue outer
+        if (
+          a == null ||
+          b == null ||
+          typeof a !== "object" ||
+          typeof b !== "object"
+        ) {
+          return false
+        }
+        const aKeys = Object.keys(a)
+        const bKeys = Object.keys(b)
+        if (aKeys.length !== bKeys.length) return false
+        for (const k of aKeys) {
+          if (!(k in (b as object))) return false
+        }
+        continue outer
+      }
+
+      if (a === b) continue outer
+      if (
+        a == null ||
+        b == null ||
+        typeof a !== "object" ||
+        typeof b !== "object"
+      ) {
+        if (!Object.is(a, b)) return false
+        continue outer
+      }
+      a = (a as Record<string, unknown>)[key]
+      b = (b as Record<string, unknown>)[key]
     }
+
+    if (!Object.is(a, b)) return false
   }
+
   return true
 }
 
-function getAtPath(obj: Record<string, unknown>, path: string): unknown {
-  let cur: unknown = obj
-  for (const key of path.split(".")) {
-    if (cur == null || typeof cur !== "object") return undefined
-    cur = (cur as Record<string, unknown>)[key]
-  }
-  return cur
-}
+const proxyCache = new WeakMap<object, any>()
 
 /**
- * Proxy that records paths and wraps signals. We only add to accessedPaths when
- * we hit a signal (the leaf we subscribe to), so propSync skip only compares
- * signal refs. Container objects (e.g. "data") are new every render and would
- * always fail the skip.
+ * Proxy that records accessed paths and primitives into the current
+ * tracking context (currentAccessedPaths).
  */
-function createPropsProxy<P extends Record<string, unknown>>(
-  props: P,
-  accessedPaths: Set<string>,
-  pathPrefix?: string
+function createProxy<P extends Record<string, unknown>>(
+  source: P,
+  path: string[] = []
 ): P {
-  return new Proxy(props, {
-    get(holder, key: string) {
-      const path = pathPrefix ? `${pathPrefix}.${key}` : key
-      const v = holder[key]
-      if (Signal.isSignal(v)) {
-        accessedPaths.add(path) // only record path for signal leaves
+  let cached = proxyCache.get(source)
+
+  if (!cached) {
+    cached = new Proxy(source, {
+      get(holder, key: string | symbol) {
+        if (typeof key === "symbol") return Reflect.get(holder, key)
+
+        const keyPath = [...path, key as string]
+        const v = holder[key as string]
+
+        if (v !== null && typeof v === "object" && !Signal.isSignal(v)) {
+          return createProxy(v as Record<string, unknown>, keyPath)
+        }
+
+        currentAccessedPaths?.add(keyPath)
         return v
-      }
-      if (v !== null && typeof v === "object" && !Array.isArray(v)) {
-        return createPropsProxy(
-          v as Record<string, unknown>,
-          accessedPaths,
-          path
-        ) as P[keyof P]
-      }
-      accessedPaths.add(path) // primitive leaf
-      return v
-    },
-  }) as P
+      },
+      has(holder, key: string | symbol) {
+        if (typeof key === "symbol") return Reflect.has(holder, key)
+        currentAccessedPaths?.add([...path, key as string])
+        return key in holder
+      },
+      ownKeys(holder) {
+        currentAccessedPaths?.add([...path, OWN_KEYS])
+        return Reflect.ownKeys(holder)
+      },
+    })
+
+    proxyCache.set(source, cached)
+  }
+
+  return cached
 }

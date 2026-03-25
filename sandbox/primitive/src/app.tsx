@@ -1,71 +1,35 @@
-import { ref, signal, onBeforeMount, onMount, onCleanup } from "kiru"
+import { signal, setup } from "kiru"
 
-const tag = signal("")
+const initialCount = signal(0)
 export function App() {
-  console.log("app mounted", tag.value)
-  return () => (
+  console.log(initialCount.value)
+  return (
     <div>
-      <input bind:value={tag} />
-      <Counter foo={tag.value} />
+      <input bind:value={initialCount} type="number" />
+      <Counter
+        foo={{ initialCount: initialCount.value }}
+        items={[initialCount.value, 2, 3]}
+      />
     </div>
   )
 }
 
-const createMousePosWatcher = () => {
-  const pos = signal({ x: 0, y: 0 })
-  const handleMouseMove = (e: MouseEvent) => {
-    pos.value = { x: e.clientX, y: e.clientY }
-  }
-  window.addEventListener("mousemove", handleMouseMove)
-  return [
-    pos,
-    () => window.removeEventListener("mousemove", handleMouseMove),
-  ] as const
-}
-
 interface CounterProps {
-  foo: string
+  foo: {
+    initialCount: number
+  }
+  items: number[]
 }
 
-const Counter: Kiru.FC<CounterProps> = (props) => {
-  const btnRef = ref<HTMLButtonElement>(null)
-  const count = signal(0)
-  const [pos, dispose] = createMousePosWatcher()
-  onCleanup(() => dispose())
+const Counter: Kiru.FC<CounterProps> = () => {
+  const { derive, props } = setup<typeof Counter>()
+  const count = derive((props) => props.foo.initialCount)
 
-  const intervalId = setInterval(() => {
-    count.value++
-  }, 1000)
-
-  onCleanup(() => {
-    clearInterval(intervalId)
-  })
-
-  {
-    onBeforeMount(() => {
-      console.log("counter before mounted", btnRef.current)
-      return () => console.log("onBeforeMount: unmounted")
-    })
-
-    onMount(() => {
-      console.log("counter mounted", btnRef.current)
-      //return () => console.log("onMount: unmounted")
-    })
-  }
-
-  console.log("initial render", props.foo)
-
-  return ({ foo }) => {
-    console.log("render", foo)
-    console.log("pos", pos.value)
-
-    return (
-      <div>
-        <h1>Count: {count}</h1>
-        <button ref={btnRef} onclick={() => count.value++}>
-          Increment
-        </button>
-      </div>
-    )
-  }
+  return () => (
+    <div>
+      <p>Items: {JSON.stringify(props.items)}</p>
+      <h1>Count: {count}</h1>
+      <button onclick={() => count.value++}>Increment</button>
+    </div>
+  )
 }
