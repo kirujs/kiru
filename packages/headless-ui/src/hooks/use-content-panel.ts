@@ -10,8 +10,7 @@ import type { HtmlOrSvgElement } from "../types"
 export function useContentPanel(isOpen: Kiru.Signal<boolean>) {
   const wasOpenInitially = isOpen.peek()
   const hidden = Kiru.signal(!wasOpenInitially)
-  const refProxy = createRefProxy<HtmlOrSvgElement>((el) => (element = el))
-  let element: HtmlOrSvgElement | null = null
+  const refProxy = createRefProxy<HtmlOrSvgElement>()
 
   // ── Animation style capture ──────────────────────────────────────────────
   // We briefly zero-out animation/transition so that measuring the element's
@@ -39,6 +38,7 @@ export function useContentPanel(isOpen: Kiru.Signal<boolean>) {
   // ── Mount: measure without animation if already open ────────────────────
 
   Kiru.onBeforeMount(() => {
+    const element = refProxy.current
     if (!element) return
     if (isOpen.peek()) {
       captureAndPreventAnimationStyles(element)
@@ -52,6 +52,7 @@ export function useContentPanel(isOpen: Kiru.Signal<boolean>) {
 
   let epoch = 0
   isOpen.subscribe(async (open) => {
+    const element = refProxy.current
     if (!element) return void (hidden.value = true)
     const e = ++epoch
 

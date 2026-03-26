@@ -1,6 +1,5 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
-import { createRefProxy } from "../utils/ref-proxy.js"
 import { createContext } from "../utils/create-context.js"
 import type { KiruGlobal } from "../types"
 
@@ -105,8 +104,6 @@ const SwitchRoot: SwitchRoot = () => {
     sharedAttrs,
   }
 
-  const refProxy = createRefProxy<HTMLButtonElement>(() => {})
-
   const handleClick = (e: KiruGlobal.MouseEvent<HTMLButtonElement>) => {
     const props = $.props as any
     try {
@@ -133,7 +130,6 @@ const SwitchRoot: SwitchRoot = () => {
   }
 
   const attrs = {
-    ref: refProxy.ref,
     role: "switch",
     type: "button" as const,
     onclick: handleClick,
@@ -156,8 +152,6 @@ const SwitchRoot: SwitchRoot = () => {
     value: valueProp,
     ...props
   }) => {
-    refProxy.update(props)
-
     const hiddenInputAttrs = {
       type: "checkbox" as const,
       "aria-hidden": "true",

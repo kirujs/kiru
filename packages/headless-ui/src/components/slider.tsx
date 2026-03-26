@@ -2,12 +2,13 @@ import * as Kiru from "kiru"
 import { isElement, styleObjectToString } from "kiru/utils"
 import { createRefProxy } from "../utils/ref-proxy.js"
 import { createContext } from "../utils/create-context.js"
-import type { Direction, Orientation } from "../types"
+import type { Direction, KiruGlobal, Orientation } from "../types"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
 
 interface SliderRootContextType {
   id: Kiru.Signal<string>
+  rootElement: KiruGlobal.RefObject<Element | null>
   values: Kiru.Signal<number[]>
   orientation: Kiru.Signal<Orientation>
   dir: Kiru.Signal<Direction>
@@ -16,7 +17,11 @@ interface SliderRootContextType {
   max: Kiru.Signal<number>
   step: Kiru.Signal<number>
   name: string | undefined
-  updateValue: (index: number, newValue: number) => void
+  updateValue: (
+    index: number,
+    newValue: number,
+    allowSwitch?: boolean
+  ) => number
   getValuePercent: (value: number) => number
   getValueFromPercent: (percent: number) => number
   getClosestValueIndex: (value: number) => number
@@ -32,11 +37,38 @@ const [SliderRootContext, useSliderRoot] =
 
 export type SliderMode = "single" | "multiple"
 
+type SliderRootSingleProps = {
+  onValueChange?: (value: number) => void
+  disableSwitch?: never
+} & (
+  | {
+      value: Kiru.Signal<number>
+      defaultValue?: never
+    }
+  | {
+      value?: never
+      defaultValue?: number
+    }
+)
+
+type SliderRootMultipleProps = {
+  onValueChange?: (value: number[]) => void
+  disableSwitch?: boolean
+} & (
+  | {
+      value: Kiru.Signal<number[]>
+      defaultValue?: never
+    }
+  | {
+      value?: never
+      defaultValue?: number[]
+    }
+)
+
 export type SliderRootProps<
   Mode extends SliderMode = "single",
   AsChild extends boolean = false,
 > = {
-  onValueChange?: (value: Mode extends "single" ? number : number[]) => void
   orientation?: Orientation
   dir?: Direction
   disabled?: Kiru.Signalable<boolean>
@@ -47,16 +79,7 @@ export type SliderRootProps<
   children?: JSX.Children
   asChild?: AsChild
   mode?: Mode
-} & (
-  | {
-      value: Kiru.Signal<Mode extends "single" ? number : number[]>
-      defaultValue?: never
-    }
-  | {
-      value?: never
-      defaultValue?: Mode extends "single" ? number : number[]
-    }
-) &
+} & (Mode extends "single" ? SliderRootSingleProps : SliderRootMultipleProps) &
   (AsChild extends true ? {} : JSX.IntrinsicElements["span"])
 
 export type SliderTrackProps<AsChild extends boolean = false> = {
@@ -89,12 +112,12 @@ const SliderRoot: SliderRoot = () => {
 
   const values = $.derive(({ value, defaultValue }) => {
     if (!!value) {
-      const v = value.value || null
-      if (v === null) return []
+      const v = value.value
+      if (v === null || v === undefined) return []
       return Array.isArray(v) ? v : [v]
     }
-    const v = defaultValue || null
-    if (v === null) return []
+    const v = defaultValue
+    if (v === null || v === undefined) return []
     return Array.isArray(v) ? v : [v]
   })
 
@@ -109,16 +132,17 @@ const SliderRoot: SliderRoot = () => {
   const max = $.derive((p) => p.max ?? 100)
   const step = $.derive((p) => p.step ?? 1)
 
-  const updateValue = (index: number, newValue: number) => {
-    if (disabled.peek()) return
+  const updateValue = (
+    index: number,
+    newValue: number,
+    allowSwitch = false
+  ) => {
+    if (disabled.peek()) return index
     const { value: propsValue, mode } = $.props
 
     const currentValues = values.peek()
     if (index < 0 || index >= currentValues.length) {
-      console.warn(
-        `Slider.Thumb index ${index} is out of bounds for value array of length ${currentValues.length}`
-      )
-      return
+      return index
     }
 
     const minVal = min.peek()
@@ -126,12 +150,44 @@ const SliderRoot: SliderRoot = () => {
     const stepVal = step.peek()
 
     // Clamp and round the new value
-    const clampedValue = clampValue(newValue, minVal, maxVal)
+    let clampedValue = clampValue(newValue, minVal, maxVal)
     const roundedValue = roundToStep(clampedValue, stepVal, minVal)
     const finalValue = clampValue(roundedValue, minVal, maxVal)
 
+    let targetIndex = index
+
+    // For multiple thumbs, check if we should switch to a neighboring thumb
+    if (
+      $.props.disableSwitch !== true &&
+      allowSwitch &&
+      currentValues.length > 1
+    ) {
+      // If dragging past the right neighbor, switch to that thumb
+      if (
+        index < currentValues.length - 1 &&
+        finalValue >= currentValues[index + 1]
+      ) {
+        targetIndex = index + 1
+      }
+      // If dragging past the left neighbor, switch to that thumb
+      else if (index > 0 && finalValue <= currentValues[index - 1]) {
+        targetIndex = index - 1
+      }
+    } else if (currentValues.length > 1) {
+      // debugger
+      // If not allowing switch, clamp to neighboring values
+      if (index > 0) {
+        const leftThumbValue = currentValues[index - 1]
+        clampedValue = Math.max(finalValue, leftThumbValue)
+      }
+      if (index < currentValues.length - 1) {
+        const rightThumbValue = currentValues[index + 1]
+        clampedValue = Math.min(clampedValue, rightThumbValue)
+      }
+    }
+
     const newValues = [...currentValues]
-    newValues[index] = finalValue
+    newValues[targetIndex] = allowSwitch ? finalValue : clampedValue
 
     const valueToEmit =
       mode === "multiple" ? [...newValues] : (newValues[0] ?? null)
@@ -141,7 +197,9 @@ const SliderRoot: SliderRoot = () => {
     } else {
       values.value = newValues
     }
-    $.props.onValueChange?.(valueToEmit)
+    $.props.onValueChange?.(valueToEmit as any)
+
+    return targetIndex
   }
 
   const getValuePercent = (val: number): number => {
@@ -153,7 +211,9 @@ const SliderRoot: SliderRoot = () => {
   const getValueFromPercent = (percent: number): number => {
     const minVal = min.peek()
     const maxVal = max.peek()
-    return (percent / 100) * (maxVal - minVal) + minVal
+    const stepVal = step.peek()
+    let val = (percent / 100) * (maxVal - minVal) + minVal
+    return roundToStep(val, stepVal, minVal)
   }
 
   const getClosestValueIndex = (val: number): number => {
@@ -177,8 +237,11 @@ const SliderRoot: SliderRoot = () => {
     "data-disabled": Kiru.computed(() => (disabled.value ? "" : undefined)),
   }
 
+  const refProxy = createRefProxy<HTMLSpanElement>()
+
   const ctx: SliderRootContextType = {
     id: $.id,
+    rootElement: refProxy,
     values,
     orientation,
     dir,
@@ -194,12 +257,11 @@ const SliderRoot: SliderRoot = () => {
     sharedAttrs,
   }
 
-  const refProxy = createRefProxy<HTMLSpanElement>(() => {})
-
   const attrs = {
     ref: refProxy.ref,
     role: "group",
     "aria-orientation": orientation,
+    dir: dir,
     ...sharedAttrs,
   }
 
@@ -219,37 +281,10 @@ const SliderRoot: SliderRoot = () => {
   }) => {
     refProxy.update(props)
 
-    const hiddenInputs =
-      !!name &&
-      values.value.map((val, index) => {
-        const inputName = values.value.length === 1 ? name : `${name}[${index}]`
-        return (
-          <input
-            key={index}
-            type="number"
-            aria-hidden="true"
-            tabIndex={-1}
-            name={inputName}
-            value={val}
-            disabled={disabled}
-            style={{
-              position: "absolute" as const,
-              pointerEvents: "none" as const,
-              opacity: 0,
-              margin: 0,
-              transform: "translateX(-100%)",
-              width: "25px",
-              height: "25px",
-            }}
-          />
-        )
-      })
-
     if (asChild && isElement(children)) {
       return (
         <SliderRootContext value={ctx}>
           {{ ...children, props: { ...children.props, ...props, ...attrs } }}
-          {hiddenInputs}
         </SliderRootContext>
       )
     }
@@ -258,7 +293,6 @@ const SliderRoot: SliderRoot = () => {
         <span {...props} {...attrs}>
           {children}
         </span>
-        {hiddenInputs}
       </SliderRootContext>
     )
   }
@@ -274,25 +308,34 @@ interface SliderTrack {
 }
 
 const SliderTrack: SliderTrack = () => {
+  const $ = Kiru.setup<SliderTrackProps>()
   const ctx = useSliderRoot()
 
-  let elementRef: HTMLSpanElement | null = null
+  const refProxy = createRefProxy<HTMLSpanElement>()
 
-  const refProxy = createRefProxy<HTMLSpanElement>((el) => {
-    elementRef = el
-  })
+  const handleClick = (event: KiruGlobal.PointerEvent<HTMLSpanElement>) => {
+    try {
+      $.props.onclick?.(event)
+    } finally {
+      if (event.defaultPrevented) return
+      event.preventDefault()
+    }
 
-  const handleClick = (event: PointerEvent) => {
     if (ctx.disabled.peek()) return
-
+    const elementRef = refProxy.current
     if (!elementRef) return
 
     const rect = elementRef.getBoundingClientRect()
     const orientation = ctx.orientation.peek()
+    const dir = ctx.dir.peek()
 
     let percent: number
     if (orientation === "horizontal") {
-      percent = ((event.clientX - rect.left) / rect.width) * 100
+      if (dir === "rtl") {
+        percent = ((rect.right - event.clientX) / rect.width) * 100
+      } else {
+        percent = ((event.clientX - rect.left) / rect.width) * 100
+      }
     } else {
       // Vertical: bottom is min, top is max
       percent = ((rect.bottom - event.clientY) / rect.height) * 100
@@ -305,7 +348,7 @@ const SliderTrack: SliderTrack = () => {
 
   const attrs = {
     ref: refProxy.ref,
-    onClick: handleClick,
+    onclick: handleClick,
     ...ctx.sharedAttrs,
   }
 
@@ -347,6 +390,7 @@ const SliderRange: SliderRange = () => {
   })
 
   const style = Kiru.computed(() => {
+    const dir = ctx.dir.value
     const values = ctx.values.value
     const orientation = ctx.orientation.value
     const minValue = Math.min(...values)
@@ -361,14 +405,17 @@ const SliderRange: SliderRange = () => {
     if (typeof pStyle === "string") {
       prefix = pStyle
     } else if (typeof pStyle === "object" && !!pStyle) {
-      prefix = styleObjectToString(pStyle as Kiru.StyleObject, {
+      const asStr = styleObjectToString(pStyle as Kiru.StyleObject, {
         reactiveRead: true,
       })
+      prefix = asStr ? `${asStr};` : ""
     }
+    const isSingle = values.length === 1
     if (orientation === "horizontal") {
-      return `${prefix};left:${minPercent}%;width:${sizePercent}%`
+      const position = dir === "rtl" ? "right" : "left"
+      return `${prefix}${position}:${isSingle ? 0 : minPercent}%;width:${isSingle ? maxPercent : sizePercent}%`
     } else {
-      return `${prefix};bottom:${minPercent}%;height:${sizePercent}%`
+      return `${prefix}bottom:${isSingle ? 0 : minPercent}%;height:${isSingle ? maxPercent : sizePercent}%`
     }
   })
 
@@ -408,12 +455,9 @@ const SliderThumb: SliderThumb = () => {
 
   const index = $.derive((p) => p.index ?? 0)
   const isDragging = Kiru.signal(false)
+  const activeIndex = Kiru.signal(0) // Track which thumb is actually being dragged
 
-  let elementRef: HTMLSpanElement | null = null
-
-  const refProxy = createRefProxy<HTMLSpanElement>((el) => {
-    elementRef = el
-  })
+  const refProxy = createRefProxy<HTMLSpanElement>()
 
   const currentValue = Kiru.computed(() => {
     const idx = index.value
@@ -421,10 +465,32 @@ const SliderThumb: SliderThumb = () => {
     return values[idx] ?? ctx.min.value
   })
 
+  const wrapperStyle = Kiru.computed(() => {
+    const value = currentValue.value
+    const percent = ctx.getValuePercent(value)
+    const orientation = ctx.orientation.value
+    const dir = ctx.dir.value
+
+    const transform =
+      orientation === "horizontal"
+        ? dir === "ltr"
+          ? "translateX(-50%)"
+          : "translateX(50%)"
+        : "translateY(50%)"
+
+    if (orientation === "horizontal") {
+      const position = dir === "rtl" ? "right" : "left"
+      return `transform:${transform};position:absolute;${position}:${percent}%`
+    } else {
+      return `transform:${transform};position:absolute;bottom:${percent}%`
+    }
+  })
+
   const getValueFromPointer = (event: PointerEvent): number => {
+    const elementRef = refProxy.current
     if (!elementRef) return currentValue.peek()
 
-    const parent = elementRef.parentElement
+    const parent = ctx.rootElement.current
     if (!parent) return currentValue.peek()
 
     const rect = parent.getBoundingClientRect()
@@ -433,18 +499,14 @@ const SliderThumb: SliderThumb = () => {
 
     let percent: number
     if (orientation === "horizontal") {
-      if (dir === "ltr") {
-        percent = ((event.clientX - rect.left) / rect.width) * 100
-      } else {
+      if (dir === "rtl") {
         percent = ((rect.right - event.clientX) / rect.width) * 100
+      } else {
+        percent = ((event.clientX - rect.left) / rect.width) * 100
       }
     } else {
-      if (dir === "ltr") {
-        // Vertical: bottom is min, top is max
-        percent = ((rect.bottom - event.clientY) / rect.height) * 100
-      } else {
-        percent = ((event.clientY - rect.top) / rect.height) * 100
-      }
+      // Vertical: bottom is min, top is max
+      percent = ((rect.bottom - event.clientY) / rect.height) * 100
     }
 
     return ctx.getValueFromPercent(percent)
@@ -455,7 +517,10 @@ const SliderThumb: SliderThumb = () => {
     if (ctx.disabled.peek()) return
 
     const value = getValueFromPointer(event)
-    ctx.updateValue(index.peek(), value)
+    const newIndex = ctx.updateValue(activeIndex.peek(), value, true)
+    if (newIndex !== activeIndex.peek()) {
+      activeIndex.value = newIndex
+    }
   }
 
   const handlePointerUp = () => {
@@ -466,21 +531,27 @@ const SliderThumb: SliderThumb = () => {
     document.removeEventListener("pointerup", handlePointerUp)
   }
 
-  const handlePointerDown = (event: PointerEvent) => {
+  const handlePointerDown = (
+    event: KiruGlobal.PointerEvent<HTMLSpanElement>
+  ) => {
     if (ctx.disabled.peek()) return
 
     isDragging.value = true
+    activeIndex.value = index.peek()
 
     // Update value immediately on pointer down
-    const value = getValueFromPointer(event)
-    ctx.updateValue(index.peek(), value)
+    const value = getValueFromPointer(event as PointerEvent)
+    const newIndex = ctx.updateValue(activeIndex.peek(), value, true)
+    if (newIndex !== activeIndex.peek()) {
+      activeIndex.value = newIndex
+    }
 
     // Track pointer movement globally
     document.addEventListener("pointermove", handlePointerMove)
     document.addEventListener("pointerup", handlePointerUp)
   }
 
-  const handleKeyDown = (event: KeyboardEvent) => {
+  const handleKeyDown = (event: KiruGlobal.KeyboardEvent<HTMLSpanElement>) => {
     if (ctx.disabled.peek()) return
 
     const currentIdx = index.peek()
@@ -489,14 +560,17 @@ const SliderThumb: SliderThumb = () => {
     const minVal = ctx.min.peek()
     const maxVal = ctx.max.peek()
     const orientation = ctx.orientation.peek()
+    const dir = ctx.dir.peek()
 
     let newValue: number | null = null
 
     switch (event.key) {
       case "ArrowRight":
         if (orientation === "horizontal") {
-          newValue = currentVal + stepVal
+          newValue = dir === "rtl" ? currentVal - stepVal : currentVal + stepVal
           event.preventDefault()
+        } else {
+          newValue = currentVal + stepVal
         }
         break
       case "ArrowUp":
@@ -505,8 +579,10 @@ const SliderThumb: SliderThumb = () => {
         break
       case "ArrowLeft":
         if (orientation === "horizontal") {
-          newValue = currentVal - stepVal
+          newValue = dir === "rtl" ? currentVal + stepVal : currentVal - stepVal
           event.preventDefault()
+        } else {
+          newValue = currentVal - stepVal
         }
         break
       case "ArrowDown":
@@ -547,23 +623,43 @@ const SliderThumb: SliderThumb = () => {
     "aria-disabled": Kiru.computed(() =>
       ctx.disabled.value ? "true" : undefined
     ),
-    onPointerDown: handlePointerDown,
-    onKeyDown: handleKeyDown,
+    onpointerdown: handlePointerDown,
+    onkeydown: handleKeyDown,
     ...ctx.sharedAttrs,
   }
 
   return ({ children, asChild, index: indexProp, ...props }) => {
     refProxy.update(props)
 
-    if (asChild && isElement(children)) {
-      return {
-        ...children,
-        props: { ...children.props, ...props, ...attrs },
-      }
-    }
+    const thumbElement =
+      asChild && isElement(children) ? (
+        { ...children, props: { ...children.props, ...props, ...attrs } }
+      ) : (
+        <span {...props} {...attrs}>
+          {children}
+        </span>
+      )
+
     return (
-      <span {...props} {...attrs}>
-        {children}
+      <span style={wrapperStyle}>
+        {thumbElement}
+        {!!ctx.name && (
+          <input
+            type="number"
+            aria-hidden="true"
+            tabIndex={-1}
+            name={
+              ctx.values.value.length === 1
+                ? ctx.name
+                : `${ctx.name}[${index.value}]`
+            }
+            value={currentValue}
+            disabled={ctx.disabled}
+            style={{
+              display: "none" as const,
+            }}
+          />
+        )}
       </span>
     )
   }

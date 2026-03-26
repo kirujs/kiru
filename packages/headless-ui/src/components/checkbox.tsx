@@ -1,6 +1,5 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
-import { createRefProxy } from "../utils/ref-proxy.js"
 import { createContext } from "../utils/create-context.js"
 import type { KiruGlobal } from "../types"
 
@@ -106,8 +105,6 @@ const CheckboxRoot: CheckboxRoot = () => {
     sharedAttrs,
   }
 
-  const refProxy = createRefProxy<HTMLButtonElement>(() => {})
-
   const handleClick = (e: KiruGlobal.MouseEvent<HTMLButtonElement>) => {
     const props = $.props as any
     try {
@@ -134,7 +131,6 @@ const CheckboxRoot: CheckboxRoot = () => {
   }
 
   const attrs = {
-    ref: refProxy.ref,
     role: "checkbox",
     type: "button" as const,
     onclick: handleClick,
@@ -164,8 +160,6 @@ const CheckboxRoot: CheckboxRoot = () => {
     value: valueProp,
     ...props
   }) => {
-    refProxy.update(props)
-
     const hiddenInputAttrs = {
       type: "checkbox" as const,
       "aria-hidden": "true",

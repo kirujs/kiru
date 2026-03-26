@@ -42,28 +42,44 @@ const [AccordionItemContext, useAccordionItem] =
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AccordionMode = "single" | "multiple"
 
+type AccordionRootSingleProps = {
+  onValueChange?: (value: string | null) => void
+} & (
+  | {
+      value: Kiru.Signal<string | null>
+      defaultValue?: never
+    }
+  | {
+      value?: never
+      defaultValue?: string | null
+    }
+)
+
+type AccordionRootMultipleProps = {
+  onValueChange?: (value: string[]) => void
+} & (
+  | {
+      value: Kiru.Signal<string[]>
+      defaultValue?: never
+    }
+  | {
+      value?: never
+      defaultValue?: string[]
+    }
+)
+
 export type AccordionRootProps<
   Mode extends AccordionMode = "single",
   AsChild extends boolean = false,
 > = {
   mode?: Mode
-  onValueChange?: (
-    value: Mode extends "single" ? string | null : string[]
-  ) => void
   children?: JSX.Children
   asChild?: AsChild
   orientation?: Orientation
   collapsible?: boolean
-} & (
-  | {
-      value: Kiru.Signal<Mode extends "single" ? string | null : string[]>
-      defaultValue?: never
-    }
-  | {
-      value?: never
-      defaultValue?: Mode extends "single" ? string | null : string[]
-    }
-) &
+} & (Mode extends "single"
+  ? AccordionRootSingleProps
+  : AccordionRootMultipleProps) &
   (AsChild extends true ? {} : JSX.IntrinsicElements["div"])
 
 export type AccordionItemProps<AsChild extends boolean = false> = {
@@ -134,7 +150,7 @@ const AccordionRoot: AccordionRoot = () => {
     } else {
       currentTabs.value = nextTabs
     }
-    $.props.onValueChange?.(valueToEmit)
+    $.props.onValueChange?.(valueToEmit as any)
   }
 
   const ctx: AccordionRootContextType = {

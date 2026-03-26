@@ -1,9 +1,11 @@
 import { setRef } from "kiru/utils"
 
-export function createRefProxy<T>(callback: Kiru.RefCallback<T>) {
+export function createRefProxy<T>(callback?: Kiru.RefCallback<T>) {
   let propsRef: Kiru.Ref<T> | undefined
+  let current: T | null = null
   const ref: Kiru.RefCallback<T> = (value) => {
-    callback(value)
+    current = value
+    callback?.(value)
     if (propsRef) {
       setRef(propsRef, value)
     }
@@ -19,5 +21,11 @@ export function createRefProxy<T>(callback: Kiru.RefCallback<T>) {
       propsRef = undefined
     }
   }
-  return { ref, update }
+  return {
+    ref,
+    update,
+    get current() {
+      return current
+    },
+  }
 }
