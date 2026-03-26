@@ -335,10 +335,26 @@ const SliderRoot: SliderRoot = () => {
   }) => {
     refProxy.update(props)
 
+    const hiddenInputs = name
+      ? values.value.map((val, i) => (
+          <input
+            key={i}
+            type="number"
+            aria-hidden="true"
+            tabIndex={-1}
+            name={values.value.length === 1 ? name : `${name}[${i}]`}
+            value={val}
+            disabled={disabled}
+            style="display:none"
+          />
+        ))
+      : null
+
     if (asChild && isElement(children)) {
       return (
         <SliderRootContext value={ctx}>
           {{ ...children, props: { ...children.props, ...props, ...attrs } }}
+          {hiddenInputs}
         </SliderRootContext>
       )
     }
@@ -346,6 +362,7 @@ const SliderRoot: SliderRoot = () => {
       <SliderRootContext value={ctx}>
         <span {...props} {...attrs}>
           {children}
+          {hiddenInputs}
         </span>
       </SliderRootContext>
     )
@@ -467,9 +484,13 @@ const SliderRange: SliderRange = () => {
     const isSingle = values.length === 1
     if (orientation === "horizontal") {
       const position = dir === "rtl" ? "right" : "left"
-      return `${prefix}${position}:${isSingle ? 0 : minPercent}%;width:${isSingle ? maxPercent : sizePercent}%`
+      return `${prefix}${position}:${isSingle ? 0 : minPercent}%;width:${
+        isSingle ? maxPercent : sizePercent
+      }%`
     } else {
-      return `${prefix}bottom:${isSingle ? 0 : minPercent}%;height:${isSingle ? maxPercent : sizePercent}%`
+      return `${prefix}bottom:${isSingle ? 0 : minPercent}%;height:${
+        isSingle ? maxPercent : sizePercent
+      }%`
     }
   })
 
@@ -694,28 +715,7 @@ const SliderThumb: SliderThumb = () => {
         </span>
       )
 
-    return (
-      <span style={wrapperStyle}>
-        {thumbElement}
-        {!!ctx.name && (
-          <input
-            type="number"
-            aria-hidden="true"
-            tabIndex={-1}
-            name={
-              ctx.values.value.length === 1
-                ? ctx.name
-                : `${ctx.name}[${index.value}]`
-            }
-            value={currentValue}
-            disabled={ctx.disabled}
-            style={{
-              display: "none" as const,
-            }}
-          />
-        )}
-      </span>
-    )
+    return <span style={wrapperStyle}>{thumbElement}</span>
   }
 }
 
