@@ -1,6 +1,7 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
 import { createContext } from "../utils/create-context.js"
+import { useCheckboxGroupRoot } from "./checkbox-group.js"
 import type { KiruGlobal } from "../types"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
@@ -26,6 +27,9 @@ export type CheckboxRootProps<AsChild extends boolean = false> = {
   required?: Kiru.Signalable<boolean>
   name?: string
   value?: string
+  // When rendered as a "parent" inside a CheckboxGroup, it reflects/controls
+  // selection of the group's (or its own) `allValues`.
+  parent?: boolean
   children?: JSX.Children
   asChild?: AsChild
 } & (
@@ -57,32 +61,102 @@ interface CheckboxRoot {
 const CheckboxRoot: CheckboxRoot = () => {
   const $ = Kiru.setup<typeof CheckboxRoot>()
 
-  const checked = $.derive(({ checked, defaultChecked }) => {
+  // Optional CheckboxGroup context. We catch because Checkbox can be used standalone.
+  let groupCtx: ReturnType<typeof useCheckboxGroupRoot> | null = null
+  try {
+    groupCtx = useCheckboxGroupRoot()
+  } catch {
+    groupCtx = null
+  }
+
+  const isParent = $.derive((p) => p.parent ?? false)
+  const itemValue = $.derive((p) => p.value ?? "on")
+
+  const propsChecked = $.derive(({ checked, defaultChecked }) => {
     if (Kiru.Signal.isSignal(checked)) {
       return checked.value
     }
     return defaultChecked ?? false
   })
 
-  const disabled = $.derive((p) => {
+  const localDisabled = $.derive((p) => {
     const d = Kiru.unwrap(p.disabled, true) as boolean | undefined
     return d ?? false
   })
 
-  const toggle = () => {
+  const disabled = Kiru.computed(() => {
+    if (!groupCtx) return localDisabled.value
+    return localDisabled.value || groupCtx.disabled.value
+  })
+
+  const checked = Kiru.computed(() => {
+    if (!groupCtx) return propsChecked.value
+
+    if (isParent.value) {
+      const all = groupCtx.allValues.value
+      if (!all.length) return false
+
+      const currentValue = groupCtx.value.value
+      const selectedCount = all.reduce((acc, v) => {
+        return currentValue.includes(v) ? acc + 1 : acc
+      }, 0)
+
+      if (selectedCount === 0) return false
+      if (selectedCount === all.length) return true
+      return "indeterminate"
+    }
+
+    return groupCtx.value.value.includes(itemValue.value)
+  })
+
+  const toggleStandalone = () => {
     if (disabled.peek()) return
 
-    const currentChecked = checked.peek()
+    const currentChecked = propsChecked.peek()
     const nextChecked =
       currentChecked === "indeterminate" ? true : !currentChecked
 
-    const { checked: propsChecked } = $.props
-    if (Kiru.Signal.isSignal(propsChecked)) {
-      propsChecked.value = nextChecked
+    const { checked: propsCheckedSignal } = $.props
+    if (Kiru.Signal.isSignal(propsCheckedSignal)) {
+      propsCheckedSignal.value = nextChecked
     } else {
-      checked.value = nextChecked
+      propsChecked.value = nextChecked
     }
     $.props.onCheckedChange?.(nextChecked)
+  }
+
+  const toggleGroup = () => {
+    if (!groupCtx) return
+    if (disabled.peek()) return
+
+    if (isParent.value) {
+      const all = groupCtx.allValues.peek()
+      if (!all.length) return
+
+      const currentValue = groupCtx.value.peek()
+      const currentSet = new Set(currentValue)
+      const allSelected = all.every((v) => currentSet.has(v))
+      const nextChecked = allSelected ? false : true
+
+      $.props.onCheckedChange?.(nextChecked)
+      groupCtx.toggleParent()
+      return
+    }
+
+    const val = itemValue.value
+    const currentChecked = groupCtx.value.peek().includes(val)
+    const nextChecked = !currentChecked
+
+    $.props.onCheckedChange?.(nextChecked)
+    groupCtx.toggleValue(val)
+  }
+
+  const toggle = () => {
+    if (groupCtx) {
+      toggleGroup()
+    } else {
+      toggleStandalone()
+    }
   }
 
   const sharedAttrs: CheckboxRootContextType["sharedAttrs"] = {
@@ -158,8 +232,13 @@ const CheckboxRoot: CheckboxRoot = () => {
     required: requiredProp,
     name,
     value: valueProp,
+    parent,
     ...props
   }) => {
+    // Prevent these bindings from becoming unused locals (they're only read
+    // via signals derived from `$.props`).
+    void parent
+    const shouldRenderHiddenInput = name && !(groupCtx && groupCtx.name)
     const hiddenInputAttrs = {
       type: "checkbox" as const,
       "aria-hidden": "true",
@@ -184,7 +263,7 @@ const CheckboxRoot: CheckboxRoot = () => {
       return (
         <CheckboxRootContext value={ctx}>
           {{ ...children, props: { ...children.props, ...props, ...attrs } }}
-          {name && <input {...hiddenInputAttrs} />}
+          {shouldRenderHiddenInput && <input {...hiddenInputAttrs} />}
         </CheckboxRootContext>
       )
     }
@@ -193,7 +272,7 @@ const CheckboxRoot: CheckboxRoot = () => {
         <button {...props} {...attrs}>
           {children}
         </button>
-        {name && <input {...hiddenInputAttrs} />}
+        {shouldRenderHiddenInput && <input {...hiddenInputAttrs} />}
       </CheckboxRootContext>
     )
   }

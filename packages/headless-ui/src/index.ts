@@ -1,5 +1,6 @@
 export * from "./components/accordion.js"
 export * from "./components/checkbox.js"
+export * from "./components/checkbox-group.js"
 export * from "./components/collapsible.js"
 export * from "./components/radio-group.js"
 export * from "./components/slider.js"
