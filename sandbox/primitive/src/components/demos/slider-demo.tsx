@@ -27,7 +27,8 @@ export const SliderDemo = () => {
         <p style="margin-bottom:1rem">Values: {multipleValuesText}</p>
         <Slider.Root
           value={multipleValues}
-          dir="rtl"
+          minStepsBetweenThumbs={1}
+          step={5}
           mode="multiple"
           className="slider"
         >
@@ -74,7 +75,9 @@ export const SliderDemo = () => {
           <Slider.Root
             defaultValue={[25, 50, 75]}
             mode="multiple"
+            minStepsBetweenThumbs={2}
             orientation="vertical"
+            step={5}
             className="slider slider-vertical"
           >
             <Slider.Track className="slider-track">

@@ -40,6 +40,7 @@ export type SliderMode = "single" | "multiple"
 type SliderRootSingleProps = {
   onValueChange?: (value: number) => void
   disableSwitch?: never
+  minStepsBetweenThumbs?: never
 } & (
   | {
       value: Kiru.Signal<number>
@@ -51,9 +52,12 @@ type SliderRootSingleProps = {
     }
 )
 
+// type ThumbCollisionBehavior = "swap" | "constrain" |"push"
+
 type SliderRootMultipleProps = {
   onValueChange?: (value: number[]) => void
   disableSwitch?: boolean
+  minStepsBetweenThumbs?: number
 } & (
   | {
       value: Kiru.Signal<number[]>
@@ -138,7 +142,7 @@ const SliderRoot: SliderRoot = () => {
     allowSwitch = false
   ) => {
     if (disabled.peek()) return index
-    const { value: propsValue, mode } = $.props
+    const { value: propsValue, mode, minStepsBetweenThumbs = 0 } = $.props
 
     const currentValues = values.peek()
     if (index < 0 || index >= currentValues.length) {
@@ -148,13 +152,17 @@ const SliderRoot: SliderRoot = () => {
     const minVal = min.peek()
     const maxVal = max.peek()
     const stepVal = step.peek()
+    const minStepsBetween = minStepsBetweenThumbs
+    // Ensure thumbs are always at least 1 step apart, plus any additional minStepsBetweenThumbs
+    const minDistance = minStepsBetween * stepVal
 
     // Clamp and round the new value
     let clampedValue = clampValue(newValue, minVal, maxVal)
     const roundedValue = roundToStep(clampedValue, stepVal, minVal)
-    const finalValue = clampValue(roundedValue, minVal, maxVal)
+    let finalValue = clampValue(roundedValue, minVal, maxVal)
 
     let targetIndex = index
+    const newValues = [...currentValues]
 
     // For multiple thumbs, check if we should switch to a neighboring thumb
     if (
@@ -162,32 +170,75 @@ const SliderRoot: SliderRoot = () => {
       allowSwitch &&
       currentValues.length > 1
     ) {
-      // If dragging past the right neighbor, switch to that thumb
+      // Check if we should switch to a neighboring thumb (before clamping)
+      // If dragging past the right neighbor, check if we have enough distance to switch
       if (
         index < currentValues.length - 1 &&
-        finalValue >= currentValues[index + 1]
+        finalValue > currentValues[index + 1]
       ) {
-        targetIndex = index + 1
+        const neighborValue = currentValues[index + 1]
+        const requiredValue = neighborValue + minDistance
+
+        // Only switch if we've dragged far enough for the next step
+        if (finalValue >= requiredValue) {
+          targetIndex = index + 1
+          // Original thumb takes neighbor's value
+          newValues[index] = neighborValue
+          // New thumb gets the value beyond the required distance
+          finalValue = Math.max(finalValue, requiredValue)
+        }
       }
-      // If dragging past the left neighbor, switch to that thumb
-      else if (index > 0 && finalValue <= currentValues[index - 1]) {
-        targetIndex = index - 1
+      // If dragging past the left neighbor, check if we have enough distance to switch
+      else if (index > 0 && finalValue < currentValues[index - 1]) {
+        const neighborValue = currentValues[index - 1]
+        const requiredValue = neighborValue - minDistance
+
+        // Only switch if we've dragged far enough for the next step
+        if (finalValue <= requiredValue) {
+          targetIndex = index - 1
+          // Original thumb takes neighbor's value
+          newValues[index] = neighborValue
+          // New thumb gets the value beyond the required distance
+          finalValue = Math.min(finalValue, requiredValue)
+        }
+      }
+
+      // If we didn't switch, clamp to maintain minimum distance
+      if (targetIndex === index) {
+        if (index > 0) {
+          const leftThumbValue = currentValues[index - 1]
+          finalValue = Math.max(finalValue, leftThumbValue + minDistance)
+        }
+        if (index < currentValues.length - 1) {
+          const rightThumbValue = currentValues[index + 1]
+          finalValue = Math.min(finalValue, rightThumbValue - minDistance)
+        }
+      }
+
+      // After switching, ensure the new value respects other neighbors
+      if (targetIndex !== index) {
+        if (targetIndex > 0 && targetIndex !== index) {
+          const leftThumbValue = newValues[targetIndex - 1]
+          finalValue = Math.max(finalValue, leftThumbValue + minDistance)
+        }
+        if (targetIndex < currentValues.length - 1 && targetIndex !== index) {
+          const rightThumbValue = newValues[targetIndex + 1]
+          finalValue = Math.min(finalValue, rightThumbValue - minDistance)
+        }
       }
     } else if (currentValues.length > 1) {
-      // debugger
-      // If not allowing switch, clamp to neighboring values
+      // If not allowing switch, clamp to neighboring values with minDistance
       if (index > 0) {
         const leftThumbValue = currentValues[index - 1]
-        clampedValue = Math.max(finalValue, leftThumbValue)
+        finalValue = Math.max(finalValue, leftThumbValue + minDistance)
       }
       if (index < currentValues.length - 1) {
         const rightThumbValue = currentValues[index + 1]
-        clampedValue = Math.min(clampedValue, rightThumbValue)
+        finalValue = Math.min(finalValue, rightThumbValue - minDistance)
       }
     }
 
-    const newValues = [...currentValues]
-    newValues[targetIndex] = allowSwitch ? finalValue : clampedValue
+    newValues[targetIndex] = finalValue
 
     const valueToEmit =
       mode === "multiple" ? [...newValues] : (newValues[0] ?? null)
@@ -276,7 +327,10 @@ const SliderRoot: SliderRoot = () => {
     min: minProp,
     max: maxProp,
     step: stepProp,
+    minStepsBetweenThumbs: minStepsBetweenThumbsProp,
     name,
+    mode,
+    disableSwitch,
     ...props
   }) => {
     refProxy.update(props)
