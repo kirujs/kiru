@@ -1,6 +1,6 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
-import { createContext } from "../utils/create-context.js"
+import { createContext } from "../utils/index.js"
 import { useCheckboxGroupRoot } from "./checkbox-group.js"
 import type { KiruGlobal } from "../types"
 

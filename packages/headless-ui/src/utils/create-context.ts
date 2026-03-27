@@ -1,6 +1,6 @@
 import { createContext as createKiruContext, useContext } from "kiru"
 
-const $DEFAULT = Symbol("unmatched")
+const $DEFAULT = Symbol()
 export function createContext<T>(name: string) {
   const ctx = createKiruContext<T>($DEFAULT as T)
   ctx.displayName = name

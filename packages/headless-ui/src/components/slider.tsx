@@ -1,7 +1,6 @@
 import * as Kiru from "kiru"
 import { isElement, styleObjectToString } from "kiru/utils"
-import { createRefProxy } from "../utils/ref-proxy.js"
-import { createContext } from "../utils/create-context.js"
+import { createContext, createRefProxy } from "../utils/index.js"
 import type { Direction, KiruGlobal, Orientation } from "../types"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────

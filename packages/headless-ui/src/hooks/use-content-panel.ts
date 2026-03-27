@@ -1,5 +1,5 @@
 import * as Kiru from "kiru"
-import { createRefProxy } from "../utils/ref-proxy.js"
+import { createRefProxy } from "../utils/index.js"
 import type { HtmlOrSvgElement } from "../types"
 
 /**

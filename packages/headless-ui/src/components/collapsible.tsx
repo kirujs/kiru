@@ -1,7 +1,7 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
 import { useContentPanel } from "../hooks/use-content-panel.js"
-import { createContext } from "../utils/create-context.js"
+import { createContext } from "../utils/index.js"
 import type { KiruGlobal } from "../types"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────

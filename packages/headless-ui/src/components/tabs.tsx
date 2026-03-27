@@ -1,12 +1,12 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
-import { createRefProxy } from "../utils/ref-proxy.js"
 import {
+  createContext,
+  createRefProxy,
   createTriggerController,
   type TriggerController,
-} from "./trigger-controller.js"
+} from "../utils/index.js"
 import type { KiruGlobal, Orientation } from "../types.js"
-import { createContext } from "../utils/create-context.js"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
 
