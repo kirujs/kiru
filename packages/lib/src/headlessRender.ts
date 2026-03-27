@@ -37,6 +37,9 @@ export function headlessRender(
   if (el instanceof Array) {
     return el.forEach((c, i) => headlessRender(ctx, c, parent, i))
   }
+  if (typeof el === "function") {
+    return headlessRender(ctx, el(), parent, idx)
+  }
   if (Signal.isSignal(el)) {
     const value = el.peek()
     if (!isPrimitiveChild(value)) {

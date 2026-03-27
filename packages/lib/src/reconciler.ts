@@ -189,6 +189,10 @@ function updateSlot(
     }
     return updateFragment(parent, oldChild, child)
   }
+  if (typeof child === "function") {
+    if (key !== null) return null
+    return updateFunctionChild(parent, oldChild, child)
+  }
   return null
 }
 
@@ -263,6 +267,22 @@ function updateFragment(
   return oldChild
 }
 
+function updateFunctionChild(
+  parent: VNode,
+  oldChild: VNode | null,
+  children: Function
+) {
+  if (oldChild === null || oldChild.type !== children) {
+    return createVNode(parent, children)
+  }
+  if (__DEV__) {
+    dev_emitUpdateNode()
+  }
+  oldChild.flags |= FLAG_UPDATE
+  oldChild.sibling = null
+  return oldChild
+}
+
 function createChild(parent: VNode, child: unknown): VNode | null {
   if (isValidTextChild(child)) {
     return createVNode(parent, "#text", { nodeValue: "" + child })
@@ -281,6 +301,10 @@ function createChild(parent: VNode, child: unknown): VNode | null {
       markListChild(child)
     }
     return createVNode(parent, $FRAGMENT, { children: child })
+  }
+
+  if (typeof child === "function") {
+    return createVNode(parent, child)
   }
 
   return null
@@ -472,7 +496,7 @@ function getNearestParentFcTag(vNode: VNode) {
 function createVNode(
   parent: VNode,
   type: VNode["type"],
-  props: VNode["props"],
+  props?: VNode["props"],
   key: VNode["key"] = null,
   index = 0
 ): VNode {
