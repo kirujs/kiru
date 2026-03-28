@@ -380,11 +380,11 @@ function updateFromMap(
 
   if (Array.isArray(child)) {
     const props = { children: child }
-    const oldChild = existingChildren.get(index)
     if (__DEV__) {
       markListChild(child)
     }
-    if (oldChild) {
+    const oldChild = existingChildren.get(index)
+    if (oldChild?.type === $FRAGMENT) {
       if (__DEV__) {
         dev_emitUpdateNode()
       }
