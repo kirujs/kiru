@@ -340,14 +340,11 @@ function updateFromMap(
   const isSig = Signal.isSignal(child)
   if (isSig || isValidTextChild(child)) {
     const oldChild = existingChildren.get(index)
-    if (oldChild) {
+    if (oldChild?.type === "#text") {
       if (oldChild.props.nodeValue === child) {
         return oldChild
       }
-      if (
-        oldChild.type === "#text" &&
-        Signal.isSignal(oldChild.props.nodeValue)
-      ) {
+      if (Signal.isSignal(oldChild.props.nodeValue)) {
         oldChild.cleanups?.["nodeValue"]?.()
       }
     }
