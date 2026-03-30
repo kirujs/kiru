@@ -2,6 +2,7 @@ export {
   $SIGNAL,
   $CONTEXT,
   $FRAGMENT,
+  $INLINE_FN,
   $KIRU_ERROR,
   $HMR_ACCEPT,
   $ERROR_BOUNDARY,
@@ -22,6 +23,7 @@ export { voidElements, svgTags, booleanAttributes, snakeCaseAttributes }
 const $SIGNAL = Symbol.for("kiru.signal")
 const $CONTEXT = Symbol.for("kiru.context")
 const $FRAGMENT = Symbol.for("kiru.fragment")
+const $INLINE_FN = Symbol.for("kiru.inlineFn")
 const $KIRU_ERROR = Symbol.for("kiru.error")
 const $HMR_ACCEPT = Symbol.for("kiru.hmrAccept")
 const $ERROR_BOUNDARY = Symbol.for("kiru.errorBoundary")

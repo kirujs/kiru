@@ -1,4 +1,9 @@
-import type { $CONTEXT, $ERROR_BOUNDARY, $FRAGMENT } from "./constants"
+import type {
+  $CONTEXT,
+  $ERROR_BOUNDARY,
+  $FRAGMENT,
+  $INLINE_FN,
+} from "./constants"
 import type { Signal } from "./signals"
 import type { ErrorBoundaryProps } from "./components/errorBoundary"
 
@@ -36,6 +41,13 @@ export interface ErrorBoundaryNode extends Kiru.VNode {
 
 export interface FragmentNode extends Kiru.VNode {
   type: typeof $FRAGMENT
+}
+
+export interface InlineCompNode extends Kiru.VNode {
+  type: typeof $INLINE_FN
+  props: {
+    expr: () => JSX.Element
+  }
 }
 
 export type Prettify<T> = {

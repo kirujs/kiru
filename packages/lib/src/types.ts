@@ -1,5 +1,10 @@
 import type { Signal as SignalClass } from "./signals"
-import type { $CONTEXT, $ERROR_BOUNDARY, $FRAGMENT } from "./constants"
+import type {
+  $CONTEXT,
+  $ERROR_BOUNDARY,
+  $FRAGMENT,
+  $INLINE_FN,
+} from "./constants"
 import type { KiruGlobalContext } from "./globalContext"
 import type {
   GlobalAttributes,
@@ -332,6 +337,7 @@ declare global {
       | typeof $FRAGMENT
       | typeof $CONTEXT
       | typeof $ERROR_BOUNDARY
+      | typeof $INLINE_FN
 
     interface Element {
       type:

@@ -1,10 +1,11 @@
+import { $INLINE_FN } from "../constants.js"
 import { node } from "../globals.js"
 
 export function getVNodeLifecycleHooks(): null | NonNullable<
   Kiru.VNode["hooks"]
 > {
   const vNode = node.current!
-  if (!vNode) return null
+  if (!vNode || vNode.type === $INLINE_FN) return null
 
   return (vNode.hooks ??= {
     pre: [],

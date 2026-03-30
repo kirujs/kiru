@@ -5,8 +5,14 @@ import {
   generateRandomID,
   registerVNodeCleanup,
 } from "../utils/index.js"
-import { $DEV_FILE_LINK, $HMR_ACCEPT, $SIGNAL } from "../constants.js"
+import {
+  $DEV_FILE_LINK,
+  $HMR_ACCEPT,
+  $INLINE_FN,
+  $SIGNAL,
+} from "../constants.js"
 import { __DEV__, isBrowser } from "../env.js"
+import { KiruError } from "../error.js"
 import { node } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"
 import { tracking } from "./tracking.js"
@@ -58,7 +64,15 @@ export class Signal<T> {
 
     const n = node.current
     if (n) {
-      registerVNodeCleanup(n, this.$id, Signal.dispose.bind(null, this))
+      if (__DEV__ && n.type === $INLINE_FN) {
+        throw new KiruError({
+          message: "Signals cannot be created inside inline functions",
+          vNode: n,
+        })
+      }
+      if (sideEffectsEnabled()) {
+        registerVNodeCleanup(n, this.$id, Signal.dispose.bind(null, this))
+      }
     }
   }
 

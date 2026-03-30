@@ -1,5 +1,6 @@
 import { signal, Signal } from "../signals/base.js"
 import { createVNodeId, isVNodeDeleted } from "../utils/vdom.js"
+import { $INLINE_FN } from "../constants.js"
 import { __DEV__ } from "../env.js"
 import { node, setups } from "../globals.js"
 import {
@@ -29,7 +30,7 @@ export interface Setup<Props extends {}> {
 export function setup<Props extends {}>(): Setup<Props> {
   const vNode = node.current!
   if (__DEV__) {
-    if (!vNode) {
+    if (!vNode || vNode.type === $INLINE_FN) {
       throw new Error("setup() must be called inside a Kiru component")
     }
     if (vNode.render) {

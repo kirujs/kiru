@@ -1,6 +1,12 @@
-import type { DomVNode, ErrorBoundaryNode, FunctionVNode } from "./types.utils"
+import type {
+  DomVNode,
+  ErrorBoundaryNode,
+  FunctionVNode,
+  InlineCompNode,
+} from "./types.utils"
 import {
   $ERROR_BOUNDARY,
+  $INLINE_FN,
   CONSECUTIVE_DIRTY_LIMIT,
   FLAG_DELETION,
   FLAG_DIRTY,
@@ -298,7 +304,18 @@ function updateExoticComponent(vNode: VNode): VNode | null {
   const { props, type } = vNode
   let children = props.children
 
-  if (type === $ERROR_BOUNDARY) {
+  if (type === $INLINE_FN) {
+    node.current = vNode
+    let render = (props as InlineCompNode["props"]).expr
+    if (__DEV__) {
+      render = latest(render)
+    }
+    try {
+      children = render()
+    } finally {
+      node.current = null
+    }
+  } else if (type === $ERROR_BOUNDARY) {
     const n = vNode as ErrorBoundaryNode
     const { error } = n
     if (error) {

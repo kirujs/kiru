@@ -1,4 +1,9 @@
-import { $FRAGMENT, FLAG_PLACEMENT, FLAG_UPDATE } from "./constants.js"
+import {
+  $FRAGMENT,
+  $INLINE_FN,
+  FLAG_PLACEMENT,
+  FLAG_UPDATE,
+} from "./constants.js"
 import {
   getVNodeApp,
   isElement,
@@ -191,7 +196,7 @@ function updateSlot(
   }
   if (typeof child === "function") {
     if (key !== null) return null
-    return updateFunctionChild(parent, oldChild, child)
+    return updateInlineFnChild(parent, oldChild, child)
   }
   return null
 }
@@ -267,17 +272,18 @@ function updateFragment(
   return oldChild
 }
 
-function updateFunctionChild(
+function updateInlineFnChild(
   parent: VNode,
   oldChild: VNode | null,
-  children: Function
+  expr: Function
 ) {
-  if (oldChild === null || oldChild.type !== children) {
-    return createVNode(parent, children)
+  if (oldChild === null || oldChild.type !== $INLINE_FN) {
+    return createVNode(parent, $INLINE_FN, { expr })
   }
   if (__DEV__) {
     dev_emitUpdateNode()
   }
+  oldChild.props = { expr }
   oldChild.flags |= FLAG_UPDATE
   oldChild.sibling = null
   return oldChild
@@ -304,7 +310,7 @@ function createChild(parent: VNode, child: unknown): VNode | null {
   }
 
   if (typeof child === "function") {
-    return createVNode(parent, child)
+    return createVNode(parent, $INLINE_FN, { expr: child })
   }
 
   return null
@@ -391,6 +397,21 @@ function updateFromMap(
     }
 
     return createVNode(parent, $FRAGMENT, props, null, index)
+  }
+
+  if (typeof child === "function") {
+    const props = { expr: child }
+    const oldChild = existingChildren.get(index)
+    if (oldChild?.type === $INLINE_FN) {
+      if (__DEV__) {
+        dev_emitUpdateNode()
+      }
+      oldChild.flags |= FLAG_UPDATE
+      oldChild.props = props
+      return oldChild
+    }
+
+    return createVNode(parent, $INLINE_FN, props, null, index)
   }
 
   return null

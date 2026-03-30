@@ -1,3 +1,5 @@
+import { $INLINE_FN } from "../constants.js"
+import { __DEV__ } from "../env.js"
 import { node } from "../globals.js"
 import {
   generateRandomID,
@@ -14,7 +16,7 @@ import {
 export function onCleanup(fn: () => void): void {
   if (!sideEffectsEnabled()) return
   const vNode = node.current!
-  if (!vNode) {
+  if (!vNode || (__DEV__ && vNode.type === $INLINE_FN)) {
     throw new Error("Cannot queue onCleanup effect outside of a component")
   }
   registerVNodeCleanup(vNode, generateRandomID(10), fn)

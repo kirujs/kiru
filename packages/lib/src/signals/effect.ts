@@ -11,6 +11,8 @@ import {
 import type { Signal } from "./base.js"
 import type { SignalValues } from "./types.js"
 import { node } from "../globals.js"
+import { $INLINE_FN } from "../constants.js"
+import { KiruError } from "../error.js"
 
 type EffectCallbackReturn = (() => void) | void
 
@@ -37,6 +39,12 @@ export class Effect<const Deps extends readonly Signal<unknown>[] = []> {
     }
     const n = node.current
     if (n) {
+      if (__DEV__ && n.type === $INLINE_FN) {
+        throw new KiruError({
+          message: "Effects cannot be created inside inline functions",
+          vNode: n,
+        })
+      }
       if (!sideEffectsEnabled()) return // prevent side effects in non-browser environments
       registerVNodeCleanup(n, this.id, this.stop.bind(this))
     }

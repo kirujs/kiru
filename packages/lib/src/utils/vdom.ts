@@ -5,6 +5,7 @@ import {
   FLAG_UPDATE,
   $ERROR_BOUNDARY,
   $CONTEXT,
+  $INLINE_FN,
 } from "../constants.js"
 import { createElement } from "../index.js"
 import { KiruError } from "../error.js"
@@ -70,7 +71,12 @@ function isValidTextChild(thing: unknown): thing is string | number | bigint {
 }
 
 function isExoticType(type: Kiru.VNode["type"]): type is Kiru.ExoticSymbol {
-  return type === $FRAGMENT || type === $CONTEXT || type === $ERROR_BOUNDARY
+  return (
+    type === $FRAGMENT ||
+    type === $CONTEXT ||
+    type === $ERROR_BOUNDARY ||
+    type === $INLINE_FN
+  )
 }
 
 function isFragment(
