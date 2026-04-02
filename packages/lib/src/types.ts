@@ -136,7 +136,6 @@ declare global {
       input: HTMLElementProps<"input">
       ins: HTMLElementProps<"ins">
       kbd: HTMLElementProps<"kbd">
-      //keygen: HTMLElementProps<"keygen">
       label: HTMLElementProps<"label">
       legend: HTMLElementProps<"legend">
       li: HTMLElementProps<"li">
@@ -145,7 +144,6 @@ declare global {
       map: HTMLElementProps<"map">
       mark: HTMLElementProps<"mark">
       menu: HTMLElementProps<"menu">
-      //menuitem: HTMLElementProps<"menuitem">
       meta: HTMLElementProps<"meta">
       meter: HTMLElementProps<"meter">
       nav: HTMLElementProps<"nav">
@@ -192,12 +190,11 @@ declare global {
       ul: HTMLElementProps<"ul">
       var: HTMLElementProps<"var">
       video: HTMLElementProps<"video">
-      //wbr: HTMLElementProps<"wbr">
-      //webview: HTMLElementProps<"webview">
+      wbr: HTMLElementProps<"wbr">
 
       // SVG
-      // animate: SVGElementProps<"animate">
-      // animateMotion: SVGElementProps<"animateMotion">
+      animate: SVGElementProps<"animate">
+      animateMotion: SVGElementProps<"animateMotion">
       animateTransform: SVGElementProps<"animateTransform">
       circle: SVGElementProps<"circle">
       clipPath: SVGElementProps<"clipPath">
@@ -205,11 +202,11 @@ declare global {
       desc: SVGElementProps<"desc">
       ellipse: SVGElementProps<"ellipse">
       feBlend: SVGElementProps<"feBlend">
-      //feColorMatrix: SVGElementProps<"feColorMatrix">
+      feColorMatrix: SVGElementProps<"feColorMatrix">
       feComponentTransfer: SVGElementProps<"feComponentTransfer">
-      // feComposite: SVGElementProps<"feComposite">
-      // feConvolveMatrix: SVGElementProps<"feConvolveMatrix">
-      // feDiffuseLighting: SVGElementProps<"feDiffuseLighting">
+      feComposite: SVGElementProps<"feComposite">
+      feConvolveMatrix: SVGElementProps<"feConvolveMatrix">
+      feDiffuseLighting: SVGElementProps<"feDiffuseLighting">
       feDisplacementMap: SVGElementProps<"feDisplacementMap">
       feDropShadow: SVGElementProps<"feDropShadow">
       feFlood: SVGElementProps<"feFlood">
@@ -218,40 +215,40 @@ declare global {
       feFuncG: SVGElementProps<"feFuncG">
       feFuncR: SVGElementProps<"feFuncR">
       feGaussianBlur: SVGElementProps<"feGaussianBlur">
-      // feImage: SVGElementProps<"feImage">
-      // feMerge: SVGElementProps<"feMerge">
-      // feMergeNode: SVGElementProps<"feMergeNode">
-      // feMorphology: SVGElementProps<"feMorphology">
-      // feOffset: SVGElementProps<"feOffset">
-      // feSpecularLighting: SVGElementProps<"feSpecularLighting">
-      // feTile: SVGElementProps<"feTile">
+      feImage: SVGElementProps<"feImage">
+      feMerge: SVGElementProps<"feMerge">
+      feMergeNode: SVGElementProps<"feMergeNode">
+      feMorphology: SVGElementProps<"feMorphology">
+      feOffset: SVGElementProps<"feOffset">
+      feSpecularLighting: SVGElementProps<"feSpecularLighting">
+      feTile: SVGElementProps<"feTile">
       feTurbulence: SVGElementProps<"feTurbulence">
       filter: SVGElementProps<"filter">
-      // foreignObject: SVGElementProps<"foreignObject">
+      foreignObject: SVGElementProps<"foreignObject">
       g: SVGElementProps<"g">
       image: SVGElementProps<"image">
       line: SVGElementProps<"line">
       linearGradient: SVGElementProps<"linearGradient">
-      // marker: SVGElementProps<"marker">
+      marker: SVGElementProps<"marker">
       mask: SVGElementProps<"mask">
-      // metadata: SVGElementProps<"metadata">
-      // mpath: SVGElementProps<"mpath">
+      metadata: SVGElementProps<"metadata">
+      mpath: SVGElementProps<"mpath">
       path: SVGElementProps<"path">
       pattern: SVGElementProps<"pattern">
       polygon: SVGElementProps<"polygon">
       polyline: SVGElementProps<"polyline">
       radialGradient: SVGElementProps<"radialGradient">
       rect: SVGElementProps<"rect">
-      // set: SVGElementProps<"set">
+      set: SVGElementProps<"set">
       stop: SVGElementProps<"stop">
-      // switch: SVGElementProps<"switch">
-      // symbol: SVGElementProps<"symbol">
+      switch: SVGElementProps<"switch">
+      symbol: SVGElementProps<"symbol">
       text: SVGElementProps<"text">
       textPath: SVGElementProps<"textPath">
       tspan: SVGElementProps<"tspan">
       svg: SVGElementProps<"svg">
-      // use: SVGElementProps<"use">
-      // view: SVGElementProps<"view">
+      use: SVGElementProps<"use">
+      view: SVGElementProps<"view">
     }
 
     interface IntrinsicAttributes {

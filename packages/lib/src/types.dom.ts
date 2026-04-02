@@ -1091,6 +1091,46 @@ interface FeFuncAttributes {
 }
 
 interface SvgElementAttributes {
+  animate: {
+    begin?: string
+    dur?: string
+    end?: string
+    min?: string
+    max?: string
+    restart?: "always" | "whenNotActive" | "never"
+    repeatCount?: "indefinite" | number
+    repeatDur?: string
+    fill?: "freeze" | "remove" | "default"
+    calcMode?: "linear" | "discrete" | "spline" | "paced"
+    keyTimes?: string
+    keySplines?: string
+    values?: string
+    from?: string
+    to?: string
+    by?: string
+    attributeName?: string
+    attributeType?: "CSS" | "XML"
+    additive?: "replace" | "sum"
+    accumulate?: "none" | "sum"
+  }
+  animateMotion: {
+    begin?: string
+    dur?: string
+    end?: string
+    min?: string
+    max?: string
+    restart?: "always" | "whenNotActive" | "never"
+    repeatCount?: "indefinite" | number
+    repeatDur?: string
+    fill?: "freeze" | "remove" | "default"
+    calcMode?: "linear" | "discrete" | "spline" | "paced"
+    keyTimes?: string
+    keySplines?: string
+    path?: string
+    keyPoints?: string
+    rotate?: "none" | (string & {})
+    origin?: string
+  }
   animateTransform: {
     begin?: string
     dur?: string
@@ -1126,6 +1166,69 @@ interface SvgElementAttributes {
   }
   defs: {}
   desc: {}
+  foreignObject: {
+    x?: string | number
+    y?: string | number
+    width?: string | number
+    height?: string | number
+    requiredExtensions?: string
+    requiredFeatures?: string
+    systemLanguage?: string
+  }
+  marker: {
+    markerUnits?: "userSpaceOnUse" | "strokeWidth"
+    markerWidth?: string | number
+    markerHeight?: string | number
+    refX?: string | number
+    refY?: string | number
+    orient?: "auto" | "auto-start-reverse" | string
+    viewBox?: string
+  }
+  metadata: {}
+  mpath: {
+    href?: string
+    "xlink:href"?: string
+  }
+  set: {
+    begin?: string
+    dur?: string
+    end?: string
+    min?: string
+    max?: string
+    restart?: "always" | "whenNotActive" | "never"
+    repeatCount?: "indefinite" | number
+    repeatDur?: string
+    fill?: "freeze" | "remove" | "default"
+    attributeName?: string
+    attributeType?: "CSS" | "XML"
+    to?: string
+  }
+  switch: {
+    requiredExtensions?: string
+    requiredFeatures?: string
+    systemLanguage?: string
+  }
+  symbol: {
+    x?: string | number
+    y?: string | number
+    width?: string | number
+    height?: string | number
+    viewBox?: string
+    preserveAspectRatio?: string
+  }
+  use: {
+    href?: string
+    "xlink:href"?: string
+    x?: string | number
+    y?: string | number
+    width?: string | number
+    height?: string | number
+  }
+  view: {
+    viewBox?: string
+    preserveAspectRatio?: string
+    zoomAndPan?: "magnify" | "disable" | string
+  }
   ellipse: SvgStrokeAttributes & {
     cx?: string | number
     cy?: string | number
@@ -1138,6 +1241,90 @@ interface SvgElementAttributes {
   feComponentTransfer: {
     in?: string
     in2?: string
+    result?: string
+  }
+  feColorMatrix: {
+    in?: string
+    type?: "matrix" | "saturate" | "hueRotate" | "luminanceToAlpha"
+    values?: string
+    result?: string
+  }
+  feComposite: {
+    in?: string
+    in2?: string
+    operator?: "over" | "in" | "out" | "atop" | "xor" | "arithmetic"
+    k1?: string | number
+    k2?: string | number
+    k3?: string | number
+    k4?: string | number
+    result?: string
+  }
+  feConvolveMatrix: {
+    in?: string
+    order?: string
+    kernelMatrix?: string
+    divisor?: string | number
+    bias?: string | number
+    targetX?: string | number
+    targetY?: string | number
+    edgeMode?: "duplicate" | "wrap" | "none"
+    preserveAlpha?: boolean
+    result?: string
+  }
+  feDiffuseLighting: {
+    in?: string
+    surfaceScale?: string | number
+    diffuseConstant?: string | number
+    kernelUnitLength?: string
+    lightingColor?: string
+    azimuth?: string | number
+    elevation?: string | number
+    result?: string
+  }
+  feImage: {
+    x?: string | number
+    y?: string | number
+    width?: string | number
+    height?: string | number
+    preserveAspectRatio?: string
+    href?: string
+    result?: string
+  }
+  feMerge: {
+    result?: string
+  }
+  feMergeNode: {
+    in?: string
+  }
+  feMorphology: {
+    in?: string
+    operator?: "erode" | "dilate"
+    radius?: string | number
+    result?: string
+  }
+  feOffset: {
+    in?: string
+    dx?: string | number
+    dy?: string | number
+    result?: string
+  }
+  feSpecularLighting: {
+    in?: string
+    surfaceScale?: string | number
+    specularConstant?: string | number
+    specularExponent?: string | number
+    kernelUnitLength?: string
+    lightingColor?: string
+    azimuth?: string | number
+    elevation?: string | number
+    result?: string
+  }
+  feTile: {
+    in?: string
+    x?: string | number
+    y?: string | number
+    width?: string | number
+    height?: string | number
     result?: string
   }
   feFuncR: FeFuncAttributes
