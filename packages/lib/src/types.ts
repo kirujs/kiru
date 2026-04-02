@@ -220,6 +220,7 @@ declare global {
       feMergeNode: SVGElementProps<"feMergeNode">
       feMorphology: SVGElementProps<"feMorphology">
       feOffset: SVGElementProps<"feOffset">
+      feSpotLight: SVGElementProps<"feSpotLight">
       feSpecularLighting: SVGElementProps<"feSpecularLighting">
       feTile: SVGElementProps<"feTile">
       feTurbulence: SVGElementProps<"feTurbulence">
