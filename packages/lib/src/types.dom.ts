@@ -1,5 +1,5 @@
-import type { Signal } from "./signals"
-import type { Prettify, Signalable } from "./types.utils"
+import type { Signal } from "./signals/base.js"
+import type { Prettify, Signalable } from "./types.utils.js"
 
 export type {
   HTMLTagToElement,
@@ -16,8 +16,8 @@ type HTMLTagToElement<T extends keyof HtmlElementAttributes> =
   T extends keyof HTMLElementTagNameMap
     ? HTMLElementTagNameMap[T]
     : T extends keyof HTMLElementDeprecatedTagNameMap
-    ? HTMLElementDeprecatedTagNameMap[T]
-    : never
+      ? HTMLElementDeprecatedTagNameMap[T]
+      : never
 
 type SVGTagToElement<T extends keyof SvgElementAttributes> =
   T extends keyof SVGElementTagNameMap ? SVGElementTagNameMap[T] : never
@@ -369,53 +369,81 @@ declare global {
       bivarianceHack(event: E): void
     }["bivarianceHack"]
 
-    interface BaseEvent<T extends DomElement = DomElement>
-      extends DOMEvent<Event, T> {}
+    interface BaseEvent<T extends DomElement = DomElement> extends DOMEvent<
+      Event,
+      T
+    > {}
 
-    interface AnimationEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeAnimationEvent, T> {}
+    interface AnimationEvent<
+      T extends DomElement = DomElement,
+    > extends DOMEvent<NativeAnimationEvent, T> {}
 
-    interface ClipboardEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeClipboardEvent, T> {}
+    interface ClipboardEvent<
+      T extends DomElement = DomElement,
+    > extends DOMEvent<NativeClipboardEvent, T> {}
 
-    interface CompositionEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeCompositionEvent, T> {}
+    interface CompositionEvent<
+      T extends DomElement = DomElement,
+    > extends DOMEvent<NativeCompositionEvent, T> {}
 
-    interface DragEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeDragEvent, T> {}
+    interface DragEvent<T extends DomElement = DomElement> extends DOMEvent<
+      NativeDragEvent,
+      T
+    > {}
 
-    interface FocusEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeFocusEvent, T> {}
+    interface FocusEvent<T extends DomElement = DomElement> extends DOMEvent<
+      NativeFocusEvent,
+      T
+    > {}
 
-    interface FormEvent<T extends DomElement = DomElement>
-      extends DOMEvent<Event, T> {}
+    interface FormEvent<T extends DomElement = DomElement> extends DOMEvent<
+      Event,
+      T
+    > {}
 
-    interface KeyboardEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeKeyboardEvent, T> {}
+    interface KeyboardEvent<T extends DomElement = DomElement> extends DOMEvent<
+      NativeKeyboardEvent,
+      T
+    > {}
 
-    interface MouseEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeMouseEvent, T> {}
+    interface MouseEvent<T extends DomElement = DomElement> extends DOMEvent<
+      NativeMouseEvent,
+      T
+    > {}
 
-    interface PointerEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativePointerEvent, T> {}
+    interface PointerEvent<T extends DomElement = DomElement> extends DOMEvent<
+      NativePointerEvent,
+      T
+    > {}
 
-    interface SubmitEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeSubmitEvent, T> {}
+    interface SubmitEvent<T extends DomElement = DomElement> extends DOMEvent<
+      NativeSubmitEvent,
+      T
+    > {}
 
-    interface TouchEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeTouchEvent, T> {}
+    interface TouchEvent<T extends DomElement = DomElement> extends DOMEvent<
+      NativeTouchEvent,
+      T
+    > {}
 
-    interface ToggleEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeToggleEvent, T> {}
+    interface ToggleEvent<T extends DomElement = DomElement> extends DOMEvent<
+      NativeToggleEvent,
+      T
+    > {}
 
-    interface TransitionEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeTransitionEvent, T> {}
+    interface TransitionEvent<
+      T extends DomElement = DomElement,
+    > extends DOMEvent<NativeTransitionEvent, T> {}
 
-    interface UIEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeUIEvent, T> {}
+    interface UIEvent<T extends DomElement = DomElement> extends DOMEvent<
+      NativeUIEvent,
+      T
+    > {}
 
-    interface WheelEvent<T extends DomElement = DomElement>
-      extends DOMEvent<NativeWheelEvent, T> {}
+    interface WheelEvent<T extends DomElement = DomElement> extends DOMEvent<
+      NativeWheelEvent,
+      T
+    > {}
 
     type BaseEventHandler<T extends DomElement = DomElement> = EventHandler<
       BaseEvent<T>
@@ -466,8 +494,9 @@ declare global {
       ) => void
     }
 
-    interface EventAttributes<T extends DomElement = DomElement>
-      extends CustomEventAttributes {
+    interface EventAttributes<
+      T extends DomElement = DomElement,
+    > extends CustomEventAttributes {
       // Clipboard Events
       oncopy?: ClipboardEventHandler<T> | undefined
       oncut?: ClipboardEventHandler<T> | undefined
@@ -1035,6 +1064,7 @@ interface HtmlElementAttributes {
       ev: PictureInPictureEvent
     ) => void
   }
+  wbr: {}
 }
 
 interface SvgGlobalAttributes {

@@ -1,5 +1,5 @@
-import type { FileRouterContextType } from "./context"
-import type { PageConfig } from "./types"
+import type { FileRouterContextType } from "./context.js"
+import type { PageConfig } from "./types.js"
 
 export interface CurrentPage {
   component: Kiru.FC<any>

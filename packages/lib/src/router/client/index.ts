@@ -9,8 +9,8 @@ import {
   match404Route,
   parseQuery,
 } from "../utils/index.js"
-import type { FormattedViteImportMap, PageModule } from "../types.internal"
-import type { FileRouterConfig, FileRouterPreloadConfig } from "../types"
+import type { FormattedViteImportMap, PageModule } from "../types.internal.js"
+import type { FileRouterConfig, FileRouterPreloadConfig } from "../types.js"
 import { fileRouterInstance, fileRouterRoute, routerCache } from "../globals.js"
 import { FileRouterController } from "../fileRouterController.js"
 import { FileRouterDataLoadError } from "../errors.js"

@@ -12,7 +12,7 @@ import {
 import { Signal } from "./signals/base.js"
 import { $ERROR_BOUNDARY, voidElements, $STREAM_DATA } from "./constants.js"
 import { __DEV__ } from "./env.js"
-import type { ErrorBoundaryNode } from "./types.utils"
+import type { ErrorBoundaryNode } from "./types.utils.js"
 
 export interface HeadlessRenderContext {
   write(chunk: string): void

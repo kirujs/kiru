@@ -1,7 +1,7 @@
 import { createKiruGlobalContext } from "./globalContext.js"
 import { isBrowser } from "./env.js"
 
-export type * from "./types"
+export type * from "./types.js"
 export * from "./signals/index.js"
 export * from "./action.js"
 export * from "./appHandle.js"

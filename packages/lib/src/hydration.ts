@@ -1,4 +1,4 @@
-import type { MaybeDom, SomeDom } from "./types.utils"
+import type { MaybeDom, SomeDom } from "./types.utils.js"
 
 const parents: SomeDom[] = []
 const childIdx: number[] = []

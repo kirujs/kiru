@@ -2,8 +2,8 @@ import type {
   DomVNode,
   ErrorBoundaryNode,
   FunctionVNode,
-  InlineCompNode,
-} from "./types.utils"
+  InlineFnNode,
+} from "./types.utils.js"
 import {
   $ERROR_BOUNDARY,
   $INLINE_FN,
@@ -36,7 +36,7 @@ import { node, postEffectCleanups, renderMode, setups } from "./globals.js"
 import { hydrationStack } from "./hydration.js"
 import { reconcileChildren } from "./reconciler.js"
 import { isHmrUpdate } from "./hmr.js"
-import type { AppHandle } from "./appHandle"
+import type { AppHandle } from "./appHandle.js"
 
 type VNode = Kiru.VNode
 
@@ -306,7 +306,7 @@ function updateExoticComponent(vNode: VNode): VNode | null {
 
   if (type === $INLINE_FN) {
     node.current = vNode
-    let render = (props as InlineCompNode["props"]).expr
+    let render = (props as InlineFnNode["props"]).expr
     if (__DEV__) {
       render = latest(render)
     }

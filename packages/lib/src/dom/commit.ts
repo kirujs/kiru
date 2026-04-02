@@ -12,7 +12,7 @@ import { isHmrUpdate } from "../hmr.js"
 import { unmountDomProps, updateDomProps } from "./props.js"
 import { HostNode, getDomParent, placeDom } from "./nodes.js"
 import type { AppHandle } from "../appHandle.js"
-import type { DomVNode, ElementVNode } from "../types.utils"
+import type { DomVNode, ElementVNode } from "../types.utils.js"
 
 export { commitWork, commitDeletion }
 

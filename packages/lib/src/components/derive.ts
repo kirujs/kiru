@@ -7,7 +7,7 @@ import { $STREAM_DATA } from "../constants.js"
 import { node } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"
 import { isResource, Resource } from "../resource.js"
-import type { RecordHas } from "../types.utils"
+import type { RecordHas } from "../types.utils.js"
 
 export type Derivable =
   | Kiru.Signal<unknown>

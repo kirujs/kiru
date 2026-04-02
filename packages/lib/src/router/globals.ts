@@ -1,5 +1,5 @@
-import type { RouterCache } from "./cache"
-import type { FileRouterController } from "./fileRouterController"
+import type { RouterCache } from "./cache.js"
+import type { FileRouterController } from "./fileRouterController.js"
 
 export const fileRouterInstance = {
   current: null as FileRouterController | null,

@@ -4,7 +4,7 @@ import type {
   FormattedViteImportMap,
   RouteMatch,
   ViteImportMap,
-} from "../types.internal"
+} from "../types.internal.js"
 
 export {
   formatViteImportMap,

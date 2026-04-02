@@ -1,4 +1,4 @@
-import type { ElementProps } from "../types"
+import type { ElementProps } from "../types.js"
 import { createElement } from "../element.js"
 import { useFileRouter } from "./context.js"
 

@@ -733,8 +733,8 @@ function setStyleProp(
   // Avoid Set allocation for the common case where prevStyle is empty
   if (prevKeys.length === 0) {
     for (let i = 0; i < nextKeys.length; i++) {
-      const k = nextKeys[i] as keyof StyleObject
-      const rawNext = nextStyle[k]
+      const k = nextKeys[i]
+      const rawNext = nextStyle[k as keyof StyleObject]
       const nextVal = unwrap(rawNext)
       if (trackSignals && Signal.isSignal(rawNext)) {
         styleKeyToSignal.set(k, rawNext)
@@ -751,7 +751,7 @@ function setStyleProp(
   // Full merge path: iterate prevKeys for removals, nextKeys for additions/changes
   const nextStyleKeys = new Set(nextKeys)
   for (let i = 0; i < prevKeys.length; i++) {
-    const k = prevKeys[i] as keyof StyleObject
+    const k = prevKeys[i]
     if (!nextStyleKeys.has(k)) {
       // Property was removed
       if ((k as string).startsWith("--")) {
@@ -763,9 +763,9 @@ function setStyleProp(
   }
 
   for (let i = 0; i < nextKeys.length; i++) {
-    const k = nextKeys[i] as keyof StyleObject
-    const rawNext = nextStyle[k]
-    const prevVal = unwrap(prevStyle[k])
+    const k = nextKeys[i]
+    const rawNext = nextStyle[k as keyof StyleObject]
+    const prevVal = unwrap(prevStyle[k as keyof StyleObject])
     const nextVal = unwrap(rawNext)
     if (trackSignals && Signal.isSignal(rawNext)) {
       styleKeyToSignal.set(k, rawNext)

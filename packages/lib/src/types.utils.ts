@@ -3,29 +3,51 @@ import type {
   $ERROR_BOUNDARY,
   $FRAGMENT,
   $INLINE_FN,
-} from "./constants"
-import type { Signal } from "./signals"
-import type { ErrorBoundaryProps } from "./components/errorBoundary"
+} from "./constants.js"
+import type { Signal } from "./signals/base.js"
+import type { ErrorBoundaryProps } from "./components/errorBoundary.js"
 
-export type SomeElement = HTMLElement | SVGElement
-export type SomeDom = HTMLElement | SVGElement | Text
-export type MaybeElement = SomeElement | undefined
-export type MaybeDom = SomeDom | undefined
+export type {
+  SomeElement,
+  SomeDom,
+  MaybeElement,
+  MaybeDom,
+  FunctionVNode,
+  ElementVNode,
+  DomVNode,
+  ContextNode,
+  ErrorBoundaryNode,
+  FragmentNode,
+  InlineFnNode,
+  Prettify,
+  Signalable,
+  AsyncTaskState,
+  Guard,
+  ArrayHas,
+  RecordHas,
+  Falsy,
+  Truthy,
+}
 
-export interface FunctionVNode extends Kiru.VNode {
+type SomeElement = HTMLElement | SVGElement
+type SomeDom = HTMLElement | SVGElement | Text
+type MaybeElement = SomeElement | undefined
+type MaybeDom = SomeDom | undefined
+
+interface FunctionVNode extends Kiru.VNode {
   type: (props: Record<string, unknown>) => JSX.Element
 }
 
-export interface ElementVNode extends Kiru.VNode {
+interface ElementVNode extends Kiru.VNode {
   dom: SomeElement
   type: string
 }
-export interface DomVNode extends Kiru.VNode {
+interface DomVNode extends Kiru.VNode {
   dom: SomeDom
   type: "#text" | (string & {})
 }
 
-export interface ContextNode<T> extends Kiru.VNode {
+interface ContextNode<T> extends Kiru.VNode {
   type: typeof $CONTEXT
   props: Kiru.VNode["props"] & {
     value: T
@@ -33,30 +55,30 @@ export interface ContextNode<T> extends Kiru.VNode {
   }
 }
 
-export interface ErrorBoundaryNode extends Kiru.VNode {
+interface ErrorBoundaryNode extends Kiru.VNode {
   type: typeof $ERROR_BOUNDARY
   props: ErrorBoundaryProps
   error?: Error
 }
 
-export interface FragmentNode extends Kiru.VNode {
+interface FragmentNode extends Kiru.VNode {
   type: typeof $FRAGMENT
 }
 
-export interface InlineCompNode extends Kiru.VNode {
+interface InlineFnNode extends Kiru.VNode {
   type: typeof $INLINE_FN
   props: {
     expr: () => JSX.Element
   }
 }
 
-export type Prettify<T> = {
+type Prettify<T> = {
   [K in keyof T]: T[K]
 } & {}
 
-export type Signalable<T> = T | Signal<T>
+type Signalable<T> = T | Signal<T>
 
-export type AsyncTaskState<T, E extends Error = Error> =
+type AsyncTaskState<T, E extends Error = Error> =
   | {
       data: null
       error: null
@@ -73,19 +95,19 @@ export type AsyncTaskState<T, E extends Error = Error> =
       loading: false
     }
 
-export type Guard<T, K extends keyof T> = {
+type Guard<T, K extends keyof T> = {
   [P in K]: T[P]
 }
 
-export type ArrayHas<T extends any[], U> =
+type ArrayHas<T extends any[], U> =
   // does the union of element types intersect U?
   Extract<T[number], U> extends never ? false : true
 
-export type RecordHas<T extends Record<string, any>, U> = [
+type RecordHas<T extends Record<string, any>, U> = [
   Extract<T[keyof T], U>,
 ] extends [never]
   ? false
   : true
 
-export type Falsy = false | 0 | 0n | "" | null | undefined
-export type Truthy<T> = Exclude<T, Falsy>
+type Falsy = false | 0 | 0n | "" | null | undefined
+type Truthy<T> = Exclude<T, Falsy>

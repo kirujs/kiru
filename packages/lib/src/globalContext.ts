@@ -2,8 +2,8 @@ import { __DEV__ } from "./env.js"
 import { createHmrContext } from "./hmr.js"
 import { createProfilingContext } from "./profiling.js"
 import { fileRouterInstance } from "./router/globals.js"
-import type { FileRouterController } from "./router/fileRouterController"
-import type { AppHandle } from "./appHandle"
+import type { FileRouterController } from "./router/fileRouterController.js"
+import type { AppHandle } from "./appHandle.js"
 
 export { createKiruGlobalContext, type GlobalKiruEvent, type KiruGlobalContext }
 

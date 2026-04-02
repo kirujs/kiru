@@ -10,7 +10,12 @@ import {
 } from "../utils/index.js"
 import { KiruError } from "../error.js"
 import { __DEV__, isBrowser } from "../env.js"
-import type { DomVNode, ElementVNode, MaybeDom, SomeDom } from "../types.utils"
+import type {
+  DomVNode,
+  ElementVNode,
+  MaybeDom,
+  SomeDom,
+} from "../types.utils.js"
 import { updateDomProps } from "./props.js"
 
 export { createDom, hydrateDom, getDomParent, placeDom }
@@ -28,8 +33,8 @@ function createDom(vNode: DomVNode): SomeDom {
     t == "#text"
       ? createTextNode(vNode)
       : svgTags.has(t)
-      ? document.createElementNS("http://www.w3.org/2000/svg", t)
-      : document.createElement(t)
+        ? document.createElementNS("http://www.w3.org/2000/svg", t)
+        : document.createElement(t)
 
   return dom
 }

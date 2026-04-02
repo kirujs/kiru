@@ -1,11 +1,11 @@
-import type { Signal as SignalClass } from "./signals"
+import type { Signal as SignalClass } from "./signals/base.js"
 import type {
   $CONTEXT,
   $ERROR_BOUNDARY,
   $FRAGMENT,
   $INLINE_FN,
-} from "./constants"
-import type { KiruGlobalContext } from "./globalContext"
+} from "./constants.js"
+import type { KiruGlobalContext } from "./globalContext.js"
 import type {
   GlobalAttributes,
   HtmlElementAttributes,
@@ -15,14 +15,14 @@ import type {
   HtmlElementBindableProps,
   HTMLTagToElement,
   SVGTagToElement,
-} from "./types.dom"
+} from "./types.dom.js"
 import type {
   AsyncTaskState,
   Prettify,
   Signalable,
   SomeDom,
-} from "./types.utils"
-import type { AppHandle } from "./appHandle"
+} from "./types.utils.js"
+import type { AppHandle } from "./appHandle.js"
 
 export type { AsyncTaskState, ElementProps, Prettify, Signalable, StyleObject }
 

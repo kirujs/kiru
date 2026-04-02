@@ -1,4 +1,4 @@
-import type { AppHandle } from "./appHandle"
+import type { AppHandle } from "./appHandle.js"
 
 const MAX_TICKS = 100
 

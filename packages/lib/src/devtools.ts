@@ -1,4 +1,4 @@
-import type { DebuggerEntry } from "./globalContext"
+import type { DebuggerEntry } from "./globalContext.js"
 
 export namespace DevTools {
   export const track = (signal: Kiru.Signal<unknown>, label?: string) => {

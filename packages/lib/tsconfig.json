@@ -1,10 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    //"useDefineForClassFields": true,
-    "module": "ESNext",
+    "module": "node16",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "moduleResolution": "Node",
+    "moduleResolution": "node16",
     "strict": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
@@ -16,10 +15,11 @@
     "noImplicitReturns": true,
     "skipLibCheck": true,
     "outDir": "dist",
-    "baseUrl": ".",
+    "rootDir": "./src",
     "removeComments": false,
     "sourceMap": true,
     "declarationMap": true,
+    /* JSX settings for transformation in unit tests */
     "jsx": "react",
     "jsxFactory": "kiru.createElement",
     "jsxFragmentFactory": "kiru.Fragment"

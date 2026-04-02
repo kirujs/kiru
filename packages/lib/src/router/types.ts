@@ -1,10 +1,10 @@
-import type { AsyncTaskState } from "../types.utils"
-import type { FileRouterDataLoadError } from "./errors"
+import type { AsyncTaskState } from "../types.utils.js"
+import type { FileRouterDataLoadError } from "./errors.js"
 import type {
   DefaultComponentModule,
   FormattedViteImportMap,
   PageModule,
-} from "./types.internal"
+} from "./types.internal.js"
 
 export interface FileRouterPreloadConfig {
   pages: FormattedViteImportMap
