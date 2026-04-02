@@ -7,8 +7,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\"",
-    "build": "tsx build.ts",
-    "dev": "tsx build.dev.ts"
+    "build": "tsx ./src/build.ts",
+    "dev": "tsx ./src/build.dev.ts"
   },
   "keywords": [],
   "author": "",

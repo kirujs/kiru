@@ -1,6 +1,6 @@
-import { createAliasHandler, MagicString, TransformCTX } from "./shared"
-import { ProgramNode } from "rollup"
-import * as AST from "./ast"
+import { createAliasHandler, MagicString, TransformCTX } from "./shared.js"
+import * as AST from "./ast.js"
+import type { ProgramNode } from "rollup"
 type AstNode = AST.AstNode
 
 export function prepareDevOnlyHooks(ctx: TransformCTX) {

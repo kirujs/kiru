@@ -1,15 +1,15 @@
 /**
- * We're now explicitly importing the CJS version of MagicString
+ * We're explicitly importing the CJS version of MagicString
  * in order to prevent pollution caused by the UMD version
  */
-
-import type { ProgramNode } from "rollup"
+// @ts-expect-error
 import MagicString from "../../node_modules/magic-string/dist/magic-string.cjs"
-import { FileLinkFormatter } from "../types"
+import type { ProgramNode } from "rollup"
+import { FileLinkFormatter } from "../types.js"
+import * as AST from "./ast.js"
 
 export { MagicString }
 
-import * as AST from "./ast"
 type AstNode = AST.AstNode
 
 export type TransformCTX = {

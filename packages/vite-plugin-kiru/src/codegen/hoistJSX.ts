@@ -1,5 +1,5 @@
-import * as AST from "./ast"
-import { TransformCTX, createAliasHandler } from "./shared"
+import * as AST from "./ast.js"
+import { TransformCTX, createAliasHandler } from "./shared.js"
 type AstNode = AST.AstNode
 
 type Hoistable = {
