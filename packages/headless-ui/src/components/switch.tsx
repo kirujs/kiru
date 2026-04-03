@@ -1,6 +1,7 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
 import { callEventHandler, createContext } from "../utils/index.js"
+import { HIDDEN_INPUT_STYLES } from "../constants.js"
 import type { KiruGlobal } from "../types"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
@@ -48,9 +49,9 @@ export type SwitchThumbProps<AsChild extends boolean = false> = {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 interface SwitchRoot {
-  <AsChild extends boolean = false>(
+  <AsChild extends boolean = false>(props: SwitchRootProps<AsChild>): (
     props: SwitchRootProps<AsChild>
-  ): (props: SwitchRootProps<AsChild>) => JSX.Element
+  ) => JSX.Element
   displayName?: string
 }
 
@@ -162,15 +163,7 @@ const SwitchRoot: SwitchRoot = () => {
       disabled: disabled,
       required: required,
       name: name,
-      style: {
-        position: "absolute" as const,
-        "pointer-events": "none" as const,
-        opacity: 0,
-        margin: 0,
-        transform: "translateX(-100%)",
-        width: "25px",
-        height: "25px",
-      },
+      style: HIDDEN_INPUT_STYLES,
     }
 
     if (asChild && isElement(children)) {
@@ -195,9 +188,9 @@ const SwitchRoot: SwitchRoot = () => {
 // ─── Thumb ────────────────────────────────────────────────────────────────────
 
 interface SwitchThumb {
-  <AsChild extends boolean = false>(
+  <AsChild extends boolean = false>(props: SwitchThumbProps<AsChild>): (
     props: SwitchThumbProps<AsChild>
-  ): (props: SwitchThumbProps<AsChild>) => JSX.Element
+  ) => JSX.Element
   displayName?: string
 }
 

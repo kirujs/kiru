@@ -7,6 +7,7 @@ import {
   createTriggerController,
   type TriggerController,
 } from "../utils/index.js"
+import { HIDDEN_INPUT_STYLES } from "../constants.js"
 import type { HtmlOrSvgElement, Orientation, KiruGlobal } from "../types"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
@@ -77,9 +78,9 @@ export type RadioGroupIndicatorProps<AsChild extends boolean = false> = {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 interface RadioGroupRoot {
-  <AsChild extends boolean = false>(
+  <AsChild extends boolean = false>(props: RadioGroupRootProps<AsChild>): (
     props: RadioGroupRootProps<AsChild>
-  ): (props: RadioGroupRootProps<AsChild>) => JSX.Element
+  ) => JSX.Element
   displayName?: string
 }
 
@@ -158,9 +159,9 @@ const RadioGroupRoot: RadioGroupRoot = () => {
 // ─── Item ─────────────────────────────────────────────────────────────────────
 
 interface RadioGroupItem {
-  <AsChild extends boolean = false>(
+  <AsChild extends boolean = false>(props: RadioGroupItemProps<AsChild>): (
     props: RadioGroupItemProps<AsChild>
-  ): (props: RadioGroupItemProps<AsChild>) => JSX.Element
+  ) => JSX.Element
   displayName?: string
 }
 
@@ -254,15 +255,7 @@ const RadioGroupItem: RadioGroupItem = () => {
     checked: isChecked,
     required: groupRequired,
     name: groupName,
-    style: {
-      position: "absolute" as const,
-      "pointer-events": "none" as const,
-      opacity: 0,
-      margin: 0,
-      transform: "translateX(-100%)",
-      width: "25px",
-      height: "25px",
-    },
+    style: HIDDEN_INPUT_STYLES,
   }
 
   return ({ children, asChild, value, disabled, ...props }) => {
@@ -290,9 +283,9 @@ const RadioGroupItem: RadioGroupItem = () => {
 // ─── Indicator ────────────────────────────────────────────────────────────────
 
 interface RadioGroupIndicator {
-  <AsChild extends boolean = false>(
+  <AsChild extends boolean = false>(props: RadioGroupIndicatorProps<AsChild>): (
     props: RadioGroupIndicatorProps<AsChild>
-  ): (props: RadioGroupIndicatorProps<AsChild>) => JSX.Element
+  ) => JSX.Element
   displayName?: string
 }
 

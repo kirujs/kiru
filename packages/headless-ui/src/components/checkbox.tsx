@@ -1,6 +1,7 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
 import { callEventHandler, createContext } from "../utils/index.js"
+import { HIDDEN_INPUT_STYLES } from "../constants.js"
 import { useCheckboxGroupRoot } from "./checkbox-group.js"
 import type { KiruGlobal } from "../types"
 
@@ -257,15 +258,7 @@ const CheckboxRoot: CheckboxRoot = () => {
       disabled: disabled,
       required: requiredProp,
       name: name,
-      style: {
-        position: "absolute" as const,
-        "pointer-events": "none" as const,
-        opacity: 0,
-        margin: 0,
-        transform: "translateX(-100%)",
-        width: "25px",
-        height: "25px",
-      },
+      style: HIDDEN_INPUT_STYLES,
     }
 
     if (asChild && isElement(children)) {
