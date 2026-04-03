@@ -399,3 +399,31 @@ button:focus-visible {
   cursor: not-allowed;
   opacity: 0.5;
 }
+
+/* Progress */
+.progress-root {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.14);
+  overflow: hidden;
+}
+
+.progress-indicator {
+  height: 100%;
+  background: #646cff;
+  transition: width 180ms ease;
+}
+
+/* Separator */
+.separator {
+  width: 100%;
+  height: 1px;
+  background: rgb(255 255 255 / 0.2);
+}
+
+.separator-vertical {
+  width: 1px;
+  height: 1.25rem;
+}

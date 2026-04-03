@@ -6,12 +6,16 @@ import { CheckboxDemo } from "./components/demos/checkbox-demo"
 import { RadioGroupDemo } from "./components/demos/radio-group-demo"
 import { SliderDemo } from "./components/demos/slider-demo"
 import { SwitchDemo } from "./components/demos/switch-demo"
+import { ProgressDemo } from "./components/demos/progress-demo"
+import { SeparatorDemo } from "./components/demos/separator-demo"
 
 const demos = {
   accordion: AccordionDemo,
   checkbox: CheckboxDemo,
   collapsible: CollapsibleDemo,
   radioGroup: RadioGroupDemo,
+  progress: ProgressDemo,
+  separator: SeparatorDemo,
   slider: SliderDemo,
   switch: SwitchDemo,
   tabs: TabsDemo,
@@ -43,6 +47,8 @@ export const App = () => {
         <option value="checkbox">Checkbox</option>
         <option value="collapsible">Collapsible</option>
         <option value="radioGroup">Radio Group</option>
+        <option value="progress">Progress</option>
+        <option value="separator">Separator</option>
         <option value="slider">Slider</option>
         <option value="switch">Switch</option>
         <option value="tabs">Tabs</option>
@@ -64,6 +70,10 @@ const DemoOutlet = () => {
       return <demos.collapsible />
     case "radioGroup":
       return <demos.radioGroup />
+    case "progress":
+      return <demos.progress />
+    case "separator":
+      return <demos.separator />
     case "slider":
       return <demos.slider />
     case "switch":
