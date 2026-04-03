@@ -63,9 +63,9 @@ export type CheckboxIndicatorProps<AsChild extends boolean = false> = {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 interface CheckboxRoot {
-  <AsChild extends boolean = false>(props: CheckboxRootProps<AsChild>): (
+  <AsChild extends boolean = false>(
     props: CheckboxRootProps<AsChild>
-  ) => JSX.Element
+  ): (props: CheckboxRootProps<AsChild>) => JSX.Element
   displayName?: string
 }
 
@@ -127,13 +127,13 @@ const CheckboxRoot: CheckboxRoot = () => {
     const nextChecked =
       currentChecked === "indeterminate" ? true : !currentChecked
 
-    const { checked: propsCheckedSignal } = $.props
+    const { checked: propsCheckedSignal, onCheckedChange } = $.props
     if (Kiru.Signal.isSignal(propsCheckedSignal)) {
       propsCheckedSignal.value = nextChecked
     } else {
       propsChecked.value = nextChecked
     }
-    $.props.onCheckedChange?.(nextChecked)
+    onCheckedChange?.(nextChecked)
   }
 
   const toggleGroup = () => {
@@ -176,8 +176,8 @@ const CheckboxRoot: CheckboxRoot = () => {
       return c === "indeterminate"
         ? "indeterminate"
         : c
-        ? "checked"
-        : "unchecked"
+          ? "checked"
+          : "unchecked"
     }),
     "data-disabled": Kiru.computed(() => (disabled.value ? "" : undefined)),
   }
@@ -283,9 +283,9 @@ const CheckboxRoot: CheckboxRoot = () => {
 // ─── Indicator ────────────────────────────────────────────────────────────────
 
 interface CheckboxIndicator {
-  <AsChild extends boolean = false>(props: CheckboxIndicatorProps<AsChild>): (
+  <AsChild extends boolean = false>(
     props: CheckboxIndicatorProps<AsChild>
-  ) => JSX.Element
+  ): (props: CheckboxIndicatorProps<AsChild>) => JSX.Element
   displayName?: string
 }
 

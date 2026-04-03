@@ -145,7 +145,12 @@ const SliderRoot: SliderRoot = () => {
     allowSwitch = false
   ) => {
     if (disabled.peek()) return index
-    const { value: propsValue, mode, minStepsBetweenThumbs = 0 } = $.props
+    const {
+      value: propsValue,
+      mode,
+      minStepsBetweenThumbs = 0,
+      onValueChange,
+    } = $.props
 
     const currentValues = values.peek()
     if (index < 0 || index >= currentValues.length) {
@@ -251,7 +256,7 @@ const SliderRoot: SliderRoot = () => {
     } else {
       values.value = newValues
     }
-    $.props.onValueChange?.(valueToEmit as any)
+    onValueChange?.(valueToEmit as any)
 
     return targetIndex
   }

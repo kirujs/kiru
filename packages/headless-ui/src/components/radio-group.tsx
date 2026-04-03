@@ -78,9 +78,9 @@ export type RadioGroupIndicatorProps<AsChild extends boolean = false> = {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 interface RadioGroupRoot {
-  <AsChild extends boolean = false>(props: RadioGroupRootProps<AsChild>): (
+  <AsChild extends boolean = false>(
     props: RadioGroupRootProps<AsChild>
-  ) => JSX.Element
+  ): (props: RadioGroupRootProps<AsChild>) => JSX.Element
   displayName?: string
 }
 
@@ -101,13 +101,13 @@ const RadioGroupRoot: RadioGroupRoot = () => {
   const select = (itemValue: string) => {
     if (disabled.peek()) return
 
-    const { value: propsValue } = $.props
+    const { value: propsValue, onValueChange } = $.props
     if (Kiru.Signal.isSignal(propsValue)) {
       propsValue.value = itemValue
     } else {
       value.value = itemValue
     }
-    $.props.onValueChange?.(itemValue)
+    onValueChange?.(itemValue)
   }
 
   const ctx: RadioGroupRootContextType = {
@@ -159,9 +159,9 @@ const RadioGroupRoot: RadioGroupRoot = () => {
 // ─── Item ─────────────────────────────────────────────────────────────────────
 
 interface RadioGroupItem {
-  <AsChild extends boolean = false>(props: RadioGroupItemProps<AsChild>): (
+  <AsChild extends boolean = false>(
     props: RadioGroupItemProps<AsChild>
-  ) => JSX.Element
+  ): (props: RadioGroupItemProps<AsChild>) => JSX.Element
   displayName?: string
 }
 
@@ -283,9 +283,9 @@ const RadioGroupItem: RadioGroupItem = () => {
 // ─── Indicator ────────────────────────────────────────────────────────────────
 
 interface RadioGroupIndicator {
-  <AsChild extends boolean = false>(props: RadioGroupIndicatorProps<AsChild>): (
+  <AsChild extends boolean = false>(
     props: RadioGroupIndicatorProps<AsChild>
-  ) => JSX.Element
+  ): (props: RadioGroupIndicatorProps<AsChild>) => JSX.Element
   displayName?: string
 }
 

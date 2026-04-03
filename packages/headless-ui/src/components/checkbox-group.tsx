@@ -36,9 +36,9 @@ export type CheckboxGroupProps<AsChild extends boolean = false> = {
   (AsChild extends true ? {} : JSX.IntrinsicElements["div"])
 
 interface CheckboxGroup {
-  <AsChild extends boolean = false>(props: CheckboxGroupProps<AsChild>): (
+  <AsChild extends boolean = false>(
     props: CheckboxGroupProps<AsChild>
-  ) => JSX.Element
+  ): (props: CheckboxGroupProps<AsChild>) => JSX.Element
   displayName?: string
 }
 
@@ -56,13 +56,13 @@ const CheckboxGroup: CheckboxGroup = () => {
   const disabled = $.derive((p) => Kiru.unwrap(p.disabled, true) ?? false)
 
   const updateValue = (nextValue: string[]) => {
-    const { value: propsValue } = $.props
+    const { value: propsValue, onValueChange } = $.props
     if (Kiru.Signal.isSignal(propsValue)) {
       propsValue.value = nextValue
     } else {
       value.value = nextValue
     }
-    $.props.onValueChange?.(nextValue)
+    onValueChange?.(nextValue)
   }
 
   const toggleValue = (itemValue: string) => {

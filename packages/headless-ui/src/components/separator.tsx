@@ -43,4 +43,3 @@ const Separator: SeparatorComponent = () => {
 Separator.displayName = "Separator"
 
 export { Separator }
-

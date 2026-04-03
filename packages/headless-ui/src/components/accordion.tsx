@@ -131,7 +131,7 @@ const AccordionRoot: AccordionRoot = () => {
 
   const toggle = (id: string) => {
     const tabs = currentTabs.peek()
-    const { mode, value: propsValue, collapsible } = $.props
+    const { mode, value: propsValue, collapsible, onValueChange } = $.props
     const isShown = tabs.includes(id)
 
     let nextTabs
@@ -151,7 +151,7 @@ const AccordionRoot: AccordionRoot = () => {
     } else {
       currentTabs.value = nextTabs
     }
-    $.props.onValueChange?.(valueToEmit as any)
+    onValueChange?.(valueToEmit as any)
   }
 
   const ctx: AccordionRootContextType = {

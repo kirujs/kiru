@@ -49,9 +49,9 @@ export type SwitchThumbProps<AsChild extends boolean = false> = {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 interface SwitchRoot {
-  <AsChild extends boolean = false>(props: SwitchRootProps<AsChild>): (
+  <AsChild extends boolean = false>(
     props: SwitchRootProps<AsChild>
-  ) => JSX.Element
+  ): (props: SwitchRootProps<AsChild>) => JSX.Element
   displayName?: string
 }
 
@@ -81,13 +81,13 @@ const SwitchRoot: SwitchRoot = () => {
     const currentChecked = checked.peek()
     const nextChecked = !currentChecked
 
-    const { checked: propsChecked } = $.props
+    const { checked: propsChecked, onCheckedChange } = $.props
     if (Kiru.Signal.isSignal(propsChecked)) {
       propsChecked.value = nextChecked
     } else {
       checked.value = nextChecked
     }
-    $.props.onCheckedChange?.(nextChecked)
+    onCheckedChange?.(nextChecked)
   }
 
   const sharedAttrs: SwitchRootContextType["sharedAttrs"] = {
@@ -188,9 +188,9 @@ const SwitchRoot: SwitchRoot = () => {
 // ─── Thumb ────────────────────────────────────────────────────────────────────
 
 interface SwitchThumb {
-  <AsChild extends boolean = false>(props: SwitchThumbProps<AsChild>): (
+  <AsChild extends boolean = false>(
     props: SwitchThumbProps<AsChild>
-  ) => JSX.Element
+  ): (props: SwitchThumbProps<AsChild>) => JSX.Element
   displayName?: string
 }
 
