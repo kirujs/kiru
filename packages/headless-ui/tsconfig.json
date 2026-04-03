@@ -4,6 +4,7 @@
     "useDefineForClassFields": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "types": ["node"],
 
     // Other Outputs
     "sourceMap": true,
@@ -18,7 +19,7 @@
     //"noEmit": true,
 
     "outDir": "dist",
-    "baseUrl": ".",
+    "rootDir": "./src",
 
     /* Linting */
     "strict": true,

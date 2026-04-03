@@ -1,6 +1,10 @@
 import * as Kiru from "kiru"
 import { isElement, styleObjectToString } from "kiru/utils"
-import { createContext, createRefProxy } from "../utils/index.js"
+import {
+  callEventHandler,
+  createContext,
+  createRefProxy,
+} from "../utils/index.js"
 import type { Direction, KiruGlobal, Orientation } from "../types"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
@@ -383,13 +387,13 @@ const SliderTrack: SliderTrack = () => {
 
   const refProxy = createRefProxy<HTMLSpanElement>()
 
-  const handleClick = (event: KiruGlobal.PointerEvent<HTMLSpanElement>) => {
+  const handleClick = (e: KiruGlobal.PointerEvent<HTMLSpanElement>) => {
     try {
-      $.props.onclick?.(event)
+      callEventHandler($.props, "onclick", e)
     } finally {
-      if (event.defaultPrevented) return
-      event.preventDefault()
     }
+    if (e.defaultPrevented) return
+    e.preventDefault()
 
     if (ctx.disabled.peek()) return
     const elementRef = refProxy.current
@@ -402,13 +406,13 @@ const SliderTrack: SliderTrack = () => {
     let percent: number
     if (orientation === "horizontal") {
       if (dir === "rtl") {
-        percent = ((rect.right - event.clientX) / rect.width) * 100
+        percent = ((rect.right - e.clientX) / rect.width) * 100
       } else {
-        percent = ((event.clientX - rect.left) / rect.width) * 100
+        percent = ((e.clientX - rect.left) / rect.width) * 100
       }
     } else {
       // Vertical: bottom is min, top is max
-      percent = ((rect.bottom - event.clientY) / rect.height) * 100
+      percent = ((rect.bottom - e.clientY) / rect.height) * 100
     }
 
     const value = ctx.getValueFromPercent(percent)
@@ -475,9 +479,7 @@ const SliderRange: SliderRange = () => {
     if (typeof pStyle === "string") {
       prefix = pStyle
     } else if (typeof pStyle === "object" && !!pStyle) {
-      const asStr = styleObjectToString(pStyle as Kiru.StyleObject, {
-        reactiveRead: true,
-      })
+      const asStr = styleObjectToString(pStyle, { reactiveRead: true })
       prefix = asStr ? `${asStr};` : ""
     }
     const isSingle = values.length === 1
@@ -605,16 +607,18 @@ const SliderThumb: SliderThumb = () => {
     document.removeEventListener("pointerup", handlePointerUp)
   }
 
-  const handlePointerDown = (
-    event: KiruGlobal.PointerEvent<HTMLSpanElement>
-  ) => {
-    if (ctx.disabled.peek()) return
+  const handlePointerDown = (e: KiruGlobal.PointerEvent<HTMLSpanElement>) => {
+    try {
+      callEventHandler($.props, "onpointerpown", e)
+    } finally {
+    }
+    if (e.defaultPrevented || ctx.disabled.peek()) return
 
     isDragging.value = true
     activeIndex.value = index.peek()
 
     // Update value immediately on pointer down
-    const value = getValueFromPointer(event as PointerEvent)
+    const value = getValueFromPointer(e as PointerEvent)
     const newIndex = ctx.updateValue(activeIndex.peek(), value, true)
     if (newIndex !== activeIndex.peek()) {
       activeIndex.value = newIndex
@@ -625,8 +629,12 @@ const SliderThumb: SliderThumb = () => {
     document.addEventListener("pointerup", handlePointerUp)
   }
 
-  const handleKeyDown = (event: KiruGlobal.KeyboardEvent<HTMLSpanElement>) => {
-    if (ctx.disabled.peek()) return
+  const handleKeyDown = (e: KiruGlobal.KeyboardEvent<HTMLSpanElement>) => {
+    try {
+      callEventHandler($.props, "onkeydown", e)
+    } finally {
+    }
+    if (e.defaultPrevented || ctx.disabled.peek()) return
 
     const currentIdx = index.peek()
     const currentVal = currentValue.peek()
@@ -638,46 +646,46 @@ const SliderThumb: SliderThumb = () => {
 
     let newValue: number | null = null
 
-    switch (event.key) {
+    switch (e.key) {
       case "ArrowRight":
         if (orientation === "horizontal") {
           newValue = dir === "rtl" ? currentVal - stepVal : currentVal + stepVal
-          event.preventDefault()
+          e.preventDefault()
         } else {
           newValue = currentVal + stepVal
         }
         break
       case "ArrowUp":
         newValue = currentVal + stepVal
-        event.preventDefault()
+        e.preventDefault()
         break
       case "ArrowLeft":
         if (orientation === "horizontal") {
           newValue = dir === "rtl" ? currentVal + stepVal : currentVal - stepVal
-          event.preventDefault()
+          e.preventDefault()
         } else {
           newValue = currentVal - stepVal
         }
         break
       case "ArrowDown":
         newValue = currentVal - stepVal
-        event.preventDefault()
+        e.preventDefault()
         break
       case "Home":
         newValue = minVal
-        event.preventDefault()
+        e.preventDefault()
         break
       case "End":
         newValue = maxVal
-        event.preventDefault()
+        e.preventDefault()
         break
       case "PageUp":
         newValue = currentVal + stepVal * 10
-        event.preventDefault()
+        e.preventDefault()
         break
       case "PageDown":
         newValue = currentVal - stepVal * 10
-        event.preventDefault()
+        e.preventDefault()
         break
     }
 

@@ -1,6 +1,7 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
 import {
+  callEventHandler,
   createContext,
   createRefProxy,
   createTriggerController,
@@ -208,31 +209,29 @@ const RadioGroupItem: RadioGroupItem = () => {
   })
 
   const handleClick = (e: KiruGlobal.MouseEvent<HTMLButtonElement>) => {
-    const props = $.props as any
     try {
-      props.onclick?.(e)
+      callEventHandler($.props, "onclick", e)
     } finally {
-      if (!e.defaultPrevented && !disabled.peek()) {
-        select()
-      }
+    }
+    if (!e.defaultPrevented && !disabled.peek()) {
+      select()
     }
   }
 
   const handleKeydown = (e: KiruGlobal.KeyboardEvent<HTMLButtonElement>) => {
-    const props = $.props as any
     try {
-      props.onkeydown?.(e)
+      callEventHandler($.props, "onkeydown", e)
     } finally {
-      if (!e.defaultPrevented) {
-        if (e.key === " ") {
-          e.preventDefault()
-          if (!disabled.peek()) {
-            select()
-          }
-        } else {
-          triggers.onKeyDown(e, value)
-        }
+    }
+    if (e.defaultPrevented) return
+
+    if (e.key === " ") {
+      e.preventDefault()
+      if (!disabled.peek()) {
+        select()
       }
+    } else {
+      triggers.onKeyDown(e, value)
     }
   }
 

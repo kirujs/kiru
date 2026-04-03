@@ -1,6 +1,7 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
 import {
+  callEventHandler,
   createContext,
   createRefProxy,
   createTriggerController,
@@ -175,19 +176,17 @@ const TabsTrigger: TabsTrigger = () => {
 
   const handleClick = (e: KiruGlobal.MouseEvent<HTMLButtonElement>) => {
     try {
-      $.props.onclick?.(e)
-    } finally {
-      if (!e.defaultPrevented && !disabled.peek()) select(value.peek())
-    }
+      callEventHandler($.props, "onclick", e)
+    } catch {}
+    if (!e.defaultPrevented && !disabled.peek()) select(value.peek())
   }
 
   const handleKeydown = (e: KiruGlobal.KeyboardEvent<HTMLButtonElement>) => {
     try {
-      $.props.onkeydown?.(e)
-    } finally {
-      if (!e.defaultPrevented) {
-        triggers.onKeyDown(e, value)
-      }
+      callEventHandler($.props, "onkeydown", e)
+    } catch {}
+    if (!e.defaultPrevented) {
+      triggers.onKeyDown(e, value)
     }
   }
 

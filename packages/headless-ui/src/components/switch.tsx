@@ -1,6 +1,6 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
-import { createContext } from "../utils/index.js"
+import { callEventHandler, createContext } from "../utils/index.js"
 import type { KiruGlobal } from "../types"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ interface SwitchRoot {
 }
 
 const SwitchRoot: SwitchRoot = () => {
-  const $ = Kiru.setup<typeof SwitchRoot>()
+  const $ = Kiru.setup<typeof SwitchRoot<false>>()
 
   const checked = $.derive(({ checked, defaultChecked }) => {
     if (Kiru.Signal.isSignal(checked)) {
@@ -105,26 +105,27 @@ const SwitchRoot: SwitchRoot = () => {
   }
 
   const handleClick = (e: KiruGlobal.MouseEvent<HTMLButtonElement>) => {
-    const props = $.props as any
     try {
-      props.onclick?.(e)
+      callEventHandler($.props, "onclick", e)
     } finally {
-      if (!e.defaultPrevented && !disabled.peek()) {
-        toggle()
-      }
+    }
+    if (!e.defaultPrevented && !disabled.peek()) {
+      toggle()
     }
   }
 
   const handleKeydown = (e: KiruGlobal.KeyboardEvent<HTMLButtonElement>) => {
-    const props = $.props as any
     try {
-      props.onkeydown?.(e)
+      callEventHandler($.props, "onkeydown", e)
     } finally {
-      if (!e.defaultPrevented && (e.key === " " || e.key === "Enter")) {
-        e.preventDefault()
-        if (!disabled.peek()) {
-          toggle()
-        }
+    }
+    if (e.defaultPrevented) {
+      return
+    }
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault()
+      if (!disabled.peek()) {
+        toggle()
       }
     }
   }

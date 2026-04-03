@@ -1,7 +1,7 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
 import { useContentPanel } from "../hooks/use-content-panel.js"
-import { createContext } from "../utils/index.js"
+import { callEventHandler, createContext } from "../utils/index.js"
 import type { KiruGlobal } from "../types"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
@@ -123,24 +123,25 @@ const CollapsibleTrigger: CollapsibleTrigger = () => {
 
   const handleClick = (e: KiruGlobal.MouseEvent<HTMLButtonElement>) => {
     try {
-      $.props.onclick?.(e)
+      callEventHandler($.props, "onclick", e)
     } finally {
-      if (!e.defaultPrevented && !disabled.peek()) {
-        toggle()
-      }
+    }
+    if (!e.defaultPrevented && !disabled.peek()) {
+      toggle()
     }
   }
 
   const handleKeydown = (e: KiruGlobal.KeyboardEvent<HTMLButtonElement>) => {
     try {
-      $.props.onkeydown?.(e)
+      callEventHandler($.props, "onkeydown", e)
     } finally {
-      if (!e.defaultPrevented && !disabled.peek()) {
-        if (e.key === " " || e.key === "Enter") {
-          e.preventDefault()
-          toggle()
-        }
-      }
+    }
+    if (e.defaultPrevented || disabled.peek()) {
+      return
+    }
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault()
+      toggle()
     }
   }
 

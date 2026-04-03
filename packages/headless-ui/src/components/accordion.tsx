@@ -2,6 +2,7 @@ import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
 import { useContentPanel } from "../hooks/use-content-panel.js"
 import {
+  callEventHandler,
   createContext,
   createRefProxy,
   createTriggerController,
@@ -292,21 +293,21 @@ const AccordionTrigger: AccordionTrigger = () => {
 
   const handleClick = (e: KiruGlobal.MouseEvent<HTMLButtonElement>) => {
     try {
-      $.props.onclick?.(e)
+      callEventHandler($.props, "onclick", e)
     } finally {
-      if (!e.defaultPrevented && !disabled.peek()) {
-        toggle()
-      }
+    }
+    if (!e.defaultPrevented && !disabled.peek()) {
+      toggle()
     }
   }
 
   const handleKeydown = (e: KiruGlobal.KeyboardEvent<HTMLButtonElement>) => {
     try {
-      $.props.onkeydown?.(e)
+      callEventHandler($.props, "onkeydown", e)
     } finally {
-      if (!e.defaultPrevented) {
-        triggers.onKeyDown(e, value)
-      }
+    }
+    if (!e.defaultPrevented) {
+      triggers.onKeyDown(e, value)
     }
   }
 

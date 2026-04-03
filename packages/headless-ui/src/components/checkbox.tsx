@@ -1,6 +1,6 @@
 import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
-import { createContext } from "../utils/index.js"
+import { callEventHandler, createContext } from "../utils/index.js"
 import { useCheckboxGroupRoot } from "./checkbox-group.js"
 import type { KiruGlobal } from "../types"
 
@@ -180,27 +180,26 @@ const CheckboxRoot: CheckboxRoot = () => {
   }
 
   const handleClick = (e: KiruGlobal.MouseEvent<HTMLButtonElement>) => {
-    const props = $.props as any
     try {
-      props.onclick?.(e)
+      callEventHandler($.props, "onclick", e)
     } finally {
-      if (!e.defaultPrevented && !disabled.peek()) {
-        toggle()
-      }
+    }
+    if (!e.defaultPrevented && !disabled.peek()) {
+      toggle()
     }
   }
 
   const handleKeydown = (e: KiruGlobal.KeyboardEvent<HTMLButtonElement>) => {
-    const props = $.props as any
     try {
-      props.onkeydown?.(e)
+      callEventHandler($.props, "onkeydown", e)
     } finally {
-      if (!e.defaultPrevented && e.key === " ") {
-        e.preventDefault()
-        if (!disabled.peek()) {
-          toggle()
-        }
-      }
+    }
+    if (e.defaultPrevented || e.key !== " ") {
+      return
+    }
+    e.preventDefault()
+    if (!disabled.peek()) {
+      toggle()
     }
   }
 
