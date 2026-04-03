@@ -10,22 +10,22 @@ describe("Checkbox.Root - Parent Checkbox Toggle Behavior", () => {
     const value = Kiru.signal<string[]>([])
 
     const html1 = renderToString(
-      <CheckboxGroup.Root value={value} allValues={["a", "b", "c"]}>
+      <CheckboxGroup value={value} allValues={["a", "b", "c"]}>
         <Checkbox.Root parent>
           <Checkbox.Indicator>✓</Checkbox.Indicator>
         </Checkbox.Root>
-      </CheckboxGroup.Root>
+      </CheckboxGroup>
     )
     assert.ok(html1.includes('aria-checked="false"'))
 
     value.value = ["a", "b", "c"]
 
     const html2 = renderToString(
-      <CheckboxGroup.Root value={value} allValues={["a", "b", "c"]}>
+      <CheckboxGroup value={value} allValues={["a", "b", "c"]}>
         <Checkbox.Root parent>
           <Checkbox.Indicator>✓</Checkbox.Indicator>
         </Checkbox.Root>
-      </CheckboxGroup.Root>
+      </CheckboxGroup>
     )
     assert.ok(html2.includes('aria-checked="true"'))
   })
@@ -34,22 +34,22 @@ describe("Checkbox.Root - Parent Checkbox Toggle Behavior", () => {
     const value = Kiru.signal<string[]>(["a", "b", "c"])
 
     const html1 = renderToString(
-      <CheckboxGroup.Root value={value} allValues={["a", "b", "c"]}>
+      <CheckboxGroup value={value} allValues={["a", "b", "c"]}>
         <Checkbox.Root parent>
           <Checkbox.Indicator>✓</Checkbox.Indicator>
         </Checkbox.Root>
-      </CheckboxGroup.Root>
+      </CheckboxGroup>
     )
     assert.ok(html1.includes('aria-checked="true"'))
 
     value.value = []
 
     const html2 = renderToString(
-      <CheckboxGroup.Root value={value} allValues={["a", "b", "c"]}>
+      <CheckboxGroup value={value} allValues={["a", "b", "c"]}>
         <Checkbox.Root parent>
           <Checkbox.Indicator>✓</Checkbox.Indicator>
         </Checkbox.Root>
-      </CheckboxGroup.Root>
+      </CheckboxGroup>
     )
     assert.ok(html2.includes('aria-checked="false"'))
   })
@@ -58,22 +58,22 @@ describe("Checkbox.Root - Parent Checkbox Toggle Behavior", () => {
     const value = Kiru.signal<string[]>(["a"])
 
     const html1 = renderToString(
-      <CheckboxGroup.Root value={value} allValues={["a", "b", "c"]}>
+      <CheckboxGroup value={value} allValues={["a", "b", "c"]}>
         <Checkbox.Root parent>
           <Checkbox.Indicator>✓</Checkbox.Indicator>
         </Checkbox.Root>
-      </CheckboxGroup.Root>
+      </CheckboxGroup>
     )
     assert.ok(html1.includes('aria-checked="mixed"'))
 
     value.value = ["a", "b", "c"]
 
     const html2 = renderToString(
-      <CheckboxGroup.Root value={value} allValues={["a", "b", "c"]}>
+      <CheckboxGroup value={value} allValues={["a", "b", "c"]}>
         <Checkbox.Root parent>
           <Checkbox.Indicator>✓</Checkbox.Indicator>
         </Checkbox.Root>
-      </CheckboxGroup.Root>
+      </CheckboxGroup>
     )
     assert.ok(html2.includes('aria-checked="true"'))
   })
@@ -82,11 +82,11 @@ describe("Checkbox.Root - Parent Checkbox Toggle Behavior", () => {
     const value = Kiru.signal<string[]>([])
 
     const html = renderToString(
-      <CheckboxGroup.Root value={value} allValues={[]}>
+      <CheckboxGroup value={value} allValues={[]}>
         <Checkbox.Root parent>
           <Checkbox.Indicator>✓</Checkbox.Indicator>
         </Checkbox.Root>
-      </CheckboxGroup.Root>
+      </CheckboxGroup>
     )
 
     assert.ok(html.includes('aria-checked="false"'))
@@ -97,22 +97,22 @@ describe("Checkbox.Root - Parent Checkbox Toggle Behavior", () => {
     const value = Kiru.signal<string[]>(["x", "y"])
 
     const html1 = renderToString(
-      <CheckboxGroup.Root value={value} allValues={["a", "b", "c"]}>
+      <CheckboxGroup value={value} allValues={["a", "b", "c"]}>
         <Checkbox.Root parent>
           <Checkbox.Indicator>✓</Checkbox.Indicator>
         </Checkbox.Root>
-      </CheckboxGroup.Root>
+      </CheckboxGroup>
     )
     assert.ok(html1.includes('aria-checked="false"'))
 
     value.value = ["x", "y", "a", "b", "c"]
 
     const html2 = renderToString(
-      <CheckboxGroup.Root value={value} allValues={["a", "b", "c"]}>
+      <CheckboxGroup value={value} allValues={["a", "b", "c"]}>
         <Checkbox.Root parent>
           <Checkbox.Indicator>✓</Checkbox.Indicator>
         </Checkbox.Root>
-      </CheckboxGroup.Root>
+      </CheckboxGroup>
     )
     assert.ok(html2.includes('aria-checked="true"'))
   })

@@ -2,7 +2,7 @@ import * as Kiru from "kiru"
 import { isElement } from "kiru/utils"
 import { createContext } from "../utils/index.js"
 
-interface CheckboxGroupRootContextType {
+interface CheckboxGroupContextType {
   id: Kiru.Signal<string>
   value: Kiru.Signal<string[]>
   disabled: Kiru.Signal<boolean>
@@ -14,9 +14,9 @@ interface CheckboxGroupRootContextType {
 }
 
 const [CheckboxGroupRootContext, useCheckboxGroupRoot] =
-  createContext<CheckboxGroupRootContextType>("CheckboxGroupRootContext")
+  createContext<CheckboxGroupContextType>("CheckboxGroupContext")
 
-export type CheckboxGroupRootProps<AsChild extends boolean = false> = {
+export type CheckboxGroupProps<AsChild extends boolean = false> = {
   onValueChange?: (value: string[]) => void
   disabled?: Kiru.Signalable<boolean>
   name?: string
@@ -35,15 +35,15 @@ export type CheckboxGroupRootProps<AsChild extends boolean = false> = {
 ) &
   (AsChild extends true ? {} : JSX.IntrinsicElements["div"])
 
-interface CheckboxGroupRoot {
-  <AsChild extends boolean = false>(
-    props: CheckboxGroupRootProps<AsChild>
-  ): (props: CheckboxGroupRootProps<AsChild>) => JSX.Element
+interface CheckboxGroup {
+  <AsChild extends boolean = false>(props: CheckboxGroupProps<AsChild>): (
+    props: CheckboxGroupProps<AsChild>
+  ) => JSX.Element
   displayName?: string
 }
 
-const CheckboxGroupRoot: CheckboxGroupRoot = () => {
-  const $ = Kiru.setup<typeof CheckboxGroupRoot>()
+const CheckboxGroup: CheckboxGroup = () => {
+  const $ = Kiru.setup<typeof CheckboxGroup>()
 
   const value = $.derive(({ value: propsValue, defaultValue }) => {
     if (Kiru.Signal.isSignal(propsValue)) {
@@ -109,7 +109,7 @@ const CheckboxGroupRoot: CheckboxGroupRoot = () => {
     return "indeterminate"
   })
 
-  const ctx: CheckboxGroupRootContextType = {
+  const ctx: CheckboxGroupContextType = {
     id: $.id,
     value,
     disabled,
@@ -179,10 +179,6 @@ const CheckboxGroupRoot: CheckboxGroupRoot = () => {
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
-CheckboxGroupRoot.displayName = "CheckboxGroupRoot"
+CheckboxGroup.displayName = "CheckboxGroupRoot"
 
-export const CheckboxGroup = {
-  Root: CheckboxGroupRoot,
-}
-
-export { useCheckboxGroupRoot }
+export { CheckboxGroup, useCheckboxGroupRoot }

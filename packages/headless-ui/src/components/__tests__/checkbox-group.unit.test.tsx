@@ -5,13 +5,13 @@ import { renderToString } from "kiru"
 import { CheckboxGroup } from "../checkbox-group.js"
 import { Checkbox } from "../checkbox.js"
 
-describe("CheckboxGroup.Root - Default Rendering", () => {
+describe("CheckboxGroup - Default Rendering", () => {
   it("renders as div with role='group' by default", () => {
     const App = () => {
       return (
-        <CheckboxGroup.Root>
+        <CheckboxGroup>
           <div />
-        </CheckboxGroup.Root>
+        </CheckboxGroup>
       )
     }
 
@@ -22,13 +22,13 @@ describe("CheckboxGroup.Root - Default Rendering", () => {
   })
 })
 
-describe("CheckboxGroup.Root - asChild Composition Pattern", () => {
+describe("CheckboxGroup - asChild Composition Pattern", () => {
   it("merges props with child element when using asChild", () => {
     const App = () => {
       return (
-        <CheckboxGroup.Root asChild name="choices" defaultValue={["a"]}>
+        <CheckboxGroup asChild name="choices" defaultValue={["a"]}>
           <section className="my-checkbox-group" />
-        </CheckboxGroup.Root>
+        </CheckboxGroup>
       )
     }
 
@@ -40,20 +40,20 @@ describe("CheckboxGroup.Root - asChild Composition Pattern", () => {
   })
 })
 
-describe("CheckboxGroup.Root - Checkbox Integration", () => {
+describe("CheckboxGroup - Checkbox Integration", () => {
   it("reflects group value in child checkbox aria/data attributes", () => {
     const value = Kiru.signal<string[]>(["a"])
 
     const App = () => {
       return (
-        <CheckboxGroup.Root value={value}>
+        <CheckboxGroup value={value}>
           <Checkbox.Root value="a">
             <Checkbox.Indicator>✓</Checkbox.Indicator>
           </Checkbox.Root>
           <Checkbox.Root value="b">
             <Checkbox.Indicator>✓</Checkbox.Indicator>
           </Checkbox.Root>
-        </CheckboxGroup.Root>
+        </CheckboxGroup>
       )
     }
 
@@ -66,17 +66,17 @@ describe("CheckboxGroup.Root - Checkbox Integration", () => {
   })
 })
 
-describe("CheckboxGroup.Root - Parent Checkbox State", () => {
+describe("CheckboxGroup - Parent Checkbox State", () => {
   it("renders unchecked when none of allValues are selected", () => {
     const value = Kiru.signal<string[]>([])
 
     const App = () => {
       return (
-        <CheckboxGroup.Root value={value} allValues={["a", "b", "c"]}>
+        <CheckboxGroup value={value} allValues={["a", "b", "c"]}>
           <Checkbox.Root parent>
             <Checkbox.Indicator>✓</Checkbox.Indicator>
           </Checkbox.Root>
-        </CheckboxGroup.Root>
+        </CheckboxGroup>
       )
     }
 
@@ -90,11 +90,11 @@ describe("CheckboxGroup.Root - Parent Checkbox State", () => {
 
     const App = () => {
       return (
-        <CheckboxGroup.Root value={value} allValues={["a", "b", "c"]}>
+        <CheckboxGroup value={value} allValues={["a", "b", "c"]}>
           <Checkbox.Root parent>
             <Checkbox.Indicator>✓</Checkbox.Indicator>
           </Checkbox.Root>
-        </CheckboxGroup.Root>
+        </CheckboxGroup>
       )
     }
 
@@ -108,11 +108,11 @@ describe("CheckboxGroup.Root - Parent Checkbox State", () => {
 
     const App = () => {
       return (
-        <CheckboxGroup.Root value={value} allValues={["a", "b", "c"]}>
+        <CheckboxGroup value={value} allValues={["a", "b", "c"]}>
           <Checkbox.Root parent>
             <Checkbox.Indicator>✓</Checkbox.Indicator>
           </Checkbox.Root>
-        </CheckboxGroup.Root>
+        </CheckboxGroup>
       )
     }
 

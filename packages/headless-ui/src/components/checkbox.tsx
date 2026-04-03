@@ -27,21 +27,31 @@ export type CheckboxRootProps<AsChild extends boolean = false> = {
   required?: Kiru.Signalable<boolean>
   name?: string
   value?: string
-  // When rendered as a "parent" inside a CheckboxGroup, it reflects/controls
-  // selection of the group's (or its own) `allValues`.
-  parent?: boolean
+
   children?: JSX.Children
   asChild?: AsChild
 } & (
   | {
-      checked: Kiru.Signal<boolean | "indeterminate">
-      defaultChecked?: never
+      value?: string
+      parent?: never
     }
   | {
-      checked?: never
-      defaultChecked?: boolean | "indeterminate"
+      // When rendered as a "parent" inside a CheckboxGroup, it reflects/controls
+      // selection of the group's (or its own) `allValues`.
+      value?: never
+      parent?: boolean
     }
 ) &
+  (
+    | {
+        checked: Kiru.Signal<boolean | "indeterminate">
+        defaultChecked?: never
+      }
+    | {
+        checked?: never
+        defaultChecked?: boolean | "indeterminate"
+      }
+  ) &
   (AsChild extends true ? {} : JSX.IntrinsicElements["button"])
 
 export type CheckboxIndicatorProps<AsChild extends boolean = false> = {
@@ -52,9 +62,9 @@ export type CheckboxIndicatorProps<AsChild extends boolean = false> = {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 interface CheckboxRoot {
-  <AsChild extends boolean = false>(
+  <AsChild extends boolean = false>(props: CheckboxRootProps<AsChild>): (
     props: CheckboxRootProps<AsChild>
-  ): (props: CheckboxRootProps<AsChild>) => JSX.Element
+  ) => JSX.Element
   displayName?: string
 }
 
@@ -165,8 +175,8 @@ const CheckboxRoot: CheckboxRoot = () => {
       return c === "indeterminate"
         ? "indeterminate"
         : c
-          ? "checked"
-          : "unchecked"
+        ? "checked"
+        : "unchecked"
     }),
     "data-disabled": Kiru.computed(() => (disabled.value ? "" : undefined)),
   }
@@ -280,9 +290,9 @@ const CheckboxRoot: CheckboxRoot = () => {
 // ─── Indicator ────────────────────────────────────────────────────────────────
 
 interface CheckboxIndicator {
-  <AsChild extends boolean = false>(
+  <AsChild extends boolean = false>(props: CheckboxIndicatorProps<AsChild>): (
     props: CheckboxIndicatorProps<AsChild>
-  ): (props: CheckboxIndicatorProps<AsChild>) => JSX.Element
+  ) => JSX.Element
   displayName?: string
 }
 

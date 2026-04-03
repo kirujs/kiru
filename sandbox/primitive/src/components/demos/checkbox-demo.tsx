@@ -9,8 +9,12 @@ export const CheckboxDemo = () => {
   const indeterminateIndicator = computed(() =>
     indeterminate.value === "indeterminate" ? "-" : "✓"
   )
+  const fruits = [
+    { value: "fuji-apple", display: "Fuji" },
+    { value: "gala-apple", display: "Gala" },
+    { value: "granny-smith-apple", display: "Granny Smith" },
+  ]
 
-  const fruits = ["fuji-apple", "gala-apple", "granny-smith-apple"]
   const groupValue = signal<string[]>(["fuji-apple"])
   const groupValueText = computed(() => JSON.stringify(groupValue.value))
   const groupValueIndicator = computed(() =>
@@ -20,89 +24,87 @@ export const CheckboxDemo = () => {
   return () => (
     <div style="display:flex; flex-direction:column; gap:1rem">
       <div>
-        <Checkbox.Root checked={checked} className="checkbox">
+        <Checkbox.Root checked={checked} className="checkbox" id="controlled">
           <Checkbox.Indicator className="checkbox-indicator">
             ✓
           </Checkbox.Indicator>
         </Checkbox.Root>
-        <label style="margin-left:0.5rem">
+        <label style="margin-left:0.5rem" htmlFor="controlled">
           Controlled checkbox (checked: {checkedText})
         </label>
       </div>
 
       <div>
-        <Checkbox.Root defaultChecked className="checkbox">
+        <Checkbox.Root defaultChecked className="checkbox" id="uncontrolled">
           <Checkbox.Indicator className="checkbox-indicator">
             ✓
           </Checkbox.Indicator>
         </Checkbox.Root>
-        <label style="margin-left:0.5rem">
+        <label style="margin-left:0.5rem" htmlFor="uncontrolled">
           Uncontrolled checkbox (default checked)
         </label>
       </div>
 
       <div>
-        <Checkbox.Root checked={indeterminate} className="checkbox">
+        <Checkbox.Root
+          checked={indeterminate}
+          className="checkbox"
+          id="indeterminate"
+        >
           <Checkbox.Indicator className="checkbox-indicator">
             {indeterminateIndicator}
           </Checkbox.Indicator>
         </Checkbox.Root>
-        <label style="margin-left:0.5rem">
+        <label style="margin-left:0.5rem" htmlFor="indeterminate">
           Indeterminate checkbox (state: {indeterminateText})
         </label>
       </div>
 
       <div>
-        <Checkbox.Root disabled className="checkbox">
+        <Checkbox.Root disabled className="checkbox" id="disabled">
           <Checkbox.Indicator className="checkbox-indicator">
             ✓
           </Checkbox.Indicator>
         </Checkbox.Root>
-        <label style="margin-left:0.5rem">Disabled checkbox</label>
+        <label style="margin-left:0.5rem" htmlFor="disabled">
+          Disabled checkbox
+        </label>
       </div>
 
       <div style="display:flex; flex-direction:column; gap:0.5rem">
         <div style="opacity:0.85">CheckboxGroup</div>
 
-        <CheckboxGroup.Root value={groupValue} allValues={fruits} name="fruit">
+        <CheckboxGroup
+          value={groupValue}
+          allValues={fruits.map((f) => f.value)}
+          name="fruit"
+        >
           <div style="display:flex; align-items:center; gap:0.5rem">
-            <Checkbox.Root parent className="checkbox">
+            <Checkbox.Root parent className="checkbox" id="group-parent">
               <Checkbox.Indicator className="checkbox-indicator">
                 {groupValueIndicator}
               </Checkbox.Indicator>
             </Checkbox.Root>
-            <label>Select all</label>
+            <label htmlFor="group-parent">Select all</label>
           </div>
 
           <div style="display:flex; flex-direction:column; gap:0.5rem; padding-left:1.5rem">
-            <div style="display:flex; align-items:center; gap:0.5rem">
-              <Checkbox.Root value="fuji-apple" className="checkbox">
-                <Checkbox.Indicator className="checkbox-indicator">
-                  ✓
-                </Checkbox.Indicator>
-              </Checkbox.Root>
-              <label>Fuji</label>
-            </div>
-
-            <div style="display:flex; align-items:center; gap:0.5rem">
-              <Checkbox.Root value="gala-apple" className="checkbox">
-                <Checkbox.Indicator className="checkbox-indicator">
-                  ✓
-                </Checkbox.Indicator>
-              </Checkbox.Root>
-              <label>Gala</label>
-            </div>
-
-            <div style="display:flex; align-items:center; gap:0.5rem">
-              <Checkbox.Root value="granny-smith-apple" className="checkbox">
-                <Checkbox.Indicator className="checkbox-indicator">
-                  ✓
-                </Checkbox.Indicator>
-              </Checkbox.Root>
-              <label>Granny Smith</label>
-            </div>
+            {fruits.map((f) => (
+              <div style="display:flex; align-items:center; gap:0.5rem">
+                <Checkbox.Root
+                  value={f.value}
+                  className="checkbox"
+                  id={`group-${f.value}`}
+                >
+                  <Checkbox.Indicator className="checkbox-indicator">
+                    ✓
+                  </Checkbox.Indicator>
+                </Checkbox.Root>
+                <label htmlFor={`group-${f.value}`}>{f.display}</label>
+              </div>
+            ))}
           </div>
-        </CheckboxGroup.Root>
+        </CheckboxGroup>
 
         <div style="opacity:0.75; font-size:0.9em">
           Selected: {groupValueText}

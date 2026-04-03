@@ -249,6 +249,10 @@ button:focus-visible {
   gap: 0.5rem;
 }
 
+.radio-group[data-orientation="horizontal"] {
+  flex-direction: row;
+}
+
 .radio-item {
   width: 20px;
   height: 20px;
