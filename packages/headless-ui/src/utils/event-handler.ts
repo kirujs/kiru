@@ -9,8 +9,11 @@ export function callEventHandler(
   }
 ) {
   const { asChild, children } = props
-  if (asChild && isElement(children)) {
-    return children.props[name]?.(event)
+  try {
+    if (asChild && isElement(children)) {
+      return children.props[name]?.(event)
+    }
+    props[name]?.(event)
+  } finally {
   }
-  return props[name]?.(event)
 }

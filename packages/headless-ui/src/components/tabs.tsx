@@ -175,16 +175,12 @@ const TabsTrigger: TabsTrigger = () => {
   )
 
   const handleClick = (e: KiruGlobal.MouseEvent<HTMLButtonElement>) => {
-    try {
-      callEventHandler($.props, "onclick", e)
-    } catch {}
+    callEventHandler($.props, "onclick", e)
     if (!e.defaultPrevented && !disabled.peek()) select(value.peek())
   }
 
   const handleKeydown = (e: KiruGlobal.KeyboardEvent<HTMLButtonElement>) => {
-    try {
-      callEventHandler($.props, "onkeydown", e)
-    } catch {}
+    callEventHandler($.props, "onkeydown", e)
     if (!e.defaultPrevented) {
       triggers.onKeyDown(e, value)
     }

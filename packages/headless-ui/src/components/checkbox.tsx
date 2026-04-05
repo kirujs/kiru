@@ -191,20 +191,14 @@ const CheckboxRoot: CheckboxRoot = () => {
   }
 
   const handleClick = (e: KiruGlobal.MouseEvent<HTMLButtonElement>) => {
-    try {
-      callEventHandler($.props, "onclick", e)
-    } finally {
-    }
+    callEventHandler($.props, "onclick", e)
     if (!e.defaultPrevented && !disabled.peek()) {
       toggle()
     }
   }
 
   const handleKeydown = (e: KiruGlobal.KeyboardEvent<HTMLButtonElement>) => {
-    try {
-      callEventHandler($.props, "onkeydown", e)
-    } finally {
-    }
+    callEventHandler($.props, "onkeydown", e)
     if (e.defaultPrevented || e.key !== " ") {
       return
     }

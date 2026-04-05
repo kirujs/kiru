@@ -393,10 +393,7 @@ const SliderTrack: SliderTrack = () => {
   const refProxy = createRefProxy<HTMLSpanElement>()
 
   const handleClick = (e: KiruGlobal.PointerEvent<HTMLSpanElement>) => {
-    try {
-      callEventHandler($.props, "onclick", e)
-    } finally {
-    }
+    callEventHandler($.props, "onclick", e)
     if (e.defaultPrevented) return
     e.preventDefault()
 
@@ -613,10 +610,7 @@ const SliderThumb: SliderThumb = () => {
   }
 
   const handlePointerDown = (e: KiruGlobal.PointerEvent<HTMLSpanElement>) => {
-    try {
-      callEventHandler($.props, "onpointerpown", e)
-    } finally {
-    }
+    callEventHandler($.props, "onpointerpown", e)
     if (e.defaultPrevented || ctx.disabled.peek()) return
 
     isDragging.value = true
@@ -635,10 +629,7 @@ const SliderThumb: SliderThumb = () => {
   }
 
   const handleKeyDown = (e: KiruGlobal.KeyboardEvent<HTMLSpanElement>) => {
-    try {
-      callEventHandler($.props, "onkeydown", e)
-    } finally {
-    }
+    callEventHandler($.props, "onkeydown", e)
     if (e.defaultPrevented || ctx.disabled.peek()) return
 
     const currentIdx = index.peek()

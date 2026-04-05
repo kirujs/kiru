@@ -210,20 +210,14 @@ const RadioGroupItem: RadioGroupItem = () => {
   })
 
   const handleClick = (e: KiruGlobal.MouseEvent<HTMLButtonElement>) => {
-    try {
-      callEventHandler($.props, "onclick", e)
-    } finally {
-    }
+    callEventHandler($.props, "onclick", e)
     if (!e.defaultPrevented && !disabled.peek()) {
       select()
     }
   }
 
   const handleKeydown = (e: KiruGlobal.KeyboardEvent<HTMLButtonElement>) => {
-    try {
-      callEventHandler($.props, "onkeydown", e)
-    } finally {
-    }
+    callEventHandler($.props, "onkeydown", e)
     if (e.defaultPrevented) return
 
     if (e.key === " ") {
