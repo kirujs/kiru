@@ -261,7 +261,10 @@ const AccordionHeader: AccordionHeader = () => {
 
   return ({ children, asChild, level, ...props }) => {
     if (asChild && isElement(children)) {
-      return { ...children, props: { ...children.props, ...sharedAttrs } }
+      return {
+        ...children,
+        props: { ...children.props, ...props, ...sharedAttrs },
+      }
     }
     const Tag = `h${level ?? 3}` as "h3"
     return (
