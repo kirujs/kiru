@@ -3,10 +3,7 @@ import { createVNodeId, isVNodeDeleted } from "../utils/vdom.js"
 import { $INLINE_FN } from "../constants.js"
 import { __DEV__ } from "../env.js"
 import { node, setups } from "../globals.js"
-import {
-  tracking,
-  type TrackingStackObservations,
-} from "../signals/tracking.js"
+import { executeWithTracking } from "../signals/tracking.js"
 import { registerVNodeCleanup } from "../utils/index.js"
 
 let currentAccessedPaths: Set<string[]> | null = null
@@ -95,34 +92,19 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
 
       function sync() {
         accessedPaths.clear()
+        currentAccessedPaths = accessedPaths
+
         const propsProxy = createProxy(
           currentProps.current as Record<string, unknown>
         ) as InferredProps
-        const observations: TrackingStackObservations = new Map()
-        tracking.stack.push(observations)
-        currentAccessedPaths = accessedPaths
-        const value = selector(propsProxy)
-        currentAccessedPaths = null
-        tracking.stack.pop()
-        // Always assign and notify so the component re-renders when the derived value changes
-        // (e.g. when parent passes a different signal ref like toggle switching count/double).
-        resultSig.value = value
 
-        for (const [sid, unsub] of unsubs) {
-          if (!observations.has(sid)) {
-            unsub()
-            unsubs.delete(sid)
-          }
-        }
-        for (const [sid, observedSig] of observations) {
-          if (!unsubs.has(sid)) {
-            try {
-              unsubs.set(sid, observedSig.subscribe(sync))
-            } catch {
-              // Signal may be disposed after HMR; skip subscribing
-            }
-          }
-        }
+        resultSig.value = executeWithTracking({
+          id: Signal.id(resultSig),
+          fn: () => selector(propsProxy),
+          onDepChanged: sync,
+          subs: unsubs,
+        })
+        currentAccessedPaths = null
       }
 
       sync()
@@ -144,8 +126,11 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
           return id
         }
         if (node.current !== vNode) {
-          // @ts-expect-error
-          registerVNodeCleanup(vNode, id.$id, Signal.dispose.bind(null, id))
+          registerVNodeCleanup(
+            vNode,
+            Signal.id(id),
+            Signal.dispose.bind(null, id)
+          )
         }
         prevIndex = vNode.index
         propSyncs.push(() => {
