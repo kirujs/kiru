@@ -165,6 +165,10 @@ export class Signal<T> {
     return typeof x === "object" && !!x && $SIGNAL in x
   }
 
+  static id(signal: Signal<any>) {
+    return signal.$id
+  }
+
   static subscribers(signal: Signal<any>) {
     return signal.$subs
   }
