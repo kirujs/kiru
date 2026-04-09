@@ -86,11 +86,9 @@ function styleObjectToString(
   opts?: { reactiveRead?: boolean }
 ): string {
   let cssString = ""
+  const reactive = opts?.reactiveRead
   for (const key in obj) {
-    const val = unwrap(
-      (obj as Record<string, unknown>)[key],
-      opts?.reactiveRead
-    )
+    const val = unwrap((obj as Record<string, unknown>)[key], reactive)
     if (val === null || val === undefined) continue
     const cssKey = key.replace(REGEX_ALPHA_UPPER, "-$&").toLowerCase()
     cssString += `${cssKey}:${val};`
