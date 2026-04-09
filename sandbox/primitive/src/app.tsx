@@ -46,20 +46,20 @@ setDemoFromWindow()
 window.addEventListener("popstate", setDemoFromWindow)
 
 export const App = () => (
-  <div style="display:flex; gap:1rem; flex-direction:column">
-    <select
-      name="demo-id"
-      bind:value={demoId}
-      onchange={(e) => {
-        window.history.pushState(null, "", "/?demo=" + e.target.value)
-      }}
-    >
-      {demos.map(({ id, displayName }) => (
-        <option value={id}>{displayName}</option>
-      ))}
-    </select>
+  <>
     <div>
-      <Derive from={demoComponent}>{(Component) => <Component />}</Derive>
+      <select
+        name="demo-id"
+        bind:value={demoId}
+        onchange={(e) => {
+          window.history.pushState(null, "", "/?demo=" + e.target.value)
+        }}
+      >
+        {demos.map(({ id, displayName }) => (
+          <option value={id}>{displayName}</option>
+        ))}
+      </select>
     </div>
-  </div>
+    <Derive from={demoComponent}>{(Component) => <Component />}</Derive>
+  </>
 )

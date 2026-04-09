@@ -11,6 +11,7 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --primary: #747bff;
 }
 
 a {
@@ -25,8 +26,8 @@ a:hover {
 
 body {
   margin: 0;
-  /* display: flex;
-  place-items: center; */
+  /* display: flex; */
+  place-items: center;
   min-width: 320px;
   min-height: 100vh;
 }
@@ -79,7 +80,7 @@ button {
 }
 
 button:hover {
-  border-color: #646cff;
+  border-color: var(--primary);
 }
 
 button:focus,
@@ -94,7 +95,7 @@ button:focus-visible {
   }
 
   a:hover {
-    color: #747bff;
+    color: var(--primary);
   }
 
   button {
@@ -167,6 +168,15 @@ button:focus-visible {
 
 .accordion-trigger[data-state="open"]>.accordion-chevron {
   transform: rotate(180deg);
+}
+
+.accordion-content {
+  background-color: #222;
+
+}
+
+.collapsible-content {
+  border: 1px solid var(--primary);
 }
 
 .accordion-content,
