@@ -32,25 +32,19 @@ export function executeWithTracking<T, Deps extends readonly Signal<unknown>[]>(
   ctx: TrackedExecutionContext<T, Deps>
 ): T {
   const { id, subs, fn, deps = [], onDepChanged } = ctx
-  let observations: Map<string, Signal<unknown>> | undefined
+  let observations: TrackingStackObservations | undefined
 
   effectQueue.delete(id)
-  const isServer = !!node.current && !sideEffectsEnabled()
 
-  if (!isServer) {
-    observations = new Map<string, Signal<unknown>>()
+  // Prevent side effects in non-browser environments while rendering
+  if (!node.current || sideEffectsEnabled()) {
+    observations = new Map()
     tracking.stack.push(observations)
   }
 
   const result = fn(...(deps.map((s) => s.value) as SignalValues<Deps>))
 
-  if (!isServer) {
-    for (const [id, unsub] of subs) {
-      if (observations!.has(id)) continue
-      unsub()
-      subs.delete(id)
-    }
-
+  if (observations) {
     const effect = () => {
       if (!effectQueue.size) {
         queueMicrotask(tick)
@@ -58,11 +52,19 @@ export function executeWithTracking<T, Deps extends readonly Signal<unknown>[]>(
       effectQueue.set(id, onDepChanged)
     }
 
-    for (const [id, sig] of observations!) {
-      if (subs.has(id)) continue
-      const unsub = sig.subscribe(effect)
-      subs.set(id, unsub)
+    for (const [id, signal] of observations) {
+      if (!subs.has(id)) {
+        subs.set(id, signal.subscribe(effect))
+      }
     }
+
+    for (const [id, unsub] of subs) {
+      if (!observations.has(id)) {
+        unsub()
+        subs.delete(id)
+      }
+    }
+
     tracking.stack.pop()
   }
 
