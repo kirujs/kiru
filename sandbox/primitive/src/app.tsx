@@ -1,4 +1,4 @@
-import { signal } from "kiru"
+import { computed, Derive, signal } from "kiru"
 import { AccordionDemo } from "./components/demos/accordion-demo"
 import { CollapsibleDemo } from "./components/demos/collapsible-demo"
 import { TabsDemo } from "./components/demos/tabs-demo"
@@ -9,76 +9,57 @@ import { SwitchDemo } from "./components/demos/switch-demo"
 import { ProgressDemo } from "./components/demos/progress-demo"
 import { SeparatorDemo } from "./components/demos/separator-demo"
 
-const demos = {
-  accordion: AccordionDemo,
-  checkbox: CheckboxDemo,
-  collapsible: CollapsibleDemo,
-  radioGroup: RadioGroupDemo,
-  progress: ProgressDemo,
-  separator: SeparatorDemo,
-  slider: SliderDemo,
-  switch: SwitchDemo,
-  tabs: TabsDemo,
+interface Demo {
+  id: string
+  component: Kiru.FC
+  displayName: string
 }
 
-const demo = signal<keyof typeof demos>("accordion")
+const demos: Demo[] = [
+  { id: "accordion", component: AccordionDemo, displayName: "Accordion" },
+  { id: "checkbox", component: CheckboxDemo, displayName: "Checkbox" },
+  { id: "collapsible", component: CollapsibleDemo, displayName: "Collapsible" },
+  { id: "radioGroup", component: RadioGroupDemo, displayName: "Radio Group" },
+  { id: "progress", component: ProgressDemo, displayName: "Progress" },
+  { id: "separator", component: SeparatorDemo, displayName: "Separator" },
+  { id: "slider", component: SliderDemo, displayName: "Slider" },
+  { id: "switch", component: SwitchDemo, displayName: "Switch" },
+  { id: "tabs", component: TabsDemo, displayName: "Tabs" },
+]
+
+const demoId = signal(demos[0].id)
+const demoComponent = computed(() => {
+  const match = demos.find((d) => d.id === demoId.value)
+  if (!match) return demos[0].component
+  return match.component
+})
+
 const setDemoFromWindow = () => {
   const fromParams = new URLSearchParams(window.location.search).get("demo")
-  if (fromParams && fromParams in demos) {
-    demo.value = fromParams as keyof typeof demos
+  if (fromParams && demos.some((d) => d.id === fromParams)) {
+    demoId.value = fromParams
   } else {
-    demo.value = "accordion"
+    demoId.value = demos[0].id
   }
 }
 setDemoFromWindow()
 window.addEventListener("popstate", setDemoFromWindow)
 
-export const App = () => {
-  return (
-    <div style="display:flex; gap:1rem; flex-direction:column">
-      <select
-        name="demo-selection"
-        bind:value={demo}
-        onchange={(e) => {
-          window.history.pushState(null, "", "/?demo=" + e.target.value)
-        }}
-      >
-        <option value="accordion">Accordion</option>
-        <option value="checkbox">Checkbox</option>
-        <option value="collapsible">Collapsible</option>
-        <option value="radioGroup">Radio Group</option>
-        <option value="progress">Progress</option>
-        <option value="separator">Separator</option>
-        <option value="slider">Slider</option>
-        <option value="switch">Switch</option>
-        <option value="tabs">Tabs</option>
-      </select>
-      <div>
-        <DemoOutlet />
-      </div>
+export const App = () => (
+  <div style="display:flex; gap:1rem; flex-direction:column">
+    <select
+      name="demo-id"
+      bind:value={demoId}
+      onchange={(e) => {
+        window.history.pushState(null, "", "/?demo=" + e.target.value)
+      }}
+    >
+      {demos.map(({ id, displayName }) => (
+        <option value={id}>{displayName}</option>
+      ))}
+    </select>
+    <div>
+      <Derive from={demoComponent}>{(Component) => <Component />}</Derive>
     </div>
-  )
-}
-
-const DemoOutlet = () => {
-  switch (demo.value) {
-    case "accordion":
-      return <demos.accordion />
-    case "checkbox":
-      return <demos.checkbox />
-    case "collapsible":
-      return <demos.collapsible />
-    case "radioGroup":
-      return <demos.radioGroup />
-    case "progress":
-      return <demos.progress />
-    case "separator":
-      return <demos.separator />
-    case "slider":
-      return <demos.slider />
-    case "switch":
-      return <demos.switch />
-    case "tabs":
-      return <demos.tabs />
-  }
-}
+  </div>
+)
