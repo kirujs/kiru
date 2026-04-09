@@ -90,7 +90,8 @@ const CollapsibleRoot: CollapsibleRoot = () => {
     "data-disabled": Kiru.computed(() => (disabled.value ? "" : undefined)),
   }
 
-  return ({ children, asChild, onOpenChange, ...props }) => {
+  return ({ children, defaultOpen, asChild, onOpenChange, ...props }) => {
+    void defaultOpen
     if (asChild && isElement(children)) {
       return (
         <CollapsibleRootContext value={ctx}>
