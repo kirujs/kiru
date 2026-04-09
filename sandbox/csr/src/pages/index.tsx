@@ -1,4 +1,4 @@
-import { signal, computed, resource, Derive } from "kiru"
+import { signal, resource, Derive } from "kiru"
 
 interface User {
   id: number
@@ -9,15 +9,9 @@ interface User {
 
 const search = signal("")
 const limit = signal(10)
-const searchParams = computed(() => {
-  return {
-    search: search.value,
-    limit: limit.value,
-  }
-})
 
 // able to be created globally _or_ within components
-const users = resource(searchParams, async (src, ctx) => {
+const users = resource({ search, limit }, async (src, ctx) => {
   const res = await fetch(
     `https://dummyjson.com/users/search?q=${src.search}&limit=${src.limit}`,
     { signal: ctx.signal }

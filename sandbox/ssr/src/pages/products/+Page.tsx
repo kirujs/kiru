@@ -19,18 +19,15 @@ interface ProductsResponse {
 export function Page() {
   const count = signal(0)
   const limit = signal(10)
-  const products = resource<ProductsResponse, number>(
-    limit,
-    async (limit, { signal }) => {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      const response = await fetch(
-        `https://dummyjson.com/products?limit=${limit}`,
-        { signal }
-      )
-      if (!response.ok) throw new Error(response.statusText)
-      return await response.json()
-    }
-  )
+  const products = resource(limit, async (limit, { signal }) => {
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const response = await fetch(
+      `https://dummyjson.com/products?limit=${limit}`,
+      { signal }
+    )
+    if (!response.ok) throw new Error(response.statusText)
+    return (await response.json()) as ProductsResponse
+  })
 
   return () => (
     <>
