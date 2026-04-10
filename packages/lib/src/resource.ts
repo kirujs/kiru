@@ -110,10 +110,16 @@ export function resource<T, Source extends ResourceSource>(
     registerVNodeCleanup(vNode, promiseId, dispose)
   }
 
+  let promise: Kiru.StatefulPromise<T>
   const resource: Resource<T> = Object.assign(data, {
     error,
     isPending,
-    promise: undefined as unknown as Kiru.StatefulPromise<T>,
+    get promise() {
+      return (promise ??= createPromise())
+    },
+    set promise(newPromise) {
+      promise = newPromise
+    },
     refetch() {
       data.value = void 0 as T
       resource.promise = createPromise()
@@ -170,7 +176,7 @@ export function resource<T, Source extends ResourceSource>(
         }
         return promise
       },
-      id: Signal.id(resource),
+      id: Signal.id(data),
       onDepChanged: updateResource,
       subs: observedSignalUnsubs,
     })
@@ -201,7 +207,7 @@ export function resource<T, Source extends ResourceSource>(
   if (__DEV__ && isBrowser && window.__kiru.HMRContext?.isReplacement()) {
     queueMicrotask(() => (resource.promise = createPromise()))
   } else {
-    resource.promise = createPromise()
+    resource.promise ??= createPromise()
   }
 
   return resource
