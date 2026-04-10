@@ -231,7 +231,7 @@ const RadioGroupItem: RadioGroupItem = () => {
   }
 
   const attrs = {
-    ref: refProxy.ref,
+    ref: refProxy,
     role: "radio",
     type: "button" as const,
     onclick: handleClick,
@@ -253,8 +253,6 @@ const RadioGroupItem: RadioGroupItem = () => {
   }
 
   return ({ children, asChild, value, disabled, ...props }) => {
-    refProxy.update(props)
-
     if (asChild && isElement(children)) {
       return (
         <RadioGroupItemContext value={ctx}>

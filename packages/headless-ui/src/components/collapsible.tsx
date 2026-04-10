@@ -178,7 +178,7 @@ const CollapsibleContent: CollapsibleContent = () => {
 
   const attrs = {
     id: contentId,
-    ref: refProxy.ref,
+    ref: refProxy,
     hidden,
     role: "region",
     "aria-labelledby": triggerId,
@@ -187,7 +187,6 @@ const CollapsibleContent: CollapsibleContent = () => {
   }
 
   return ({ children, asChild, ...props }) => {
-    refProxy.update(props)
     const isHidden = hidden.value
     if (asChild && isElement(children)) {
       const { children: childChildren, ...childProps } = children.props

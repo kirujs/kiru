@@ -187,7 +187,7 @@ const TabsTrigger: TabsTrigger = () => {
   }
 
   const attrs = {
-    ref: refProxy.ref,
+    ref: refProxy,
     role: "tab",
     id: Kiru.computed(() => `${id}:trigger:${value}`),
     onclick: handleClick,
@@ -202,7 +202,6 @@ const TabsTrigger: TabsTrigger = () => {
   }
 
   return ({ children, asChild, value, disabled, ...props }) => {
-    refProxy.update(props)
     if (asChild && isElement(children)) {
       return { ...children, props: { ...children.props, ...props, ...attrs } }
     }

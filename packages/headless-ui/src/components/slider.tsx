@@ -317,7 +317,7 @@ const SliderRoot: SliderRoot = () => {
   }
 
   const attrs = {
-    ref: refProxy.ref,
+    ref: refProxy,
     role: "group",
     "aria-orientation": orientation,
     dir: dir,
@@ -341,8 +341,6 @@ const SliderRoot: SliderRoot = () => {
     disableSwitch,
     ...props
   }) => {
-    refProxy.update(props)
-
     const hiddenInputs = name
       ? values.value.map((val, i) => (
           <input
@@ -423,14 +421,12 @@ const SliderTrack: SliderTrack = () => {
   }
 
   const attrs = {
-    ref: refProxy.ref,
+    ref: refProxy,
     onclick: handleClick,
     ...ctx.sharedAttrs,
   }
 
   return ({ children, asChild, ...props }) => {
-    refProxy.update(props)
-
     if (asChild && isElement(children)) {
       return {
         ...children,
@@ -691,7 +687,7 @@ const SliderThumb: SliderThumb = () => {
   }
 
   const attrs = {
-    ref: refProxy.ref,
+    ref: refProxy,
     role: "slider",
     tabIndex: 0,
     "aria-valuemin": ctx.min,
@@ -707,8 +703,6 @@ const SliderThumb: SliderThumb = () => {
   }
 
   return ({ children, asChild, index: indexProp, ...props }) => {
-    refProxy.update(props)
-
     const thumbElement =
       asChild && isElement(children) ? (
         { ...children, props: { ...children.props, ...props, ...attrs } }

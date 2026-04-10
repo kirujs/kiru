@@ -309,7 +309,7 @@ const AccordionTrigger: AccordionTrigger = () => {
   }
 
   const attrs = {
-    ref: refProxy.ref,
+    ref: refProxy,
     id: triggerId,
     onclick: handleClick,
     onkeydown: handleKeydown,
@@ -320,7 +320,6 @@ const AccordionTrigger: AccordionTrigger = () => {
   }
 
   return ({ children, asChild, ...props }) => {
-    refProxy.update(props)
     if (asChild && isElement(children)) {
       return { ...children, props: { ...children.props, ...props, ...attrs } }
     }
@@ -347,7 +346,7 @@ const AccordionContent: AccordionContent = () => {
 
   const attrs = {
     id: contentId,
-    ref: refProxy.ref,
+    ref: refProxy,
     hidden,
     role: "region",
     "aria-labelledby": triggerId,
@@ -355,7 +354,6 @@ const AccordionContent: AccordionContent = () => {
   }
 
   return ({ children, asChild, ...props }) => {
-    refProxy.update(props)
     const isHidden = hidden.value
     if (asChild && isElement(children)) {
       const { children: childChildren, ...childProps } = children.props

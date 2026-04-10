@@ -1,31 +1,30 @@
+import { setup } from "kiru"
 import { setRef } from "kiru/utils"
 
-export function createRefProxy<T>(callback?: Kiru.RefCallback<T>) {
-  let propsRef: Kiru.Ref<T> | undefined
+export function createRefProxy<T>(
+  callback?: Kiru.RefCallback<T>
+): Kiru.RefObject<T | null> {
+  const $ = setup<Kiru.VNode["props"]>()
+  const propsRef = $.derive((p) => p.ref)
+
   let current: T | null = null
-  const ref: Kiru.RefCallback<T> = (value) => {
-    current = value
-    callback?.(value)
-    if (propsRef) {
-      setRef(propsRef, value)
-    }
-  }
-  const update = (props: Record<string, unknown>) => {
-    if ("ref" in props) {
-      if (propsRef !== props.ref && !!propsRef) {
-        setRef(propsRef, null)
-      }
-      propsRef = props.ref as Kiru.Ref<T>
-    } else if (propsRef) {
-      setRef(propsRef, null)
-      propsRef = undefined
-    }
-  }
+  propsRef.subscribe((next, prev) => {
+    if (prev) setRef(prev, null)
+    if (next) setRef(next, current)
+  })
+
   return {
-    ref,
-    update,
     get current() {
       return current
+    },
+    set current(value) {
+      current = value
+      callback?.(value)
+
+      const currentPropsRef = propsRef.peek()
+      if (currentPropsRef) {
+        setRef(currentPropsRef, value)
+      }
     },
   }
 }
