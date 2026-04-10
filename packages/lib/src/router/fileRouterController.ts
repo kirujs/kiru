@@ -2,7 +2,7 @@ import { signal, Signal } from "../signals/base.js"
 import { effect } from "../signals/effect.js"
 import { __DEV__ } from "../env.js"
 import { nextIdle } from "../scheduler.js"
-import { ReloadOptions, type FileRouterContextType } from "./context.js"
+import { type FileRouterContextType } from "./context.js"
 import { FileRouterDataLoadError } from "./errors.js"
 import { fileRouterInstance, fileRouterRoute, routerCache } from "./globals.js"
 import type {
@@ -521,7 +521,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
             data: null,
             error: new FileRouterDataLoadError(error),
             loading: false,
-          } satisfies PageProps<PageConfig<unknown>>)
+          }) satisfies PageProps<PageConfig<unknown>>
       )
       .then((state) => {
         if (context.signal.aborted) return
@@ -661,13 +661,13 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       )
     }
   }
-  private createContextValue() {
+  private createContextValue(): FileRouterContextType {
     const __this = this
     return {
       get baseUrl() {
         return __this.baseUrl
       },
-      invalidate: async (...paths: string[]) => {
+      invalidate: async (...paths) => {
         if (this.invalidate(...paths)) {
           return this.loadRoute(void 0, void 0, true)
         }
@@ -677,7 +677,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       },
       navigate: this.navigate.bind(this),
       prefetchRouteModules: this.prefetchRouteModules.bind(this),
-      reload: async (options?: ReloadOptions) => {
+      reload: (options) => {
         if (options?.invalidate ?? true) {
           this.invalidate(this.state.pathname.peek())
         }
