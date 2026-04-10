@@ -9,7 +9,7 @@ export type TrackingStackObservations = Map<string, Signal<unknown>>
 export const tracking = {
   enabled: true,
   stack: new Array<TrackingStackObservations>(),
-  current: function (): TrackingStackObservations | undefined {
+  current(): TrackingStackObservations | undefined {
     return this.stack[this.stack.length - 1]
   },
 }
