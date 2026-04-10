@@ -116,7 +116,7 @@ export function resource<T, Source extends ResourceSource>(
     promise: undefined as unknown as Kiru.StatefulPromise<T>,
     refetch() {
       data.value = void 0 as T
-      this.promise = createPromise()
+      resource.promise = createPromise()
     },
     dispose,
   })
