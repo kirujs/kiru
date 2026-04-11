@@ -25,37 +25,23 @@ const lib = task({
   },
 })
 
-const createDevtoolsTask = (name) =>
-  task({
-    name,
-    cwd: `packages/${name}`,
-    commands: {
-      build: {
-        run: "pnpm build",
-        cache: {
-          inputs: ["src", lib.artifact("build"), pnpm.package()],
-          outputs: ["dist"],
-        },
-      },
-      dev: {
-        run: "pnpm dev",
-        readyWhen: (output) => output.includes("Build complete!"),
+const devtoolsHost = task({
+  name: "devtools-host",
+  cwd: "packages/devtools-host",
+  commands: {
+    build: {
+      run: "pnpm build",
+      cache: {
+        inputs: ["src", lib.artifact("build"), pnpm.package()],
+        outputs: ["dist"],
       },
     },
-  })
-
-// const devtoolsClient = createDevtoolsTask(
-//   "devtools-client",
-//   "packages/devtools-client"
-// )
-const devtoolsHost = createDevtoolsTask(
-  "devtools-host",
-  "packages/devtools-host"
-)
-// const devtools = pipeline([devtoolsClient, devtoolsHost]).toTask({
-//   name: "devtools",
-//   dependencies: [lib],
-// })
+    dev: {
+      run: "pnpm dev",
+      readyWhen: (output) => output.includes("Build complete!"),
+    },
+  },
+})
 
 const vitePlugin = task({
   name: "vite-plugin-kiru",
@@ -67,7 +53,6 @@ const vitePlugin = task({
         inputs: [
           "src",
           lib.artifact("build"),
-          //devtoolsClient.artifact("build"),
           devtoolsHost.artifact("build"),
           pnpm.package(),
         ],
@@ -147,5 +132,4 @@ const result = await pipeline([
   onTaskComplete: (taskName) => console.log(`~~~~~ Task complete: ${taskName}`),
 })
 
-//console.log(JSON.stringify(result, null, 2))
 console.log(result)
