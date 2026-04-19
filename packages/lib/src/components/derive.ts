@@ -67,10 +67,8 @@ type Derive = {
  * @see https://kirujs.dev/docs/components/derive
  */
 export const Derive: Derive = () => {
-  let prevSuccess: unknown
-  return (props) => {
-    const { from, children, fallback, mode } = props
-
+  let prevSuccess: { value: unknown } | null
+  return ({ from, children, fallback, mode }) => {
     const promises = new Set<Kiru.StatefulPromise<any>>()
     let value: unknown
 
@@ -109,15 +107,17 @@ export const Derive: Derive = () => {
         const nodeRef = node.current!
         Promise.allSettled(promises).then(() => requestUpdate(nodeRef))
 
-        const prev = prevSuccess
-        if (mode !== "fallback" && prev) {
-          return (children as ChildFnWithStale<unknown>)(prev, true)
+        if (mode !== "fallback" && prevSuccess) {
+          return (children as ChildFnWithStale<unknown>)(
+            prevSuccess.value,
+            true
+          )
         }
         return fallback
       }
     }
 
-    prevSuccess = value
+    prevSuccess = { value }
     return (children as ChildFnWithStale<unknown>)(value, false)
   }
 }
