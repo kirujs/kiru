@@ -36,15 +36,6 @@ kiru({
   // Enable logging for debugging
   loggingEnabled: true,
 
-  // App configuration for file-based routing
-  app: {
-    baseUrl: "/", // Base URL for the app
-    dir: "src/pages", // Directory containing pages
-    document: "document.{tsx,jsx}", // Document component file
-    page: "index.{tsx,jsx}", // Page component pattern
-    layout: "layout.{tsx,jsx}", // Layout component pattern
-  },
-
   // Callbacks
   onFileTransformed: (id, content) => {
     console.log(`Transformed: ${id}`)
