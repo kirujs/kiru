@@ -1,4 +1,5 @@
 import { $HMR_ACCEPT, $DEV_FILE_LINK } from "./constants.js"
+import { getNodeMeta } from "./dom/metadata.js"
 import { flushSync, requestUpdate } from "./scheduler.js"
 import { Signal } from "./signals/base.js"
 import type { Effect } from "./signals/effect.js"
@@ -48,6 +49,24 @@ type HotVarRegistrationEntry = {
   type: string
   value: HotVar
   link: string
+}
+
+function collectOwnersInRange(root: Kiru.KiruNode): Set<Kiru.KiruNode> {
+  const owners = new Set<Kiru.KiruNode>([root])
+  const visit = (node: Node) => {
+    const meta = getNodeMeta(node)
+    if (meta) owners.add(meta)
+    node.childNodes.forEach(visit)
+  }
+  const range = root.range
+  if (!range) return owners
+  let cursor: Node | null = range.start
+  while (cursor) {
+    visit(cursor)
+    if (cursor === range.end) break
+    cursor = cursor.nextSibling
+  }
+  return owners
 }
 
 export function createHmrContext() {
@@ -127,8 +146,16 @@ export function createHmrContext() {
         )
         continue
       }
-      // Owner-based renderer no longer traverses a VDOM tree for HMR.
-      // Generic acceptors still handle stateful constructs; component swaps rely on rerender.
+      if (oldEntry.type === "component" && newEntry.type === "component") {
+        window.__kiru.apps.forEach((app) => {
+          collectOwnersInRange(app.root).forEach((ownerNode) => {
+            if (ownerNode.type === oldEntry.value) {
+              ownerNode.type = newEntry.value as any
+              dirtyNodes.add(ownerNode)
+            }
+          })
+        })
+      }
     }
 
     if (dirtyNodes.size) {

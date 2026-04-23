@@ -1,4 +1,4 @@
-import { signal, setup, unwrap } from "kiru"
+import { signal } from "kiru"
 
 const initialCount = signal(0)
 export function App() {
