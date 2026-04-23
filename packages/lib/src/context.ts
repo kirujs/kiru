@@ -1,6 +1,5 @@
 import { $CONTEXT } from "./constants.js"
 import { createElement } from "./element.js"
-import type { ContextNode } from "./types.utils.js"
 import { node } from "./globals.js"
 
 export function createContext<T>(defaultValue: T): Kiru.Context<T> {
@@ -13,12 +12,11 @@ export function createContext<T>(defaultValue: T): Kiru.Context<T> {
   return Context
 }
 
-function getContextValue<T>(vNode: Kiru.VNode, context: Kiru.Context<T>): T {
-  let n = vNode.parent
+function getContextValue<T>(node: Kiru.KiruNode, context: Kiru.Context<T>): T {
+  let n = node.parent
   while (n) {
     if (n.type === $CONTEXT) {
-      const provider = n as ContextNode<unknown>
-      const { ctx, value } = provider.props
+      const { ctx, value } = n.props
       if (ctx === context) {
         return value as T
       }

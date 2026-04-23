@@ -5,6 +5,7 @@ import type {
   $FRAGMENT,
   $INLINE_FN,
 } from "./constants.js"
+import type { ROOT_OWNER_TYPE } from "./dom/metadata.js"
 import type { KiruGlobalContext } from "./globalContext.js"
 import type {
   GlobalAttributes,
@@ -23,6 +24,7 @@ import type {
   SomeDom,
 } from "./types.utils.js"
 import type { AppHandle } from "./appHandle.js"
+import type { KiruNodeMeta } from "./dom/metadata.js"
 
 export type { AsyncTaskState, ElementProps, Prettify, Signalable, StyleObject }
 
@@ -298,9 +300,9 @@ declare global {
     }
 
     export interface FC<T = {}> {
-      (
-        props: T
-      ): Exclude<JSX.Element, Kiru.FC<any>> | ((props: T) => JSX.Element)
+      (props: T):
+        | Exclude<JSX.Element, Kiru.FC<any>>
+        | ((props: T) => JSX.Element)
       /** Used to display the name of the component in devtools  */
       displayName?: string
     }
@@ -341,6 +343,7 @@ declare global {
       type:
         | (Function & { displayName?: string })
         | ExoticSymbol
+        | typeof ROOT_OWNER_TYPE
         | "#text"
         | (string & {})
       key: JSX.ElementKey | null
@@ -353,19 +356,27 @@ declare global {
 
     type LifecycleHookCallback = () => (() => void) | void
 
-    interface VNode extends Element {
+    interface NodeRange {
+      start: Comment
+      end: Comment
+    }
+
+    interface KiruNode extends Element {
       app?: AppHandle
       dom?: SomeDom
       index: number
-      depth: number
-      flags: number
-      parent: VNode | null
-      child: VNode | null
-      sibling: VNode | null
-      prev: VNodeSnapshot | null
-      deletions: VNode[] | null
+      parent: KiruNode | null
+      flags?: number
+      dirty?: boolean
+      unmounted?: boolean
+      range?: NodeRange
+      rootNode?: Node
       subs?: Set<Function>
+      unsubs?: Array<() => void>
       cleanups?: Record<string, Function>
+      signalPropSubscriptions?: Record<string, () => void>
+      eventHandlers?: Record<string, EventListenerOrEventListenerObject>
+      component?: KiruNode
 
       hooks?: {
         pre: LifecycleHookCallback[]
@@ -374,22 +385,15 @@ declare global {
         postCleanups: (() => void)[]
       }
       /** Run before each render with current props to sync prop-derived signals */
-      propSyncs?: ((props: VNode["props"]) => void)[]
-      render?: (props: VNode["props"]) => unknown
-    }
-    interface VNodeSnapshot {
-      props: Kiru.VNode["props"]
-      key: Kiru.VNode["key"]
-      index: number
+      propSyncs?: ((props: KiruNode["props"]) => void)[]
+      render?: (props: KiruNode["props"]) => unknown
     }
 
     type ContainerElement = HTMLElement | ShadowRoot
   }
 
-  interface Element {
-    __kiruNode?: Kiru.VNode
-  }
-  interface ShadowRoot {
-    __kiruNode?: Kiru.VNode
+  interface Node {
+    __kiruApp?: AppHandle
+    __kiru?: KiruNodeMeta
   }
 }

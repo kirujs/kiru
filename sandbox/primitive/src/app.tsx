@@ -1,35 +1,35 @@
-import { signal, setup } from "kiru"
+import { signal, setup, unwrap } from "kiru"
 
 const initialCount = signal(0)
 export function App() {
-  console.log(initialCount.value)
+  //console.log(initialCount.value)
   return (
-    <div>
+    <>
       <input bind:value={initialCount} type="number" />
-      <Counter
-        foo={{ initialCount: initialCount.value }}
-        items={[initialCount.value, 2, 3]}
-      />
-    </div>
+      {(v = initialCount.value) => (isNaN(v) ? 0 : v * 5)}
+      {/* <Counter count={initialCount} /> */}
+    </>
   )
 }
 
-interface CounterProps {
-  foo: {
-    initialCount: number
-  }
-  items: number[]
-}
+// interface CounterProps {
+//   count: Kiru.Signal<number>
+//   depth?: number
+// }
 
-const Counter: Kiru.FC<CounterProps> = () => {
-  const { derive, props } = setup<typeof Counter>()
-  const count = derive((props) => props.foo.initialCount)
+// const Counter: Kiru.FC<CounterProps> = () => {
+//   const { derive, props, id } = setup<typeof Counter>()
+//   const count = derive((props) => unwrap(props.count, true))
 
-  return () => (
-    <div>
-      <p>Items: {JSON.stringify(props.items)}</p>
-      <h1>Count: {count}</h1>
-      <button onclick={() => count.value++}>Increment</button>
-    </div>
-  )
-}
+//   return () => (
+//     <div>
+//       <h1>
+//         Count: {count} {id}
+//       </h1>
+//       <button onclick={() => count.value++}>Increment</button>
+//       {!props.depth || props.depth < 25 ? (
+//         <Counter depth={(props.depth ?? 0) + 1} count={count} />
+//       ) : null}
+//     </div>
+//   )
+// }

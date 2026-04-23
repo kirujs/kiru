@@ -1,4 +1,3 @@
-import { FLAG_STATIC_DOM } from "../constants.js"
 import { __DEV__ } from "../env.js"
 import { KiruError } from "../error.js"
 import { node, renderMode } from "../globals.js"
@@ -14,24 +13,23 @@ interface PortalProps {
  * @see https://kirujs.dev/docs/components/portal
  */
 export function Portal({ children, container }: PortalProps) {
-  const vNode = node.current!
-  if (!vNode.dom) {
-    vNode.flags |= FLAG_STATIC_DOM
+  const thisNode = node.current!
+  if (!thisNode.dom) {
     switch (renderMode.current) {
       case "dom":
-        vNode.dom = typeof container === "function" ? container() : container
-        if (!(vNode.dom instanceof HTMLElement)) {
+        thisNode.dom = typeof container === "function" ? container() : container
+        if (!(thisNode.dom instanceof HTMLElement)) {
           if (__DEV__) {
             throw new KiruError({
-              message: `Invalid portal container, expected HTMLElement, got ${vNode.dom}`,
-              vNode: vNode,
+              message: `Invalid portal container, expected HTMLElement, got ${thisNode.dom}`,
+              node: thisNode,
             })
           }
           return null
         }
         return children
       case "hydrate":
-        nextIdle(() => requestUpdate(vNode))
+        nextIdle(() => requestUpdate(thisNode))
       case "stream":
       case "string":
         return null

@@ -1,13 +1,15 @@
-import { Setup } from "./hooks/index.js"
+import type { Setup } from "./hooks/setup.js"
 import { isBrowser } from "./env.js"
 export { node, renderMode, hydrationMode, setups, postEffectCleanups }
 
 /**
- * A reference to the current VNode (always a component) being rendered.
+ * A reference to the current owner node being rendered.
  */
 const node = {
-  current: null as Kiru.VNode | null,
+  current: null as Kiru.KiruNode | null,
 }
+
+const owner = node
 
 /**
  * The current render mode. Can be "dom" "string", "stream", or "hydrate".
@@ -25,12 +27,14 @@ const hydrationMode = {
 }
 
 /**
- * A map of VNodes (components) to their setup functions.
+ * A map of owner nodes (components) to their setup functions.
  */
-const setups: WeakMap<Kiru.VNode, Setup<any>> = new WeakMap()
+const setups: WeakMap<object, Setup<{}>> = new WeakMap()
 
 /**
  * Cleanup functions from onMount() that run after components
  * have been unmounted and the browser has painted.
  */
 const postEffectCleanups: (() => void)[] = []
+
+export { owner }

@@ -1,5 +1,5 @@
 import { Signal } from "../signals/base.js"
-import { isValidTextChild, isVNode } from "../utils/index.js"
+import { isValidTextChild, isKiruNode } from "../utils/index.js"
 import { createElement } from "../element.js"
 import { __DEV__, isBrowser } from "../env.js"
 import { KiruError } from "../error.js"
@@ -15,24 +15,24 @@ function HeadContent({ children }: { children: JSX.Children }): JSX.Element {
     const asArray = Array.isArray(children) ? children : [children]
     const invalidNodes = asArray.filter(
       (c) =>
-        !isVNode(c) ||
+        !isKiruNode(c) ||
         typeof c.type !== "string" ||
         !validHeadChildren.includes(c.type)
     )
     if (invalidNodes.length) {
       throw new KiruError({
         message: `[kiru/router]: <Head.Content> only accepts title, base, link, meta, style and script elements as children. Received: ${invalidNodes.map(
-          (n) => (isVNode(n) ? `<${n.type.toString()}>` : `"${n}"`)
+          (n) => (isKiruNode(n) ? `<${n.type.toString()}>` : `"${n}"`)
         )}`,
-        vNode: n,
+        node: n,
       })
     }
   }
   if (isBrowser) {
     const asArray = Array.isArray(children) ? children : [children]
     const titleNode = asArray.find(
-      (c) => isVNode(c) && c.type === "title"
-    ) as Kiru.VNode
+      (c) => isKiruNode(c) && c.type === "title"
+    ) as Kiru.KiruNode
 
     if (titleNode) {
       const props = titleNode.props

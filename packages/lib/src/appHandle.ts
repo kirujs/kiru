@@ -1,10 +1,9 @@
-import { FLAG_STATIC_DOM } from "./constants.js"
 import { __DEV__ } from "./env.js"
+import { ROOT_OWNER_TYPE } from "./dom/metadata.js"
+import { unmount as domUnmount } from "./dom/runtime.js"
+import { createRange } from "./dom/range.js"
+import { reconcileChildren } from "./dom/reconcile.js"
 import { renderRootSync } from "./scheduler.js"
-import { createVNode } from "./vNode.js"
-import type { SomeDom } from "./types.utils.js"
-
-type VNode = Kiru.VNode
 
 export interface AppHandleOptions {
   /**
@@ -16,7 +15,7 @@ export interface AppHandleOptions {
 export interface AppHandle {
   id: number
   name: string
-  rootNode: VNode
+  root: Kiru.KiruNode
   render(children: JSX.Element): void
   unmount(): void
 }
@@ -28,40 +27,40 @@ export function mount(
   container: Kiru.ContainerElement,
   options?: AppHandleOptions
 ): AppHandle {
-  if (__DEV__ && container.__kiruNode) {
-    return container.__kiruNode.app!
+  if (__DEV__ && container.__kiruApp) {
+    return container.__kiruApp as AppHandle
   }
 
-  const rootNode = createRootNode(container)
+  const root = createRootOwner(container)
   const id = appId++
   const name = options?.name ?? `App-${id}`
 
   const app: AppHandle = {
     id,
     name,
-    rootNode,
+    root,
     render,
     unmount,
   }
 
   function render(children: JSX.Element) {
-    rootNode.props = { children }
-    renderRootSync(rootNode)
+    root.props = { children }
+    renderRootSync(root)
   }
 
   function unmount() {
-    rootNode.props = { children: null }
-    renderRootSync(rootNode)
+    while (container.firstChild) {
+      domUnmount(container.firstChild)
+    }
+    root.props = { children: null }
     if (__DEV__) {
-      delete (container as HTMLElement).__kiruNode
-      delete rootNode.app
+      delete (container as HTMLElement).__kiruApp
     }
     window.__kiru.emit("unmount", app)
   }
 
-  if (__DEV__) {
-    rootNode.app = app
-  }
+  root.app = app
+  if (__DEV__) container.__kiruApp = app
 
   render(children)
   window.__kiru.emit("mount", app)
@@ -78,12 +77,23 @@ export function mount(
   return app
 }
 
-function createRootNode(container: Kiru.ContainerElement): Kiru.VNode {
-  const node = createVNode(container.nodeName.toLowerCase())
-  node.flags |= FLAG_STATIC_DOM
-  node.dom = container as SomeDom
-  if (__DEV__) {
-    container.__kiruNode = node
+function createRootOwner(container: Kiru.ContainerElement): Kiru.KiruNode {
+  const root: Kiru.KiruNode = {
+    type: ROOT_OWNER_TYPE,
+    key: null,
+    props: { children: null as unknown },
+    parent: null,
+    index: 0,
+    dirty: false,
+    render: (props: Record<string, unknown>) => {
+      const children = props.children
+      const hadRange = !!root.range
+      const range = root.range ?? createRange(root)
+      if (!hadRange) container.append(range.start, range.end)
+      const values = Array.isArray(children) ? children : [children]
+      reconcileChildren(range, values)
+      return null
+    },
   }
-  return node
+  return root
 }

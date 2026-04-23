@@ -2,7 +2,7 @@ import { $HMR_ACCEPT, STREAMED_DATA_EVENT } from "./constants.js"
 import { hydrationMode, node, renderMode } from "./globals.js"
 import { Signal, signal } from "./signals/base.js"
 import { executeWithTracking } from "./signals/tracking.js"
-import { createVNodeId, registerVNodeCleanup } from "./utils/vdom.js"
+import { createOwnerId, registerOwnerCleanup } from "./utils/node.js"
 import { generateRandomID } from "./utils/generateId.js"
 import { __DEV__, isBrowser } from "./env.js"
 import { GenericHMRAcceptor, performHmrAccept } from "./hmr.js"
@@ -29,7 +29,7 @@ export interface ResourceLoaderContext {
   signal: AbortSignal
 }
 
-const resourceMeta = new WeakMap<Kiru.VNode, { id: string; index: number }>()
+const resourceMeta = new WeakMap<Kiru.KiruNode, { id: string; index: number }>()
 
 export function resource<T>(
   callback: (ctx: ResourceLoaderContext) => Promise<T>
@@ -55,8 +55,8 @@ export function resource<T, Source extends ResourceSource>(
   let controller = new AbortController()
 
   let promiseId = ""
-  const vNode = node.current
-  if (!vNode) {
+  const owner = node.current
+  if (!owner) {
     // todo: investigate streaming global resources via SSR
     // likely cooked since we can't ensure modules are loaded in the same order,
   } else if (
@@ -64,15 +64,15 @@ export function resource<T, Source extends ResourceSource>(
     renderMode.current === "stream"
   ) {
     // hydrate or stream - create a deterministic id + index offset to use for promise hydration
-    const { id, index } = resourceMeta.get(vNode) ?? {
-      id: createVNodeId(vNode),
+    const { id, index } = resourceMeta.get(owner) ?? {
+      id: createOwnerId(owner),
       index: 0,
     }
     promiseId = `${id}:resource:${index}`
-    resourceMeta.set(vNode, { id, index: index + 1 })
+    resourceMeta.set(owner, { id, index: index + 1 })
   } else {
     // could be improved. For now, just use a random id to prevent collisions on the cleanups map.
-    // in future, we could implement a cached id based on the vNode for use across other modules too.
+    // in future, we could implement a cached id based on the owner node for use across other modules too.
     promiseId = generateRandomID()
   }
 
@@ -106,8 +106,8 @@ export function resource<T, Source extends ResourceSource>(
     unsubFromSource?.()
   }
 
-  if (vNode) {
-    registerVNodeCleanup(vNode, promiseId, dispose)
+  if (owner) {
+    registerOwnerCleanup(owner, promiseId, dispose)
   }
 
   let promise: Kiru.StatefulPromise<T>

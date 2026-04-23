@@ -1,7 +1,7 @@
 import { $FRAGMENT } from "./constants.js"
 import { normalizeElementKey } from "./utils/index.js"
 
-export function createElement<T extends Kiru.VNode["type"]>(
+export function createElement<T extends Kiru.KiruNode["type"]>(
   type: T,
   props: null | Record<string, unknown> = null,
   ...children: unknown[]

@@ -1,57 +1,16 @@
-import type {
-  DomVNode,
-  ErrorBoundaryNode,
-  FunctionVNode,
-  InlineFnNode,
-} from "./types.utils.js"
-import {
-  $ERROR_BOUNDARY,
-  $INLINE_FN,
-  CONSECUTIVE_DIRTY_LIMIT,
-  FLAG_DELETION,
-  FLAG_DIRTY,
-} from "./constants.js"
-import {
-  captureFocus,
-  commitDeletion,
-  commitWork,
-  createDom,
-  hydrateDom,
-  reinstateFocus,
-} from "./dom/index.js"
-import {
-  assertValidElementProps,
-  latest,
-  traverseApply,
-  isExoticType,
-  getVNodeApp,
-  findParentErrorBoundary,
-  call,
-  propsChanged,
-  depthSort,
-} from "./utils/index.js"
-import { __DEV__ } from "./env.js"
-import { KiruError } from "./error.js"
-import { node, postEffectCleanups, renderMode, setups } from "./globals.js"
-import { hydrationStack } from "./hydration.js"
-import { reconcileChildren } from "./reconciler.js"
-import { isHmrUpdate } from "./hmr.js"
 import type { AppHandle } from "./appHandle.js"
+import { ROOT_OWNER_TYPE } from "./dom/metadata.js"
+import { updateFunctionOwner } from "./dom/runtime.js"
+import { captureFocus, reinstateFocus } from "./dom/focus.js"
+import { node, postEffectCleanups } from "./globals.js"
 
-type VNode = Kiru.VNode
-
-let app: AppHandle | null
-let treesInProgress: VNode[] = []
+let app: AppHandle | null = null
+let queuedOwners: Kiru.KiruNode[] = []
 let isRunningOrQueued = false
-let nextIdleEffects: (() => void)[] = []
-let deletions: VNode[] = []
-let isImmediateEffectsMode = false
-let immediateEffectDirtiedRender = false
-let isRenderDirtied = false
-let consecutiveDirtyCount = 0
+let nextIdleEffects: Array<() => void> = []
+let animationFrameHandle = -1
 let preEffects: Kiru.LifecycleHookCallback[] = []
 let postEffects: Kiru.LifecycleHookCallback[] = []
-let animationFrameHandle = -1
 
 /**
  * Runs a function after any existing work has been completed,
@@ -74,10 +33,9 @@ export function flushSync(): void {
   doWork()
 }
 
-export function renderRootSync(rootNode: VNode): void {
-  rootNode.flags |= FLAG_DIRTY
-  treesInProgress.push(rootNode)
-
+export function renderRootSync(rootNode: Kiru.KiruNode): void {
+  rootNode.dirty = true
+  queuedOwners.push(rootNode)
   isRunningOrQueued = true
   flushSync()
 }
@@ -85,11 +43,8 @@ export function renderRootSync(rootNode: VNode): void {
 /**
  * Queues a node for an update. Has no effect if the node is already deleted or marked for deletion.
  */
-export function requestUpdate(vNode: VNode): void {
-  if (renderMode.current === "hydrate") {
-    return nextIdle(() => queueUpdate(vNode))
-  }
-  queueUpdate(vNode)
+export function requestUpdate(owner: Kiru.KiruNode): void {
+  queueUpdate(owner)
 }
 
 export function useRequestUpdate(): () => void {
@@ -100,99 +55,38 @@ export function useRequestUpdate(): () => void {
   return () => requestUpdate(n)
 }
 
-function queueUpdate(vNode: VNode): void {
-  // In immediate effect mode (onBeforeMount), immediately mark the render as dirty
-  if (isImmediateEffectsMode) {
-    immediateEffectDirtiedRender = true
+function queueUpdate(owner: Kiru.KiruNode): void {
+  if (owner.dirty || owner.unmounted) return
+  owner.dirty = true
+  queuedOwners.push(owner)
+  if (!isRunningOrQueued) {
+    isRunningOrQueued = true
+    animationFrameHandle = window.requestAnimationFrame(doWork)
   }
-
-  // If this node is currently being rendered, just mark it dirty
-  if (node.current === vNode) {
-    if (__DEV__) {
-      window.__kiru.profilingContext?.emit("updateDirtied", app!)
-    }
-    isRenderDirtied = true
-    return
-  }
-
-  if (vNode.flags & (FLAG_DIRTY | FLAG_DELETION)) return
-  vNode.flags |= FLAG_DIRTY
-
-  if (!treesInProgress.length) {
-    treesInProgress.push(vNode)
-
-    if (!isRunningOrQueued) {
-      isRunningOrQueued = true
-      animationFrameHandle = window.requestAnimationFrame(doWork)
-    }
-    return
-  }
-
-  treesInProgress.push(vNode)
 }
-
-function queueDelete(vNode: VNode): void {
-  traverseApply(vNode, (n) => (n.flags |= FLAG_DELETION))
-  deletions.push(vNode)
-}
-
-let currentWorkRoot: VNode | null = null
 
 function doWork(): void {
-  if (__DEV__) {
-    const n = deletions[0] ?? treesInProgress[0]
-    if (n) {
-      app = getVNodeApp(n)!
-      window.__kiru.profilingContext?.beginTick(app)
-    } else {
-      app = null
-    }
-  }
-
-  let len = 1
-
+  app = queuedOwners[0]?.app ?? null
   captureFocus()
-  while (treesInProgress.length) {
-    if (treesInProgress.length > len) {
-      treesInProgress.sort(depthSort)
+  while (queuedOwners.length) {
+    const queued = queuedOwners.shift()!
+    if (!queued.dirty || queued.unmounted) continue
+    if (queued.type === ROOT_OWNER_TYPE) {
+      queued.render?.(queued.props)
+      queued.dirty = false
+    } else {
+      updateFunctionOwner(queued)
     }
-
-    currentWorkRoot = treesInProgress.shift()!
-    len = treesInProgress.length
-
-    const flags = currentWorkRoot.flags
-    if (flags & FLAG_DELETION) continue
-    if (flags & FLAG_DIRTY) {
-      let n: VNode | null = currentWorkRoot
-      while ((n = performUnitOfWork(n))) {}
-
-      while (deletions.length) {
-        commitDeletion(deletions.pop()!)
-      }
-
-      commitWork(currentWorkRoot)
-      currentWorkRoot.flags &= ~FLAG_DIRTY
+    const hooks = queued.hooks
+    if (hooks) {
+      preEffects.push(...hooks.pre)
+      postEffects.push(...hooks.post)
+      hooks.pre.length = 0
+      hooks.post.length = 0
     }
   }
   reinstateFocus()
-
-  isImmediateEffectsMode = true
   flushEffects(preEffects)
-  isImmediateEffectsMode = false
-
-  if (immediateEffectDirtiedRender) {
-    checkForTooManyConsecutiveDirtyRenders()
-    flushEffects(postEffects)
-    immediateEffectDirtiedRender = false
-    consecutiveDirtyCount++
-    if (__DEV__) {
-      window.__kiru.profilingContext?.endTick(app!)
-      window.__kiru.profilingContext?.emit("updateDirtied", app!)
-    }
-    return flushSync()
-  }
-  consecutiveDirtyCount = 0
-
   isRunningOrQueued = false
   while (nextIdleEffects.length) {
     nextIdleEffects.shift()!()
@@ -201,275 +95,8 @@ function doWork(): void {
     flushEffects(postEffectCleanups)
     flushEffects(postEffects)
   })
-  if (__DEV__) {
+  if (app && "window" in globalThis) {
     window.__kiru.emit("update", app!)
-    window.__kiru.profilingContext?.emit("update", app!)
-    window.__kiru.profilingContext?.endTick(app!)
-  }
-}
-
-function performUnitOfWork(vNode: VNode): VNode | null {
-  const next = updateVNode(vNode)
-
-  if (vNode.deletions !== null) {
-    vNode.deletions.forEach(queueDelete)
-    vNode.deletions = null
-  }
-
-  if (next) {
-    return next
-  }
-
-  let nextNode: VNode | null = vNode
-  while (nextNode) {
-    // queue effects upon ascent
-    const { hooks } = nextNode
-    if (hooks) {
-      preEffects.push(...hooks.pre)
-      postEffects.push(...hooks.post)
-      hooks.pre.length = 0
-      hooks.post.length = 0
-    }
-
-    if (nextNode === currentWorkRoot) return null
-    if (nextNode.sibling) {
-      return nextNode.sibling
-    }
-
-    nextNode = nextNode.parent
-    if (renderMode.current === "hydrate" && nextNode?.dom) {
-      hydrationStack.pop()
-    }
-  }
-
-  return null
-}
-
-function updateVNode(vNode: VNode): VNode | null {
-  const { type, props, prev, flags } = vNode
-
-  if (__DEV__ && isHmrUpdate()) {
-  } else if (
-    prev &&
-    (flags & FLAG_DIRTY) === 0 &&
-    (prev.props === props || !propsChanged(prev.props, props))
-  ) {
-    return null
-  }
-  try {
-    if (typeof type === "string") {
-      return updateHostComponent(vNode as DomVNode)
-    } else if (isExoticType(type)) {
-      return updateExoticComponent(vNode)
-    } else {
-      return updateFunctionComponent(vNode as FunctionVNode)
-    }
-  } catch (error) {
-    if (__DEV__) {
-      window.__kiru.emit(
-        "error",
-        app!,
-        error instanceof Error ? error : new Error(String(error))
-      )
-    }
-
-    const handler = findParentErrorBoundary(vNode)
-    if (handler) {
-      handler.flags |= FLAG_DIRTY
-      const e = (handler.error =
-        error instanceof Error ? error : new Error(String(error)))
-
-      handler.props.onError?.(e)
-      if (handler.depth < currentWorkRoot!.depth) {
-        currentWorkRoot = handler
-      }
-      return handler
-    }
-
-    if (KiruError.isKiruError(error)) {
-      if (error.fatal) {
-        throw error
-      }
-      console.error(error)
-      return vNode.child
-    }
-    setTimeout(() => {
-      throw error
-    })
-  }
-  return null
-}
-
-function updateExoticComponent(vNode: VNode): VNode | null {
-  const { props, type } = vNode
-  let children = props.children
-
-  if (type === $INLINE_FN) {
-    node.current = vNode
-    let render = (props as InlineFnNode["props"]).expr
-    if (__DEV__) {
-      render = latest(render)
-    }
-    try {
-      children = render()
-    } finally {
-      node.current = null
-    }
-  } else if (type === $ERROR_BOUNDARY) {
-    const n = vNode as ErrorBoundaryNode
-    const { error } = n
-    if (error) {
-      children =
-        typeof props.fallback === "function"
-          ? props.fallback(error)
-          : props.fallback
-
-      delete n.error
-    }
-  }
-
-  return (vNode.child = reconcileChildren(vNode, children))
-}
-
-function updateFunctionComponent(vNode: FunctionVNode): VNode | null {
-  const { type, props, subs } = vNode
-
-  /** Only sync prop-derived signals when update came from parent (new props), not from internal subscription (e.g. signal). */
-  const shouldSyncProps = (vNode.flags & FLAG_DIRTY) === 0
-
-  try {
-    node.current = vNode
-    let newChild
-    let renderTryCount = 0
-    do {
-      vNode.flags &= ~FLAG_DIRTY
-      isRenderDirtied = false
-
-      /**
-       * remove previous signal subscriptions (if any) every render.
-       * this prevents no-longer-observed signals from triggering updates
-       * in components that are not currently using them.
-       *
-       * TODO: in future, we might be able to optimize this by
-       * only clearing the subscriptions that are no longer needed
-       * and not clearing the entire set.
-       */
-      if (subs) {
-        subs.forEach(call)
-        subs.clear()
-      }
-
-      if (__DEV__ && isHmrUpdate()) {
-        const { hooks, cleanups } = vNode
-        if (cleanups) {
-          Object.values(cleanups).forEach(call)
-          delete vNode.cleanups
-        }
-        if (hooks) {
-          const { preCleanups, postCleanups } = hooks
-          preCleanups.forEach(call)
-          postCleanups.forEach(call)
-          preCleanups.length = postCleanups.length = 0
-        }
-        delete vNode.propSyncs
-        delete vNode.render
-      }
-
-      newChild = renderFunctionComponent(vNode, type, props, shouldSyncProps)
-
-      if (++renderTryCount > CONSECUTIVE_DIRTY_LIMIT) {
-        if (__DEV__) {
-          throw new KiruError({
-            message:
-              "Too many re-renders. Kiru limits the number of renders to prevent an infinite loop.",
-            fatal: true,
-            vNode,
-          })
-        }
-        break
-      }
-    } while (isRenderDirtied)
-
-    return (vNode.child = reconcileChildren(vNode, newChild))
-  } finally {
-    node.current = null
-  }
-}
-
-function renderFunctionComponent(
-  vNode: FunctionVNode,
-  type: Function,
-  props: Record<string, unknown>,
-  shouldSyncProps: boolean
-): unknown {
-  let { render, propSyncs } = vNode
-
-  if (render) {
-    if (shouldSyncProps) {
-      const p = { ...props }
-      propSyncs?.forEach((sync) => sync(p))
-    }
-    return render(props)
-  }
-
-  if (__DEV__) {
-    type = latest(type)
-    if (typeof type !== "function") {
-      throw new KiruError({
-        message: `received invalid component type: ${type}`,
-        fatal: true,
-        vNode,
-      })
-    }
-  }
-
-  let newChild = type(props)
-  if (typeof newChild === "function") {
-    vNode.subs?.forEach(call) // unsub from signals observed during setup
-    vNode.render = newChild
-    if (shouldSyncProps) {
-      const p = { ...props }
-      propSyncs?.forEach((sync) => sync(p))
-    }
-    newChild = newChild(props)
-  } else if (__DEV__ && setups.has(vNode)) {
-    throw new Error("setup() must not be called inside a render function")
-  }
-
-  return newChild
-}
-
-function updateHostComponent(vNode: DomVNode): VNode | null {
-  const { props, type } = vNode
-  if (__DEV__) {
-    assertValidElementProps(vNode)
-  }
-  if (!vNode.dom) {
-    if (renderMode.current === "hydrate") {
-      hydrateDom(vNode)
-    } else {
-      vNode.dom = createDom(vNode)
-    }
-    if (__DEV__ && vNode.dom instanceof Element) {
-      vNode.dom.__kiruNode = vNode
-    }
-  }
-  // text should _never_ have children
-  if (type !== "#text") {
-    vNode.child = reconcileChildren(vNode, props.children)
-    if (vNode.child && renderMode.current === "hydrate") {
-      hydrationStack.push(vNode.dom!)
-    }
-  }
-
-  return vNode.child
-}
-
-function checkForTooManyConsecutiveDirtyRenders(): void {
-  if (consecutiveDirtyCount > CONSECUTIVE_DIRTY_LIMIT) {
-    throw new KiruError(
-      "Maximum update depth exceeded. This can happen when a component repeatedly updates during render or in onBeforeMount. Kiru limits the number of nested updates to prevent infinite loops."
-    )
   }
 }
 

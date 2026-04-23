@@ -1,6 +1,6 @@
 import { node } from "./globals.js"
 import {
-  isVNode,
+  isKiruNode,
   encodeHtmlEntities,
   propsToElementAttributes,
   isExoticType,
@@ -22,7 +22,7 @@ export interface HeadlessRenderContext {
 export function headlessRender(
   ctx: HeadlessRenderContext,
   el: unknown,
-  parent: Kiru.VNode | null = null,
+  parent: Kiru.KiruNode | null = null,
   idx: number = 0
 ): void {
   if (el === null) return
@@ -54,11 +54,10 @@ export function headlessRender(
     }
     return
   }
-  if (!isVNode(el)) {
+  if (!isKiruNode(el)) {
     return
   }
   el.parent = parent
-  el.depth = (parent?.depth ?? -1) + 1
   el.index = idx
   const { type, props = {} } = el
   if (type === "#text") {
@@ -123,6 +122,10 @@ export function headlessRender(
   }
 
   if (__DEV__) assertValidElementProps(el)
+  if (typeof type !== "string") {
+    headlessRender(ctx, children, el, idx)
+    return
+  }
   const attrs = propsToElementAttributes(props)
   ctx.write(`<${type}${attrs.length ? ` ${attrs}` : ""}>`)
 

@@ -12,9 +12,9 @@ export type {
   SomeDom,
   MaybeElement,
   MaybeDom,
-  FunctionVNode,
-  ElementVNode,
-  DomVNode,
+  FunctionOwnerNode,
+  ElementOwnerNode,
+  DomOwnerNode,
   ContextNode,
   ErrorBoundaryNode,
   FragmentNode,
@@ -34,38 +34,38 @@ type SomeDom = HTMLElement | SVGElement | Text
 type MaybeElement = SomeElement | undefined
 type MaybeDom = SomeDom | undefined
 
-interface FunctionVNode extends Kiru.VNode {
+interface FunctionOwnerNode extends Kiru.KiruNode {
   type: (props: Record<string, unknown>) => JSX.Element
 }
 
-interface ElementVNode extends Kiru.VNode {
+interface ElementOwnerNode extends Kiru.KiruNode {
   dom: SomeElement
   type: string
 }
-interface DomVNode extends Kiru.VNode {
+interface DomOwnerNode extends Kiru.KiruNode {
   dom: SomeDom
   type: "#text" | (string & {})
 }
 
-interface ContextNode<T> extends Kiru.VNode {
+interface ContextNode<T> extends Kiru.KiruNode {
   type: typeof $CONTEXT
-  props: Kiru.VNode["props"] & {
+  props: Kiru.KiruNode["props"] & {
     value: T
     ctx: Kiru.Context<T>
   }
 }
 
-interface ErrorBoundaryNode extends Kiru.VNode {
+interface ErrorBoundaryNode extends Kiru.KiruNode {
   type: typeof $ERROR_BOUNDARY
   props: ErrorBoundaryProps
   error?: Error
 }
 
-interface FragmentNode extends Kiru.VNode {
+interface FragmentNode extends Kiru.KiruNode {
   type: typeof $FRAGMENT
 }
 
-interface InlineFnNode extends Kiru.VNode {
+interface InlineFnNode extends Kiru.KiruNode {
   type: typeof $INLINE_FN
   props: {
     expr: () => JSX.Element
@@ -104,7 +104,7 @@ type ArrayHas<T extends any[], U> =
   Extract<T[number], U> extends never ? false : true
 
 type RecordHas<T extends Record<string, any>, U> = [
-  Extract<T[keyof T], U>,
+  Extract<T[keyof T], U>
 ] extends [never]
   ? false
   : true

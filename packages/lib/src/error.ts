@@ -8,7 +8,7 @@ type KiruErrorOptions =
       /** Used to indicate that the error is fatal and should crash the application */
       fatal?: boolean
       /** Used to generate custom node stack */
-      vNode?: Kiru.VNode
+      node?: Kiru.KiruNode
     }
 
 export class KiruError extends Error {
@@ -22,8 +22,9 @@ export class KiruError extends Error {
         : optionsOrMessage.message
     super(message)
     if (typeof optionsOrMessage !== "string") {
-      if (__DEV__ && optionsOrMessage?.vNode) {
-        const stack = createVNodeStack(optionsOrMessage.vNode)
+      const node = optionsOrMessage?.node
+      if (__DEV__ && node) {
+        const stack = createOwnerStack(node)
         this.message = `${message}
 ${stack.map((item) => `    at ${item}`).join("\n")}
 `
@@ -37,8 +38,8 @@ ${stack.map((item) => `    at ${item}`).join("\n")}
   }
 }
 
-function createVNodeStack(vNode: Kiru.VNode) {
-  let n = vNode
+function createOwnerStack(node: Kiru.KiruNode) {
+  let n = node
   let componentFns: string[] = []
   while (n) {
     if (!n.parent) break // skip root node

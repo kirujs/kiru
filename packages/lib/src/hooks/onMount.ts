@@ -1,5 +1,5 @@
 import { sideEffectsEnabled } from "../utils/index.js"
-import { getVNodeLifecycleHooks, wrapLifecycleHookCallback } from "./utils.js"
+import { getOwnerLifecycleHooks, wrapLifecycleHookCallback } from "./utils.js"
 
 /**
  * Registers a callback that runs after the component is first mounted to the DOM.
@@ -10,7 +10,7 @@ import { getVNodeLifecycleHooks, wrapLifecycleHookCallback } from "./utils.js"
  */
 export function onMount(fn: () => (() => void) | void): void {
   if (!sideEffectsEnabled()) return
-  const hooks = getVNodeLifecycleHooks()
+  const hooks = getOwnerLifecycleHooks()
   if (!hooks) {
     throw new Error("Cannot queue onMount effect outside of a component")
   }

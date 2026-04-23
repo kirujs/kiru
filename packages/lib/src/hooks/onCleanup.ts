@@ -1,11 +1,5 @@
-import { $INLINE_FN } from "../constants.js"
-import { __DEV__ } from "../env.js"
 import { node } from "../globals.js"
-import {
-  generateRandomID,
-  registerVNodeCleanup,
-  sideEffectsEnabled,
-} from "../utils/index.js"
+import { generateRandomID, sideEffectsEnabled } from "../utils/index.js"
 
 /**
  * Registers a cleanup function that runs when the component unmounts.
@@ -15,9 +9,9 @@ import {
  */
 export function onCleanup(fn: () => void): void {
   if (!sideEffectsEnabled()) return
-  const vNode = node.current!
-  if (!vNode || (__DEV__ && vNode.type === $INLINE_FN)) {
+  const current = node.current
+  if (!current || typeof current.type !== "function") {
     throw new Error("Cannot queue onCleanup effect outside of a component")
   }
-  registerVNodeCleanup(vNode, generateRandomID(10), fn)
+  ;(current.cleanups ??= {})[generateRandomID(10)] = fn
 }

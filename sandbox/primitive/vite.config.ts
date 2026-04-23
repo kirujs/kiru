@@ -9,6 +9,7 @@ export default defineConfig({
   },
   plugins: [
     kiru({
+      devtools: false,
       loggingEnabled: true,
       experimental: {
         // TODO: static hoisting is not working with the primitive app...

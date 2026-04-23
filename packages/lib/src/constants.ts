@@ -11,11 +11,8 @@ export {
   CONSECUTIVE_DIRTY_LIMIT,
   STREAMED_DATA_EVENT,
   EVENT_PREFIX_REGEX,
-  FLAG_UPDATE,
-  FLAG_PLACEMENT,
   FLAG_DELETION,
-  FLAG_STATIC_DOM,
-  FLAG_DIRTY,
+  RANGE_START,
 }
 
 export { voidElements, svgTags, booleanAttributes, snakeCaseAttributes }
@@ -33,13 +30,10 @@ const $DEV_FILE_LINK = Symbol.for("kiru.devFileLink")
 const CONSECUTIVE_DIRTY_LIMIT = 50
 const STREAMED_DATA_EVENT = "kiru:deferred"
 
-const FLAG_UPDATE = 1 << 1
-const FLAG_PLACEMENT = 1 << 2
 const FLAG_DELETION = 1 << 3
-const FLAG_STATIC_DOM = 1 << 4
-const FLAG_DIRTY = 1 << 7
 
 const EVENT_PREFIX_REGEX = /^on:?/
+const RANGE_START = "$"
 
 const voidElements = new Set([
   "kiru-head-outlet",

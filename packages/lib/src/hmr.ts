@@ -1,5 +1,4 @@
 import { $HMR_ACCEPT, $DEV_FILE_LINK } from "./constants.js"
-import { traverseApply } from "./utils/index.js"
 import { flushSync, requestUpdate } from "./scheduler.js"
 import { Signal } from "./signals/base.js"
 import type { Effect } from "./signals/effect.js"
@@ -100,7 +99,7 @@ export function createHmrContext() {
 
     // TODO: we should call destroy() on unmatched old entries
 
-    let dirtyNodes = new Set<Kiru.VNode>()
+    let dirtyNodes = new Set<any>()
     for (const [name, newEntry] of Object.entries(hotVarRegistrationEntries)) {
       const oldEntry = currentModuleMemory.hotVars.get(name)
 
@@ -128,16 +127,8 @@ export function createHmrContext() {
         )
         continue
       }
-      if (oldEntry.type === "component" && newEntry.type === "component") {
-        window.__kiru.apps.forEach((app) => {
-          traverseApply(app.rootNode, (vNode) => {
-            if (vNode.type === oldEntry.value) {
-              vNode.type = newEntry.value as any
-              dirtyNodes.add(vNode)
-            }
-          })
-        })
-      }
+      // Owner-based renderer no longer traverses a VDOM tree for HMR.
+      // Generic acceptors still handle stateful constructs; component swaps rely on rerender.
     }
 
     if (dirtyNodes.size) {

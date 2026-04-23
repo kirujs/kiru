@@ -124,7 +124,7 @@ export class ComputedSignal<T> extends Signal<T> {
     if (__DEV__) {
       /**
        * This is a safeguard for dev-mode only, where a 'read' on an
-       * already-disposed signal during HMR update => `dom.setSignalProp`
+       * already-disposed signal during HMR update => DOM property binding sync
        * would throw due to invalid subs-map access.
        *
        * Perhaps in future we could handle this better by carrying over

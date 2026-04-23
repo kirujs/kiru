@@ -3,16 +3,13 @@ import {
   safeStringify,
   sideEffectsEnabled,
   generateRandomID,
-  registerVNodeCleanup,
 } from "../utils/index.js"
 import {
   $DEV_FILE_LINK,
   $HMR_ACCEPT,
-  $INLINE_FN,
   $SIGNAL,
 } from "../constants.js"
 import { __DEV__, isBrowser } from "../env.js"
-import { KiruError } from "../error.js"
 import { node } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"
 import { tracking } from "./tracking.js"
@@ -62,17 +59,9 @@ export class Signal<T> {
       } satisfies HMRAccept<Signal<any>>
     }
 
-    const n = node.current
-    if (n) {
-      if (__DEV__ && n.type === $INLINE_FN) {
-        throw new KiruError({
-          message: "Signals cannot be created inside inline functions",
-          vNode: n,
-        })
-      }
-      if (sideEffectsEnabled()) {
-        registerVNodeCleanup(n, this.$id, Signal.dispose.bind(null, this))
-      }
+    const current = node.current
+    if (current && sideEffectsEnabled()) {
+      ;(current.cleanups ??= {})[this.$id] = Signal.dispose.bind(null, this)
     }
   }
 
@@ -177,18 +166,22 @@ export class Signal<T> {
     if (tracking.enabled === false) return
     if (__DEV__) signal = latest(signal)
 
-    const vNode = node.current
+    const current = node.current
     const trackedSignalObservations = tracking.current()
     if (trackedSignalObservations) {
       // track non-rendering access, only track rendering access if renderMode is DOM/hydrate
-      if (!vNode || (vNode && sideEffectsEnabled())) {
+      if (!current || (current && sideEffectsEnabled())) {
         trackedSignalObservations.set(signal.$id, signal)
       }
       return
     }
-    if (!vNode || !sideEffectsEnabled()) return
-    const unsub = signal.subscribe(() => requestUpdate(vNode))
-    ;(vNode.subs ??= new Set()).add(unsub)
+    if (!current || !sideEffectsEnabled()) return
+    const unsub = signal.subscribe(() => requestUpdate(current))
+    if ("unsubs" in current) {
+      ;(current.unsubs ??= []).push(unsub)
+      return
+    }
+    ;(current.subs ??= new Set()).add(unsub)
   }
 
   static dispose(signal: Signal<any>) {

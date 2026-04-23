@@ -5,7 +5,7 @@ import {
   latest,
   generateRandomID,
   call,
-  registerVNodeCleanup,
+  registerOwnerCleanup,
   sideEffectsEnabled,
 } from "../utils/index.js"
 import type { Signal } from "./base.js"
@@ -42,11 +42,11 @@ export class Effect<const Deps extends readonly Signal<unknown>[] = []> {
       if (__DEV__ && n.type === $INLINE_FN) {
         throw new KiruError({
           message: "Effects cannot be created inside inline functions",
-          vNode: n,
+          node: n,
         })
       }
       if (!sideEffectsEnabled()) return // prevent side effects in non-browser environments
-      registerVNodeCleanup(n, this.id, this.stop.bind(this))
+      registerOwnerCleanup(n, this.id, this.stop.bind(this))
     }
     this.start()
   }
