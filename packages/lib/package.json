@@ -74,6 +74,7 @@
     "@types/chai": "^5.2.3",
     "@types/jsdom": "^27.0.0",
     "@types/mocha": "^10.0.10",
+    "@types/node": "^25.6.0",
     "chai": "^6.2.2",
     "ts-mocha": "^11.1.0",
     "typescript": "^5.9.3"
