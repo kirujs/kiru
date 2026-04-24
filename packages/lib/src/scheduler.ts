@@ -55,6 +55,15 @@ export function useRequestUpdate(): () => void {
   return () => requestUpdate(n)
 }
 
+export function queueOwnerLifecycleHooks(owner: Kiru.KiruNode): void {
+  const hooks = owner.hooks
+  if (!hooks) return
+  preEffects.push(...hooks.pre)
+  postEffects.push(...hooks.post)
+  hooks.pre.length = 0
+  hooks.post.length = 0
+}
+
 function queueUpdate(owner: Kiru.KiruNode): void {
   if (owner.dirty || owner.unmounted) return
   owner.dirty = true
@@ -77,13 +86,7 @@ function doWork(): void {
     } else {
       updateFunctionOwner(queued)
     }
-    const hooks = queued.hooks
-    if (hooks) {
-      preEffects.push(...hooks.pre)
-      postEffects.push(...hooks.post)
-      hooks.pre.length = 0
-      hooks.post.length = 0
-    }
+    queueOwnerLifecycleHooks(queued)
   }
   reinstateFocus()
   flushEffects(preEffects)

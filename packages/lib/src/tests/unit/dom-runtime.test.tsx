@@ -205,4 +205,176 @@ describe("DOM runtime (Node + jsdom)", () => {
     })
   })
 
+  it("sets and clears object refs across mount/update/unmount", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const firstRef = kiru.ref<Element | null>(null)
+      const secondRef = kiru.ref<Element | null>(null)
+
+      const app = kiru.mount(<div id="one" ref={firstRef} />, container)
+      assert.ok(firstRef.current, "ref should be set on initial mount")
+      assert.strictEqual(
+        (firstRef.current as Element).id,
+        "one",
+        "ref should point to the mounted element"
+      )
+
+      app.render(<div id="one" ref={secondRef} />)
+      assert.strictEqual(
+        firstRef.current,
+        null,
+        "previous ref should be cleared when ref prop changes"
+      )
+      assert.ok(secondRef.current, "next ref should be assigned on update")
+
+      app.unmount()
+      await waitForMicrotask()
+      assert.strictEqual(
+        secondRef.current,
+        null,
+        "ref should be cleared when element unmounts"
+      )
+    })
+  })
+
+  it("supports callback refs in DOM-first runtime", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const calls: Array<Element | null> = []
+      const capture = (el: Element | null) => calls.push(el)
+      const app = kiru.mount(<button ref={capture}>ok</button>, container)
+      assert.ok(
+        calls.at(-1) instanceof window.Element,
+        "callback ref should receive mounted element"
+      )
+
+      app.unmount()
+      await waitForMicrotask()
+      assert.strictEqual(
+        calls.at(-1),
+        null,
+        "callback ref should receive null on unmount"
+      )
+    })
+  })
+
+  it("creates SVG elements with the SVG namespace", async () => {
+    await withJSDOM(async (container, kiru) => {
+      kiru.mount(
+        <svg>
+          <g>
+            <circle cx="5" cy="5" r="3" />
+          </g>
+        </svg>,
+        container
+      )
+
+      const svg = container.querySelector("svg")
+      const g = container.querySelector("g")
+      const circle = container.querySelector("circle")
+
+      assert.ok(svg && g && circle, "svg subtree should render")
+      assert.strictEqual(
+        svg.namespaceURI,
+        "http://www.w3.org/2000/svg",
+        "svg root should use SVG namespace"
+      )
+      assert.strictEqual(
+        g.namespaceURI,
+        "http://www.w3.org/2000/svg",
+        "nested svg element should use SVG namespace"
+      )
+      assert.strictEqual(
+        circle.namespaceURI,
+        "http://www.w3.org/2000/svg",
+        "leaf svg element should use SVG namespace"
+      )
+    })
+  })
+
+  it("runs onMount after ref assignment for mounted host nodes", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const seen = kiru.ref<HTMLElement | null>(null)
+      let mountedRef: HTMLElement | null = null
+      let mountedCalled = false
+
+      const Example: Kiru.FC = () => {
+        kiru.onMount(() => {
+          mountedCalled = true
+          mountedRef = seen.current
+        })
+        return () => <div ref={seen}>ready</div>
+      }
+
+      kiru.mount(<Example />, container)
+      await waitForMicrotask()
+      assert.ok(mountedCalled, "onMount should fire for mounted component")
+      assert.ok(mountedRef, "onMount should observe assigned ref")
+      assert.strictEqual(
+        (mountedRef as HTMLElement).textContent,
+        "ready",
+        "ref should point to mounted host element"
+      )
+    })
+  })
+
+  it("runs component cleanups before clearing host refs", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const seen = kiru.ref<HTMLElement | null>(null)
+      let cleanupSawRef = false
+
+      const Example: Kiru.FC = () => {
+        kiru.onCleanup(() => {
+          cleanupSawRef = !!seen.current
+        })
+        return () => <div ref={seen}>bye</div>
+      }
+
+      const app = kiru.mount(<Example />, container)
+      app.unmount()
+      await waitForMicrotask()
+      assert.ok(
+        cleanupSawRef,
+        "onCleanup should run before host ref is nulled during unmount"
+      )
+      assert.strictEqual(
+        seen.current,
+        null,
+        "host ref should be nulled after cleanup runs"
+      )
+    })
+  })
+
+  it("keeps sibling host event handlers isolated inside one component", async () => {
+    await withJSDOM(async (container, kiru) => {
+      let left = 0
+      let right = 0
+
+      const Pair: Kiru.FC<{ rightEnabled: boolean }> = ({ rightEnabled }) => (
+        <div>
+          <button id="left" onclick={() => left++}>
+            left
+          </button>
+          <button id="right" onclick={rightEnabled ? () => right++ : undefined}>
+            right
+          </button>
+        </div>
+      )
+
+      const app = kiru.mount(<Pair rightEnabled={true} />, container)
+      let leftBtn = container.querySelector("#left") as HTMLButtonElement
+      let rightBtn = container.querySelector("#right") as HTMLButtonElement
+      leftBtn.click()
+      rightBtn.click()
+      assert.strictEqual(left, 1, "left handler should fire")
+      assert.strictEqual(right, 1, "right handler should fire")
+
+      app.render(<Pair rightEnabled={false} />)
+      leftBtn = container.querySelector("#left") as HTMLButtonElement
+      rightBtn = container.querySelector("#right") as HTMLButtonElement
+      leftBtn.click()
+      rightBtn.click()
+      assert.strictEqual(left, 2, "left handler should still fire after update")
+      assert.strictEqual(right, 1, "right handler should be removed independently")
+    })
+  })
+
 })

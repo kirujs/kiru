@@ -1,7 +1,7 @@
 import { signal, Signal } from "../signals/base.js"
 import { node, setups } from "../globals.js"
 import { executeWithTracking } from "../signals/tracking.js"
-import { createOwnerId, isNodeDeleted } from "../utils/node.js"
+import { createStableId, isNodeDeleted } from "../utils/node.js"
 
 export interface Setup<Props extends {}> {
   readonly derive: <T>(
@@ -48,7 +48,7 @@ export function setup<Props extends {}>(): Setup<Props> {
       })
       return resultSig
     },
-    id: signal(createOwnerId(current as Kiru.KiruNode)),
+    id: signal(createStableId(current as Kiru.KiruNode)),
     get props() {
       return currentProps.current
     },
@@ -63,7 +63,7 @@ export function setup<Props extends {}>(): Setup<Props> {
     if (isNodeDeleted(current as Kiru.KiruNode)) return
     const owner = current as Kiru.KiruNode
     if (owner.index !== prevIndex) {
-      setupResult.id.value = createOwnerId(owner)
+      setupResult.id.value = createStableId(owner)
       prevIndex = owner.index
     }
   })

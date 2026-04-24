@@ -1,4 +1,5 @@
 import * as kiru from "kiru"
+import { getAppOwners } from "kiru/utils"
 import { devtoolsState, kiruGlobal } from "../../state"
 import { getNodeName, ifDevtoolsAppRootHasFocus } from "../../utils"
 
@@ -18,7 +19,7 @@ export interface GraphRoot {
 
 export interface GraphNode {
   id: string
-  kiruNode: Kiru.VNode
+  kiruNode: Kiru.KiruNode
   name: string
   collapsed: kiru.Signal<boolean>
   parent: GraphNode | null
@@ -30,7 +31,7 @@ type DiffMapEntry = {
   id: string
   collapsed: kiru.Signal<boolean>
 }
-type DiffMap = Map<Kiru.VNode, DiffMapEntry>
+type DiffMap = Map<Kiru.KiruNode, DiffMapEntry>
 
 kiru.effect(() => {
   const app = selectedApp.value
@@ -70,13 +71,10 @@ function reconcileGraph(
   const existing: DiffMap = new Map()
   collectCollapsedSignals(currentGraph, existing)
 
-  const rootNode = app.rootNode
   const newGraph = createGraphRoot()
-  if (rootNode) {
-    const trimmed = search.trim().toLowerCase()
-    const searchTerms = trimmed ? trimmed.split(/\s+/) : []
-    newGraph.nodes.push(...searchFunctionNodes(rootNode, searchTerms, existing))
-  }
+  const trimmed = search.trim().toLowerCase()
+  const searchTerms = trimmed ? trimmed.split(/\s+/) : []
+  newGraph.nodes.push(...searchFunctionNodes(app, searchTerms, existing))
 
   // Dispose collapsed signals for nodes that are no longer in the graph
   for (const { collapsed } of existing.values()) {
@@ -102,20 +100,30 @@ function collectCollapsedSignals(
 }
 
 function searchFunctionNodes(
-  vNode: Kiru.VNode | null,
+  app: kiru.AppHandle,
   terms: string[],
   existing: DiffMap = new Map()
 ): GraphNode[] {
-  const result: GraphNode[] = []
-  let n = vNode
-  while (n) {
-    const children = searchFunctionNodes(n.child, terms, existing)
-    if (typeof n.type !== "function") {
-      result.push(...children)
-    } else {
-      const name = getNodeName(n)
+  const components = getAppOwners(app).filter(
+    (owner): owner is Kiru.KiruNode & { type: Function } =>
+      typeof owner.type === "function"
+  )
+  const childrenByParent = new Map<Kiru.KiruNode | null, Kiru.KiruNode[]>()
+  components.forEach((component) => {
+    const parent = findComponentParent(component)
+    const siblings = childrenByParent.get(parent) ?? []
+    siblings.push(component)
+    childrenByParent.set(parent, siblings)
+  })
+
+  const build = (parentComponent: Kiru.KiruNode | null): GraphNode[] => {
+    const components = childrenByParent.get(parentComponent) ?? []
+    const result: GraphNode[] = []
+    for (const component of components) {
+      const children = build(component)
+      const name = getNodeName(component)
       if (searchMatchesItem(terms, name)) {
-        const node = createGraphNode(n, name, existing)
+        const node = createGraphNode(component, name, existing)
         node.child = children[0] ?? null
         for (let i = 0; i < children.length; i++) {
           children[i].parent = node
@@ -126,10 +134,19 @@ function searchFunctionNodes(
         result.push(...children)
       }
     }
-
-    n = n.sibling
+    return result
   }
-  return result
+
+  return build(null)
+}
+
+function findComponentParent(node: Kiru.KiruNode): Kiru.KiruNode | null {
+  let parent = node.parent
+  while (parent) {
+    if (typeof parent.type === "function") return parent
+    parent = parent.parent
+  }
+  return null
 }
 
 function searchMatchesItem(terms: string[], item: string) {
@@ -145,7 +162,7 @@ function createGraphRoot(...nodes: GraphNode[]): GraphRoot {
 }
 
 function createGraphNode(
-  vNode: Kiru.VNode,
+  vNode: Kiru.KiruNode,
   name: string,
   existing: DiffMap = new Map()
 ): GraphNode {
@@ -166,9 +183,9 @@ function createGraphNode(
 }
 
 function expandParentsOfSelectedNode(graph: GraphRoot) {
-  const vNode = selectedNode.peek()
-  if (!vNode) return
-  const graphNode = findGraphNodeByVNode(graph, vNode)
+  const node = selectedNode.peek()
+  if (!node) return
+  const graphNode = findGraphNodeByVNode(graph, node)
   if (!graphNode) return
   let p = graphNode.parent
   while (p) {
@@ -177,8 +194,8 @@ function expandParentsOfSelectedNode(graph: GraphRoot) {
   }
 }
 
-function onSelectedNodeChange(vNode: Kiru.VNode | null) {
-  if (!vNode) return
+function onSelectedNodeChange(node: Kiru.KiruNode | null) {
+  if (!node) return
   expandParentsOfSelectedNode(appGraph.peek())
 }
 
@@ -219,9 +236,9 @@ const handleKeyDown = (e: KeyboardEvent) => {
 }
 
 function setCollapsed(collapsed: boolean) {
-  const currentVNode = selectedNode.peek()
-  if (!currentVNode) return
-  const graphNode = findGraphNodeByVNode(appGraph.peek(), currentVNode)
+  const currentNode = selectedNode.peek()
+  if (!currentNode) return
+  const graphNode = findGraphNodeByVNode(appGraph.peek(), currentNode)
   if (!graphNode?.child) return
   graphNode.collapsed.value = collapsed
 }
@@ -279,7 +296,7 @@ function findGraphNode(root: GraphRoot, node: HTMLElement): GraphNode | null {
 
 function findGraphNodeByVNode(
   root: GraphRoot,
-  vNode: Kiru.VNode
+  vNode: Kiru.KiruNode
 ): GraphNode | null {
   const search = (n: GraphNode | null): GraphNode | null => {
     if (!n) return null

@@ -3,7 +3,7 @@ import assert from "node:assert"
 import { createKiruNode } from "../../ownerNode.js"
 import { node } from "../../globals.js"
 import { setup } from "../../hooks/setup.js"
-import { createOwnerId } from "../../utils/node.js"
+import { createStableId } from "../../utils/node.js"
 
 describe("setup", () => {
   it("returns a cached setup per owner node and keeps derived signals in sync with props", () => {
@@ -54,7 +54,7 @@ describe("setup", () => {
     const initialId = id.value
     assert.strictEqual(
       initialId,
-      createOwnerId(n),
+      createStableId(n),
       "initial id should be derived from the current owner node"
     )
 
@@ -77,7 +77,7 @@ describe("setup", () => {
     )
     assert.strictEqual(
       id.value,
-      createOwnerId(n),
+      createStableId(n),
       "updated id should reflect the new owner position"
     )
 

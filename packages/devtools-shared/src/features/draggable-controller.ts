@@ -250,6 +250,7 @@ export function createDraggableController(
 
     window.addEventListener("resize", calculatePosition)
     handle.addEventListener("mousedown", onHandleMouseDown)
+    console.log("init", handle, container)
 
     cleanups.push(() => {
       resizeObserver.disconnect()

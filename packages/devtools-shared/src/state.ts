@@ -1,7 +1,7 @@
 import { Signal, signal, type AppHandle } from "kiru"
 import { assert, isDevtoolsApp } from "./utils"
 import { APP_TABS } from "./constants"
-import { getVNodeApp } from "kiru/utils"
+import { getOwnerApp } from "kiru/utils"
 
 const stateRegister: Record<string, any> = ((window.opener ?? window)[
   "__kiru_devtools_state_register"
@@ -95,13 +95,13 @@ const [devtoolsState] = createSyncedState("kiru-devtools:syncedState", {
   appSearchInput: null as HTMLInputElement | null,
   componentSelection: {
     enabled: false,
-    componentNode: null as Kiru.VNode | null,
+    componentNode: null as Kiru.KiruNode | null,
   },
   devtoolsViewMode: "embedded" as "embedded" | "popup",
   devtoolsTab: "Apps" as keyof typeof APP_TABS,
   popupWindow: null as Window | null,
   selectedApp: null as AppHandle | null,
-  selectedNode: null as Kiru.VNode | null,
+  selectedNode: null as Kiru.KiruNode | null,
   viewerSettings: {
     objectKeysChunkSize: 10,
     arrayChunkSize: 10,
@@ -161,7 +161,7 @@ if ("window" in globalThis) {
 
   componentSelection.subscribe(({ componentNode }) => {
     selectedNode.value = componentNode
-    selectedApp.value = componentNode ? getVNodeApp(componentNode) : null
+    selectedApp.value = componentNode ? getOwnerApp(componentNode) : null
   })
 }
 

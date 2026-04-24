@@ -8,6 +8,7 @@ import {
 import { createElement } from "../index.js"
 import { KiruError } from "../error.js"
 import { node } from "../globals.js"
+import type { AppHandle } from "../appHandle.js"
 
 export {
   cloneElement,
@@ -24,9 +25,12 @@ export {
   findParent,
   assertValidElementProps,
   normalizeElementKey,
-  createStableId as createOwnerId,
-  registerOwnerCleanup,
+  createStableId,
+  registerCleanup,
   propsChanged,
+  getNodeFromDom,
+  getAppOwners,
+  getOwnerElements,
 }
 
 function cloneElement(element: Kiru.Element): Kiru.Element {
@@ -154,11 +158,10 @@ function createStableId(node: Kiru.KiruNode): string {
     path.push(current.index)
     current = current.parent
   }
-  console.log(path)
   return `k:${BigInt(path.join("")).toString(36)}`
 }
 
-function registerOwnerCleanup(
+function registerCleanup(
   node: Kiru.KiruNode,
   id: string,
   callback: () => void
@@ -179,4 +182,48 @@ function propsChanged(
     if (oldProps[key] !== newProps[key]) return true
   }
   return false
+}
+
+function getNodeFromDom(domNode: Node | null): Kiru.KiruNode | null {
+  if (!domNode) return null
+  const meta = domNode.__kiru
+  if (!meta) return null
+  return meta.component ?? meta
+}
+
+function getAppOwners(app: AppHandle): Kiru.KiruNode[] {
+  const owners = new Set<Kiru.KiruNode>()
+  const rootRange = app.root.range
+  if (!rootRange) return []
+  let current: Node | null = rootRange.start
+  while (current) {
+    const owner = getNodeFromDom(current)
+    if (owner) owners.add(owner)
+    if (current === rootRange.end) break
+    current = current.nextSibling
+  }
+  return Array.from(owners)
+}
+
+function getOwnerElements(owner: Kiru.KiruNode): Set<Element> {
+  const elements = new Set<Element>()
+  if (owner.rootNode instanceof Element) {
+    elements.add(owner.rootNode)
+  }
+  const range = owner.range
+  if (!range) return elements
+
+  let current: Node | null = range.start.nextSibling
+  while (current && current !== range.end) {
+    if (current instanceof Element) elements.add(current)
+    // if (
+    //   current.nodeType === Node.COMMENT_NODE &&
+    //   current === (current as Comment).__kiru?.range?.start
+    // ) {
+    //   const rangeEnd = (current as Comment).__kiru?.range?.end
+    //   current = rangeEnd ?? current
+    // }
+    current = current.nextSibling
+  }
+  return elements
 }

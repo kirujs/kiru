@@ -1,13 +1,9 @@
 import { __DEV__, isBrowser } from "../env.js"
 import { effectQueue } from "./globals.js"
 import { executeWithTracking } from "./tracking.js"
-import {
-  latest,
-  generateRandomID,
-  call,
-  registerOwnerCleanup,
-  sideEffectsEnabled,
-} from "../utils/index.js"
+import { latest, call, sideEffectsEnabled } from "../utils/shared-runtime.js"
+import { generateRandomID } from "../utils/generateId.js"
+import { registerCleanup } from "../utils/node.js"
 import type { Signal } from "./base.js"
 import type { SignalValues } from "./types.js"
 import { node } from "../globals.js"
@@ -46,7 +42,7 @@ export class Effect<const Deps extends readonly Signal<unknown>[] = []> {
         })
       }
       if (!sideEffectsEnabled()) return // prevent side effects in non-browser environments
-      registerOwnerCleanup(n, this.id, this.stop.bind(this))
+      registerCleanup(n, this.id, this.stop.bind(this))
     }
     this.start()
   }

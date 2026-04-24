@@ -13,7 +13,7 @@ export interface ComponentInfoPanelState {
   id: string
   name: string
   link: string
-  component: Kiru.VNode
+  component: Kiru.KiruNode
   unmounted: boolean
   hash: string
   pulseGeneration: number

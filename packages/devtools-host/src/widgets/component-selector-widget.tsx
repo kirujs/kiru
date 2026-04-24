@@ -2,6 +2,7 @@ import * as kiru from "kiru"
 import {
   createMousePositionTracker,
   getFileLink,
+  getDomNodeComponent,
   getNodeName,
   isDevtoolsApp,
   kiruGlobal,
@@ -13,7 +14,7 @@ import {
   widgetStackTop,
 } from "../state"
 import { SelectionBox } from "../components/selection-box"
-import { className as cls } from "kiru/utils"
+import { className as cls, getOwnerElements } from "kiru/utils"
 
 interface HoverInfo {
   name: string
@@ -22,7 +23,7 @@ interface HoverInfo {
   width: number
   height: number
   link: string
-  component: Kiru.VNode
+  component: Kiru.KiruNode
 }
 
 interface ComponentSelectorWidgetProps {
@@ -53,7 +54,7 @@ export const ComponentSelectorWidget: Kiru.FC<
 
     let searchResult: ComponentSearchResult | null = null
     for (const element of elements) {
-      const node = element.__kiruNode
+      const node = getDomNodeComponent(element)
       if (!node) continue
       searchResult = findNearestComponentWithLink(node)
       if (searchResult) break
@@ -204,16 +205,16 @@ export const ComponentSelectorWidget: Kiru.FC<
 
 interface ComponentSearchResult {
   elements: Set<Element>
-  component: Kiru.VNode
+  component: Kiru.KiruNode
   link: string
 }
 
 function findNearestComponentWithLink(
-  node: Kiru.VNode
+  node: Kiru.KiruNode
 ): ComponentSearchResult | null {
   // find the nearest component
-  let match: null | { component: Kiru.VNode; link: string } = null
-  let n: Kiru.VNode | null = node
+  let match: null | { component: Kiru.KiruNode; link: string } = null
+  let n: Kiru.KiruNode | null = node
   while (n) {
     if (typeof n.type === "function") {
       const c = n,
@@ -227,21 +228,5 @@ function findNearestComponentWithLink(
   }
   if (!match) return null
 
-  return { ...match, elements: collectDomNodes(match.component.child!) }
-}
-
-function collectDomNodes(
-  firstChild: Kiru.VNode,
-  elements: Set<Element> = new Set()
-): Set<Element> {
-  let child: Kiru.VNode | null = firstChild
-  while (child) {
-    if (child.dom && child.dom instanceof Element) {
-      elements.add(child.dom)
-    } else if (child.child) {
-      collectDomNodes(child.child, elements)
-    }
-    child = child.sibling
-  }
-  return elements
+  return { ...match, elements: getOwnerElements(match.component) }
 }

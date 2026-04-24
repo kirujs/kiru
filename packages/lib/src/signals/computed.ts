@@ -1,6 +1,6 @@
 import { __DEV__ } from "../env.js"
 import { $HMR_ACCEPT } from "../constants.js"
-import { call, latest } from "../utils/index.js"
+import { call, latest } from "../utils/shared-runtime.js"
 import { effectQueue } from "./globals.js"
 import { executeWithTracking } from "./tracking.js"
 import { Signal } from "./base.js"

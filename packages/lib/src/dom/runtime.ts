@@ -1,12 +1,13 @@
-import { $FRAGMENT, $INLINE_FN } from "../constants.js"
-import { owner } from "../globals.js"
+import { $FRAGMENT, $INLINE_FN, svgTags } from "../constants.js"
+import { owner, postEffectCleanups } from "../globals.js"
 import type { KiruNodeMeta, NodeRange } from "./metadata.js"
 import { getAttachedNodeMeta, getNodeMeta, setNodeMeta } from "./metadata.js"
 import { createRange } from "./range.js"
 import { reconcileChildren } from "./reconcile.js"
-import { requestUpdate } from "../scheduler.js"
+import { queueOwnerLifecycleHooks, requestUpdate } from "../scheduler.js"
 import { applyProps, removeProp } from "./runtime-props.js"
-import { Signal } from "../signals/index.js"
+import { Signal } from "../signals/base.js"
+import { setRef } from "../utils/runtime.js"
 
 export function isElementLike(value: unknown): value is Kiru.Element {
   return typeof value === "object" && !!value && "type" in (value as object)
@@ -24,6 +25,14 @@ function createKiruNode(
     parent,
     index,
   }
+}
+
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg"
+
+function createHostElement(tagName: string): Element {
+  return svgTags.has(tagName)
+    ? document.createElementNS(SVG_NAMESPACE, tagName)
+    : document.createElement(tagName)
 }
 
 function normalizeChildrenInput(children: unknown): unknown[] {
@@ -90,7 +99,9 @@ export function createChild(
       index,
     }
     const range = createRange(rangeKiruNode)
-    const nodes = child.flatMap((value, i) => createChild(value, i, rangeKiruNode))
+    const nodes = child.flatMap((value, i) =>
+      createChild(value, i, rangeKiruNode)
+    )
     return [range.start, ...nodes, range.end]
   }
   if (typeof child === "function") {
@@ -118,7 +129,7 @@ export function createChild(
 
   const node = createKiruNode(child, index, parent)
   if (typeof node.type === "string") {
-    const el = document.createElement(node.type)
+    const el = createHostElement(node.type)
     setNodeMeta(el, node as KiruNodeMeta)
     applyProps(el, child.props)
     const children = child.props.children
@@ -142,6 +153,7 @@ export function createChild(
   }
 
   const result = renderFunction(node)
+  queueOwnerLifecycleHooks(node)
   const rendered = createChild(result, 0, node)
   if (rendered.length === 1 && rendered[0].nodeType !== Node.COMMENT_NODE) {
     node.rootNode = rendered[0]
@@ -256,8 +268,8 @@ export function updateChildInPlace(oldNode: Node, nextChild: unknown): boolean {
     nextChild.type === hostMeta.type
   ) {
     const element = oldNode as Element
-    const elementMeta = getNodeMeta(element)
-    for (const key of Object.keys(meta.props)) {
+    const elementMeta = getAttachedNodeMeta(element)
+    for (const key of Object.keys(hostMeta.props)) {
       if (key !== "children" && !(key in nextChild.props)) {
         if (key.startsWith("on")) {
           const handlers = elementMeta?.eventHandlers
@@ -278,7 +290,11 @@ export function updateChildInPlace(oldNode: Node, nextChild: unknown): boolean {
           }
           continue
         }
-        removeProp(element, key, (meta.props as Record<string, unknown>)[key])
+        removeProp(
+          element,
+          key,
+          (hostMeta.props as Record<string, unknown>)[key]
+        )
       }
     }
     applyProps(
@@ -346,6 +362,18 @@ export function updateChildInPlace(oldNode: Node, nextChild: unknown): boolean {
 }
 
 export function unmount(node: Node): void {
+  const runOwnerTeardown = (meta: KiruNodeMeta | null | undefined) => {
+    if (!meta) return
+    meta.unsubs?.forEach((u) => u())
+    if (meta.cleanups) Object.values(meta.cleanups).forEach((fn) => fn())
+    if (meta.hooks) {
+      const { preCleanups, postCleanups } = meta.hooks
+      preCleanups.forEach((fn) => fn())
+      postEffectCleanups.push(...postCleanups)
+      preCleanups.length = postCleanups.length = 0
+    }
+  }
+
   if (node.nodeType === Node.COMMENT_NODE) {
     const comment = node as Comment
     const meta = getNodeMeta(comment)
@@ -359,6 +387,7 @@ export function unmount(node: Node): void {
         if (cur === meta.range.end) break
         cur = next
       }
+      runOwnerTeardown(meta)
       meta.unmounted = true
       return
     }
@@ -366,21 +395,21 @@ export function unmount(node: Node): void {
   if (node.nodeType === Node.ELEMENT_NODE) {
     const el = node as Element
     while (el.firstChild) unmount(el.firstChild)
-    const meta = getNodeMeta(el)
-    if (meta?.eventHandlers) {
-      for (const [key, handler] of Object.entries(meta.eventHandlers)) {
+    const attachedMeta = getAttachedNodeMeta(el)
+    if (attachedMeta?.eventHandlers) {
+      for (const [key, handler] of Object.entries(attachedMeta.eventHandlers)) {
         el.removeEventListener(key.replace(/^on:?/, "").toLowerCase(), handler)
       }
     }
-    if (meta?.signalPropSubscriptions) {
-      Object.values(meta.signalPropSubscriptions).forEach((u) => u())
+    if (attachedMeta?.signalPropSubscriptions) {
+      Object.values(attachedMeta.signalPropSubscriptions).forEach((u) => u())
     }
-    meta?.unsubs?.forEach((u) => u())
-    if (meta?.cleanups) Object.values(meta.cleanups).forEach((fn) => fn())
+    runOwnerTeardown(getNodeMeta(el))
+    const ref = attachedMeta?.props?.ref as Kiru.Ref<Element | null> | undefined
+    if (ref) setRef(ref, null)
     node.parentNode?.removeChild(node)
     return
   }
-  const meta = getNodeMeta(node)
-  meta?.unsubs?.forEach((u) => u())
+  runOwnerTeardown(getNodeMeta(node))
   node.parentNode?.removeChild(node)
 }

@@ -43,6 +43,18 @@ const devtoolsHost = task({
   },
 })
 
+const devtoolsShared = task({
+  name: "devtools-shared",
+  cwd: "packages/devtools-shared",
+  commands: {
+    test: "pnpm test",
+    cache: {
+      inputs: ["src", lib.artifact("build"), pnpm.package()],
+      outputs: ["dist"],
+    },
+  },
+})
+
 const vitePlugin = task({
   name: "vite-plugin-kiru",
   cwd: "packages/vite-plugin-kiru",
@@ -118,12 +130,14 @@ const ssgTest = task({
 const argv = process.argv.slice(2)
 const command = argv[0]
 
+const skipE2E = argv.includes("--skip-e2e")
+
 const result = await pipeline([
   lib,
   devtoolsHost,
   vitePlugin,
-  csrTest,
-  ssgTest,
+  devtoolsShared,
+  ...(skipE2E ? [] : [csrTest, ssgTest]),
 ]).run({
   command,
   onTaskBegin: (taskName) => console.log(`~~~~~ Task begin: ${taskName}`),

@@ -1,5 +1,5 @@
 import { node } from "../globals.js"
-import { sideEffectsEnabled } from "../utils/index.js"
+import { sideEffectsEnabled } from "../utils/shared-runtime.js"
 import { effectQueue } from "./globals.js"
 import { tick } from "./utils.js"
 import type { Signal } from "./base.js"

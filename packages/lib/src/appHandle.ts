@@ -4,6 +4,7 @@ import { unmount as domUnmount } from "./dom/runtime.js"
 import { createRange } from "./dom/range.js"
 import { reconcileChildren } from "./dom/reconcile.js"
 import { renderRootSync } from "./scheduler.js"
+import { renderMode } from "./globals.js"
 
 export interface AppHandleOptions {
   /**
@@ -27,6 +28,7 @@ export function mount(
   container: Kiru.ContainerElement,
   options?: AppHandleOptions
 ): AppHandle {
+  renderMode.current = "dom"
   if (__DEV__ && container.__kiruApp) {
     return container.__kiruApp as AppHandle
   }

@@ -1,9 +1,6 @@
-import {
-  latest,
-  safeStringify,
-  sideEffectsEnabled,
-  generateRandomID,
-} from "../utils/index.js"
+import { latest, sideEffectsEnabled } from "../utils/shared-runtime.js"
+import { safeStringify } from "../utils/format.js"
+import { generateRandomID } from "../utils/generateId.js"
 import {
   $DEV_FILE_LINK,
   $HMR_ACCEPT,

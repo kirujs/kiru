@@ -1,4 +1,4 @@
-import { call } from "../utils/index.js"
+import { call } from "../utils/shared-runtime.js"
 import { Signal } from "./base.js"
 import { effectQueue } from "./globals.js"
 import { tracking } from "./tracking.js"

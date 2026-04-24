@@ -1,5 +1,10 @@
 import * as kiru from "kiru"
-import { className as cls, getVNodeApp, isVNodeDeleted } from "kiru/utils"
+import {
+  className as cls,
+  getOwnerApp,
+  getOwnerElements,
+  isNodeDeleted,
+} from "kiru/utils"
 import {
   buildViewerRoot,
   collectFromRoot,
@@ -39,7 +44,7 @@ interface ComponentInfoWidgetProps {
   state: kiru.TransitionState
 }
 
-function getPropsForViewer(component: Kiru.VNode): Record<string, unknown> {
+function getPropsForViewer(component: Kiru.KiruNode): Record<string, unknown> {
   const props = { ...(component.props as Record<string, unknown>) }
   delete props.children
   return props
@@ -51,25 +56,8 @@ function disposeViewerRoot(root: ReturnType<typeof buildViewerRoot>) {
   disposeCache(cache)
 }
 
-function collectDomNodes(
-  firstChild: Kiru.VNode | null,
-  elements: Set<Element> = new Set()
-): Set<Element> {
-  let child: Kiru.VNode | null = firstChild
-  while (child) {
-    if (child.dom && child.dom instanceof Element) {
-      elements.add(child.dom)
-    } else if (child.child) {
-      collectDomNodes(child.child, elements)
-    }
-    child = child.sibling
-  }
-  return elements
-}
-
-function getComponentBoundingBox(component: Kiru.VNode) {
-  if (!component.child) return null
-  const elements = collectDomNodes(component.child)
+function getComponentBoundingBox(component: Kiru.KiruNode) {
+  const elements = getOwnerElements(component)
   if (elements.size === 0) return null
 
   let minLeft = Infinity,
@@ -199,13 +187,13 @@ const ComponentInfoPanel: Kiru.FC<{
       const current = currentPanels.find((p) => p.id === id)
       if (!current) return
       if (isDevtoolsApp(updatedApp)) return
-      const vNodeApp = getVNodeApp(current.component)
-      if (vNodeApp && vNodeApp !== updatedApp) return
+      const ownerApp = getOwnerApp(current.component)
+      if (ownerApp && ownerApp !== updatedApp) return
 
       if (current.unmounted) {
         const hash = selectedHash.value
         if (!hash) return
-        const remounted = findComponentByHash(updatedApp.rootNode, hash)
+        const remounted = findComponentByHash(updatedApp, hash)
         if (!remounted) return
         componentInfoPanels.value = currentPanels.map((p) =>
           p.id === id ? { ...p, component: remounted, unmounted: false } : p
@@ -213,7 +201,7 @@ const ComponentInfoPanel: Kiru.FC<{
         return
       }
 
-      if (isVNodeDeleted(current.component)) {
+      if (isNodeDeleted(current.component)) {
         componentInfoPanels.value = currentPanels.map((p) =>
           p.id === id ? { ...p, unmounted: true } : p
         )

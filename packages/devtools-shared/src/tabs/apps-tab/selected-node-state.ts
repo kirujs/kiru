@@ -1,5 +1,5 @@
 import * as kiru from "kiru"
-import { isVNodeDeleted } from "kiru/utils"
+import { isNodeDeleted } from "kiru/utils"
 import { devtoolsState, kiruGlobal } from "../../state"
 import { getNodeName } from "../../utils"
 import {
@@ -13,7 +13,7 @@ import {
 const { selectedNode, selectedApp, viewerSettings } = devtoolsState
 
 export interface SelectedNodeViewData {
-  node: Kiru.VNode
+  node: Kiru.KiruNode
   name: string
   props: PropsData
 }
@@ -38,7 +38,7 @@ kiru.effect(() => {
 
   const onAppUpdate = (updatedApp: kiru.AppHandle) => {
     if (updatedApp !== app) return
-    if (isVNodeDeleted(node)) {
+    if (isNodeDeleted(node)) {
       selectedNode.value = null
       return
     }
@@ -50,7 +50,7 @@ kiru.effect(() => {
 })
 
 function rebuildNodeViewData(
-  node: Kiru.VNode | null,
+  node: Kiru.KiruNode | null,
   settings: { objectKeysChunkSize: number; arrayChunkSize: number }
 ) {
   const prevData = selectedNodeViewData.peek()

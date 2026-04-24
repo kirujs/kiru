@@ -1,7 +1,6 @@
 import * as kiru from "kiru"
 import { devtoolsState } from "../../state"
 import { getNodeName } from "../../utils"
-import { getVNodeApp } from "kiru/utils"
 import { MouseIcon, ResizableSplit } from "../../components"
 import { SelectedAppGraphView } from "./selected-app-graph"
 import { SelectedNodeView } from "./selected-node"

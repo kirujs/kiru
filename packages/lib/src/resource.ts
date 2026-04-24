@@ -2,7 +2,7 @@ import { $HMR_ACCEPT, STREAMED_DATA_EVENT } from "./constants.js"
 import { hydrationMode, node, renderMode } from "./globals.js"
 import { Signal, signal } from "./signals/base.js"
 import { executeWithTracking } from "./signals/tracking.js"
-import { createOwnerId, registerOwnerCleanup } from "./utils/node.js"
+import { createStableId, registerCleanup } from "./utils/node.js"
 import { generateRandomID } from "./utils/generateId.js"
 import { __DEV__, isBrowser } from "./env.js"
 import { GenericHMRAcceptor, performHmrAccept } from "./hmr.js"
@@ -65,7 +65,7 @@ export function resource<T, Source extends ResourceSource>(
   ) {
     // hydrate or stream - create a deterministic id + index offset to use for promise hydration
     const { id, index } = resourceMeta.get(owner) ?? {
-      id: createOwnerId(owner),
+      id: createStableId(owner),
       index: 0,
     }
     promiseId = `${id}:resource:${index}`
@@ -107,7 +107,7 @@ export function resource<T, Source extends ResourceSource>(
   }
 
   if (owner) {
-    registerOwnerCleanup(owner, promiseId, dispose)
+    registerCleanup(owner, promiseId, dispose)
   }
 
   let promise: Kiru.StatefulPromise<T>

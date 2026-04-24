@@ -5,7 +5,7 @@
   "main": "./src/index.ts",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\""
+    "test": "cross-env NODE_ENV=development tsx --test src/tests/**/*.test.ts"
   },
   "keywords": [],
   "author": "",
@@ -15,9 +15,13 @@
     "chartjs-plugin-zoom": "^2.2.0"
   },
   "devDependencies": {
+    "@types/jsdom": "^27.0.0",
     "autoprefixer": "^10.4.21",
+    "cross-env": "^10.1.0",
+    "jsdom": "^27.4.0",
     "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.20.6"
   },
   "peerDependencies": {
     "kiru": "workspace:^"

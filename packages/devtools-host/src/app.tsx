@@ -52,6 +52,7 @@ export default function DevtoolsHostApp() {
   })
 
   kiru.onMount(() => {
+    console.log("[devtools-host]: App mounted")
     mainMenuController.init()
     const container = mainMenuController.containerRef.value!
     const tooltip = tooltipRef.current!

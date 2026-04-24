@@ -1,4 +1,5 @@
 import type { AppHandle } from "kiru"
+import { getAppOwners, getNodeFromDom } from "kiru/utils"
 import { devtoolsState } from "./state"
 
 export function assert(value: unknown, message: string): asserts value {
@@ -7,7 +8,7 @@ export function assert(value: unknown, message: string): asserts value {
   }
 }
 
-export function getNodeName(node: Kiru.VNode) {
+export function getNodeName(node: Kiru.KiruNode) {
   return (
     (node.type as any).displayName ??
     ((node.type as Function).name || "Anonymous Function")
@@ -90,9 +91,9 @@ export function ifDevtoolsAppRootHasFocus<T>(callback: (el: Element) => T) {
   return null
 }
 
-export function computeComponentHash(component: Kiru.VNode): string {
+export function computeComponentHash(component: Kiru.KiruNode): string {
   const segments: string[] = []
-  let n: Kiru.VNode | null = component
+  let n: Kiru.KiruNode | null = component
   while (n) {
     if (typeof n.type === "function") {
       const anyType = n.type as any
@@ -111,20 +112,18 @@ export function computeComponentHash(component: Kiru.VNode): string {
 }
 
 export function findComponentByHash(
-  root: Kiru.VNode | null,
+  app: AppHandle | null,
   targetHash: string
-): Kiru.VNode | null {
-  if (!root) return null
-  const stack: Kiru.VNode[] = [root]
-  while (stack.length) {
-    const node = stack.pop()!
-    if (typeof node.type === "function") {
-      if (computeComponentHash(node) === targetHash) {
-        return node
-      }
-    }
-    if (node.child) stack.push(node.child)
-    if (node.sibling) stack.push(node.sibling)
+): Kiru.KiruNode | null {
+  if (!app) return null
+  const owners = getAppOwners(app)
+  for (const owner of owners) {
+    if (typeof owner.type !== "function") continue
+    if (computeComponentHash(owner) === targetHash) return owner
   }
   return null
+}
+
+export function getDomNodeComponent(node: Node | null): Kiru.KiruNode | null {
+  return getNodeFromDom(node)
 }

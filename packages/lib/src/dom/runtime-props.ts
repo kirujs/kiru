@@ -1,8 +1,9 @@
 import { __DEV__ } from "../env.js"
 import { booleanAttributes } from "../constants.js"
 import { propToHtmlAttr } from "../utils/index.js"
-import { getNodeMeta } from "./metadata.js"
-import { Signal } from "../signals/index.js"
+import { setRef } from "../utils/runtime.js"
+import { getAttachedNodeMeta } from "./metadata.js"
+import { Signal } from "../signals/base.js"
 
 const bindAttrToEventMap: Record<string, string> = {
   value: "input",
@@ -24,10 +25,20 @@ export function applyProps(
   const keys = Object.keys(props)
   if (keys.length > 1) maybeOrderPropKeys(keys)
   for (const key of keys) applyProp(element, key, props[key], prevProps?.[key])
+  const prevRef = prevProps?.ref as Kiru.Ref<Element | null> | undefined
+  const nextRef = props.ref as Kiru.Ref<Element | null> | undefined
+  if (prevRef !== nextRef) {
+    if (prevRef) setRef(prevRef, null)
+    if (nextRef) setRef(nextRef, element)
+  }
 }
 
 export function removeProp(element: Element, key: string, prevValue: unknown) {
-  const meta = getNodeMeta(element)
+  if (key === "ref") {
+    if (prevValue) setRef(prevValue as Kiru.Ref<Element | null>, null)
+    return
+  }
+  const meta = getAttachedNodeMeta(element)
   const signalSubs = meta?.signalPropSubscriptions
   if (key.startsWith("on")) {
     const event = key.replace(/^on:?/, "").toLowerCase()
@@ -52,8 +63,8 @@ function applyProp(
   value: unknown,
   prevValue: unknown
 ) {
-  if (key === "children" || key === "key") return
-  const meta = getNodeMeta(element)
+  if (key === "children" || key === "key" || key === "ref") return
+  const meta = getAttachedNodeMeta(element)
   const signalSubs = meta ? (meta.signalPropSubscriptions ??= {}) : undefined
   const sourceMap = signalPropSources.get(element) ?? {}
   if (!signalPropSources.has(element)) signalPropSources.set(element, sourceMap)
@@ -166,16 +177,16 @@ function maybeOrderPropKeys(keys: string[]) {
       priority <= 0
         ? 0
         : priority === 1
-        ? 1
-        : priority === 2
-        ? 2
-        : priority === 3
-        ? 3
-        : priority === 5
-        ? 4
-        : priority >= 9
-        ? 6
-        : 5
+          ? 1
+          : priority === 2
+            ? 2
+            : priority === 3
+              ? 3
+              : priority === 5
+                ? 4
+                : priority >= 9
+                  ? 6
+                  : 5
     buckets[bucketIdx].push(key)
   }
   let out = 0

@@ -1,11 +1,14 @@
-import { signal } from "kiru"
+import { onMount, ref, signal } from "kiru"
 
 const initialCount = signal(0)
+const inputRef = ref<HTMLInputElement>(null)
 export function App() {
-  //console.log(initialCount.value)
+  onMount(() => {
+    console.log(inputRef.current)
+  })
   return (
     <>
-      <input bind:value={initialCount} type="number" />
+      <input ref={inputRef} bind:value={initialCount} type="number" />
       {(v = initialCount.value) => (isNaN(v) ? 0 : v * 5)}
       {/* <Counter count={initialCount} /> */}
     </>
