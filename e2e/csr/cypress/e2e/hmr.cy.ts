@@ -1,9 +1,10 @@
 let counterTsx = "",
   counterModifiedTsx = ""
+const counterPath = "src/pages/counter/index.tsx"
 
 describe("hot module reload", () => {
   before(() =>
-    cy.readFile("src/pages/counter/index.tsx").then((file) => {
+    cy.readFile(counterPath).then((file) => {
       counterTsx = file
       counterModifiedTsx = counterTsx.replace(
         `<div id="counter">`,
@@ -15,7 +16,7 @@ describe("hot module reload", () => {
     const port = Cypress.env("port")
     cy.visit(`http://localhost:${port}/counter`)
   })
-  afterEach(() => cy.writeFile("src/pages/counter/index.tsx", counterTsx))
+  afterEach(() => cy.task("hmrRestoreFile", counterPath))
 
   it("can update a component in the VDOM & DOM after changing the file, without causing full refresh", () => {
     cy.window()
@@ -24,7 +25,10 @@ describe("hot module reload", () => {
         win["test_marker"] = 123
       })
       .then(() =>
-        cy.writeFile("src/pages/counter/index.tsx", counterModifiedTsx)
+        cy.task("hmrMutateFile", {
+          filePath: counterPath,
+          content: counterModifiedTsx,
+        })
       )
       .then(() => cy.get("#counter").should("have.attr", "data-changed"))
       .then(() => cy.window().should("have.property", "test_marker"))

@@ -52,7 +52,7 @@
     "url": "https://github.com/kirujs/kiru"
   },
   "scripts": {
-    "build": "rm -rf dist && pnpm i && tsc",
+    "build": "pnpm i && tsc",
     "test": "node --test dist/**/*.test.js",
     "dev": "tsc --watch"
   },

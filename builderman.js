@@ -1,16 +1,18 @@
+// @ts-check
 import { task, pipeline } from "builderman"
 import { pnpm } from "@builderman/resolvers-pnpm"
 
+const libCacheConfig = {
+  inputs: ["src", pnpm.package()],
+  outputs: ["dist"],
+}
 const lib = task({
   name: "lib",
   cwd: "packages/lib",
   commands: {
     build: {
       run: "pnpm build",
-      cache: {
-        inputs: ["src", pnpm.package()],
-        outputs: ["dist"],
-      },
+      cache: libCacheConfig,
     },
     dev: {
       run: "pnpm dev",
@@ -21,6 +23,7 @@ const lib = task({
       env: {
         NODE_ENV: "development",
       },
+      cache: libCacheConfig,
     },
   },
 })
@@ -66,23 +69,28 @@ const vitePlugin = task({
   },
 })
 
+const E2ECachConfig = {
+  inputs: [
+    "src",
+    lib.artifact("build"),
+    vitePlugin.artifact("build"),
+    pnpm.package(),
+  ],
+  outputs: ["dist"],
+}
+
 const csrTest = task({
   name: "e2e:csr",
   cwd: "e2e/csr",
   commands: {
     build: {
       run: "pnpm build",
-      cache: {
-        inputs: [
-          "src",
-          lib.artifact("build"),
-          vitePlugin.artifact("build"),
-          pnpm.package(),
-        ],
-        outputs: ["dist"],
-      },
+      cache: E2ECachConfig,
     },
-    test: "pnpm test",
+    test: {
+      run: "pnpm test",
+      cache: E2ECachConfig,
+    },
   },
   dependencies: [lib],
   env: {
@@ -96,34 +104,31 @@ const ssgTest = task({
   commands: {
     build: {
       run: "pnpm build",
-      cache: {
-        inputs: [
-          "src",
-          lib.artifact("build"),
-          vitePlugin.artifact("build"),
-          pnpm.package(),
-        ],
-        outputs: ["dist"],
-      },
+      cache: E2ECachConfig,
     },
-    test: "pnpm test",
+    test: {
+      run: "pnpm test",
+      cache: E2ECachConfig,
+    },
   },
   // github can't run two cypress tests in parallel
-  dependencies: (process.env.GITHUB ? [csrTest] : []).concat(lib),
+  dependencies: [...(process.env.GITHUB ? [csrTest] : []), lib],
   env: {
     NODE_ENV: "development",
   },
 })
 
-const argv = process.argv.slice(2)
-const command = argv[0]
+const [, , command, ...args] = process.argv
+if (!["build", "dev", "test"].includes(command)) {
+  console.error(`Invalid command: ${command}`)
+  process.exit(1)
+}
 
 const result = await pipeline([
   lib,
   devtoolsHost,
   vitePlugin,
-  csrTest,
-  ssgTest,
+  ...(args.includes("--skip-e2e") ? [] : [csrTest, ssgTest]),
 ]).run({
   command,
   onTaskBegin: (taskName) => console.log(`~~~~~ Task begin: ${taskName}`),

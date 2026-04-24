@@ -1,5 +1,6 @@
 import { defineConfig } from "cypress"
 import { createServer, type ViteDevServer } from "vite"
+import { registerHmrFileTasks } from "../shared/cypress-hmr-file-tasks"
 
 async function startServer() {
   const server = await createServer({
@@ -20,10 +21,13 @@ export default defineConfig({
     },
     setupNodeEvents(on) {
       let server: ViteDevServer | null = null
+      const restoreAllHmrFiles = registerHmrFileTasks(on)
+
       on("before:run", async () => {
         server = await startServer()
       })
       on("after:run", async () => {
+        await restoreAllHmrFiles()
         await server?.close()
       })
     },
