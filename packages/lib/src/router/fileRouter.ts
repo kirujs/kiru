@@ -4,6 +4,7 @@ import { FileRouterController } from "./fileRouterController.js"
 import type { FileRouterConfig } from "./types.js"
 import { fileRouterInstance } from "./globals.js"
 import { onCleanup } from "../hooks/onCleanup.js"
+import { setup } from "../index.js"
 
 export interface FileRouterProps {
   /**
@@ -24,28 +25,20 @@ export interface FileRouterProps {
   config: FileRouterConfig
 }
 
-export const FileRouter: Kiru.FC<FileRouterProps> = ({ config }) => {
+export const FileRouter: Kiru.FC<FileRouterProps> = () => {
   fileRouterInstance.current?.dispose()
-  let router = (fileRouterInstance.current = new FileRouterController())
-  let configStr = ""
+  const router = (fileRouterInstance.current = new FileRouterController())
+  const $ = setup<FileRouterProps>()
+  const config = $.derive((p) => p.config)
 
+  router.init(config.peek())
+  config.subscribe((config) => router.updateConfig(config))
   onCleanup(() => router.dispose())
 
-  const onUpdate = (props: FileRouterProps) => {
-    const newConfigStr = JSON.stringify(props.config)
-    if (newConfigStr !== configStr) {
-      config = props.config
-      configStr = newConfigStr
-      router.init(config)
-    }
-  }
-
-  return (nextProps) => (
-    onUpdate(nextProps),
+  return () =>
     createElement(
       RouterContext,
       { value: router.contextValue },
       router.getChildren()
     )
-  )
 }

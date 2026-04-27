@@ -39,6 +39,8 @@ interface PageConfigWithLoader<T = unknown> extends PageConfig {
   loader: PageDataLoaderConfig<T>
 }
 
+let currentNavigationPromise: Promise<unknown> | null = null
+
 export class FileRouterController {
   public contextValue: FileRouterContextType
   public devtools?: DevtoolsInterface
@@ -61,6 +63,7 @@ export class FileRouterController {
   private pageRouteToConfig?: Map<string, PageConfig>
   private state: RouterState
   private baseUrl = "/"
+  private initialized = false
 
   constructor() {
     routerCache.current ??= new RouterCache()
@@ -173,7 +176,44 @@ export class FileRouterController {
     }
   }
 
+  public updateConfig(newConfig: FileRouterConfig): void {
+    if (!this.initialized) return
+    if (currentNavigationPromise) {
+      currentNavigationPromise.then(() => this.updateConfig(newConfig))
+      return
+    }
+    const {
+      layouts,
+      pages,
+      dir = "/pages",
+      baseUrl = "/",
+      transition,
+    } = newConfig
+
+    this.enableTransitions = !!transition
+    const [normalizedDir, normalizedBaseUrl] = [
+      normalizePrefixPath(dir),
+      normalizePrefixPath(baseUrl),
+    ]
+    this.baseUrl = normalizedBaseUrl.slice(0, -1)
+    const formattedPages = formatViteImportMap(
+      pages as ViteImportMap,
+      normalizedDir,
+      normalizedBaseUrl
+    )
+    const formattedLayouts = formatViteImportMap(
+      layouts as ViteImportMap,
+      normalizedDir,
+      normalizedBaseUrl
+    )
+
+    applyDiffs(this.pages, formattedPages)
+    applyDiffs(this.layouts, formattedLayouts)
+  }
+
   public init(config: FileRouterConfig) {
+    if (this.initialized) return
+    this.initialized = true
     const {
       pages,
       layouts,
@@ -569,7 +609,7 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
 
     this.updateHistoryState(path, options)
 
-    this.loadRoute(
+    const p = (currentNavigationPromise = this.loadRoute(
       void 0,
       void 0,
       options?.transition ?? this.enableTransitions
@@ -584,7 +624,11 @@ See https://kirujs.dev/docs/api/file-router#404 for more information.`
       } else {
         window.scrollTo(0, 0)
       }
-    })
+
+      if (p === currentNavigationPromise) {
+        currentNavigationPromise = null
+      }
+    }))
   }
 
   private async prefetchRouteModules(path: string) {
@@ -794,4 +838,21 @@ function routesConflict(route1: string, route2: string): boolean {
   }
 
   return true
+}
+
+function applyDiffs(a: Record<string, unknown>, b: Record<string, unknown>) {
+  for (const [key, value] of Object.entries(b)) {
+    if (a[key] !== value) {
+      if (a[key]) {
+        Object.assign(a[key], value)
+        continue
+      }
+      a[key] = value
+    }
+  }
+  for (const key in a) {
+    if (!b[key]) {
+      delete a[key]
+    }
+  }
 }
