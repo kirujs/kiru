@@ -1,4 +1,4 @@
-import type { ESBuildOptions } from "vite"
+import type { ESBuildOptions, OxcOptions } from "vite"
 
 export type FileLinkFormatter = (path: string, line: number) => string
 
@@ -215,7 +215,11 @@ export interface KiruPluginOptions {
   ssg?: SSGOptions | true
 }
 
+/**
+ * @deprecated only exists for backwards compatibility in Vite 7
+ */
 export const defaultEsBuildOptions: ESBuildOptions
+export const defaultOxcOptions: OxcOptions
 
 /**
  * Registers a callback to be fired when the HMR is triggered

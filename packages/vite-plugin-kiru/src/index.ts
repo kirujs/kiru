@@ -1,10 +1,6 @@
 import path from "node:path"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
-import {
-  prepareDevOnlyHooks,
-  prepareHMR,
-  prepareJSXHoisting,
-} from "./codegen/index.js"
+import { prepareHMR, prepareJSXHoisting } from "./codegen/index.js"
 import { ANSI } from "./ansi.js"
 import {
   createPluginState,
@@ -31,6 +27,7 @@ import {
   type Plugin,
   type PluginOption,
 } from "vite"
+import { OutputBundle, OutputOptions, ProgramNode } from "rollup"
 
 export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   let state: PluginState
@@ -149,8 +146,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       try {
         await generateStaticSite(
           state as PluginState & { ssgOptions: Required<SSGOptions> },
-          outputOptions,
-          bundle,
+          outputOptions as OutputOptions,
+          bundle as unknown as OutputBundle,
           log,
           resolvedConfig?.base ?? "/"
         )
@@ -171,8 +168,9 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
 
       log(`Processing ${ANSI.black(id)}`)
 
-      const ast = this.parse(src)
+      const ast = this.parse(src) as ProgramNode
       const code = new MagicString(src)
+
       const ctx: TransformCTX = {
         code,
         ast,
@@ -181,8 +179,6 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         filePath: id,
         log,
       }
-
-      prepareDevOnlyHooks(ctx)
 
       if (state.features.staticHoisting) {
         prepareJSXHoisting(ctx)
@@ -239,7 +235,4 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
 }
 
 // Export additional utilities
-export { defaultEsBuildOptions } from "./config.js"
-
-// @ts-ignore
-export function onHMR(callback: () => void) {}
+export { defaultEsBuildOptions, defaultOxcOptions } from "./config.js"

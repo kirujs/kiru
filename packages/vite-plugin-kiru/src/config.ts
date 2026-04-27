@@ -1,5 +1,11 @@
 import path from "node:path"
-import type { UserConfig, ESBuildOptions, ResolvedConfig } from "vite"
+import { version as viteVersion } from "vite"
+import type {
+  UserConfig,
+  ESBuildOptions,
+  ResolvedConfig,
+  OxcOptions,
+} from "vite"
 import type {
   KiruPluginOptions,
   SSGOptions,
@@ -11,6 +17,7 @@ import {
   VIRTUAL_ENTRY_SERVER_ID,
   VIRTUAL_ENTRY_CLIENT_ID,
 } from "./virtual-modules.js"
+import type { RolldownOptions, TransformOptions } from "rolldown"
 
 export const defaultEsBuildOptions: ESBuildOptions = {
   jsxInject: `import { createElement as _jsx, Fragment as _jsxFragment } from "kiru"`,
@@ -20,6 +27,26 @@ export const defaultEsBuildOptions: ESBuildOptions = {
   loader: "tsx",
   include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
 }
+
+export const defaultOxcOptions: OxcOptions = {
+  // jsxInject: `import { createElement as _jsx, Fragment as _jsxFragment } from "kiru"`,
+  jsx: {
+    importSource: "kiru",
+    pragma: "_jsx",
+    pragmaFrag: "_jsxFragment",
+    runtime: "automatic",
+  },
+  include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
+}
+
+export const defaultRolldownTransformOptions = {
+  jsx: {
+    importSource: "kiru",
+    pragma: "_jsx",
+    pragmaFrag: "_jsxFragment",
+    runtime: "automatic",
+  },
+} satisfies TransformOptions
 
 export interface PluginState {
   isProduction: boolean
@@ -149,34 +176,81 @@ export function createViteConfig(
   config: UserConfig,
   opts: KiruPluginOptions
 ): UserConfig {
+  const isVite8 = viteVersion.startsWith("8")
+  const rolldownOptions: RolldownOptions = {
+    ...config.build?.rolldownOptions,
+    transform: {
+      ...config.build?.rolldownOptions?.transform,
+      ...defaultRolldownTransformOptions,
+    },
+  }
+
+  const versionOpts: UserConfig = isVite8
+    ? {
+        optimizeDeps: {
+          rolldownOptions: {
+            transform: { jsx: { ...defaultRolldownTransformOptions.jsx } },
+          },
+        },
+        oxc: { ...defaultOxcOptions, ...config.oxc },
+        build: { ...config.build, rolldownOptions },
+      }
+    : { esbuild: { ...defaultEsBuildOptions, ...config.esbuild } }
+
+  console.log("[createViteConfig]", JSON.stringify(versionOpts))
+
   if (!opts.ssg) {
+    return { ...config, ...versionOpts }
+  }
+
+  const ssr = config.build?.ssr
+  const baseOut = config.build?.outDir ?? "dist"
+  const desiredOutDir = ssr ? `${baseOut}/server` : `${baseOut}/client`
+
+  if (isVite8) {
+    let input = rolldownOptions?.input
+    if (!input) {
+      input = ssr ? VIRTUAL_ENTRY_SERVER_ID : VIRTUAL_ENTRY_CLIENT_ID
+    }
+
     return {
       ...config,
-      esbuild: {
-        ...defaultEsBuildOptions,
-        ...config.esbuild,
+      appType: "custom",
+      server: {},
+      build: {
+        ...config.build,
+        ssr,
+        manifest: "vite-manifest.json",
+        outDir: desiredOutDir,
+        rolldownOptions: {
+          ...rolldownOptions,
+          output: {
+            codeSplitting: ssr
+              ? {}
+              : {
+                  groups: [
+                    {
+                      name: "kiru",
+                      test: /node_modules[\\/]kiru([\\/].*)?/,
+                    },
+                  ],
+                },
+          },
+        },
       },
     }
   }
-  const isSsrBuild = config.build?.ssr
-  const rollup = config.build?.rollupOptions ?? {}
-  let input = rollup.input
 
+  const rollupOpts = config.build?.rollupOptions ?? {}
+  let input = rollupOpts?.input
   if (!input) {
-    input = isSsrBuild ? VIRTUAL_ENTRY_SERVER_ID : VIRTUAL_ENTRY_CLIENT_ID
+    input = ssr ? VIRTUAL_ENTRY_SERVER_ID : VIRTUAL_ENTRY_CLIENT_ID
   }
-
-  const ssr = isSsrBuild === true ? true : config.build?.ssr
-  const baseOut = config.build?.outDir ?? "dist"
-  const desiredOutDir = isSsrBuild ? `${baseOut}/server` : `${baseOut}/client`
 
   return {
     ...config,
     appType: "custom",
-    esbuild: {
-      ...defaultEsBuildOptions,
-      ...config.esbuild,
-    },
+    ...versionOpts,
     server: {},
     build: {
       ...config.build,
@@ -184,7 +258,8 @@ export function createViteConfig(
       manifest: "vite-manifest.json",
       outDir: desiredOutDir,
       rollupOptions: {
-        ...rollup,
+        ...rollupOpts,
+        // @ts-expect-error
         output: {
           manualChunks: ssr
             ? {}

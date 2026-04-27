@@ -1,13 +1,13 @@
 import fs from "node:fs"
-import * as AST from "./ast"
-import { FileLinkFormatter } from "../types"
+import * as AST from "./ast.js"
+import type { FileLinkFormatter } from "../types.js"
 import {
   createAliasHandler,
   findNodeName,
   isComponent,
   MagicString,
   TransformCTX,
-} from "./shared"
+} from "./shared.js"
 
 type AstNode = AST.AstNode
 
