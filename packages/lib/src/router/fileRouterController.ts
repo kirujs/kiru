@@ -840,19 +840,22 @@ function routesConflict(route1: string, route2: string): boolean {
   return true
 }
 
-function applyDiffs(a: Record<string, unknown>, b: Record<string, unknown>) {
-  for (const [key, value] of Object.entries(b)) {
-    if (a[key] !== value) {
-      if (a[key]) {
-        Object.assign(a[key], value)
+function applyDiffs(
+  prev: Record<string, unknown>,
+  latest: Record<string, unknown>
+) {
+  for (const [key, value] of Object.entries(latest)) {
+    if (prev[key] !== value) {
+      if (prev[key]) {
+        Object.assign(prev[key], value)
         continue
       }
-      a[key] = value
+      prev[key] = value
     }
   }
-  for (const key in a) {
-    if (!b[key]) {
-      delete a[key]
+  for (const key in prev) {
+    if (!latest[key]) {
+      delete prev[key]
     }
   }
 }
