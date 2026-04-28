@@ -81,14 +81,10 @@ function propToHtmlAttr(key: string): string {
   }
 }
 
-function styleObjectToString(
-  obj: StyleObject,
-  opts?: { reactiveRead?: boolean }
-): string {
+function styleObjectToString(obj: StyleObject): string {
   let cssString = ""
-  const reactive = opts?.reactiveRead
   for (const key in obj) {
-    const val = unwrap((obj as Record<string, unknown>)[key], reactive)
+    const val = unwrap(obj[key as keyof StyleObject])
     if (val === null || val === undefined) continue
     const cssKey = key.replace(REGEX_ALPHA_UPPER, "-$&").toLowerCase()
     cssString += `${cssKey}:${val};`

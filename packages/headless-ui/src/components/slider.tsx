@@ -456,7 +456,10 @@ const SliderRange: SliderRange = () => {
 
   const propStyle = $.derive(({ asChild, children, style }) => {
     if (asChild && isElement(children)) {
-      return Kiru.unwrap(children.props.style, true)
+      return Kiru.unwrap(children.props.style, true) as Exclude<
+        Kiru.ElementProps<"div">["style"],
+        Kiru.Signal<any>
+      >
     }
     return Kiru.unwrap(style, true)
   })
@@ -472,25 +475,25 @@ const SliderRange: SliderRange = () => {
     const maxPercent = ctx.getValuePercent(maxValue)
     const sizePercent = maxPercent - minPercent
 
-    const pStyle = propStyle.value
-    let prefix = ""
-    if (typeof pStyle === "string") {
-      prefix = pStyle
-    } else if (typeof pStyle === "object" && !!pStyle) {
-      const asStr = styleObjectToString(pStyle, { reactiveRead: true })
-      prefix = asStr ? `${asStr};` : ""
-    }
+    const styles: Kiru.StyleObject = {}
     const isSingle = values.length === 1
     if (orientation === "horizontal") {
       const position = dir === "rtl" ? "right" : "left"
-      return `${prefix}${position}:${isSingle ? 0 : minPercent}%;width:${
-        isSingle ? maxPercent : sizePercent
-      }%`
+      styles[position] = isSingle ? 0 : minPercent
+      styles.width = isSingle ? maxPercent : sizePercent
     } else {
-      return `${prefix}bottom:${isSingle ? 0 : minPercent}%;height:${
-        isSingle ? maxPercent : sizePercent
-      }%`
+      styles.bottom = isSingle ? 0 : minPercent
+      styles.height = isSingle ? maxPercent : sizePercent
     }
+
+    const userStyles = propStyle.value
+    if (typeof userStyles === "string") {
+      return `${userStyles}${styleObjectToString(styles)}`
+    }
+    if (typeof userStyles === "object" && !!userStyles) {
+      return { ...userStyles, ...styles }
+    }
+    return styles
   })
 
   const attrs = {
