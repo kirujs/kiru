@@ -8,8 +8,7 @@ import type { HtmlOrSvgElement } from "../types"
  * @param isOpen  - reactive signal that drives open/closed state
  */
 export function useContentPanel(isOpen: Kiru.Signal<boolean>) {
-  const wasOpenInitially = isOpen.peek()
-  const hidden = Kiru.signal(!wasOpenInitially)
+  const hidden = Kiru.signal(!isOpen.peek())
   const refProxy = createRefProxy<HtmlOrSvgElement>()
 
   // ── Animation style capture ──────────────────────────────────────────────
@@ -60,7 +59,7 @@ export function useContentPanel(isOpen: Kiru.Signal<boolean>) {
     hidden.value = false
 
     // Wait one frame so the browser can recalculate layout before we measure.
-    await new Promise<number>(requestAnimationFrame)
+    await new Promise(requestAnimationFrame)
 
     assignCustomStylePropertiesForSize(element)
     assignCapturedAnimationStyles(element)
