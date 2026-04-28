@@ -1,11 +1,12 @@
 import * as Kiru from "kiru"
-import { isElement, styleObjectToString } from "kiru/utils"
+import { isElement } from "kiru/utils"
 import {
   callEventHandler,
   createContext,
   createRefProxy,
 } from "../utils/index.js"
 import type { Direction, KiruGlobal, Orientation } from "../types"
+import { mergeStyles } from "../utils/merge-styles.js"
 
 // ─── Root Context ─────────────────────────────────────────────────────────────
 
@@ -486,14 +487,7 @@ const SliderRange: SliderRange = () => {
       styles.height = isSingle ? maxPercent : sizePercent
     }
 
-    const userStyles = propStyle.value
-    if (typeof userStyles === "string") {
-      return `${userStyles}${styleObjectToString(styles)}`
-    }
-    if (typeof userStyles === "object" && !!userStyles) {
-      return { ...userStyles, ...styles }
-    }
-    return styles
+    return mergeStyles(styles, propStyle.value)
   })
 
   const attrs = {
