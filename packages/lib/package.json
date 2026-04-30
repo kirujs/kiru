@@ -5,6 +5,29 @@
   "main": "dist/index.js",
   "type": "module",
   "homepage": "https://kirujs.dev",
+  "author": "LankyMoose",
+  "license": "ISC",
+  "types": "index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kirujs/kiru"
+  },
+  "keywords": [
+    "kiru",
+    "kirujs",
+    "kiru.js",
+    "dom",
+    "jsx",
+    "html",
+    "virtual-dom",
+    "reactive",
+    "signal"
+  ],
+  "scripts": {
+    "build": "pnpm i && tsc",
+    "test": "node --test dist/**/*.test.js",
+    "dev": "tsc --watch"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -47,29 +70,6 @@
       "default": "./dist/jsx.js"
     }
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/kirujs/kiru"
-  },
-  "scripts": {
-    "build": "pnpm i && tsc",
-    "test": "node --test dist/**/*.test.js",
-    "dev": "tsc --watch"
-  },
-  "types": "index.d.ts",
-  "keywords": [
-    "kiru",
-    "kirujs",
-    "kiru.js",
-    "dom",
-    "jsx",
-    "html",
-    "virtual-dom",
-    "reactive",
-    "signal"
-  ],
-  "author": "LankyMoose",
-  "license": "ISC",
   "devDependencies": {
     "@types/chai": "^5.2.3",
     "@types/jsdom": "^27.0.0",
