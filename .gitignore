@@ -8,5 +8,6 @@ sandbox/*
 !sandbox/csr
 !sandbox/ssg
 !sandbox/ssr
+!sandbox/ssr-vike
 !sandbox/tauri
 !sandbox/primitive
