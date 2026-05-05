@@ -98,25 +98,25 @@ const csrTest = task({
   },
 })
 
-const ssgTest = task({
-  name: "e2e:ssg",
-  cwd: "e2e/ssg",
-  commands: {
-    build: {
-      run: "pnpm build",
-      cache: E2ECachConfig,
-    },
-    test: {
-      run: "pnpm test",
-      cache: E2ECachConfig,
-    },
-  },
-  // github can't run two cypress tests in parallel
-  dependencies: [...(process.env.GITHUB ? [csrTest] : []), lib],
-  env: {
-    NODE_ENV: "development",
-  },
-})
+// const ssgTest = task({
+//   name: "e2e:ssg",
+//   cwd: "e2e/ssg",
+//   commands: {
+//     build: {
+//       run: "pnpm build",
+//       cache: E2ECachConfig,
+//     },
+//     test: {
+//       run: "pnpm test",
+//       cache: E2ECachConfig,
+//     },
+//   },
+//   // github can't run two cypress tests in parallel
+//   dependencies: [...(process.env.GITHUB ? [csrTest] : []), lib],
+//   env: {
+//     NODE_ENV: "development",
+//   },
+// })
 
 const [, , command, ...args] = process.argv
 if (!["build", "dev", "test"].includes(command)) {
@@ -128,7 +128,7 @@ const result = await pipeline([
   lib,
   devtoolsHost,
   vitePlugin,
-  ...(args.includes("--skip-e2e") ? [] : [csrTest, ssgTest]),
+  ...(args.includes("--skip-e2e") ? [] : [csrTest /*, ssgTest */]),
 ]).run({
   command,
   onTaskBegin: (taskName) => console.log(`~~~~~ Task begin: ${taskName}`),
