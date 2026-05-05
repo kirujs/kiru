@@ -1,57 +1,35 @@
-import path from "node:path"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
 import { prepareHMR, prepareJSXHoisting } from "./codegen/index.js"
 import { ANSI } from "./ansi.js"
 import {
   createPluginState,
-  createViteConfig,
+  defaultEsBuildOptions,
   updatePluginState,
   type PluginState,
 } from "./config.js"
 import { createDevtoolsHtmlTransform, setupDevtools } from "./devtools.js"
-import { handleSSR } from "./dev-server.js"
-import { createPreviewMiddleware } from "./preview-server.js"
-import { generateStaticSite } from "./ssg.js"
-import {
-  createLogger,
-  resolveUserDocument,
-  shouldTransformFile,
-} from "./utils.js"
-import { createVirtualModules } from "./virtual-modules.js"
+import { createLogger, shouldTransformFile } from "./utils.js"
 
-import type { KiruPluginOptions, SSGOptions } from "./types.js"
-import {
-  build,
-  InlineConfig,
-  ResolvedConfig,
-  type Plugin,
-  type PluginOption,
-} from "vite"
+import type { KiruPluginOptions } from "./types.js"
+import { type Plugin, type PluginOption } from "vite"
 
 export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   let state: PluginState
   let log: (...data: any[]) => void
   let virtualModules: Record<string, () => string> = {}
-  let inlineConfig: InlineConfig | undefined
-  let resolvedConfig: ResolvedConfig | undefined
 
   const mainPlugin = {
     name: "vite-plugin-kiru",
     config(config) {
-      inlineConfig = config
-      return createViteConfig(config, opts)
+      return {
+        ...config,
+        esbuild: { ...defaultEsBuildOptions, ...config.esbuild },
+      }
     },
     async configResolved(config) {
-      resolvedConfig = config
       const initialState = createPluginState(opts)
       state = updatePluginState(initialState, config, opts)
       log = createLogger(state)
-      if (state.ssgOptions) {
-        virtualModules = await createVirtualModules(
-          state.projectRoot,
-          state.ssgOptions
-        )
-      }
     },
     transformIndexHtml() {
       if (!state.devtoolsEnabled) return
@@ -60,22 +38,9 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         state.dtHostScriptPath
       )
     },
-    configurePreviewServer(server) {
-      if (!state.ssgOptions) return
-      server.middlewares.use(
-        createPreviewMiddleware(state.projectRoot, state.baseOutDir)
-      )
-    },
     configureServer(server) {
       if (state.isProduction || state.isBuild) return
-      const {
-        ssgOptions,
-        devtoolsEnabled,
-        dtClientPathname,
-        dtHostScriptPath,
-        fileLinkFormatter,
-        projectRoot,
-      } = state
+      const { devtoolsEnabled, dtHostScriptPath, fileLinkFormatter } = state
 
       if (devtoolsEnabled) {
         setupDevtools(
@@ -84,46 +49,6 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           dtHostScriptPath,
           log
         )
-      }
-
-      if (ssgOptions) {
-        // SSR HTML middleware using document.tsx
-        server.middlewares.use(async (req, res, next) => {
-          try {
-            const url = req.originalUrl || req.url || "/"
-
-            const filePath = path.join(state.baseOutDir, "client", url)
-            const extName = path.extname(filePath)
-            if (extName && extName !== ".html") {
-              return next()
-            }
-
-            const accept = req.headers["accept"] || ""
-            if (
-              typeof accept === "string" &&
-              accept.includes("text/html") &&
-              !url.startsWith("/node_modules/") &&
-              !url.startsWith("/@") &&
-              !url.startsWith(dtHostScriptPath) &&
-              !url.startsWith(dtClientPathname)
-            ) {
-              const { status, html } = await handleSSR(
-                server,
-                url,
-                state.projectRoot,
-                resolvedConfig?.base ?? "/",
-                () => resolveUserDocument(projectRoot, ssgOptions)
-              )
-              res.statusCode = status
-              res.setHeader("Content-Type", "text/html")
-              res.end(html)
-              return
-            }
-          } catch (e) {
-            console.error(e)
-          }
-          next()
-        })
       }
     },
     resolveId(id) {
@@ -137,22 +62,6 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       const raw = id.slice(1)
       if (!(raw in virtualModules)) return null
       return virtualModules[raw]()
-    },
-    async writeBundle(outputOptions, bundle) {
-      if (!state.ssgOptions) return
-      if (!state.isBuild || !state.isSSRBuild) return
-
-      try {
-        await generateStaticSite(
-          state as PluginState & { ssgOptions: Required<SSGOptions> },
-          outputOptions,
-          bundle,
-          log,
-          resolvedConfig?.base ?? "/"
-        )
-      } catch (e) {
-        log(ANSI.red("[SSG]: prerender failed"), e)
-      }
     },
     async transform(src, id) {
       if (!shouldTransformFile(id, state)) {
@@ -207,29 +116,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       }
     },
   } satisfies Plugin
-  return [
-    mainPlugin,
-    {
-      name: "vite-plugin-kiru:ssg",
-      apply: "build",
-      enforce: "post",
-      async closeBundle(error) {
-        if (error || this.environment.config.build.ssr || !state.ssgOptions)
-          return
 
-        log(ANSI.cyan("[SSG]"), "Starting SSG build...")
-        await build({
-          ...inlineConfig,
-          configFile: false,
-          build: {
-            ...inlineConfig?.build,
-            ssr: true,
-          },
-        })
-        log(ANSI.cyan("[SSG]"), "SSG build complete!")
-      },
-    } satisfies Plugin,
-  ]
+  return [mainPlugin]
 }
 
 // Export additional utilities

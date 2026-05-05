@@ -1,30 +1,12 @@
 import path from "node:path"
-import { globSync } from "tinyglobby"
-import type { PluginState } from "./config.js"
 import { ANSI } from "./ansi.js"
-import { SSGOptions, SSGSitemapOptions } from "./types.js"
+import type { PluginState } from "./config.js"
 
 export function createLogger(state: PluginState) {
   return (...data: any[]) => {
     if (!state.loggingEnabled) return
     console.log(ANSI.cyan("[vite-plugin-kiru]"), ...data)
   }
-}
-
-export function resolveUserDocument(
-  projectRoot: string,
-  ssgOptions: Required<Omit<SSGOptions, "sitemap">> & {
-    sitemap?: SSGSitemapOptions
-  }
-): string {
-  const { dir, document } = ssgOptions
-  const fp = path.resolve(projectRoot, dir, document).replace(/\\/g, "/")
-  const matches = globSync(fp)
-  if (!matches.length) {
-    throw new Error(`Document not found at ${fp}`)
-  }
-
-  return path.resolve(projectRoot, matches[0]).replace(/\\/g, "/")
 }
 
 const TRANSFORMABLE_EXTENSIONS = new Set([
