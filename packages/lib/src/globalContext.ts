@@ -1,8 +1,6 @@
 import { __DEV__ } from "./env.js"
 import { createHmrContext } from "./hmr.js"
 import { createProfilingContext } from "./profiling.js"
-import { fileRouterInstance } from "./router/globals.js"
-import type { FileRouterController } from "./router/fileRouterController.js"
 import type { AppHandle } from "./appHandle.js"
 
 export { createKiruGlobalContext, type GlobalKiruEvent, type KiruGlobalContext }
@@ -50,9 +48,6 @@ interface KiruGlobalContext {
   }
   HMRContext?: ReturnType<typeof createHmrContext>
   profilingContext?: ReturnType<typeof createProfilingContext>
-  fileRouterInstance?: {
-    current: FileRouterController | null
-  }
 }
 
 function createKiruGlobalContext(): KiruGlobalContext {
@@ -102,7 +97,6 @@ function createKiruGlobalContext(): KiruGlobalContext {
   if (__DEV__) {
     globalContext.HMRContext = createHmrContext()
     globalContext.profilingContext = createProfilingContext()
-    globalContext.fileRouterInstance = fileRouterInstance
 
     const debuggerEntries = new Set<DebuggerEntry>()
     const subscribers = new Set<(debuggerEntries: Set<DebuggerEntry>) => void>()

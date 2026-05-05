@@ -37,22 +37,6 @@
       "types": "./dist/utils/index.d.ts",
       "default": "./dist/utils/index.js"
     },
-    "./router": {
-      "types": "./dist/router/index.d.ts",
-      "default": "./dist/router/index.js"
-    },
-    "./router/client": {
-      "types": "./dist/router/client/index.d.ts",
-      "default": "./dist/router/client/index.js"
-    },
-    "./router/server": {
-      "types": "./dist/router/server/index.d.ts",
-      "default": "./dist/router/server/index.js"
-    },
-    "./router/utils": {
-      "types": "./dist/router/utils/index.d.ts",
-      "default": "./dist/router/utils/index.js"
-    },
     "./ssr/client": {
       "types": "./dist/ssr/client.d.ts",
       "default": "./dist/ssr/client.js"

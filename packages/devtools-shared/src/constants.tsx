@@ -1,15 +1,11 @@
 import * as kiru from "kiru"
-import { AppsIcon, CogIcon, FolderTreeIcon, GaugeIcon } from "./components"
+import { AppsIcon, CogIcon, GaugeIcon } from "./components"
 import { ProfilingTabView, AppsTabView } from "./tabs"
 
 export const APP_TABS = {
   Apps: {
     Icon: AppsIcon,
     View: AppsTabView,
-  },
-  FileRouter: {
-    Icon: FolderTreeIcon,
-    View: () => <div>FileRouter</div>,
   },
   Profiling: {
     Icon: GaugeIcon,
