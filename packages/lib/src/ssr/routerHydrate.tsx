@@ -1,7 +1,7 @@
 import type { AppHandle, AppHandleOptions } from "../appHandle.js"
 import { hydrate } from "./client.js"
 import { RouterProvider, createRouter } from "../router/csr.js"
-import { compileRouteTree, matchRoute } from "../router/manifest.js"
+import { compileRouteTree } from "../router/manifest.js"
 import {
   buildRoutedSubtree,
   loadNotFoundRouteTree,
@@ -35,8 +35,6 @@ export async function bootstrapSsrClient(
       ? options.routes
       : compileRouteTree(options.routes)
   const router = createRouter({ routes: manifest })
-  const pathname = window.location.pathname
-  const match = matchRoute(manifest, pathname)
 
   const { container, hydrateOptions } = options
   const staticHydrate = {
@@ -45,9 +43,10 @@ export async function bootstrapSsrClient(
   }
 
   const requestContext = readHydratedRequestContext()
+  const match = router.match.peek()
   const first = match
     ? await loadRouteTree(match)
-    : await loadNotFoundRouteTree(manifest, pathname)
+    : await loadNotFoundRouteTree(manifest, router.pathname.peek())
 
   const children = signal(
     first ? buildRoutedSubtree(first.layoutModules, first.routeModule) : null
@@ -93,7 +92,7 @@ export function bootstrapSsgClient(
   return bootstrapSsrClient({
     ...options,
     hydrateOptions: {
-      ...(options.hydrateOptions ?? {}),
+      ...options.hydrateOptions,
       hydrationMode: "static",
     },
   })

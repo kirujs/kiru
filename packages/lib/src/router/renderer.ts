@@ -187,6 +187,39 @@ export interface CreateRendererOptions {
   htmlTemplate?: string
 }
 
+async function createAppForUrl(
+  url: string,
+  ctx: RenderRequestContext | undefined,
+  manifest: RouteManifest
+) {
+  const pathname = toPathname(url)
+  const route = matchRoute(manifest, pathname)
+  const notFoundTree = !route
+    ? await loadNotFoundRouteTree(manifest, pathname)
+    : null
+  if (!route && !notFoundTree) return null
+  const { layoutModules, routeModule } = route
+    ? await loadRouteTree(route)
+    : notFoundTree!
+  const requestContext = (ctx?.context ?? null) as RequestContextValue
+  const app = buildAppElement(
+    route?.pathname ?? pathname,
+    route?.params ?? {},
+    layoutModules,
+    routeModule,
+    manifest,
+    requestContext
+  )
+  const document = route
+    ? await documentFromMatch(app, route, requestContext)
+    : { headHtml: serializeRequestContextScript(requestContext) }
+  return {
+    app,
+    document,
+    route,
+  }
+}
+
 export function createRenderer(options: CreateRendererOptions): Renderer {
   const { routes, htmlTemplate } = options
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
@@ -196,36 +229,16 @@ export function createRenderer(options: CreateRendererOptions): Renderer {
   return {
     manifest,
     async render(url, ctx) {
-      const pathname = toPathname(url)
-      const match = matchRoute(manifest, pathname)
-      const notFoundTree = !match
-        ? await loadNotFoundRouteTree(manifest, pathname)
-        : null
-      if (!match && !notFoundTree) return null
-      const { layoutModules, routeModule } = match
-        ? await loadRouteTree(match)
-        : notFoundTree!
-      const requestContext = (ctx?.context ?? null) as RequestContextValue
-      const app = buildAppElement(
-        match?.pathname ?? pathname,
-        match?.params ?? {},
-        layoutModules,
-        routeModule,
-        manifest,
-        requestContext
-      )
-      const document = match
-        ? await documentFromMatch(app, match, requestContext)
-        : {
-            headHtml: serializeRequestContextScript(requestContext),
-          }
+      const result = await createAppForUrl(url, ctx, manifest)
+      if (!result) return null
+      const { app, document, route } = result
       const body = renderToString(app)
       const html =
         compiledTemplate !== null
           ? compiledTemplate.render(body, document.headHtml)
           : body
       return {
-        status: match ? 200 : 404,
+        status: route ? 200 : 404,
         headers: DEFAULT_HEADERS,
         body: html,
         document,
@@ -245,29 +258,9 @@ export function createStreamRenderer(
   return {
     manifest,
     async render(url, ctx) {
-      const pathname = toPathname(url)
-      const match = matchRoute(manifest, pathname)
-      const notFoundTree = !match
-        ? await loadNotFoundRouteTree(manifest, pathname)
-        : null
-      if (!match && !notFoundTree) return null
-      const { layoutModules, routeModule } = match
-        ? await loadRouteTree(match)
-        : notFoundTree!
-      const requestContext = (ctx?.context ?? null) as RequestContextValue
-      const app = buildAppElement(
-        match?.pathname ?? pathname,
-        match?.params ?? {},
-        layoutModules,
-        routeModule,
-        manifest,
-        requestContext
-      )
-      const document = match
-        ? await documentFromMatch(app, match, requestContext)
-        : {
-            headHtml: serializeRequestContextScript(requestContext),
-          }
+      const result = await createAppForUrl(url, ctx, manifest)
+      if (!result) return null
+      const { app, document, route } = result
       const innerStream = renderToReadableStream(app)
       const streamBody =
         compiledTemplate !== null
@@ -277,7 +270,7 @@ export function createStreamRenderer(
             )
           : innerStream
       return {
-        status: match ? 200 : 404,
+        status: route ? 200 : 404,
         headers: { ...DEFAULT_HEADERS, "transfer-encoding": "chunked" },
         body: streamBody,
         document,
