@@ -34,19 +34,6 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       const initialState = createPluginState(opts)
       state = updatePluginState(initialState, config, opts)
       log = createLogger(state)
-
-       if (state.router.virtualManifest && state.router.routesModule) {
-        const resolvedRoutesModule = path
-          .resolve(state.projectRoot, state.router.routesModule)
-          .replace(/\\/g, "/")
-        virtualModules["virtual:kiru-routes"] = () =>
-          [
-            `import { compileRouteTree } from "kiru/router"`,
-            `import { routes } from "${resolvedRoutesModule}"`,
-            `export { routes }`,
-            `export const manifest = compileRouteTree(routes)`,
-          ].join("\n")
-      }
     },
     transformIndexHtml() {
       if (!state.devtoolsEnabled) return
@@ -158,14 +145,19 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       }
 
       if (!resolvedViteConfig) {
-        throw new Error("[vite-plugin-kiru]: internal error — missing resolved Vite config for SSG")
+        throw new Error(
+          "[vite-plugin-kiru]: internal error — missing resolved Vite config for SSG"
+        )
       }
 
       const templateName = opts.router?.htmlTemplate ?? "index.html"
       const templatePath = path.resolve(state.outDir, templateName)
       const templateHtml = await fs.readFile(templatePath, "utf8")
 
-      const routesAbs = path.resolve(state.projectRoot, state.router.routesModule)
+      const routesAbs = path.resolve(
+        state.projectRoot,
+        state.router.routesModule
+      )
       const routesViteId =
         "/" + path.relative(state.projectRoot, routesAbs).replace(/\\/g, "/")
 
@@ -190,7 +182,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           )
         }
 
-        const { prerenderStaticRoutes } = await vite.ssrLoadModule("kiru/router")
+        const { prerenderStaticRoutes } =
+          await vite.ssrLoadModule("kiru/router")
         const outputs = await prerenderStaticRoutes({
           routes,
           ...(opts.router?.htmlShell
@@ -203,7 +196,11 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         for (const output of outputs) {
           let html: string
           if (opts.router?.htmlShell) {
-            html = opts.router.htmlShell(output.body, output.path, output.document)
+            html = opts.router.htmlShell(
+              output.body,
+              output.path,
+              output.document
+            )
           } else {
             if (!output.html) {
               throw new Error(

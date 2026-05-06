@@ -78,11 +78,6 @@ export interface KiruPluginOptions {
      */
     routesModule?: string
     /**
-     * Enable route manifest virtual module generation.
-     * @default true
-     */
-    virtualManifest?: boolean
-    /**
      * Enable SSG HTML generation during build.
      * @default false
      */

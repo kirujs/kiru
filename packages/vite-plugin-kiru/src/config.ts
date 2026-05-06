@@ -31,7 +31,6 @@ export interface PluginState {
   staticProps: Record<string, Record<string, Record<string, any>>>
   router: {
     routesModule: string | null
-    virtualManifest: boolean
     ssg: boolean
   }
 }
@@ -68,7 +67,6 @@ export function createPluginState(
     },
     router: {
       routesModule: opts.router?.routesModule ?? null,
-      virtualManifest: opts.router?.virtualManifest !== false,
       ssg: opts.router?.ssg === true,
     },
   }
@@ -116,7 +114,6 @@ export function updatePluginState(
     staticProps: {},
     router: {
       routesModule: state.router?.routesModule ?? null,
-      virtualManifest: state.router?.virtualManifest !== false,
       ssg: state.router?.ssg === true,
     },
   } satisfies PluginState

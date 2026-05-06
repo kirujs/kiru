@@ -47,7 +47,6 @@ kiru({
   // Declarative router integration
   router: {
     routesModule: "./src/routes.ts",
-    virtualManifest: true,
     // When true, static routes are prerendered at the end of `vite build`.
     ssg: false,
     // HTML file in outDir to use as the shell after the client build (default: index.html).
@@ -81,5 +80,4 @@ For Node `createRenderer` HTML (non-streaming), hydrate with **`bootstrapSsrClie
 - **HMR**: Hot module replacement for fast development
 - **Devtools**: Built-in development tools for debugging
 - **TypeScript**: Full TypeScript support with proper type definitions
-- **Declarative Routing**: Route manifest module via `virtual:kiru-routes`
 - **SSG**: Prerender static routes into the production HTML shell during `vite build`
