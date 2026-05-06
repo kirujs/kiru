@@ -5,6 +5,7 @@ import {
   compileRouteTree,
   createRenderer,
   createStreamRenderer,
+  createRouter,
   defineRouteTree,
   fillRouteHtmlTemplate,
   generateStaticPaths,
@@ -12,6 +13,8 @@ import {
   Link,
   matchRoute,
   prerenderStaticRoutes,
+  useRouter,
+  useRequestContext,
 } from "../../router/index.js"
 
 describe("router", () => {
@@ -27,7 +30,10 @@ describe("router", () => {
         r.get("/users/[id]", {
           static: true,
           component: async () => ({
-            default: ({ id }: { id: string }) => <h1>{id}</h1>,
+            default: () => {
+              const router = useRouter()
+              return <h1>{router.params.value.id}</h1>
+            },
           }),
           generateStaticParams: async () => [{ id: "1" }, { id: "2" }],
         }),
@@ -59,6 +65,35 @@ describe("router", () => {
     assert.ok((response.body as string).includes("<main><h1>42</h1></main>"))
   })
 
+  it("provides CustomRequestContext to SSR components and serializes it for hydration", async () => {
+    const r = defineRouteTree((x) =>
+      x.scope({
+        layout: async () => ({
+          default: ({ children }: { children: JSX.Children }) => (
+            <main>{children}</main>
+          ),
+        }),
+        children: [
+          x.get("/", async () => ({
+            default: () => {
+              const ctx = useRequestContext() as any
+              return <p>{ctx.user?.name}</p>
+            },
+          })),
+        ],
+      })
+    )
+    const renderer = createRenderer({ routes: r })
+    const response = await renderer.render("/", {
+      context: { user: { name: "John" } } as any,
+    })
+    assert.ok(response)
+    assert.ok((response.body as string).includes("<p>John</p>"))
+    assert.ok(
+      response.document?.headHtml.includes('id="__kiru_request_context__"')
+    )
+  })
+
   it("returns null when route is unmatched", async () => {
     const renderer = createRenderer({ routes })
     const response = await renderer.render("/missing")
@@ -75,7 +110,7 @@ describe("router", () => {
   it("returns document head from renderer with merged route meta", async () => {
     const metaRoutes = defineRouteTree((r) =>
       r.scope({
-        meta: { title: "AppRoot", description: "from-scope" },
+        head: { title: "AppRoot", description: "from-scope" },
         layout: async () => ({
           default: ({ children }: { children: JSX.Children }) => (
             <main>{children}</main>
@@ -84,7 +119,7 @@ describe("router", () => {
         children: [
           r.get("/doc", {
             component: async () => ({ default: () => <p>x</p> }),
-            meta: { title: "LeafTitle", description: "from-leaf" },
+            head: { title: "LeafTitle", description: "from-leaf" },
           }),
         ],
       })
@@ -110,9 +145,12 @@ describe("router", () => {
         children: [
           x.get("/users/[id]", {
             component: async () => ({
-              default: ({ id }: { id: string }) => <span>{id}</span>,
+              default: () => {
+                const router = useRouter()
+                return <span>{router.params.value.id}</span>
+              },
             }),
-            meta: { title: "User {id}" },
+            head: { title: "User {id}" },
           }),
         ],
       })
@@ -125,7 +163,7 @@ describe("router", () => {
   it("merges <Head content> with route meta (SSR)", async () => {
     const r = defineRouteTree((x) =>
       x.scope({
-        meta: { title: "Base" },
+        head: { title: "Base" },
         layout: async () => ({
           default: ({ children }: { children: JSX.Children }) => (
             <main>{children}</main>
@@ -152,7 +190,7 @@ describe("router", () => {
   it("awaits <Head using> resource before streaming (SSR stream)", async () => {
     const r = defineRouteTree((x) =>
       x.scope({
-        meta: { title: "Base" },
+        head: { title: "Base" },
         layout: async () => ({
           default: ({ children }: { children: JSX.Children }) => (
             <main>{children}</main>
@@ -168,9 +206,7 @@ describe("router", () => {
                 <>
                   <Head
                     using={product}
-                    content={(p: { title: string }) => ({
-                      title: `Product: ${p.title}`,
-                    })}
+                    content={(p) => ({ title: `Product: ${p.title}` })}
                   />
                   <h1>{() => product.value?.title}</h1>
                 </>
@@ -206,6 +242,169 @@ describe("router", () => {
     const renderer = createRenderer({ routes: r })
     const response = await renderer.render("/")
     assert.ok((response?.body as string).includes('<a href="/users/1">'))
+  })
+
+  it("runs global beforeEach guards and can cancel navigation", async () => {
+    const manifest = compileRouteTree(routes)
+    const historyEvents: Array<{ kind: "push" | "replace"; to: string }> = []
+    const history = {
+      pushState(_a: any, _b: any, to: string) {
+        historyEvents.push({ kind: "push", to })
+      },
+      replaceState(_a: any, _b: any, to: string) {
+        historyEvents.push({ kind: "replace", to })
+      },
+    } as any as History
+
+    const location = { pathname: "/" } as any as Location
+    const router = createRouter({ routes: manifest, history, location })
+    router.beforeEach(() => false)
+    router.navigate("/about")
+    await new Promise((r) => setTimeout(r, 0))
+    assert.strictEqual(router.path.value, "/")
+    assert.strictEqual(historyEvents.length, 0)
+  })
+
+  it("runs global guards and can redirect navigation", async () => {
+    const manifest = compileRouteTree(routes)
+    const historyEvents: Array<{ kind: "push" | "replace"; to: string }> = []
+    const history = {
+      pushState(_a: any, _b: any, to: string) {
+        historyEvents.push({ kind: "push", to })
+      },
+      replaceState(_a: any, _b: any, to: string) {
+        historyEvents.push({ kind: "replace", to })
+      },
+    } as any as History
+
+    const location = { pathname: "/" } as any as Location
+    const router = createRouter({ routes: manifest, history, location })
+    router.beforeEach((to) => {
+      if (to.pathname === "/about") return "/login"
+      return
+    })
+    router.navigate("/about")
+    await new Promise((r) => setTimeout(r, 0))
+    assert.strictEqual(router.path.value, "/login")
+    assert.ok(historyEvents.some((e) => e.to === "/login"))
+  })
+
+  it("runs per-route beforeEnter guards", async () => {
+    const guarded = defineRouteTree((x) =>
+      x.scope({
+        children: [
+          x.get("/", async () => ({ default: () => <p>ok</p> })),
+          x.get("/blocked", {
+            component: async () => ({ default: () => <p>no</p> }),
+            beforeEnter: () => false,
+          }),
+        ],
+      })
+    )
+    const manifest = compileRouteTree(guarded)
+    const historyEvents: Array<{ kind: "push" | "replace"; to: string }> = []
+    const history = {
+      pushState(_a: any, _b: any, to: string) {
+        historyEvents.push({ kind: "push", to })
+      },
+      replaceState(_a: any, _b: any, to: string) {
+        historyEvents.push({ kind: "replace", to })
+      },
+    } as any as History
+
+    const location = { pathname: "/" } as any as Location
+    const router = createRouter({ routes: manifest, history, location })
+    router.navigate("/blocked")
+    await new Promise((r) => setTimeout(r, 0))
+    assert.strictEqual(router.path.value, "/")
+    assert.strictEqual(historyEvents.length, 0)
+  })
+
+  it("exposes pathname/params/hash/query signals via useRouter", async () => {
+    const r = defineRouteTree((x) =>
+      x.scope({
+        children: [
+          x.get("/users/[id]", async () => ({
+            default: () => {
+              const router = useRouter()
+              return (
+                <p>
+                  {router.pathname.value}:{router.params.value.id}:
+                  {router.hash.value}:{router.query.value.tag?.join(",")}
+                </p>
+              )
+            },
+          })),
+        ],
+      })
+    )
+    const renderer = createRenderer({ routes: r })
+    const response = await renderer.render("/users/42?tag=a&tag=b#section")
+    const body = response?.body as string
+    assert.ok(body.includes("<p>"))
+  })
+
+  it("supports baseUrl and query/hash mutators in router API", async () => {
+    const manifest = compileRouteTree(routes)
+    const historyEvents: Array<{ kind: "push" | "replace"; to: string }> = []
+    const history = {
+      state: null as any,
+      length: 1,
+      pushState(a: any, _b: any, to: string) {
+        this.state = a
+        this.length += 1
+        historyEvents.push({ kind: "push", to })
+      },
+      replaceState(a: any, _b: any, to: string) {
+        this.state = a
+        historyEvents.push({ kind: "replace", to })
+      },
+    } as any as History
+    const location = {
+      pathname: "/app/",
+      search: "",
+      hash: "",
+      origin: "http://localhost",
+    } as any as Location
+    const router = createRouter({
+      routes: manifest,
+      history,
+      location,
+      baseUrl: "/app",
+    })
+    router.navigate("/users/1")
+    await new Promise((r) => setTimeout(r, 0))
+    assert.strictEqual(router.pathname.value, "/users/1")
+    assert.strictEqual(router.resolveHref("/about"), "/app/about")
+
+    router.setQuery({ tag: ["x", "y"] }, { replace: true })
+    await new Promise((r) => setTimeout(r, 0))
+    assert.deepStrictEqual(router.query.value, { tag: ["x", "y"] })
+
+    router.setHash("top")
+    await new Promise((r) => setTimeout(r, 0))
+    assert.strictEqual(router.hash.value, "#top")
+    assert.ok(historyEvents.some((e) => e.to.startsWith("/app/users/1")))
+  })
+
+  it("renders notFound module when route is unmatched", async () => {
+    const nfRoutes = defineRouteTree((x) =>
+      x.scope({
+        layout: async () => ({
+          default: ({ children }: { children: JSX.Children }) => (
+            <main>{children}</main>
+          ),
+        }),
+        notFound: async () => ({
+          default: () => <p>missing</p>,
+        }),
+        children: [x.get("/", async () => ({ default: () => <p>ok</p> }))],
+      })
+    )
+    const renderer = createRenderer({ routes: nfRoutes })
+    const response = await renderer.render("/does-not-exist")
+    assert.strictEqual(response?.status, 404)
+    assert.ok((response?.body as string).includes("<main><p>missing</p></main>"))
   })
 
   it("fillRouteHtmlTemplate injects head and body into a shell", () => {

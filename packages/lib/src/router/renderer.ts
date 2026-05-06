@@ -3,11 +3,20 @@ import { renderToString } from "../renderToString.js"
 import { renderToReadableStream } from "../ssr/server.js"
 import { headlessRender } from "../headlessRender.js"
 import { renderMode } from "../globals.js"
-import { compileRouteTree, matchRoute } from "./manifest.js"
+import {
+  compileRouteTree,
+  matchRoute,
+  resolveNotFoundScopes,
+} from "./manifest.js"
 import { resolveMetaTemplates, serializeDocumentHead } from "./meta.js"
 import { compileRouteHtmlTemplate } from "./htmlTemplate.js"
 import { RouterProvider, createStaticRouter } from "./csr.js"
 import { createHeadCollector, withHeadCollector } from "./headContext.js"
+import {
+  RequestContextProvider,
+  serializeRequestContextScript,
+  type RequestContextValue,
+} from "./requestContext.js"
 import type {
   DocumentHead,
   RenderResult,
@@ -16,6 +25,7 @@ import type {
   RouteMatch,
   RouteModule,
   RouteTreeDefinition,
+  CustomRequestContext,
 } from "./types.js"
 
 function asComponent(module: RouteModule): Kiru.FC<any> {
@@ -25,6 +35,7 @@ function asComponent(module: RouteModule): Kiru.FC<any> {
 export interface RenderRequestContext {
   headers?: HeadersInit
   method?: string
+  context?: CustomRequestContext
 }
 
 export interface StreamRenderer {
@@ -53,9 +64,10 @@ function toPathname(url: string): string {
 
 async function documentFromMatch(
   app: JSX.Element,
-  match: RouteMatch
+  match: RouteMatch,
+  requestContext: RequestContextValue
 ): Promise<DocumentHead> {
-  const baseMeta = resolveMetaTemplates(match.route.meta, match.params)
+  const baseMeta = resolveMetaTemplates(match.route.head, match.params)
   const collector = createHeadCollector(baseMeta)
 
   withHeadCollector(collector, () => {
@@ -72,9 +84,10 @@ async function documentFromMatch(
 
   const resolvedMeta = await collector.resolve()
   return {
-    headHtml: serializeDocumentHead(resolvedMeta, {
-      pathname: match.pathname,
-    }),
+    headHtml:
+      serializeDocumentHead(resolvedMeta, {
+        pathname: match.pathname,
+      }) + `\n    ${serializeRequestContextScript(requestContext)}`,
     title: resolvedMeta.title,
   }
 }
@@ -90,13 +103,27 @@ export async function loadRouteTree(match: RouteMatch): Promise<{
   return { layoutModules, routeModule }
 }
 
+export async function loadNotFoundRouteTree(
+  manifest: RouteManifest,
+  pathname: string
+): Promise<{ layoutModules: Array<RouteModule | null>; routeModule: RouteModule } | null> {
+  const scopes = resolveNotFoundScopes(manifest, pathname)
+  if (!scopes) return null
+  const notFoundScope = [...scopes].reverse().find((scope) => !!scope.notFound)
+  if (!notFoundScope?.notFound) return null
+  const [routeModule, layoutModules] = await Promise.all([
+    notFoundScope.notFound(),
+    Promise.all(scopes.map((scope) => scope.layout?.() ?? null)),
+  ])
+  return { layoutModules, routeModule }
+}
+
 /** Layout stack + page only (no RouterProvider). Matches SSR/SSG body HTML. */
 export function buildRoutedSubtree(
-  match: RouteMatch,
   layoutModules: Array<RouteModule | null>,
   routeModule: RouteModule
 ) {
-  let app = createElement(asComponent(routeModule), match.params)
+  let app = createElement(asComponent(routeModule), {})
   for (const module of layoutModules.slice().reverse()) {
     if (!module) continue
     app = createElement(asComponent(module), { children: app })
@@ -105,19 +132,27 @@ export function buildRoutedSubtree(
 }
 
 function buildAppElement(
-  match: RouteMatch,
+  pathname: string,
+  params: Record<string, string>,
   layoutModules: Array<RouteModule | null>,
   routeModule: RouteModule,
-  manifest: RouteManifest
+  manifest: RouteManifest,
+  requestContext: RequestContextValue
 ) {
   const staticRouter = createStaticRouter({
     manifest,
-    pathname: match.pathname,
+    pathname,
+    query: {},
+    hash: "",
   })
-  const subtree = buildRoutedSubtree(match, layoutModules, routeModule)
-  return createElement(RouterProvider, {
-    router: staticRouter,
-    children: subtree,
+  staticRouter.params.value = params
+  const subtree = buildRoutedSubtree(layoutModules, routeModule)
+  return createElement(RequestContextProvider, {
+    value: requestContext,
+    children: createElement(RouterProvider, {
+      router: staticRouter,
+      children: subtree,
+    }),
   })
 }
 
@@ -127,8 +162,15 @@ export async function renderMatchToStaticHtml(
   match: RouteMatch
 ): Promise<{ body: string; document: DocumentHead }> {
   const { layoutModules, routeModule } = await loadRouteTree(match)
-  const app = buildAppElement(match, layoutModules, routeModule, manifest)
-  const document = await documentFromMatch(app, match)
+  const app = buildAppElement(
+    match.pathname,
+    match.params,
+    layoutModules,
+    routeModule,
+    manifest,
+    null
+  )
+  const document = await documentFromMatch(app, match, null)
   const body = renderToString(app)
   return { body, document }
 }
@@ -150,21 +192,37 @@ export function createRenderer(options: CreateRendererOptions): Renderer {
 
   return {
     manifest,
-    async render(url) {
+    async render(url, ctx) {
       const pathname = toPathname(url)
       const match = matchRoute(manifest, pathname)
-      if (!match) return null
-
-      const { layoutModules, routeModule } = await loadRouteTree(match)
-      const app = buildAppElement(match, layoutModules, routeModule, manifest)
-      const document = await documentFromMatch(app, match)
+      const notFoundTree = !match
+        ? await loadNotFoundRouteTree(manifest, pathname)
+        : null
+      if (!match && !notFoundTree) return null
+      const { layoutModules, routeModule } = match
+        ? await loadRouteTree(match)
+        : notFoundTree!
+      const requestContext = (ctx?.context ?? null) as RequestContextValue
+      const app = buildAppElement(
+        match?.pathname ?? pathname,
+        match?.params ?? {},
+        layoutModules,
+        routeModule,
+        manifest,
+        requestContext
+      )
+      const document = match
+        ? await documentFromMatch(app, match, requestContext)
+        : {
+            headHtml: serializeRequestContextScript(requestContext),
+          }
       const body = renderToString(app)
       const html =
         compiledTemplate !== null
           ? compiledTemplate.render(body, document.headHtml)
           : body
       return {
-        status: 200,
+        status: match ? 200 : 404,
         headers: DEFAULT_HEADERS,
         body: html,
         document,
@@ -183,14 +241,30 @@ export function createStreamRenderer(
 
   return {
     manifest,
-    async render(url) {
+    async render(url, ctx) {
       const pathname = toPathname(url)
       const match = matchRoute(manifest, pathname)
-      if (!match) return null
-
-      const { layoutModules, routeModule } = await loadRouteTree(match)
-      const app = buildAppElement(match, layoutModules, routeModule, manifest)
-      const document = await documentFromMatch(app, match)
+      const notFoundTree = !match
+        ? await loadNotFoundRouteTree(manifest, pathname)
+        : null
+      if (!match && !notFoundTree) return null
+      const { layoutModules, routeModule } = match
+        ? await loadRouteTree(match)
+        : notFoundTree!
+      const requestContext = (ctx?.context ?? null) as RequestContextValue
+      const app = buildAppElement(
+        match?.pathname ?? pathname,
+        match?.params ?? {},
+        layoutModules,
+        routeModule,
+        manifest,
+        requestContext
+      )
+      const document = match
+        ? await documentFromMatch(app, match, requestContext)
+        : {
+            headHtml: serializeRequestContextScript(requestContext),
+          }
       const innerStream = renderToReadableStream(app)
       const streamBody =
         compiledTemplate !== null
@@ -200,7 +274,7 @@ export function createStreamRenderer(
             )
           : innerStream
       return {
-        status: 200,
+        status: match ? 200 : 404,
         headers: { ...DEFAULT_HEADERS, "transfer-encoding": "chunked" },
         body: streamBody,
         document,

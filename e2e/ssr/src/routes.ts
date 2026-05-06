@@ -2,12 +2,34 @@ import { defineRouteTree } from "kiru/router"
 
 export const routes = defineRouteTree((r) =>
   r.scope({
-    meta: { description: "E2E SSR app." },
+    head: { description: "E2E SSR app." },
     layout: () => import("./pages/layout.tsx"),
+    notFound: () => import("./pages/not-found"),
     children: [
       r.get("/", {
         component: () => import("./pages/index.tsx"),
-        meta: { title: "E2E SSR Home" },
+        head: { title: "E2E SSR Home" },
+      }),
+      r.get("/about", {
+        component: () => import("./pages/about"),
+        head: { title: "E2E SSR About" },
+      }),
+      r.get("/users/[id]", {
+        component: () => import("./pages/user"),
+        head: { title: "E2E SSR User {id}" },
+      }),
+      r.get("/guarded", {
+        component: async () => ({
+          default: () => "This page should be redirected away.",
+        }),
+        beforeEnter: () => "/",
+        head: { title: "Guarded Route" },
+      }),
+      r.get("/blocked", {
+        component: async () => ({
+          default: () => "If you see this, leave guard failed.",
+        }),
+        head: { title: "Blocked Route" },
       }),
     ],
   })

@@ -5,6 +5,10 @@ export default function Layout({ children }: { children: JSX.Children }) {
     <main data-testid="ssg-layout">
       <nav>
         <Link to="/">Home</Link>
+        {" | "}
+        <Link to="/about">About</Link>
+        {" | "}
+        <Link to="/posts/one">Post one</Link>
       </nav>
       {children}
     </main>

@@ -1,14 +1,15 @@
-import type { RouteMeta } from "./types.js"
+import type { RouteHeadMeta } from "./types.js"
 import { coerceResource, getHeadCollector } from "./headContext.js"
+import type { Resource } from "../resource.js"
 
-export type HeadProps<T = unknown> =
+export type HeadProps<T> =
   | {
-      content: RouteMeta
+      content: RouteHeadMeta
       using?: never
     }
   | {
-      using: unknown
-      content: (value: T) => RouteMeta
+      using: Resource<T>
+      content: (value: T) => RouteHeadMeta
     }
 
 /**
@@ -29,6 +30,6 @@ export function Head<T = unknown>(props: HeadProps<T>): null {
     return null
   }
 
-  collector.merge(props.content as RouteMeta)
+  collector.merge(props.content as RouteHeadMeta)
   return null
 }

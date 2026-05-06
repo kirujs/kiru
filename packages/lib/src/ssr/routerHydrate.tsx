@@ -3,8 +3,16 @@ import type { AppHandle, AppHandleOptions } from "../appHandle.js"
 import { hydrate } from "./client.js"
 import { RouterProvider, createRouter } from "../router/csr.js"
 import { compileRouteTree, matchRoute } from "../router/manifest.js"
-import { buildRoutedSubtree, loadRouteTree } from "../router/renderer.js"
+import {
+  buildRoutedSubtree,
+  loadNotFoundRouteTree,
+  loadRouteTree,
+} from "../router/renderer.js"
 import type { RouteManifest, RouteTreeDefinition } from "../router/types.js"
+import {
+  readHydratedRequestContext,
+  RequestContextProvider,
+} from "../router/requestContext.js"
 
 export interface BootstrapSsrClientOptions {
   routes: RouteTreeDefinition | RouteManifest
@@ -35,19 +43,19 @@ export async function bootstrapSsrClient(
     ...hydrateOptions,
   }
 
-  if (!match) {
+  const requestContext = readHydratedRequestContext()
+  const first = match
+    ? await loadRouteTree(match)
+    : await loadNotFoundRouteTree(manifest, pathname)
+  if (!first) {
     return hydrate(<div>Not found</div>, container, staticHydrate)
   }
-
-  const first = await loadRouteTree(match)
-  const subtree = buildRoutedSubtree(
-    match,
-    first.layoutModules,
-    first.routeModule
-  )
+  const subtree = buildRoutedSubtree(first.layoutModules, first.routeModule)
 
   const app = hydrate(
-    <RouterProvider router={router}>{subtree}</RouterProvider>,
+    <RequestContextProvider value={requestContext}>
+      <RouterProvider router={router}>{subtree}</RouterProvider>
+    </RequestContextProvider>,
     container,
     staticHydrate
   )
@@ -55,17 +63,25 @@ export async function bootstrapSsrClient(
   router.path.subscribe(() => {
     void (async () => {
       const m = router.match.peek()
-      if (!m) {
+      const t = m
+        ? await loadRouteTree(m)
+        : await loadNotFoundRouteTree(manifest, router.pathname.peek())
+      if (!t) {
         app.render(
-          <RouterProvider router={router}>
-            <div>Not found</div>
-          </RouterProvider>
+          <RequestContextProvider value={requestContext}>
+            <RouterProvider router={router}>
+              <div>Not found</div>
+            </RouterProvider>
+          </RequestContextProvider>
         )
         return
       }
-      const t = await loadRouteTree(m)
-      const next = buildRoutedSubtree(m, t.layoutModules, t.routeModule)
-      app.render(<RouterProvider router={router}>{next}</RouterProvider>)
+      const next = buildRoutedSubtree(t.layoutModules, t.routeModule)
+      app.render(
+        <RequestContextProvider value={requestContext}>
+          <RouterProvider router={router}>{next}</RouterProvider>
+        </RequestContextProvider>
+      )
     })()
   })
 

@@ -1,6 +1,22 @@
 export type RouteModule = { default: Kiru.FC<any> } | Kiru.FC<any>
 export type RouteLoader = () => Promise<RouteModule>
 
+/**
+ * Custom per-request context for SSR/hydration.
+ *
+ * Users can augment this interface:
+ *
+ * ```ts
+ * declare module "kiru/router" {
+ *   interface CustomRequestContext {
+ *     user: { name: string } | null
+ *   }
+ * }
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface CustomRequestContext {}
+
 export interface GenerateStaticParamsContext {
   params: Record<string, string>
 }
@@ -10,7 +26,7 @@ export type GenerateStaticParams = (
 ) => Promise<Array<Record<string, string>>> | Array<Record<string, string>>
 
 /** Declarative SEO / document metadata (layout + route merge; child overrides). */
-export interface RouteMeta {
+export interface RouteHeadMeta {
   title?: string
   description?: string
   robots?: string
@@ -32,11 +48,47 @@ export interface RouteMeta {
   extraMeta?: Array<Record<string, string>>
 }
 
+export interface RouteLocation {
+  pathname: string
+  params: Record<string, string>
+}
+
+export type NavigationRedirect =
+  | string
+  | {
+      path: string
+      replace?: boolean
+    }
+
+export type NavigationGuardReturn =
+  | void
+  | true
+  | false
+  | NavigationRedirect
+  | Promise<void | true | false | NavigationRedirect>
+
+export type NavigationGuard = (
+  to: RouteLocation,
+  from: RouteLocation | null
+) => NavigationGuardReturn
+
+export type NavigationFailure =
+  | { type: "cancelled" }
+  | { type: "redirect"; to: NavigationRedirect }
+  | { type: "error"; error: unknown }
+
+export type AfterEachHook = (
+  to: RouteLocation,
+  from: RouteLocation | null,
+  failure?: NavigationFailure
+) => void
+
 export interface RouteDefinitionConfig {
   component: RouteLoader
   static?: boolean
   generateStaticParams?: GenerateStaticParams
-  meta?: RouteMeta
+  head?: RouteHeadMeta
+  beforeEnter?: NavigationGuard | NavigationGuard[]
 }
 
 export interface RouteDefinition {
@@ -46,7 +98,8 @@ export interface RouteDefinition {
   component: RouteLoader
   static?: boolean
   generateStaticParams?: GenerateStaticParams
-  meta?: RouteMeta
+  head?: RouteHeadMeta
+  beforeEnter?: NavigationGuard | NavigationGuard[]
 }
 
 export interface RouteScopeDefinition {
@@ -54,7 +107,7 @@ export interface RouteScopeDefinition {
   static?: boolean
   layout?: RouteLoader
   notFound?: RouteLoader
-  meta?: RouteMeta
+  head?: RouteHeadMeta
   children: RouteNodeDefinition[]
 }
 
@@ -66,7 +119,7 @@ export interface RouteBuilder {
     static?: boolean
     layout?: RouteLoader
     notFound?: RouteLoader
-    meta?: RouteMeta
+    head?: RouteHeadMeta
     children: RouteNodeDefinition[]
   }): RouteScopeDefinition
 }
@@ -80,7 +133,7 @@ export interface CompiledRouteScope {
   static: boolean
   layout?: RouteLoader
   notFound?: RouteLoader
-  meta?: RouteMeta
+  head?: RouteHeadMeta
 }
 
 export interface CompiledRoute {
@@ -96,7 +149,8 @@ export interface CompiledRoute {
   component: RouteLoader
   scopes: CompiledRouteScope[]
   /** Merged from ancestor scopes and this route */
-  meta: RouteMeta
+  head: RouteHeadMeta
+  beforeEnter?: NavigationGuard[]
 }
 
 export interface RouteManifest {

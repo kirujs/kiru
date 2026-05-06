@@ -8,7 +8,10 @@ import type {
 } from "./types.js"
 
 const routeBuilder: RouteBuilder = {
-  get(path: string, value: RouteLoader | RouteDefinitionConfig): RouteDefinition {
+  get(
+    path: string,
+    value: RouteLoader | RouteDefinitionConfig
+  ): RouteDefinition {
     if (!path.startsWith("/")) {
       throw new Error(`Route paths must start with '/': ${path}`)
     }
@@ -27,7 +30,8 @@ const routeBuilder: RouteBuilder = {
       component: value.component,
       static: value.static,
       generateStaticParams: value.generateStaticParams,
-      meta: value.meta,
+      head: value.head,
+      beforeEnter: value.beforeEnter,
     }
   },
   scope(config): RouteScopeDefinition {
@@ -36,7 +40,7 @@ const routeBuilder: RouteBuilder = {
       static: config.static,
       layout: config.layout,
       notFound: config.notFound,
-      meta: config.meta,
+      head: config.head,
       children: config.children,
     }
   },

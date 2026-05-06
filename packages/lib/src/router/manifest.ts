@@ -1,11 +1,11 @@
-import { mergeRouteMeta } from "./meta.js"
+import { mergeRouteHead } from "./meta.js"
 import type {
   CompiledRoute,
   CompiledRouteScope,
   GenerateStaticParams,
   RouteManifest,
   RouteMatch,
-  RouteMeta,
+  RouteHeadMeta,
   RouteNodeDefinition,
   RouteTreeDefinition,
 } from "./types.js"
@@ -23,6 +23,13 @@ function normalizePath(path: string): string {
   return "/" + parseSegments(path).join("/")
 }
 
+function commonPrefixLength(a: string[], b: string[]): number {
+  const length = Math.min(a.length, b.length)
+  let i = 0
+  while (i < length && a[i] === b[i]) i++
+  return i
+}
+
 function computeScore(segments: string[]): number {
   return segments.reduce((score, segment) => {
     if (/^\[[^/]+\]$/.test(segment)) return score + 2
@@ -30,7 +37,10 @@ function computeScore(segments: string[]): number {
   }, 0)
 }
 
-function compilePattern(segments: string[]): { pattern: RegExp; params: string[] } {
+function compilePattern(segments: string[]): {
+  pattern: RegExp
+  params: string[]
+} {
   if (segments.length === 0) {
     return { pattern: /^\/$/, params: [] }
   }
@@ -52,17 +62,14 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
   let routeId = 0
   let scopeId = 0
 
-  const walk = (
-    node: RouteNodeDefinition,
-    parents: CompiledRouteScope[]
-  ) => {
+  const walk = (node: RouteNodeDefinition, parents: CompiledRouteScope[]) => {
     if (node.kind === "scope") {
       const scope: CompiledRouteScope = {
         id: `scope:${scopeId++}`,
         static: node.static ?? false,
         layout: node.layout,
         notFound: node.notFound,
-        meta: node.meta,
+        head: node.head,
       }
       const nextParents = parents.concat(scope)
       for (const child of node.children) walk(child, nextParents)
@@ -75,11 +82,11 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
     const inheritedStatic = parents.some((scope) => scope.static)
     const isStatic = node.static ?? inheritedStatic
 
-    let meta: RouteMeta = {}
+    let head: RouteHeadMeta = {}
     for (const parentScope of parents) {
-      meta = mergeRouteMeta(meta, parentScope.meta)
+      head = mergeRouteHead(head, parentScope.head)
     }
-    meta = mergeRouteMeta(meta, node.meta)
+    head = mergeRouteHead(head, node.head)
 
     routes.push({
       id: `route:${routeId++}`,
@@ -95,7 +102,12 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
         | undefined,
       component: node.component,
       scopes: parents,
-      meta,
+      head,
+      beforeEnter: Array.isArray(node.beforeEnter)
+        ? node.beforeEnter
+        : node.beforeEnter
+        ? [node.beforeEnter]
+        : undefined,
     })
   }
 
@@ -125,6 +137,35 @@ export function matchRoute(
       route,
       params,
       pathname: normalizedPath,
+    }
+  }
+  return null
+}
+
+export function resolveNotFoundScopes(
+  manifest: RouteManifest,
+  pathname: string
+): CompiledRouteScope[] | null {
+  const targetSegments = parseSegments(normalizePath(pathname))
+  let best:
+    | {
+        prefix: number
+        scopes: CompiledRouteScope[]
+      }
+    | undefined
+
+  for (const route of manifest.routes) {
+    if (!route.scopes.some((scope) => scope.notFound)) continue
+    const prefix = commonPrefixLength(route.segments, targetSegments)
+    if (!best || prefix > best.prefix) {
+      best = { prefix, scopes: route.scopes }
+    }
+  }
+
+  if (!best) return null
+  for (let i = best.scopes.length - 1; i >= 0; i--) {
+    if (best.scopes[i].notFound) {
+      return best.scopes.slice(0, i + 1)
     }
   }
   return null
