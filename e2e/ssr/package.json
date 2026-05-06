@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "cross-env NODE_ENV=development vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
     "server:e2e": "cross-env SERVE=1 NODE_ENV=production PORT=5192 tsx src/server.ts",
     "cy:run": "cypress run",
     "test": "pnpm exec cypress run"

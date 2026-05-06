@@ -636,8 +636,8 @@ export function createRouter({
         kind === "leave"
           ? componentLeaveGuards
           : kind === "update"
-          ? componentUpdateGuards
-          : componentEnterGuards
+            ? componentUpdateGuards
+            : componentEnterGuards
       list.push(guard)
       return () => removeArrayEntry(list, guard)
     },

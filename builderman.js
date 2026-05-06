@@ -79,71 +79,38 @@ const E2ECachConfig = {
   outputs: ["dist"],
 }
 
-const csrTest = task({
-  name: "e2e:csr",
-  cwd: "e2e/csr",
+const sharedE2EConfig = {
   commands: {
-    build: {
-      run: "pnpm build",
-      cache: E2ECachConfig,
-    },
-    test: {
-      run: "pnpm test",
-      cache: E2ECachConfig,
-    },
+    build: { run: "pnpm build", cache: E2ECachConfig },
+    test: { run: "pnpm test", cache: E2ECachConfig },
   },
   dependencies: [lib, vitePlugin],
-  env: {
-    NODE_ENV: "development",
-  },
+  env: { NODE_ENV: "development" },
+}
+
+const csrTest = task({
+  ...sharedE2EConfig,
+  name: "e2e:csr",
+  cwd: "e2e/csr",
 })
 
 const ssgTest = task({
+  ...sharedE2EConfig,
   name: "e2e:ssg",
   cwd: "e2e/ssg",
-  commands: {
-    build: {
-      run: "pnpm build",
-      cache: E2ECachConfig,
-    },
-    test: {
-      run: "pnpm test",
-      cache: E2ECachConfig,
-    },
-  },
-  dependencies: [
-    lib,
-    vitePlugin,
-    // must perform E2E tests separately when running in Github actions
-    ...(process.env.GITHUB ? [csrTest] : []),
-  ],
-  env: {
-    NODE_ENV: "development",
-  },
 })
 
 const ssrTest = task({
+  ...sharedE2EConfig,
   name: "e2e:ssr",
   cwd: "e2e/ssr",
-  commands: {
-    build: {
-      run: "pnpm build",
-      cache: E2ECachConfig,
-    },
-    test: {
-      run: "pnpm test",
-      cache: E2ECachConfig,
-    },
-  },
-  dependencies: [
-    lib,
-    vitePlugin,
-    // must perform E2E tests separately when running in Github actions
-    ...(process.env.GITHUB ? [ssgTest] : []),
-  ],
-  env: {
-    NODE_ENV: "development",
-  },
+})
+
+const e2e = pipeline([csrTest, ssgTest, ssrTest]).toTask({
+  name: "e2e",
+  // prevent concurrent e2e tests within Github actions
+  maxConcurrency: (cmd) =>
+    cmd === "test" && !!process.env.GITHUB ? 1 : Infinity,
 })
 
 const [, , command, ...args] = process.argv
@@ -156,7 +123,7 @@ const result = await pipeline([
   lib,
   devtoolsHost,
   vitePlugin,
-  ...(args.includes("--skip-e2e") ? [] : [csrTest, ssgTest, ssrTest]),
+  ...(args.includes("--skip-e2e") ? [] : [e2e]),
 ]).run({
   command,
   onTaskBegin: (taskName) => console.log(`~~~~~ Task begin: ${taskName}`),
