@@ -1,4 +1,4 @@
-import { createElement } from "../element.js"
+import { createElement, Fragment } from "../element.js"
 import { renderToString } from "../renderToString.js"
 import { renderToReadableStream } from "../ssr/server.js"
 import { headlessRender } from "../headlessRender.js"
@@ -62,33 +62,36 @@ function toPathname(url: string): string {
   }
 }
 
-async function documentFromMatch(
+/**
+ * Single-pass render: produces the body string and resolves document head
+ * simultaneously. Used by the string renderer and SSG, where the head does
+ * not need to be known before the body starts.
+ */
+async function renderStringWithDocument(
   app: JSX.Element,
   match: RouteMatch,
   requestContext: RequestContextValue
-): Promise<DocumentHead> {
+): Promise<{ body: string; document: DocumentHead }> {
   const baseMeta = resolveMetaTemplates(match.route.head, match.params)
   const collector = createHeadCollector(baseMeta)
 
+  let body = ""
   withHeadCollector(collector, () => {
     const prev = renderMode.current
     renderMode.current = "stream"
-    headlessRender(
-      {
-        write() {},
-      },
-      app
-    )
+    headlessRender({ write(chunk) { body += chunk } }, Fragment({ children: app }))
     renderMode.current = prev
   })
 
   const resolvedMeta = await collector.resolve()
   return {
-    headHtml:
-      serializeDocumentHead(resolvedMeta, {
-        pathname: match.pathname,
-      }) + `\n    ${serializeRequestContextScript(requestContext)}`,
-    title: resolvedMeta.title,
+    body,
+    document: {
+      headHtml:
+        serializeDocumentHead(resolvedMeta, { pathname: match.pathname }) +
+        `\n    ${serializeRequestContextScript(requestContext)}`,
+      title: resolvedMeta.title,
+    },
   }
 }
 
@@ -173,9 +176,7 @@ export async function renderMatchToStaticHtml(
     manifest,
     null
   )
-  const document = await documentFromMatch(app, match, null)
-  const body = renderToString(app)
-  return { body, document }
+  return renderStringWithDocument(app, match, null)
 }
 
 const DEFAULT_HEADERS: Record<string, string> = {
@@ -210,14 +211,7 @@ async function createAppForUrl(
     manifest,
     requestContext
   )
-  const document = route
-    ? await documentFromMatch(app, route, requestContext)
-    : { headHtml: serializeRequestContextScript(requestContext) }
-  return {
-    app,
-    document,
-    route,
-  }
+  return { app, route, requestContext }
 }
 
 export function createRenderer(options: CreateRendererOptions): Renderer {
@@ -231,8 +225,13 @@ export function createRenderer(options: CreateRendererOptions): Renderer {
     async render(url, ctx) {
       const result = await createAppForUrl(url, ctx, manifest)
       if (!result) return null
-      const { app, document, route } = result
-      const body = renderToString(app)
+      const { app, route, requestContext } = result
+      const { body, document } = route
+        ? await renderStringWithDocument(app, route, requestContext)
+        : {
+            body: renderToString(app),
+            document: { headHtml: serializeRequestContextScript(requestContext) },
+          }
       const html =
         compiledTemplate !== null
           ? compiledTemplate.render(body, document.headHtml)
@@ -260,8 +259,25 @@ export function createStreamRenderer(
     async render(url, ctx) {
       const result = await createAppForUrl(url, ctx, manifest)
       if (!result) return null
-      const { app, document, route } = result
-      const innerStream = renderToReadableStream(app)
+      const { app, route, requestContext } = result
+      let document: DocumentHead
+      let innerStream: ReadableStream<string>
+      if (route) {
+        const collector = createHeadCollector(
+          resolveMetaTemplates(route.route.head, route.params)
+        )
+        innerStream = withHeadCollector(collector, () => renderToReadableStream(app))
+        const resolvedMeta = await collector.resolve()
+        document = {
+          headHtml:
+            serializeDocumentHead(resolvedMeta, { pathname: route.pathname }) +
+            `\n    ${serializeRequestContextScript(requestContext)}`,
+          title: resolvedMeta.title,
+        }
+      } else {
+        document = { headHtml: serializeRequestContextScript(requestContext) }
+        innerStream = renderToReadableStream(app)
+      }
       const streamBody =
         compiledTemplate !== null
           ? createTemplatedStream(

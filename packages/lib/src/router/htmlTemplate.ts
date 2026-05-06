@@ -26,11 +26,13 @@ export function compileRouteHtmlTemplate(
   }
   const beforeBody = template.slice(0, bodyIndex)
   const afterBody = template.slice(bodyIndex + BODY_TOKEN.length)
-  const replaceHead = (s: string, headHtml: string) => s.split(HEAD_TOKEN).join(headHtml)
 
   return {
     render(body, headHtml) {
-      return `${replaceHead(beforeBody, headHtml)}${body}${replaceHead(afterBody, headHtml)}`
+      return `${replaceHead(beforeBody, headHtml)}${body}${replaceHead(
+        afterBody,
+        headHtml
+      )}`
     },
     splitForStream(headHtml) {
       return {
@@ -41,6 +43,10 @@ export function compileRouteHtmlTemplate(
   }
 }
 
+function replaceHead(s: string, headHtml: string) {
+  return s.split(HEAD_TOKEN).join(headHtml)
+}
+
 /**
  * Inject prerendered/SSR body and head fragments into an HTML template.
  * Required placeholders: `{{kiru_head}}` and `{{kiru_body}}`.
@@ -49,7 +55,10 @@ export function fillRouteHtmlTemplate(
   template: string,
   options: { body: string; headHtml: string }
 ): string {
-  return compileRouteHtmlTemplate(template).render(options.body, options.headHtml)
+  return compileRouteHtmlTemplate(template).render(
+    options.body,
+    options.headHtml
+  )
 }
 
 /**
