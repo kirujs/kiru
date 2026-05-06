@@ -1,4 +1,5 @@
-import { routes } from "../routes"
+import { Link } from "kiru/router"
+import { routeLinks } from "../routes"
 
 export default function RootLayout({ children }: { children: JSX.Children }) {
   return (
@@ -8,7 +9,7 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
       </header>
       <nav>
         <ul>
-          {Object.entries(routes).map(([path, { displayName }]) => (
+          {routeLinks.map(({ path, displayName }) => (
             <li>
               <Link to={path}>{displayName}</Link>
             </li>
@@ -17,20 +18,5 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
       </nav>
       <div id="router-outlet">{children}</div>
     </main>
-  )
-}
-
-function Link({ to, children }: { to: string; children: JSX.Children }) {
-  return (
-    <a
-      href={to}
-      onclick={(e) => {
-        e.preventDefault()
-        window.history.pushState(null, "", to)
-        window.dispatchEvent(new Event("popstate"))
-      }}
-    >
-      {children}
-    </a>
   )
 }

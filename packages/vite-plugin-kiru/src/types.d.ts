@@ -67,6 +67,42 @@ export interface KiruPluginOptions {
    * Experimental options
    */
   experimental?: ExperimentalOptions
+
+  /**
+   * Declarative router support options.
+   */
+  router?: {
+    /**
+     * Path to the module that exports `routes` built with `defineRouteTree`.
+     * @example "./src/routes.ts"
+     */
+    routesModule?: string
+    /**
+     * Enable route manifest virtual module generation.
+     * @default true
+     */
+    virtualManifest?: boolean
+    /**
+     * Enable SSG HTML generation during build.
+     * @default false
+     */
+    ssg?: boolean
+    /**
+     * HTML file in `outDir` to use as the shell after `vite build` (must contain
+     * `{{kiru_body}}` and optionally `{{kiru_head}}` in `<head>`.
+     * @default "index.html"
+     */
+    htmlTemplate?: string
+    /**
+     * Optional full HTML override per route. If set, {@link htmlTemplate} injection is skipped.
+     * Prefer the default template tokens (`{{kiru_head}}` + `{{kiru_body}}`) and route `meta` for SEO.
+     */
+    htmlShell?: (
+      body: string,
+      path: string,
+      document: { headHtml: string; title?: string }
+    ) => string
+  }
 }
 
 export const defaultEsBuildOptions: ESBuildOptions

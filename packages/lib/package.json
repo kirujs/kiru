@@ -45,6 +45,14 @@
       "types": "./dist/ssr/server.d.ts",
       "default": "./dist/ssr/server.js"
     },
+    "./ssr/router": {
+      "types": "./dist/ssr/routerHydrate.d.ts",
+      "default": "./dist/ssr/routerHydrate.js"
+    },
+    "./router": {
+      "types": "./dist/router/index.d.ts",
+      "default": "./dist/router/index.js"
+    },
     "./jsx-dev-runtime": {
       "types": "./dist/jsx.d.ts",
       "default": "./dist/jsx.js"

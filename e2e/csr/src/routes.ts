@@ -1,23 +1,28 @@
-const globResult = import.meta.glob("/**/index.{tsx,jsx}", { base: "./pages" })
+import { defineRouteTree } from "kiru/router"
 
-interface RouteMapEntry {
-  displayName: string
-  component: () => Promise<{ default: Kiru.FC }>
-}
+export const routes = defineRouteTree((r) =>
+  r.scope({
+    layout: () => import("./pages/layout.tsx"),
+    children: [
+      r.get("/", () => import("./pages/index.tsx")),
+      r.get("/about", () => import("./pages/about/index.tsx")),
+      r.get("/counter", () => import("./pages/counter/index.tsx")),
+      r.get("/effects", () => import("./pages/effects/index.tsx")),
+      r.get("/keyed-list", () => import("./pages/keyed-list/index.tsx")),
+      r.get("/signals", () => import("./pages/signals/index.tsx")),
+      r.get("/style", () => import("./pages/style/index.tsx")),
+      r.get("/todos", () => import("./pages/todos/index.tsx")),
+    ],
+  })
+)
 
-export const routes: Record<string, RouteMapEntry> = Object.entries(
-  globResult
-).reduce((acc, [k, v]) => {
-  let path = k.substring(1, k.length - 4) // remove "." and ".tsx"
-  path = path.substring(0, path.length - 6)
-  if (path === "") path = "/"
-  return {
-    ...acc,
-    [path]: {
-      displayName: path === "/" ? "home" : path.substring(1),
-      component: v,
-    },
-  }
-}, {})
-
-console.log("routes", routes)
+export const routeLinks = [
+  { path: "/", displayName: "home" },
+  { path: "/about", displayName: "about" },
+  { path: "/counter", displayName: "counter" },
+  { path: "/effects", displayName: "effects" },
+  { path: "/keyed-list", displayName: "keyed-list" },
+  { path: "/signals", displayName: "signals" },
+  { path: "/style", displayName: "style" },
+  { path: "/todos", displayName: "todos" },
+]

@@ -92,31 +92,59 @@ const csrTest = task({
       cache: E2ECachConfig,
     },
   },
-  dependencies: [lib],
+  dependencies: [lib, vitePlugin],
   env: {
     NODE_ENV: "development",
   },
 })
 
-// const ssgTest = task({
-//   name: "e2e:ssg",
-//   cwd: "e2e/ssg",
-//   commands: {
-//     build: {
-//       run: "pnpm build",
-//       cache: E2ECachConfig,
-//     },
-//     test: {
-//       run: "pnpm test",
-//       cache: E2ECachConfig,
-//     },
-//   },
-//   // github can't run two cypress tests in parallel
-//   dependencies: [...(process.env.GITHUB ? [csrTest] : []), lib],
-//   env: {
-//     NODE_ENV: "development",
-//   },
-// })
+const ssgTest = task({
+  name: "e2e:ssg",
+  cwd: "e2e/ssg",
+  commands: {
+    build: {
+      run: "pnpm build",
+      cache: E2ECachConfig,
+    },
+    test: {
+      run: "pnpm test",
+      cache: E2ECachConfig,
+    },
+  },
+  dependencies: [
+    lib,
+    vitePlugin,
+    // must perform E2E tests separately when running in Github actions
+    ...(process.env.GITHUB ? [csrTest] : []),
+  ],
+  env: {
+    NODE_ENV: "development",
+  },
+})
+
+const ssrTest = task({
+  name: "e2e:ssr",
+  cwd: "e2e/ssr",
+  commands: {
+    build: {
+      run: "pnpm build",
+      cache: E2ECachConfig,
+    },
+    test: {
+      run: "pnpm test",
+      cache: E2ECachConfig,
+    },
+  },
+  dependencies: [
+    lib,
+    vitePlugin,
+    // must perform E2E tests separately when running in Github actions
+    ...(process.env.GITHUB ? [ssgTest] : []),
+  ],
+  env: {
+    NODE_ENV: "development",
+  },
+})
 
 const [, , command, ...args] = process.argv
 if (!["build", "dev", "test"].includes(command)) {
@@ -128,7 +156,7 @@ const result = await pipeline([
   lib,
   devtoolsHost,
   vitePlugin,
-  ...(args.includes("--skip-e2e") ? [] : [csrTest /*, ssgTest */]),
+  ...(args.includes("--skip-e2e") ? [] : [csrTest, ssgTest, ssrTest]),
 ]).run({
   command,
   onTaskBegin: (taskName) => console.log(`~~~~~ Task begin: ${taskName}`),

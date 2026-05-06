@@ -19,27 +19,22 @@ d.currentScript.remove()
 </script>
 `
 
-export interface ReadableStreamRenderResult {
-  immediate: string
-  stream: ReadableStream
-}
-
-export function renderToReadableStream(element: JSX.Element): ReadableStreamRenderResult {
+export function renderToReadableStream(
+  element: JSX.Element
+): ReadableStream<string> {
   let controller!: ReadableStreamDefaultController<string>
   const stream = new ReadableStream<string>({
     start(c) {
       controller = c
     },
   })
-  
+
   const rootNode = Fragment({ children: element })
   const streamPromises = new Set<Kiru.StatefulPromise<unknown>>()
   const pendingWritePromises: Promise<void>[] = []
 
-  let immediate = ""
-
   const ctx: HeadlessRenderContext = {
-    write: (chunk) => (immediate += chunk),
+    write: (chunk) => controller.enqueue(chunk),
     onStreamData(data) {
       for (const promise of data) {
         if (streamPromises.has(promise)) continue
@@ -74,5 +69,5 @@ export function renderToReadableStream(element: JSX.Element): ReadableStreamRend
     controller.close()
   }
 
-  return { immediate, stream }
+  return stream
 }

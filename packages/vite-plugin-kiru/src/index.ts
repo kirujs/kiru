@@ -9,14 +9,17 @@ import {
 } from "./config.js"
 import { createDevtoolsHtmlTransform, setupDevtools } from "./devtools.js"
 import { createLogger, shouldTransformFile } from "./utils.js"
+import { promises as fs } from "node:fs"
+import path from "node:path"
 
 import type { KiruPluginOptions } from "./types.js"
-import { type Plugin, type PluginOption } from "vite"
+import type { Plugin, PluginOption, ResolvedConfig } from "vite"
 
 export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   let state: PluginState
   let log: (...data: any[]) => void
   let virtualModules: Record<string, () => string> = {}
+  let resolvedViteConfig: ResolvedConfig | undefined
 
   const mainPlugin = {
     name: "vite-plugin-kiru",
@@ -27,9 +30,23 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       }
     },
     async configResolved(config) {
+      resolvedViteConfig = config
       const initialState = createPluginState(opts)
       state = updatePluginState(initialState, config, opts)
       log = createLogger(state)
+
+       if (state.router.virtualManifest && state.router.routesModule) {
+        const resolvedRoutesModule = path
+          .resolve(state.projectRoot, state.router.routesModule)
+          .replace(/\\/g, "/")
+        virtualModules["virtual:kiru-routes"] = () =>
+          [
+            `import { compileRouteTree } from "kiru/router"`,
+            `import { routes } from "${resolvedRoutesModule}"`,
+            `export { routes }`,
+            `export const manifest = compileRouteTree(routes)`,
+          ].join("\n")
+      }
     },
     transformIndexHtml() {
       if (!state.devtoolsEnabled) return
@@ -113,6 +130,98 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       return {
         code: result,
         map: map.toString(),
+      }
+    },
+    generateBundle() {
+      if (!state.isBuild || !state.router.routesModule) return
+      this.emitFile({
+        type: "asset",
+        fileName: "kiru-route-manifest.json",
+        source: JSON.stringify(
+          {
+            routesModule: state.router.routesModule,
+            generatedAt: new Date().toISOString(),
+          },
+          null,
+          2
+        ),
+      })
+    },
+    async writeBundle() {
+      if (
+        !state.isBuild ||
+        !state.router.ssg ||
+        !state.router.routesModule ||
+        state.isSSRBuild
+      ) {
+        return
+      }
+
+      if (!resolvedViteConfig) {
+        throw new Error("[vite-plugin-kiru]: internal error — missing resolved Vite config for SSG")
+      }
+
+      const templateName = opts.router?.htmlTemplate ?? "index.html"
+      const templatePath = path.resolve(state.outDir, templateName)
+      const templateHtml = await fs.readFile(templatePath, "utf8")
+
+      const routesAbs = path.resolve(state.projectRoot, state.router.routesModule)
+      const routesViteId =
+        "/" + path.relative(state.projectRoot, routesAbs).replace(/\\/g, "/")
+
+      const { createServer } = await import("vite")
+      const configFile =
+        typeof resolvedViteConfig.configFile === "string" &&
+        resolvedViteConfig.configFile
+          ? resolvedViteConfig.configFile
+          : path.resolve(state.projectRoot, "vite.config.ts")
+      const vite = await createServer({
+        configFile,
+        server: { middlewareMode: true },
+        appType: "custom",
+      })
+
+      try {
+        const routesMod = await vite.ssrLoadModule(routesViteId)
+        const routes = routesMod.routes
+        if (!routes) {
+          throw new Error(
+            `[vite-plugin-kiru]: router.routesModule "${state.router.routesModule}" does not export 'routes'`
+          )
+        }
+
+        const { prerenderStaticRoutes } = await vite.ssrLoadModule("kiru/router")
+        const outputs = await prerenderStaticRoutes({
+          routes,
+          ...(opts.router?.htmlShell
+            ? {}
+            : {
+                htmlTemplate: templateHtml,
+              }),
+        })
+
+        for (const output of outputs) {
+          let html: string
+          if (opts.router?.htmlShell) {
+            html = opts.router.htmlShell(output.body, output.path, output.document)
+          } else {
+            if (!output.html) {
+              throw new Error(
+                `[vite-plugin-kiru]: prerenderStaticRoutes() did not return full HTML for "${output.path}".`
+              )
+            }
+            html = output.html
+          }
+          const relativePath =
+            output.path === "/"
+              ? "index.html"
+              : `${output.path.replace(/^\//, "")}/index.html`
+          const target = path.resolve(state.outDir, relativePath)
+          await fs.mkdir(path.dirname(target), { recursive: true })
+          await fs.writeFile(target, html, "utf8")
+        }
+      } finally {
+        await vite.close()
       }
     },
   } satisfies Plugin

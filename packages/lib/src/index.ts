@@ -23,6 +23,7 @@ export {
   useRequestUpdate,
 } from "./scheduler.js"
 export * from "./resource.js"
+export * from "./router/index.js"
 export * from "./viewTransitions.js"
 
 if (isBrowser) {

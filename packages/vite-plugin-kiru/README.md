@@ -1,6 +1,6 @@
 # vite-plugin-kiru
 
-Vite plugin for <a href="https://kirujs.dev">Kiru</a> apps that enables HMR, devtools, and SSG with file-based routing & sitemap generation.
+Vite plugin for <a href="https://kirujs.dev">Kiru</a> apps that enables HMR, devtools, and declarative routing build hooks.
 
 ## Basic Usage
 
@@ -44,105 +44,42 @@ kiru({
     console.log(`Excluded: ${id}`)
   },
 
-  // Static Site Generation (SSG) configuration
-  ssg: {
-    // Base URL for the app
-    baseUrl: "/",
-    // Directory containing pages
-    dir: "./src/pages",
-    // Document component filename pattern
-    document: "document.{tsx,jsx}",
-    // Page component filename pattern
-    page: "index.{tsx,jsx}",
-    // Layout component filename pattern
-    layout: "layout.{tsx,jsx}",
-    // Enable view transitions for route changes and page loaders
-    transition: true,
-    // Build options
-    build: {
-      // Maximum number of pages to render concurrently
-      maxConcurrentRenders: 100,
-    },
-    // Sitemap generation options
-    sitemap: {
-      // Domain for sitemap URLs (required)
-      domain: "https://example.com",
-      // Default last modified date for all URLs
-      lastmod: new Date(),
-      // Default change frequency (hourly | daily | weekly | monthly | yearly | never)
-      changefreq: "weekly", // default: "weekly"
-      // Default priority (0.0 to 1.0)
-      priority: 0.5, // default: 0.5
-      // Per-route overrides
-      overrides: {
-        "/": {
-          changefreq: "daily",
-          priority: 0.8,
-          lastmod: new Date("2024-01-01"),
-          // Images to include for this route
-          images: ["/images/hero.png"],
-          // Videos to include for this route
-          videos: [
-            {
-              title: "Product Demo",
-              thumbnail_loc: "/images/video-thumbnail.png",
-              description: "A demonstration of our product features.",
-            },
-          ],
-        },
-        "/blog": {
-          changefreq: "weekly",
-          priority: 0.7,
-        },
-      },
-    },
+  // Declarative router integration
+  router: {
+    routesModule: "./src/routes.ts",
+    virtualManifest: true,
+    // When true, static routes are prerendered at the end of `vite build`.
+    ssg: false,
+    // HTML file in outDir to use as the shell after the client build (default: index.html).
+    // Must include `{{kiru_head}}` and `{{kiru_body}}` template tokens.
+    htmlTemplate: "index.html",
+    // Optional: return a full HTML string per route instead of template injection.
+    htmlShell: (body, path, document) => `<!doctype html>...`,
   },
-
-  // Or, if you want to enable SSG with default configuration:
-  ssg: true,
-  // (this will not include sitemap generation as it requires manual configuration)
 })
 ```
 
-## Static Site Generation (SSG)
+## Static site generation (SSG)
 
-The plugin supports static site generation with configurable sitemap creation. When SSG is enabled, all routes are pre-rendered at build time and a `sitemap.xml` file is generated if configured.
+With `router.ssg: true` and `router.routesModule` set, the plugin:
 
-### Sitemap Generation
+1. Runs the normal client `vite build` (so `index.html` gets real hashed JS/CSS).
+2. Starts a short-lived Vite server and loads your routes module with `ssrLoadModule` (TypeScript-safe).
+3. Calls `prerenderStaticRoutes` from `kiru/router` for every static path.
+4. Merges each result into a **copy** of the built `index.html` via `fillRouteHtmlTemplate` (also exported from `kiru/router` for custom SSR servers).
 
-The sitemap feature generates a `sitemap.xml` file in your build output with all discovered routes (excluding 404 pages).
+Your source `index.html` should include `{{kiru_head}}` in `<head>` and `{{kiru_body}}` at the app mount location (for example `<div id="app">{{kiru_body}}</div>`).
 
-**Features:**
+You do **not** need a separate `prerender.ts` script.
 
-- Automatic route discovery from your file structure
-- Configurable default `changefreq`, `priority`, and `lastmod` for all routes
-- Per-route overrides for fine-grained control
-- Support for images and videos (Google sitemap extensions)
+## SSR client entry
 
-**Example:**
-
-```ts
-ssg: {
-  sitemap: {
-    domain: "https://kirujs.dev",
-    changefreq: "weekly",
-    priority: 0.5,
-    overrides: {
-      "/": {
-        changefreq: "daily",
-        priority: 0.8,
-        images: ["/images/kiru.png"],
-      },
-    },
-  },
-}
-```
-
-This will generate a `sitemap.xml` file in `dist/client/sitemap.xml` with all your routes properly formatted.
+For Node `createRenderer` HTML (non-streaming), hydrate with **`bootstrapSsrClient`** from **`kiru/ssr/router`**, not `RouterView` alone: `RouterView` uses async resources that expect streamed `kiru:deferred` payloads, which plain string SSR does not emit.
 
 ## Features
 
-- **SSG + file-based routing**: Automatic route discovery, static site and sitemap generation
 - **HMR**: Hot module replacement for fast development
 - **Devtools**: Built-in development tools for debugging
 - **TypeScript**: Full TypeScript support with proper type definitions
+- **Declarative Routing**: Route manifest module via `virtual:kiru-routes`
+- **SSG**: Prerender static routes into the production HTML shell during `vite build`
