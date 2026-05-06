@@ -1,5 +1,5 @@
-import * as kiru from "../index.js"
 import { createContext, useContext } from "../context.js"
+import { createElement } from "../element.js"
 import type { CustomRequestContext } from "./types.js"
 
 export const REQUEST_CONTEXT_SCRIPT_ID = "__kiru_request_context__"
@@ -15,7 +15,7 @@ export function RequestContextProvider({
   value: RequestContextValue
   children?: JSX.Children
 }) {
-  return <RequestContext value={value}>{children}</RequestContext>
+  return createElement(RequestContext, { value, children })
 }
 
 export function useOptionalRequestContext(): RequestContextValue {

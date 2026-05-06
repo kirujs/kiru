@@ -1,11 +1,9 @@
-import * as kiru from "../index.js"
 import { createContext, useContext } from "../context.js"
 import { signal } from "../signals/base.js"
 import { nextIdle } from "../scheduler.js"
 import { resource } from "../resource.js"
-import { Derive } from "../components/derive.js"
 import { ViewTransitions } from "../viewTransitions.js"
-import { matchRoute, resolveNotFoundScopes } from "./manifest.js"
+import { matchRoute } from "./manifest.js"
 import { createElement } from "../element.js"
 import type {
   AfterEachHook,
@@ -15,20 +13,15 @@ import type {
   RouteLocation,
   RouteManifest,
   RouteMatch,
-  RouteModule,
   RouteTreeDefinition,
 } from "./types.js"
 import { compileRouteTree } from "./manifest.js"
-
-type LoadedView = {
-  layouts: Array<RouteModule | null>
-  routeModule: RouteModule
-  notFound: boolean
-}
-
-function asComponent(module: RouteModule): Kiru.FC<any> {
-  return typeof module === "function" ? module : module.default
-}
+import { setup } from "../hooks/index.js"
+import {
+  buildRoutedSubtree,
+  loadNotFoundRouteTree,
+  loadRouteTree,
+} from "./renderer.js"
 
 function joinPath(base: string, path: string): string {
   if (path.startsWith("/")) return path
@@ -200,21 +193,6 @@ function ensureHistoryIndex(history: History): number {
   const index = history.length - 1
   history.replaceState({ ...history.state, index }, "", window.location.href)
   return index
-}
-
-async function loadNotFoundView(
-  manifest: RouteManifest,
-  pathname: string
-): Promise<LoadedView | null> {
-  const scopes = resolveNotFoundScopes(manifest, pathname)
-  if (!scopes) return null
-  const notFoundScope = [...scopes].reverse().find((scope) => !!scope.notFound)
-  if (!notFoundScope?.notFound) return null
-  const [routeModule, layouts] = await Promise.all([
-    notFoundScope.notFound(),
-    Promise.all(scopes.map((scope) => scope.layout?.() ?? null)),
-  ])
-  return { routeModule, layouts, notFound: true }
 }
 
 export function createRouter({
@@ -704,7 +682,7 @@ export interface RouterProviderProps {
 }
 
 export function RouterProvider({ router, children }: RouterProviderProps) {
-  return <RouterContext value={router}>{children}</RouterContext>
+  return createElement(RouterContext, { value: router, children })
 }
 
 export function useRouter(): Router {
@@ -721,11 +699,11 @@ export type LinkProps = JSX.IntrinsicElements["a"] & {
 }
 
 export const Link: Kiru.FC<LinkProps> = () => {
-  const $ = kiru.setup<typeof Link>()
+  const $ = setup<typeof Link>()
   const router = useRouter()
 
   const href = $.derive(({ to }) => router.resolveHref(to))
-  const onPointerEnter: Kiru.PointerEventHandler<HTMLAnchorElement> = (
+  const onpointerenter: Kiru.PointerEventHandler<HTMLAnchorElement> = (
     event
   ) => {
     $.props.onpointerenter?.(event)
@@ -742,53 +720,35 @@ export const Link: Kiru.FC<LinkProps> = () => {
     void match.route.component()
   }
 
-  const onClick: Kiru.MouseEventHandler<HTMLAnchorElement> = (event) => {
+  const onclick: Kiru.MouseEventHandler<HTMLAnchorElement> = (event) => {
     $.props.onclick?.(event)
     if (event.defaultPrevented) return
     event.preventDefault()
     router.navigate($.props.to, $.props.replace)
   }
 
-  return ({ to, replace, children, ...rest }) => (
-    <a {...rest} href={href} onpointerenter={onPointerEnter} onclick={onClick}>
-      {children}
-    </a>
-  )
+  return ({ to, replace, children, ...rest }) =>
+    createElement("a", { children, href, onpointerenter, onclick, ...rest })
 }
 
-export function RouterView({ router }: { router?: Router }) {
-  const activeRouter = router ?? useRouter()
-  const { match, pathname } = activeRouter
-  const source = { m: match, pathname }
-  const view = resource<LoadedView | null, typeof source>(
-    source,
-    async ({ m, pathname }) => {
-      if (!m) {
-        return loadNotFoundView(activeRouter.manifest, pathname)
-      }
-      const [routeModule, ...layouts] = await Promise.all([
-        m.route.component(),
-        ...m.route.scopes.map((scope) => scope.layout?.() ?? null),
-      ])
-      return {
-        routeModule,
-        layouts,
-        notFound: false,
-      }
+export function RouterView() {
+  const router = useRouter()
+  const { match, pathname, manifest } = router
+  let epoch = 0
+  const children = resource(
+    { match, pathname },
+    async ({ match, pathname }) => {
+      const e = ++epoch
+      const tree = match
+        ? await loadRouteTree(match)
+        : await loadNotFoundRouteTree(manifest, pathname)
+      if (epoch !== e) return
+
+      return tree
+        ? buildRoutedSubtree(tree.layoutModules, tree.routeModule)
+        : null
     }
   )
 
-  return (
-    <Derive from={view} fallback={<div>Loading route...</div>}>
-      {(loaded) => {
-        if (!loaded) return <div>Not found</div>
-        let tree = createElement(asComponent(loaded.routeModule), {})
-        for (const layoutMod of loaded.layouts.slice().reverse()) {
-          if (!layoutMod) continue
-          tree = createElement(asComponent(layoutMod), { children: tree })
-        }
-        return tree
-      }}
-    </Derive>
-  )
+  return () => children.value
 }

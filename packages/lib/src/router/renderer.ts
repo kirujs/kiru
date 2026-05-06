@@ -106,7 +106,10 @@ export async function loadRouteTree(match: RouteMatch): Promise<{
 export async function loadNotFoundRouteTree(
   manifest: RouteManifest,
   pathname: string
-): Promise<{ layoutModules: Array<RouteModule | null>; routeModule: RouteModule } | null> {
+): Promise<{
+  layoutModules: Array<RouteModule | null>
+  routeModule: RouteModule
+} | null> {
   const scopes = resolveNotFoundScopes(manifest, pathname)
   if (!scopes) return null
   const notFoundScope = [...scopes].reverse().find((scope) => !!scope.notFound)

@@ -13,7 +13,7 @@ export default defineConfig({
       include: ["../shared/"],
       loggingEnabled: true,
       experimental: {
-        staticHoisting: true,
+        //staticHoisting: true,
       },
     }),
   ],
