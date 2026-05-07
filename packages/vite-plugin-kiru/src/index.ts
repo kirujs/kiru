@@ -90,8 +90,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             const routes = routesMod.routes
             if (!routes) return next()
 
-            const { createRenderer } =
-              await server.ssrLoadModule("kiru/router")
+            const { createRenderer } = await server.ssrLoadModule("kiru/router")
             const renderer = createRenderer({ routes, htmlTemplate })
             const result = await renderer.render(rawUrl)
 
@@ -238,9 +237,15 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           )
         }
 
-        const { prerenderStaticRoutes } =
-          await vite.ssrLoadModule("kiru/router")
-        const outputs = await prerenderStaticRoutes({
+        const { prerenderStaticRoutes } = await vite.ssrLoadModule(
+          "kiru/router"
+        )
+        const outputs: {
+          path: string
+          body: string
+          document: { headHtml: string; title?: string }
+          html?: string
+        }[] = await prerenderStaticRoutes({
           routes,
           ...(opts.router?.htmlShell
             ? {}
@@ -248,6 +253,14 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
                 htmlTemplate: templateHtml,
               }),
         })
+
+        const outputPaths = new Set<string>(
+          outputs.map((o: { path: string }) => o.path)
+        )
+        const hasChildren = (routePath: string) =>
+          [...outputPaths].some(
+            (p) => p !== routePath && p.startsWith(routePath + "/")
+          )
 
         for (const output of outputs) {
           let html: string
@@ -265,10 +278,12 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             }
             html = output.html
           }
+          const seg = output.path.replace(/^\//, "")
           const relativePath =
-            output.path === "/"
-              ? "index.html"
-              : `${output.path.replace(/^\//, "")}.html`
+            output.path === "/" || hasChildren(output.path)
+              ? `${seg ? seg + "/" : ""}index.html`
+              : `${seg}.html`
+
           const target = path.resolve(state.outDir, relativePath)
           await fs.mkdir(path.dirname(target), { recursive: true })
           await fs.writeFile(target, html, "utf8")
