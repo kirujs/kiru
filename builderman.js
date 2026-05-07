@@ -111,6 +111,7 @@ const e2e = pipeline([csrTest, ssgTest, ssrTest]).toTask({
   // prevent concurrent e2e tests within Github actions
   maxConcurrency: (cmd) =>
     cmd === "test" && !!process.env.GITHUB ? 1 : Infinity,
+  dependencies: [lib, vitePlugin],
 })
 
 const [, , command, ...args] = process.argv

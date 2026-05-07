@@ -3,7 +3,7 @@ import { Link, onBeforeRouteEnter, onBeforeRouteUpdate } from "kiru/router"
 
 const guardEvents = signal<string[]>([])
 
-export default function Layout({ children }: { children: JSX.Children }) {
+export default function Layout() {
   onBeforeRouteEnter((to) => {
     guardEvents.value = [...guardEvents.peek(), `enter:${to.pathname}`]
   })
@@ -14,13 +14,15 @@ export default function Layout({ children }: { children: JSX.Children }) {
     ]
   })
 
-  return (
+  return ({ children }: { children: JSX.Children }) => (
     <main className="min-h-screen bg-slate-950 p-6 text-slate-100 md:p-10">
       <div className="mx-auto max-w-3xl rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40 md:p-8">
         <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
           Server Side Rendering
         </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">Kiru SSR Sandbox</h1>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight">
+          Kiru SSR Sandbox
+        </h1>
         <p className="mt-2 text-sm text-slate-400">
           Tailwind CSS v4 styling with router guard event visibility.
         </p>

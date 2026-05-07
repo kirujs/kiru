@@ -23,8 +23,8 @@ export const routes = defineRouteTree((r) =>
           description: "About this static site.",
         },
       }),
+      r.get("/blog", () => import("./pages/blog.tsx")),
       r.get("/blog/[slug]", {
-        static: true,
         component: () => import("./pages/blogSlug.tsx"),
         generateStaticParams: async () => [{ slug: "hello" }, { slug: "kiru" }],
         head: {

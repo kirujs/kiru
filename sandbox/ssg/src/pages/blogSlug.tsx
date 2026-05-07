@@ -1,4 +1,4 @@
-import { useRouter } from "kiru"
+import { useRouter } from "kiru/router"
 
 export default function BlogSlugPage() {
   const router = useRouter()

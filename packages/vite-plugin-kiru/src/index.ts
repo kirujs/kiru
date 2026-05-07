@@ -212,7 +212,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           const relativePath =
             output.path === "/"
               ? "index.html"
-              : `${output.path.replace(/^\//, "")}/index.html`
+              : `${output.path.replace(/^\//, "")}.html`
           const target = path.resolve(state.outDir, relativePath)
           await fs.mkdir(path.dirname(target), { recursive: true })
           await fs.writeFile(target, html, "utf8")
