@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     kiru({
       router: {
-        routesModule: "./src/routes.ts",
+        serverEntry: "./src/server.ts",
       },
     }),
     devServer({

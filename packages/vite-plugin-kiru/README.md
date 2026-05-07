@@ -46,9 +46,13 @@ kiru({
 
   // Declarative router integration
   router: {
-    routesModule: "./src/routes.ts",
-    // When true, static routes are prerendered at the end of `vite build`.
-    ssg: false,
+    // SSR dev entry (exports default Hono app)
+    serverEntry: "./src/server.ts",
+    // SSG options:
+    // - false: disable SSG
+    // - true: enable SSG using ./src/routes.ts
+    // - { routes }: enable SSG with custom routes module path
+    ssg: { routes: "./src/routes.ts" },
     // HTML file in outDir to use as the shell after the client build (default: index.html).
     // Must include `{{kiru_head}}` and `{{kiru_body}}` template tokens.
     htmlTemplate: "index.html",
@@ -60,7 +64,7 @@ kiru({
 
 ## Static site generation (SSG)
 
-With `router.ssg: true` and `router.routesModule` set, the plugin:
+With `router.ssg` enabled (`true` or `{ routes }`), the plugin:
 
 1. Runs the normal client `vite build` (so `index.html` gets real hashed JS/CSS).
 2. Starts a short-lived Vite server and loads your routes module with `ssrLoadModule` (TypeScript-safe).

@@ -8,6 +8,8 @@ import {
   type PluginState,
 } from "./config.js"
 import { createDevtoolsHtmlTransform, setupDevtools } from "./devtools.js"
+import { injectDevCssLinks, handleSsrDevRequest } from "./dev-server.js"
+import { createSsgPreviewMiddleware } from "./preview-server.js"
 import { createLogger, shouldTransformFile } from "./utils.js"
 import { promises as fs } from "node:fs"
 import path from "node:path"
@@ -42,8 +44,13 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         state.dtHostScriptPath
       )
     },
+    configurePreviewServer(server) {
+      if (!state.router.ssg) return
+      server.middlewares.use(createSsgPreviewMiddleware(state.outDir))
+    },
     configureServer(server) {
       if (state.isProduction || state.isBuild) return
+
       const { devtoolsEnabled, dtHostScriptPath, fileLinkFormatter, router } =
         state
 
@@ -56,15 +63,14 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         )
       }
 
-      if (!router.ssg || !router.routesModule) return
-
-      const routesModule = router.routesModule
-      return () => {
+      // SSR dev mode: register DIRECTLY (not via post-hook) so we intercept
+      // requests before Vite's indexHtmlMiddleware would serve index.html.
+      // The plugin owns the full request pipeline here, giving us access to
+      // the Response object before anything hits the socket — no patching needed.
+      if (!router.ssg && router.serverEntry) {
+        const serverEntry = path.resolve(state.projectRoot, router.serverEntry)
         server.middlewares.use(async (req, res, next) => {
-          const rawUrl = req.originalUrl ?? "/"
-          const pathname = rawUrl.split("?")[0]
-
-          // Skip Vite-internal paths and non-HTML assets
+          const pathname = (req.originalUrl ?? "/").split("?")[0]
           if (
             pathname.startsWith("/@") ||
             pathname.startsWith("/__") ||
@@ -72,43 +78,73 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           ) {
             return next()
           }
-
           try {
-            const templateName = opts.router?.htmlTemplate ?? "index.html"
-            const templatePath = path.resolve(state.projectRoot, templateName)
-            const templateSource = await fs.readFile(templatePath, "utf8")
-            const htmlTemplate = await server.transformIndexHtml(
-              rawUrl,
-              templateSource
-            )
-
-            const routesAbs = path.resolve(state.projectRoot, routesModule)
-            const routesViteId =
-              "/" +
-              path.relative(state.projectRoot, routesAbs).replace(/\\/g, "/")
-            const routesMod = await server.ssrLoadModule(routesViteId)
-            const routes = routesMod.routes
-            if (!routes) return next()
-
-            const { createRenderer } = await server.ssrLoadModule("kiru/router")
-            const renderer = createRenderer({ routes, htmlTemplate })
-            const result = await renderer.render(rawUrl)
-
-            if (!result) return next()
-
-            res.statusCode = result.status
-            for (const [key, value] of Object.entries(
-              result.headers as Record<string, string>
-            )) {
-              res.setHeader(key, value)
-            }
-            res.end(result.body)
+            const handled = await handleSsrDevRequest(server, req, res, {
+              serverEntry,
+            })
+            if (!handled) next()
           } catch (e) {
             server.ssrFixStacktrace(e as Error)
             next(e)
           }
         })
+        return
       }
+
+      const routesModule = router.ssg?.routesModule
+      if (!routesModule) return
+
+      // SSG dev mode: register directly so this runs before Vite's
+      // indexHtmlMiddleware. We render pages and inject CSS links into the
+      // resulting HTML before writing the response.
+      server.middlewares.use(async (req, res, next) => {
+        const rawUrl = req.originalUrl ?? "/"
+        const pathname = rawUrl.split("?")[0]
+
+        if (
+          pathname.startsWith("/@") ||
+          pathname.startsWith("/__") ||
+          (/\.\w+$/.test(pathname) && !pathname.endsWith(".html"))
+        ) {
+          return next()
+        }
+
+        try {
+          const templateName = opts.router?.htmlTemplate ?? "index.html"
+          const templatePath = path.resolve(state.projectRoot, templateName)
+          const templateSource = await fs.readFile(templatePath, "utf8")
+          const htmlTemplate = await server.transformIndexHtml(
+            rawUrl,
+            templateSource
+          )
+
+          const routesAbs = path.resolve(state.projectRoot, routesModule)
+          const routesViteId =
+            "/" +
+            path.relative(state.projectRoot, routesAbs).replace(/\\/g, "/")
+          const routesMod = await server.ssrLoadModule(routesViteId)
+          const routes = routesMod.routes
+          if (!routes) return next()
+
+          const { createRenderer } = await server.ssrLoadModule("kiru/router")
+          const renderer = createRenderer({ routes, htmlTemplate })
+          const result = await renderer.render(rawUrl)
+          if (!result) return next()
+
+          const body = await injectDevCssLinks(server, result.body)
+          res.statusCode = result.status
+          for (const [key, value] of Object.entries(
+            result.headers as Record<string, string>
+          )) {
+            res.setHeader(key, value)
+          }
+          res.setHeader("content-length", Buffer.byteLength(body, "utf8"))
+          res.end(body)
+        } catch (e) {
+          server.ssrFixStacktrace(e as Error)
+          next(e)
+        }
+      })
     },
     resolveId(id) {
       if (id in virtualModules) {
@@ -175,13 +211,13 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       }
     },
     generateBundle() {
-      if (!state.isBuild || !state.router.routesModule) return
+      if (!state.isBuild || !state.router.ssg?.routesModule) return
       this.emitFile({
         type: "asset",
         fileName: "kiru-route-manifest.json",
         source: JSON.stringify(
           {
-            routesModule: state.router.routesModule,
+            routesModule: state.router.ssg.routesModule,
             generatedAt: new Date().toISOString(),
           },
           null,
@@ -192,8 +228,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     async writeBundle() {
       if (
         !state.isBuild ||
-        !state.router.ssg ||
-        !state.router.routesModule ||
+        !state.router.ssg?.routesModule ||
         state.isSSRBuild
       ) {
         return
@@ -211,7 +246,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
 
       const routesAbs = path.resolve(
         state.projectRoot,
-        state.router.routesModule
+        state.router.ssg.routesModule
       )
       const routesViteId =
         "/" + path.relative(state.projectRoot, routesAbs).replace(/\\/g, "/")
@@ -233,7 +268,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         const routes = routesMod.routes
         if (!routes) {
           throw new Error(
-            `[vite-plugin-kiru]: router.routesModule "${state.router.routesModule}" does not export 'routes'`
+            `[vite-plugin-kiru]: router.ssg.routes "${state.router.ssg.routesModule}" does not export 'routes'`
           )
         }
 

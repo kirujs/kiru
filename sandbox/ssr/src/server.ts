@@ -25,7 +25,6 @@ declare module "kiru/router" {
 }
 
 const renderer = createRenderer({ routes, htmlTemplate })
-
 const app = new Hono()
 
 app.all("*", async (c) => {

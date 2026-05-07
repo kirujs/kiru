@@ -79,7 +79,14 @@ async function renderStringWithDocument(
   withHeadCollector(collector, () => {
     const prev = renderMode.current
     renderMode.current = "stream"
-    headlessRender({ write(chunk) { body += chunk } }, Fragment({ children: app }))
+    headlessRender(
+      {
+        write(chunk) {
+          body += chunk
+        },
+      },
+      Fragment({ children: app })
+    )
     renderMode.current = prev
   })
 
@@ -230,12 +237,15 @@ export function createRenderer(options: CreateRendererOptions): Renderer {
         ? await renderStringWithDocument(app, route, requestContext)
         : {
             body: renderToString(app),
-            document: { headHtml: serializeRequestContextScript(requestContext) },
+            document: {
+              headHtml: serializeRequestContextScript(requestContext),
+            },
           }
       const html =
         compiledTemplate !== null
           ? compiledTemplate.render(body, document.headHtml)
           : body
+
       return {
         status: route ? 200 : 404,
         headers: DEFAULT_HEADERS,
@@ -266,7 +276,9 @@ export function createStreamRenderer(
         const collector = createHeadCollector(
           resolveMetaTemplates(route.route.head, route.params)
         )
-        innerStream = withHeadCollector(collector, () => renderToReadableStream(app))
+        innerStream = withHeadCollector(collector, () =>
+          renderToReadableStream(app)
+        )
         const resolvedMeta = await collector.resolve()
         document = {
           headHtml:

@@ -7,7 +7,6 @@ export default defineConfig({
     tailwindcss(),
     kiru({
       router: {
-        routesModule: "./src/routes.ts",
         ssg: true,
       },
     }),

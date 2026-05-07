@@ -30,8 +30,10 @@ export interface PluginState {
   }
   staticProps: Record<string, Record<string, Record<string, any>>>
   router: {
-    routesModule: string | null
-    ssg: boolean
+    ssg: null | {
+      routesModule: string
+    }
+    serverEntry: string | null
   }
 }
 
@@ -54,6 +56,10 @@ export function createPluginState(
     )
   }
 
+  const ssg = opts.router?.ssg
+  const routesModule =
+    ssg === true ? "./src/routes.ts" : typeof ssg === "object" ? ssg.routes : null
+
   return {
     projectRoot: process.cwd().replace(/\\/g, "/"),
     includedPaths: [],
@@ -66,8 +72,8 @@ export function createPluginState(
       staticHoisting: opts.experimental?.staticHoisting === true,
     },
     router: {
-      routesModule: opts.router?.routesModule ?? null,
-      ssg: opts.router?.ssg === true,
+      ssg: routesModule ? { routesModule } : null,
+      serverEntry: opts.router?.serverEntry ?? null,
     },
   }
 }
@@ -113,8 +119,8 @@ export function updatePluginState(
     },
     staticProps: {},
     router: {
-      routesModule: state.router?.routesModule ?? null,
-      ssg: state.router?.ssg === true,
+      ssg: state.router?.ssg ?? null,
+      serverEntry: state.router?.serverEntry ?? null,
     },
   } satisfies PluginState
 }

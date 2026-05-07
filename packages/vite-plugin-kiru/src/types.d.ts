@@ -73,15 +73,20 @@ export interface KiruPluginOptions {
    */
   router?: {
     /**
-     * Path to the module that exports `routes` built with `defineRouteTree`.
-     * @example "./src/routes.ts"
-     */
-    routesModule?: string
-    /**
-     * Enable SSG HTML generation during build.
+     * Enable SSG HTML generation and configure the routes module.
+     * - `true` uses the default `"./src/routes.ts"`
+     * - `{ routes: "..." }` uses a custom routes module path
      * @default false
      */
-    ssg?: boolean
+    ssg?: boolean | { routes: string }
+    /**
+     * Path to the module that exports the Hono app as `default` (SSR only).
+     * When set, the kiru plugin handles dev-mode SSR requests directly —
+     * loading your app via `ssrLoadModule`, calling `app.fetch`, and injecting
+     * render-blocking CSS links — so `@hono/vite-dev-server` is not needed.
+     * @example "./src/server.ts"
+     */
+    serverEntry?: string
     /**
      * HTML file in `outDir` to use as the shell after `vite build` (must contain
      * `{{kiru_body}}` and optionally `{{kiru_head}}` in `<head>`.

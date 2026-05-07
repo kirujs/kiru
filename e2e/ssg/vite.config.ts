@@ -5,7 +5,6 @@ export default defineConfig({
   plugins: [
     kiru({
       router: {
-        routesModule: "./src/routes.ts",
         ssg: true,
       },
     }),
