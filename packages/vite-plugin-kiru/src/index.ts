@@ -44,7 +44,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
     configureServer(server) {
       if (state.isProduction || state.isBuild) return
-      const { devtoolsEnabled, dtHostScriptPath, fileLinkFormatter } = state
+      const { devtoolsEnabled, dtHostScriptPath, fileLinkFormatter, router } =
+        state
 
       if (devtoolsEnabled) {
         setupDevtools(
@@ -53,6 +54,61 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           dtHostScriptPath,
           log
         )
+      }
+
+      if (!router.ssg || !router.routesModule) return
+
+      const routesModule = router.routesModule
+      return () => {
+        server.middlewares.use(async (req, res, next) => {
+          const rawUrl = req.originalUrl ?? "/"
+          const pathname = rawUrl.split("?")[0]
+
+          // Skip Vite-internal paths and non-HTML assets
+          if (
+            pathname.startsWith("/@") ||
+            pathname.startsWith("/__") ||
+            (/\.\w+$/.test(pathname) && !pathname.endsWith(".html"))
+          ) {
+            return next()
+          }
+
+          try {
+            const templateName = opts.router?.htmlTemplate ?? "index.html"
+            const templatePath = path.resolve(state.projectRoot, templateName)
+            const templateSource = await fs.readFile(templatePath, "utf8")
+            const htmlTemplate = await server.transformIndexHtml(
+              rawUrl,
+              templateSource
+            )
+
+            const routesAbs = path.resolve(state.projectRoot, routesModule)
+            const routesViteId =
+              "/" +
+              path.relative(state.projectRoot, routesAbs).replace(/\\/g, "/")
+            const routesMod = await server.ssrLoadModule(routesViteId)
+            const routes = routesMod.routes
+            if (!routes) return next()
+
+            const { createRenderer } =
+              await server.ssrLoadModule("kiru/router")
+            const renderer = createRenderer({ routes, htmlTemplate })
+            const result = await renderer.render(rawUrl)
+
+            if (!result) return next()
+
+            res.statusCode = result.status
+            for (const [key, value] of Object.entries(
+              result.headers as Record<string, string>
+            )) {
+              res.setHeader(key, value)
+            }
+            res.end(result.body)
+          } catch (e) {
+            server.ssrFixStacktrace(e as Error)
+            next(e)
+          }
+        })
       }
     },
     resolveId(id) {
