@@ -88,6 +88,13 @@ export interface KiruPluginOptions {
      */
     serverEntry?: string
     /**
+     * Glob pattern for remote function files.
+     * Matching modules will be transformed to client fetch stubs and made
+     * available on the server via `virtual:kiru:remote-registry`.
+     * @example "*.actions.ts"
+     */
+    remote?: string
+    /**
      * HTML file in `outDir` to use as the shell after `vite build` (must contain
      * `{{kiru_body}}` and optionally `{{kiru_head}}` in `<head>`.
      * @default "index.html"

@@ -1,5 +1,6 @@
 import { MagicString, TransformCTX } from "./codegen/shared.js"
 import { prepareHMR, prepareJSXHoisting } from "./codegen/index.js"
+import { getRouteId, prepareRemoteFunctions } from "./codegen/remote.js"
 import { ANSI } from "./ansi.js"
 import {
   createPluginState,
@@ -13,6 +14,7 @@ import { createSsgPreviewMiddleware } from "./preview-server.js"
 import { createLogger, shouldTransformFile } from "./utils.js"
 import { promises as fs } from "node:fs"
 import path from "node:path"
+import { glob } from "tinyglobby"
 
 import type { KiruPluginOptions } from "./types.js"
 import type { Plugin, PluginOption, ResolvedConfig } from "vite"
@@ -36,6 +38,16 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       const initialState = createPluginState(opts)
       state = updatePluginState(initialState, config, opts)
       log = createLogger(state)
+
+      if (state.router.remote) {
+        state.remotePaths = (
+          await glob(state.router.remote, {
+            cwd: state.projectRoot,
+            absolute: true,
+            onlyFiles: true,
+          })
+        ).map((filePath) => filePath.replace(/\\/g, "/"))
+      }
     },
     transformIndexHtml() {
       if (!state.devtoolsEnabled) return
@@ -158,7 +170,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       if (!(raw in virtualModules)) return null
       return virtualModules[raw]()
     },
-    async transform(src, id) {
+    async transform(src, id, options) {
       if (!shouldTransformFile(id, state)) {
         if (
           !state.includedPaths.some((p) => id.startsWith(p)) &&
@@ -329,7 +341,44 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
   } satisfies Plugin
 
-  return [mainPlugin]
+  // Runs after vite:esbuild so `this.parse` always receives compiled JS,
+  // not raw TypeScript. This is required for `.actions.ts` files which may
+  // contain TS type annotations that Rollup's Acorn parser can't handle.
+  const remotePlugin = {
+    name: "vite-plugin-kiru:remote",
+    enforce: "post" as const,
+    transform(src, id, options) {
+      if (!state?.router?.remote) return null
+      const cleanedId = id.split("?")[0].split("#")[0]
+      const normalizedId = path.resolve(cleanedId).replace(/\\/g, "/")
+      if (!state.remotePaths.includes(normalizedId)) return null
+
+      const ast = this.parse(src)
+      const code = new MagicString(src)
+      const ctx: TransformCTX = {
+        code,
+        ast,
+        isBuild: state.isBuild,
+        fileLinkFormatter: state.fileLinkFormatter,
+        filePath: id,
+        log,
+      }
+
+      const routeId = getRouteId(normalizedId, state.projectRoot)
+      prepareRemoteFunctions(ctx, routeId, !!options?.ssr)
+
+      if (!code.hasChanged()) return null
+
+      return {
+        code: code.toString(),
+        map: code
+          .generateMap({ source: id, file: `${id}.map`, includeContent: true })
+          .toString(),
+      }
+    },
+  } satisfies Plugin
+
+  return [mainPlugin, remotePlugin]
 }
 
 // Export additional utilities

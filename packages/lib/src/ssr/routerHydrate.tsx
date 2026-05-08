@@ -15,6 +15,47 @@ import {
 import { signal } from "../signals/index.js"
 import { createElement } from "../element.js"
 
+type ServerActionsClient = {
+  dispatch: (id: string, args: unknown[]) => Promise<unknown>
+}
+
+function ensureServerActionsClient() {
+  if (typeof window === "undefined") return
+  const g = globalThis as typeof globalThis & {
+    __kiru_serverActions?: ServerActionsClient
+  }
+
+  if (g.__kiru_serverActions) return
+
+  let token = ""
+  let loaded = false
+  const getToken = () => {
+    if (loaded) return token
+    loaded = true
+    try {
+      const s = document.querySelector("[k-request-token]")
+      token = s?.innerHTML ?? ""
+      s?.remove()
+    } catch {}
+    return token
+  }
+
+  g.__kiru_serverActions = {
+    dispatch: async (id, args) => {
+      const r = await fetch(`/?action=${id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-kiru-token": getToken(),
+        },
+        body: JSON.stringify(args),
+      })
+      if (!r.ok) throw new Error("Action failed")
+      return r.json()
+    },
+  }
+}
+
 export interface BootstrapSsrClientOptions {
   routes: RouteTreeDefinition | RouteManifest
   container: HTMLElement
@@ -30,6 +71,8 @@ export interface BootstrapSsrClientOptions {
 export async function bootstrapSsrClient(
   options: BootstrapSsrClientOptions
 ): Promise<AppHandle> {
+  ensureServerActionsClient()
+
   const manifest =
     "routes" in options.routes
       ? options.routes

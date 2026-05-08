@@ -8,6 +8,9 @@ export interface CompiledRouteHtmlTemplate {
 
 /**
  * Compile tokenized HTML template once for repeated render use.
+ *
+ * All three segment boundaries are resolved at compile time so that
+ * render/splitForStream are pure string concatenation with no scanning.
  */
 export function compileRouteHtmlTemplate(
   template: string
@@ -24,27 +27,32 @@ export function compileRouteHtmlTemplate(
       `[kiru/router] compileRouteHtmlTemplate: template must include "${HEAD_TOKEN}".`
     )
   }
-  const beforeBody = template.slice(0, bodyIndex)
-  const afterBody = template.slice(bodyIndex + BODY_TOKEN.length)
 
-  return {
-    render(body, headHtml) {
-      return `${replaceHead(beforeBody, headHtml)}${body}${replaceHead(
-        afterBody,
-        headHtml
-      )}`
-    },
-    splitForStream(headHtml) {
-      return {
-        prefix: replaceHead(beforeBody, headHtml),
-        suffix: replaceHead(afterBody, headHtml),
-      }
-    },
+  if (headIndex < bodyIndex) {
+    // Normal order: ...HEAD...BODY...
+    const s0 = template.slice(0, headIndex)
+    const s1 = template.slice(headIndex + HEAD_TOKEN.length, bodyIndex)
+    const s2 = template.slice(bodyIndex + BODY_TOKEN.length)
+    return {
+      render: (body, headHtml) => `${s0}${headHtml}${s1}${body}${s2}`,
+      splitForStream: (headHtml) => ({
+        prefix: `${s0}${headHtml}${s1}`,
+        suffix: s2,
+      }),
+    }
+  } else {
+    // Inverted order: ...BODY...HEAD... (uncommon but supported)
+    const s0 = template.slice(0, bodyIndex)
+    const s1 = template.slice(bodyIndex + BODY_TOKEN.length, headIndex)
+    const s2 = template.slice(headIndex + HEAD_TOKEN.length)
+    return {
+      render: (body, headHtml) => `${s0}${body}${s1}${headHtml}${s2}`,
+      splitForStream: (headHtml) => ({
+        prefix: s0,
+        suffix: `${s1}${headHtml}${s2}`,
+      }),
+    }
   }
-}
-
-function replaceHead(s: string, headHtml: string) {
-  return s.split(HEAD_TOKEN).join(headHtml)
 }
 
 /**

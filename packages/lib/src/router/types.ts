@@ -175,12 +175,10 @@ export interface StreamRenderResult {
   status: number
   headers: Record<string, string>
   body: ReadableStream<string>
-  document?: DocumentHead
 }
 
 export interface RenderResult {
   status: number
   headers: Record<string, string>
   body: string
-  document?: DocumentHead
 }

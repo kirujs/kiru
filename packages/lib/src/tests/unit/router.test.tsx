@@ -17,6 +17,9 @@ import {
   useRequestContext,
 } from "../../router/index.js"
 
+const MINIMAL_TPL =
+  "<!doctype html><html><head>{{kiru_head}}</head><body>{{kiru_body}}</body></html>"
+
 describe("router", () => {
   const routes = defineRouteTree((r) =>
     r.scope({
@@ -58,11 +61,13 @@ describe("router", () => {
     const renderer = createRenderer({ routes })
     const response = await renderer.render("/users/42")
     assert.ok(response)
-    const headers = response.headers as Record<string, string>
     assert.strictEqual(response.status, 200)
-    assert.strictEqual(headers["content-type"], "text/html; charset=utf-8")
+    assert.strictEqual(
+      response.headers["content-type"],
+      "text/html; charset=utf-8"
+    )
     assert.strictEqual(typeof response.body, "string")
-    assert.ok((response.body as string).includes("<main><h1>42</h1></main>"))
+    assert.ok(response.body.includes("<main><h1>42</h1></main>"))
   })
 
   it("provides CustomRequestContext to SSR components and serializes it for hydration", async () => {
@@ -83,15 +88,13 @@ describe("router", () => {
         ],
       })
     )
-    const renderer = createRenderer({ routes: r })
+    const renderer = createRenderer({ routes: r, htmlTemplate: MINIMAL_TPL })
     const response = await renderer.render("/", {
       context: { user: { name: "John" } } as any,
     })
     assert.ok(response)
-    assert.ok((response.body as string).includes("<p>John</p>"))
-    assert.ok(
-      response.document?.headHtml.includes('id="__kiru_request_context__"')
-    )
+    assert.ok(response.body.includes("<p>John</p>"))
+    assert.ok(response.body.includes('id="__kiru_request_context__"'))
   })
 
   it("returns null when route is unmatched", async () => {
@@ -124,14 +127,13 @@ describe("router", () => {
         ],
       })
     )
-    const renderer = createRenderer({ routes: metaRoutes })
+    const renderer = createRenderer({
+      routes: metaRoutes,
+      htmlTemplate: MINIMAL_TPL,
+    })
     const response = await renderer.render("/doc")
-    assert.ok(response?.document?.headHtml.includes("<title>LeafTitle</title>"))
-    assert.ok(
-      response?.document?.headHtml.includes(
-        'name="description" content="from-leaf"'
-      )
-    )
+    assert.ok(response?.body.includes("<title>LeafTitle</title>"))
+    assert.ok(response?.body.includes('name="description" content="from-leaf"'))
   })
 
   it("resolves {param} placeholders in meta for document head", async () => {
@@ -155,9 +157,9 @@ describe("router", () => {
         ],
       })
     )
-    const renderer = createRenderer({ routes: r })
+    const renderer = createRenderer({ routes: r, htmlTemplate: MINIMAL_TPL })
     const response = await renderer.render("/users/99")
-    assert.ok(response?.document?.headHtml.includes("<title>User 99</title>"))
+    assert.ok(response?.body.includes("<title>User 99</title>"))
   })
 
   it("merges <Head content> with route meta (SSR)", async () => {
@@ -182,9 +184,9 @@ describe("router", () => {
       })
     )
 
-    const renderer = createRenderer({ routes: r })
+    const renderer = createRenderer({ routes: r, htmlTemplate: MINIMAL_TPL })
     const response = await renderer.render("/")
-    assert.ok(response?.document?.headHtml.includes("<title>Welcome!</title>"))
+    assert.ok(response?.body.includes("<title>Welcome!</title>"))
   })
 
   it("awaits <Head using> resource before streaming (SSR stream)", async () => {
@@ -217,12 +219,23 @@ describe("router", () => {
       })
     )
 
-    const renderer = createStreamRenderer({ routes: r })
+    const renderer = createStreamRenderer({
+      routes: r,
+      htmlTemplate: MINIMAL_TPL,
+    })
     const response = await renderer.render("/product")
-    assert.ok(!!response?.document, "response.document is defined")
-    assert.ok(
-      response.document.headHtml.includes("<title>Product: Gizmo</title>")
-    )
+    assert.ok(response)
+
+    const reader = (response.body as ReadableStream<string>).getReader()
+    let out = ""
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      out += next.value
+    }
+    reader.releaseLock()
+
+    assert.ok(out.includes("<title>Product: Gizmo</title>"))
   })
 
   it("renders Link with resolved href in SSR output", async () => {
@@ -241,7 +254,7 @@ describe("router", () => {
     )
     const renderer = createRenderer({ routes: r })
     const response = await renderer.render("/")
-    assert.ok((response?.body as string).includes('<a href="/users/1">'))
+    assert.ok(response?.body.includes('<a href="/users/1">'))
   })
 
   it("runs global beforeEach guards and can cancel navigation", async () => {
@@ -340,8 +353,7 @@ describe("router", () => {
     )
     const renderer = createRenderer({ routes: r })
     const response = await renderer.render("/users/42?tag=a&tag=b#section")
-    const body = response?.body as string
-    assert.ok(body.includes("<p>"))
+    assert.ok(response?.body.includes("<p>"))
   })
 
   it("supports baseUrl and query/hash mutators in router API", async () => {
@@ -404,7 +416,7 @@ describe("router", () => {
     const renderer = createRenderer({ routes: nfRoutes })
     const response = await renderer.render("/does-not-exist")
     assert.strictEqual(response?.status, 404)
-    assert.ok((response?.body as string).includes("<main><p>missing</p></main>"))
+    assert.ok((response?.body).includes("<main><p>missing</p></main>"))
   })
 
   it("fillRouteHtmlTemplate injects head and body into a shell", () => {

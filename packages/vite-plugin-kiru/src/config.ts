@@ -29,11 +29,13 @@ export interface PluginState {
     staticHoisting: boolean
   }
   staticProps: Record<string, Record<string, Record<string, any>>>
+  remotePaths: string[]
   router: {
     ssg: null | {
       routesModule: string
     }
     serverEntry: string | null
+    remote: string | null
   }
 }
 
@@ -74,6 +76,7 @@ export function createPluginState(
     router: {
       ssg: routesModule ? { routesModule } : null,
       serverEntry: opts.router?.serverEntry ?? null,
+      remote: opts.router?.remote ?? null,
     },
   }
 }
@@ -118,9 +121,11 @@ export function updatePluginState(
       staticHoisting: state.features?.staticHoisting ?? false,
     },
     staticProps: {},
+    remotePaths: [],
     router: {
       ssg: state.router?.ssg ?? null,
       serverEntry: state.router?.serverEntry ?? null,
+      remote: state.router?.remote ?? null,
     },
   } satisfies PluginState
 }

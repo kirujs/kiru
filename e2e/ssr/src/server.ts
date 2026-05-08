@@ -3,6 +3,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Hono } from "hono"
 import { createRenderer } from "kiru/router"
+import { createRemoteActionHandler } from "kiru/remote"
 import { routes } from "./routes"
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..")
@@ -12,6 +13,7 @@ const templatePath =
     ? join(root, "dist", "index.html")
     : join(root, "index.html")
 const htmlTemplate = readFileSync(templatePath, "utf8")
+const remoteFunctionSecret = "kiru-e2e-remote-secret"
 
 declare module "kiru/router" {
   interface CustomRequestContext {
@@ -19,7 +21,8 @@ declare module "kiru/router" {
   }
 }
 
-const renderer = createRenderer({ routes, htmlTemplate })
+const renderer = createRenderer({ routes, htmlTemplate, remoteFunctionSecret })
+const handleAction = createRemoteActionHandler(remoteFunctionSecret)
 
 const app = new Hono()
 
@@ -43,6 +46,11 @@ if (isServe) {
 }
 
 app.all("*", async (c) => {
+  if (c.req.method === "POST" && c.req.query("action")) {
+    const actionResponse = await handleAction(c.req.raw)
+    if (actionResponse) return actionResponse
+  }
+
   const rendered = await renderer.render(c.req.url, {
     context: {
       user: { name: "E2E User" },

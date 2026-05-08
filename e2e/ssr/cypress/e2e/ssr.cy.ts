@@ -43,6 +43,14 @@ describe("SSR server", () => {
     cy.get('[data-testid="ssr-layout"]').should("exist")
   })
 
+  it("executes remote functions through server action endpoint", () => {
+    cy.get('[data-testid="ssr-remote-button"]').click()
+    cy.get('[data-testid="ssr-remote-result"]').should(
+      "contain",
+      "hello from server (E2E User)"
+    )
+  })
+
   it("renders scoped notFound route for unknown paths", () => {
     const port = Cypress.env("port")
     cy.visit(`http://127.0.0.1:${port}/missing-ssr-route`, {
