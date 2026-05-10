@@ -33,6 +33,13 @@ export const routes = defineRouteTree((r) =>
           description: "Dynamic user profile (SSR).",
         },
       }),
+      r.get("/demo-loader", {
+        component: () => import("./pages/demo-loader.tsx"),
+        head: {
+          title: "Route demo — Kiru SSR",
+          description: "Live pathname via useRouter (no route loaders).",
+        },
+      }),
     ],
   })
 )

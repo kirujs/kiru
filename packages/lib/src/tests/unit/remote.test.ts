@@ -1,10 +1,17 @@
 import { describe, it } from "node:test"
 import assert from "node:assert"
-import { makeKiruContextToken, unwrapKiruToken } from "../../remote/token.js"
+import {
+  makeKiruContextToken,
+  makeKiruContextTokenAsync,
+  unwrapKiruToken,
+  unwrapKiruTokenAsync,
+} from "../../remote/token.js"
 import {
   __INTERNAL_REMOTE_REGISTRY,
+  action,
   createRemoteActionHandler,
-  getRequestContext,
+  RemoteActionFunction,
+  RemoteError,
 } from "../../remote/index.js"
 
 const SECRET = "test-secret-abc"
@@ -16,16 +23,17 @@ const SECRET = "test-secret-abc"
 function makeRequest(
   actionId: string,
   token: string,
-  body: unknown = [],
+  body: unknown = null,
   overrides: RequestInit = {}
 ): Request {
+  const payload = body === undefined ? null : body
   return new Request(`http://localhost/?action=${actionId}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-kiru-token": token,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
     ...overrides,
   })
 }
@@ -106,6 +114,114 @@ describe("remote / token", () => {
   })
 })
 
+describe("remote / token (async / webcrypto)", () => {
+  it("makeKiruContextTokenAsync round-trips with unwrapKiruTokenAsync", async () => {
+    if (!globalThis.crypto?.subtle) return
+    const ctx = { n: 1 }
+    const token = await makeKiruContextTokenAsync(ctx, SECRET)
+    const out = await unwrapKiruTokenAsync(token, SECRET)
+    assert.deepStrictEqual(out, ctx)
+  })
+
+  it("async token verifies with sync unwrapKiruToken on Node", async () => {
+    if (!globalThis.crypto?.subtle) return
+    const ctx = { n: 2 }
+    const token = await makeKiruContextTokenAsync(ctx, SECRET)
+    assert.deepStrictEqual(unwrapKiruToken(token, SECRET), ctx)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// remote/index.ts — handler options
+// ---------------------------------------------------------------------------
+
+describe("remote / handler — options", () => {
+  it("403 when allowedOrigins is set and Origin header mismatches", async () => {
+    const handler = createRemoteActionHandler(SECRET, {
+      allowedOrigins: ["https://trusted.example"],
+    })
+    const token = validToken()
+    const routeId = "test/origin"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      fn: action(async (_ctx, _input: void) => "ok") as RemoteActionFunction<unknown, unknown>,
+    })
+    const req = new Request(`http://localhost/?action=${routeId}:fn`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-kiru-token": token,
+        origin: "http://evil.com",
+      },
+      body: JSON.stringify(null),
+    })
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 403)
+  })
+
+  it("allows request when Origin matches allowedOrigins", async () => {
+    const handler = createRemoteActionHandler(SECRET, {
+      allowedOrigins: ["http://localhost"],
+    })
+    const token = validToken()
+    const routeId = "test/origin-ok"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      fn: action(async (_ctx, _input: void) => "yes") as RemoteActionFunction<unknown, unknown>,
+    })
+    const req = new Request(`http://localhost/?action=${routeId}:fn`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-kiru-token": token,
+        origin: "http://localhost",
+      },
+      body: JSON.stringify(null),
+    })
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 200)
+  })
+
+  it("returns FORBIDDEN_ORIGIN JSON when exposeErrors and origin blocked", async () => {
+    const handler = createRemoteActionHandler(SECRET, {
+      allowedOrigins: ["https://only.here"],
+      exposeErrors: true,
+    })
+    const token = validToken()
+    const routeId = "test/forbidden-json"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      fn: action(async (_ctx, _input: void) => "x") as RemoteActionFunction<unknown, unknown>,
+    })
+    const req = new Request(`http://localhost/?action=${routeId}:fn`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-kiru-token": token,
+        origin: "http://localhost",
+      },
+      body: JSON.stringify(null),
+    })
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 403)
+    const j = (await res?.json()) as { error: { code: string } }
+    assert.strictEqual(j.error.code, "FORBIDDEN_ORIGIN")
+  })
+
+  it("exposes RemoteError as JSON when exposeErrors is true", async () => {
+    const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
+    const token = validToken()
+    const routeId = "test/remote-err"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      boom: action(async (_ctx, _input: void) => {
+        throw new RemoteError("nope", "TEST_CODE", { status: 422 })
+      }) as RemoteActionFunction<any, never>,
+    })
+    const req = makeRequest(`${routeId}:boom`, token)
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 422)
+    const j = (await res?.json()) as { error: { code: string } }
+    assert.strictEqual(j.error.code, "TEST_CODE")
+  })
+})
+
 // ---------------------------------------------------------------------------
 // remote/index.ts — registry + handler
 // ---------------------------------------------------------------------------
@@ -123,7 +239,7 @@ describe("remote / handler", () => {
     const req = new Request("http://localhost/?action=x:y", {
       method: "POST",
       headers: { "content-type": "text/plain", "x-kiru-token": token },
-      body: "[]",
+      body: "null",
     })
     assert.strictEqual(await handler(req), null)
   })
@@ -134,7 +250,7 @@ describe("remote / handler", () => {
     const req = new Request("http://localhost/", {
       method: "POST",
       headers: { "content-type": "application/json", "x-kiru-token": token },
-      body: "[]",
+      body: "null",
     })
     assert.strictEqual(await handler(req), null)
   })
@@ -144,7 +260,7 @@ describe("remote / handler", () => {
     const req = new Request("http://localhost/?action=x:y", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: "[]",
+      body: "null",
     })
     assert.strictEqual(await handler(req), null)
   })
@@ -164,15 +280,17 @@ describe("remote / handler", () => {
     assert.strictEqual(res?.status, 500)
   })
 
-  it("returns 500 when body is not a JSON array", async () => {
+  it("returns 500 when body is not valid JSON", async () => {
     const handler = createRemoteActionHandler(SECRET)
     const token = validToken()
-    const routeId = "test/body-not-array"
-    __INTERNAL_REMOTE_REGISTRY.register(routeId, { fn: async () => "ok" })
+    const routeId = "test/body-invalid-json"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      fn: action(async (_ctx, _input: void) => "ok") as RemoteActionFunction<unknown, unknown>,
+    })
     const req = new Request(`http://localhost/?action=${routeId}:fn`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-kiru-token": token },
-      body: JSON.stringify({ not: "an array" }),
+      body: "not-json",
     })
     const res = await handler(req)
     assert.strictEqual(res?.status, 500)
@@ -191,7 +309,21 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/not-a-function"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: "not a function" as unknown as () => void,
+      // @ts-expect-error - not a function
+      fn: "not a function",
+    })
+    const req = makeRequest(`${routeId}:fn`, token)
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 500)
+  })
+
+  it("returns 500 when the registered handler is not wrapped with action()", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const token = validToken()
+    const routeId = "test/not-wrapped"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      // @ts-expect-error - not a wrapped function
+      fn: async (_a: unknown) => "legacy",
     })
     const req = makeRequest(`${routeId}:fn`, token)
     const res = await handler(req)
@@ -203,9 +335,9 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/dispatch"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      greet: async (name: unknown) => `hello ${name}`,
+      greet: action(async (_ctx, name: string) => `hello ${name}`) as RemoteActionFunction<any, string>,
     })
-    const req = makeRequest(`${routeId}:greet`, token, ["world"])
+    const req = makeRequest(`${routeId}:greet`, token, "world")
     const res = await handler(req)
     assert.strictEqual(res?.status, 200)
     assert.strictEqual(
@@ -216,12 +348,14 @@ describe("remote / handler", () => {
     assert.strictEqual(body, "hello world")
   })
 
-  it("passes all positional args to the action", async () => {
+  it("dispatches a single JSON input (e.g. tuple) to the action", async () => {
     const handler = createRemoteActionHandler(SECRET)
     const token = validToken()
-    const routeId = "test/multi-args"
+    const routeId = "test/tuple-input"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      add: async (a: unknown, b: unknown) => (a as number) + (b as number),
+      add: action(
+        async (_ctx, input: readonly [number, number]) => input[0]! + input[1]!
+      ) as RemoteActionFunction<any, number>,
     })
     const req = makeRequest(`${routeId}:add`, token, [3, 7])
     const res = await handler(req)
@@ -234,45 +368,82 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/throws"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      boom: async () => {
+      boom: action(async (_ctx, _input: void) => {
         throw new Error("intentional error")
-      },
+      }) as RemoteActionFunction<any, never>,
     })
     const req = makeRequest(`${routeId}:boom`, token)
     const res = await handler(req)
     assert.strictEqual(res?.status, 500)
   })
 
-  it("provides request context to getRequestContext() inside the action", async () => {
+  it("provides request context after await in async action", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const ctx = { ping: "pong" }
+    const token = makeKiruContextToken(ctx as Record<string, unknown>, SECRET)
+    const routeId = "test/ctx-after-await"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      delayed: action(async (ctx, _input: void) => {
+        await new Promise<void>((r) => setTimeout(r, 5))
+        return (ctx as { ping?: string }).ping
+      }) as RemoteActionFunction<any, string>,
+    })
+    const req = makeRequest(`${routeId}:delayed`, token)
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 200)
+    assert.strictEqual(await res?.json(), "pong")
+  })
+
+  it("injects request context as the first action callback argument", async () => {
     const handler = createRemoteActionHandler(SECRET)
     const ctx = { user: { name: "Eve" }, role: "editor" }
     const token = makeKiruContextToken(ctx, SECRET)
     const routeId = "test/get-context"
     let captured: unknown = null
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      whoami: async () => {
-        captured = getRequestContext()
+      whoami: action(async (ctx, _input: void) => {
+        captured = ctx
         return "done"
-      },
+      }) as RemoteActionFunction<any, string>,
     })
     const req = makeRequest(`${routeId}:whoami`, token)
     await handler(req)
     assert.deepStrictEqual(captured, ctx)
   })
 
-  it("getRequestContext() throws when called outside an action", () => {
-    assert.throws(
-      () => getRequestContext(),
-      /Invalid `getRequestContext` invocation/
-    )
+  it("validates action input via schema.parse", async () => {
+    const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
+    const token = validToken()
+    const routeId = "test/schema-guard"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      greet: action(
+        {
+          parse: (input: unknown): input is { name: string } =>
+            !!input &&
+            typeof input === "object" &&
+            "name" in input &&
+            typeof (input as { name?: unknown }).name === "string",
+        },
+        async (_ctx, input) => `hello ${input.name}`
+      ) as RemoteActionFunction<any, string>,
+    })
+    const req = makeRequest(`${routeId}:greet`, token, { wrong: true })
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 400)
+    const j = (await res?.json()) as { error: { code: string } }
+    assert.strictEqual(j.error.code, "INVALID_INPUT")
   })
 
   it("__kiruRegister overwrites an existing registration for the same route", async () => {
     const handler = createRemoteActionHandler(SECRET)
     const token = validToken()
     const routeId = "test/overwrite"
-    __INTERNAL_REMOTE_REGISTRY.register(routeId, { fn: async () => "first" })
-    __INTERNAL_REMOTE_REGISTRY.register(routeId, { fn: async () => "second" })
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      fn: action(async (_ctx, _input: void) => "first") as RemoteActionFunction<unknown, unknown>,
+    })
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      fn: action(async (_ctx, _input: void) => "second") as RemoteActionFunction<unknown, unknown>,
+    })
     const req = makeRequest(`${routeId}:fn`, token)
     const res = await handler(req)
     const body = await res?.json()

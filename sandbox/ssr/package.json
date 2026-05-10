@@ -10,6 +10,7 @@
     "build:server": "tsc -p tsconfig.server.json"
   },
   "devDependencies": {
+    "@hono/vite-dev-server": "^0.25.3",
     "@tailwindcss/vite": "^4.2.4",
     "@types/node": "^22.17.0",
     "cross-env": "^10.1.0",

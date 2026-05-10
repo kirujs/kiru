@@ -3,7 +3,6 @@ import { isBrowser } from "./env.js"
 
 export type * from "./types.js"
 export * from "./signals/index.js"
-export * from "./action.js"
 export * from "./appHandle.js"
 export * from "./components/index.js"
 export * from "./context.js"

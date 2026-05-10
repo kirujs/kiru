@@ -30,9 +30,26 @@ function commonPrefixLength(a: string[], b: string[]): number {
   return i
 }
 
+function mergeShallowMeta(
+  ...layers: Array<Record<string, unknown> | undefined>
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const layer of layers) {
+    if (!layer) continue
+    for (const [k, v] of Object.entries(layer)) {
+      out[k] = v
+    }
+  }
+  return out
+}
+
+/** Score: higher wins on ambiguous matches (static > dynamic > optional > catch-all). */
 function computeScore(segments: string[]): number {
   return segments.reduce((score, segment) => {
-    if (/^\[[^/]+\]$/.test(segment)) return score + 2
+    if (/^\[\[\.\.\.[^\]]+\]\]$/.test(segment)) return score + 0
+    if (/^\[\[([^/\]]+)\]\]$/.test(segment)) return score + 1
+    if (/^\[\.\.\.[^\]]+\]$/.test(segment)) return score + 1
+    if (/^\[[^/\]]+\]$/.test(segment)) return score + 2
     return score + 4
   }, 0)
 }
@@ -45,12 +62,34 @@ function compilePattern(segments: string[]): {
     return { pattern: /^\/$/, params: [] }
   }
   const params: string[] = []
-  const parts = segments.map((segment) => {
-    const dynamic = segment.match(/^\[([^/]+)\]$/)
-    if (!dynamic) return escapeRegex(segment)
-    params.push(dynamic[1])
-    return "([^/]+)"
-  })
+  const parts: string[] = []
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i]
+    const catchAll = segment.match(/^\[\.\.\.([^/\]]+)\]$/)
+    if (catchAll) {
+      if (i !== segments.length - 1) {
+        throw new Error(
+          `[...${catchAll[1]}] must be the last segment in route path`
+        )
+      }
+      params.push(catchAll[1])
+      parts.push("(.*)")
+      continue
+    }
+    const optional = segment.match(/^\[\[([^/\]]+)\]\]$/)
+    if (optional) {
+      params.push(optional[1])
+      parts.push("(?:/([^/]+))?")
+      continue
+    }
+    const dynamic = segment.match(/^\[([^/\]]+)\]$/)
+    if (dynamic) {
+      params.push(dynamic[1])
+      parts.push("([^/]+)")
+      continue
+    }
+    parts.push(escapeRegex(segment))
+  }
   return {
     pattern: new RegExp(`^/${parts.join("/")}$`),
     params,
@@ -61,6 +100,7 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
   const routes: CompiledRoute[] = []
   let routeId = 0
   let scopeId = 0
+  const rootHasNotFound = !!tree.root.notFound
 
   const walk = (node: RouteNodeDefinition, parents: CompiledRouteScope[]) => {
     if (node.kind === "scope") {
@@ -70,6 +110,9 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
         layout: node.layout,
         notFound: node.notFound,
         head: node.head,
+        meta: node.meta,
+        error: node.error,
+        pending: node.pending,
       }
       const nextParents = parents.concat(scope)
       for (const child of node.children) walk(child, nextParents)
@@ -80,13 +123,20 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
     const segments = parseSegments(path)
     const { pattern, params } = compilePattern(segments)
     const inheritedStatic = parents.some((scope) => scope.static)
-    const isStatic = node.static ?? inheritedStatic
+    const isStatic =
+      node.static === false ? false : (node.static ?? inheritedStatic)
 
     let head: RouteHeadMeta = {}
+    let meta: Record<string, unknown> = {}
     for (const parentScope of parents) {
       head = mergeRouteHead(head, parentScope.head)
+      meta = mergeShallowMeta(meta, parentScope.meta)
     }
     head = mergeRouteHead(head, node.head)
+    meta = mergeShallowMeta(meta, node.meta)
+
+    const scopeError = [...parents].reverse().find((s) => s.error)?.error
+    const scopePending = [...parents].reverse().find((s) => s.pending)?.pending
 
     routes.push({
       id: `route:${routeId++}`,
@@ -103,11 +153,19 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
       component: node.component,
       scopes: parents,
       head,
+      meta,
       beforeEnter: Array.isArray(node.beforeEnter)
         ? node.beforeEnter
         : node.beforeEnter
         ? [node.beforeEnter]
         : undefined,
+      beforeActivate: Array.isArray(node.beforeActivate)
+        ? node.beforeActivate
+        : node.beforeActivate
+        ? [node.beforeActivate]
+        : undefined,
+      error: node.error ?? scopeError,
+      pending: node.pending ?? scopePending,
     })
   }
 
@@ -117,7 +175,7 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
     return a.path.localeCompare(b.path)
   })
 
-  return { routes }
+  return { routes, rootHasNotFound }
 }
 
 export function matchRoute(
@@ -131,7 +189,12 @@ export function matchRoute(
     if (!match) continue
     const params: Record<string, string> = {}
     for (let i = 0; i < route.params.length; i++) {
-      params[route.params[i]] = decodeURIComponent(match[i + 1] ?? "")
+      const raw = match[i + 1] ?? ""
+      try {
+        params[route.params[i]] = raw ? decodeURIComponent(raw) : ""
+      } catch {
+        params[route.params[i]] = raw
+      }
     }
     return {
       route,
@@ -171,6 +234,34 @@ export function resolveNotFoundScopes(
   return null
 }
 
+function applyParamsToPath(
+  routePath: string,
+  params: Record<string, string>,
+  paramNames: string[]
+): string {
+  let path = routePath
+  for (const key of paramNames) {
+    if (!(key in params)) {
+      throw new Error(
+        `generateStaticParams for "${routePath}" did not provide "${key}"`
+      )
+    }
+    const value = params[key]
+    const restToken = `[...${key}]`
+    if (path.includes(restToken)) {
+      const encoded = value
+        .split("/")
+        .filter(Boolean)
+        .map((s) => encodeURIComponent(s))
+        .join("/")
+      path = path.replace(restToken, encoded)
+    } else {
+      path = path.replace(`[${key}]`, encodeURIComponent(value))
+    }
+  }
+  return normalizePath(path)
+}
+
 export async function generateStaticPaths(
   manifest: RouteManifest
 ): Promise<string[]> {
@@ -190,16 +281,7 @@ export async function generateStaticPaths(
     }
     const generated = await route.generateStaticParams({ params: {} })
     for (const params of generated) {
-      let path = route.path
-      for (const key of route.params) {
-        if (!(key in params)) {
-          throw new Error(
-            `generateStaticParams for "${route.path}" did not provide "${key}"`
-          )
-        }
-        path = path.replace(`[${key}]`, encodeURIComponent(params[key]))
-      }
-      out.add(path)
+      out.add(applyParamsToPath(route.path, params, route.params))
     }
   }
 

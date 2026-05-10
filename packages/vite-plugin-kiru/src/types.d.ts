@@ -103,12 +103,14 @@ export interface KiruPluginOptions {
     /**
      * Optional full HTML override per route. If set, {@link htmlTemplate} injection is skipped.
      * Prefer the default template tokens (`{{kiru_head}}` + `{{kiru_body}}`) and route `meta` for SEO.
+     * May be async. Receives the Vite client `manifest.json` object when available (for modulepreload, etc.).
      */
     htmlShell?: (
       body: string,
       path: string,
-      document: { headHtml: string; title?: string }
-    ) => string
+      document: { headHtml: string; title?: string },
+      assets?: { manifest?: Record<string, unknown> }
+    ) => string | Promise<string>
   }
 }
 

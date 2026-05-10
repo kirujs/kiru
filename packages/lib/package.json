@@ -51,11 +51,16 @@
     },
     "./router": {
       "types": "./dist/router/index.d.ts",
+      "browser": "./dist/router/client.js",
       "default": "./dist/router/index.js"
     },
     "./remote": {
       "types": "./dist/remote/index.d.ts",
       "default": "./dist/remote/index.js"
+    },
+    "./remote/action": {
+      "types": "./dist/remote/action.d.ts",
+      "default": "./dist/remote/action.js"
     },
     "./jsx-dev-runtime": {
       "types": "./dist/jsx.d.ts",

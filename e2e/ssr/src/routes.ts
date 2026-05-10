@@ -10,6 +10,10 @@ export const routes = defineRouteTree((r) =>
         component: () => import("./pages/index.tsx"),
         head: { title: "E2E SSR Home" },
       }),
+      r.get("/hello", {
+        component: () => import("./pages/hello.tsx"),
+        head: { title: "E2E SSR Hello" },
+      }),
       r.get("/about", {
         component: () => import("./pages/about"),
         head: { title: "E2E SSR About" },

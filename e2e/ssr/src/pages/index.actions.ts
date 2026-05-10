@@ -1,6 +1,5 @@
-import { getRequestContext } from "kiru/remote"
+import { action } from "kiru/remote/action"
 
-export async function getServerMessage(): Promise<string> {
-  const ctx = getRequestContext()
+export const getServerMessage = action(async (ctx, _input: unknown) => {
   return `hello from server (${ctx.user?.name ?? "unknown"})`
-}
+})

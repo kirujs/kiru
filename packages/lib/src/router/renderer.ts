@@ -3,11 +3,12 @@ import { renderToString } from "../renderToString.js"
 import { renderToReadableStream } from "../ssr/server.js"
 import { headlessRender } from "../headlessRender.js"
 import { renderMode } from "../globals.js"
+import { compileRouteTree, matchRoute } from "./manifest.js"
 import {
-  compileRouteTree,
-  matchRoute,
-  resolveNotFoundScopes,
-} from "./manifest.js"
+  buildRoutedSubtree,
+  loadNotFoundRouteTree,
+  loadRouteTree,
+} from "./routeTree.js"
 import { resolveMetaTemplates, serializeDocumentHead } from "./meta.js"
 import { compileRouteHtmlTemplate } from "./htmlTemplate.js"
 import { RouterProvider, createStaticRouter } from "./csr.js"
@@ -51,79 +52,164 @@ export interface Renderer {
   ) => Promise<RenderResult | null>
 }
 
-export function createRenderer(options: CreateRendererOptions): Renderer {
+export type CreateRendererOptions = {
+  routes: RouteTreeDefinition | RouteManifest
+  htmlTemplate?: string
+  remoteFunctionSecret?: string
+  /** When true, `createRenderer` returns a streaming renderer contract. */
+  stream?: boolean
+}
+
+function engine(options: CreateRendererOptions & { stream: boolean }) {
   const { manifest, compiledTemplate, remoteFunctionSecret } =
     prepareRenderer(options)
 
-  return {
-    manifest,
-    async render(url, ctx) {
-      const result = await createAppForUrl(url, ctx, manifest)
-      if (!result) return null
-      const { app, routeMatch, requestContext } = result
+  const renderCore = async (url: string, ctx?: RenderRequestContext) => {
+    try {
+      const prepared = await prepareAppForUrl(url, ctx, manifest)
+      if (!prepared) return null
+
+      const { app, routeMatch, requestContext } = prepared
+
+      if (options.stream) {
+        const { stream: innerStream, document } = routeMatch
+          ? await renderStreamWithDocument(
+              app,
+              routeMatch,
+              requestContext,
+            )
+          : {
+              stream: renderToReadableStream(app),
+              document: {
+                headHtml: serializeRequestContextScript(
+                  requestContext,
+                ),
+              },
+            }
+
+        if (remoteFunctionSecret)
+          appendTokenToDocument(document, requestContext, remoteFunctionSecret)
+
+        return {
+          kind: "stream" as const,
+          result: {
+            status: routeMatch ? 200 : 404,
+            headers: { ...DEFAULT_HEADERS },
+            body:
+              compiledTemplate !== null
+                ? createTemplatedStream(
+                    innerStream,
+                    compiledTemplate.splitForStream(document.headHtml)
+                  )
+                : innerStream,
+          },
+        }
+      }
 
       const { body, document } = routeMatch
-        ? await renderStringWithDocument(app, routeMatch, requestContext)
+        ? await renderStringWithDocument(
+            app,
+            routeMatch,
+            requestContext,
+          )
         : {
             body: renderToString(app),
             document: {
-              headHtml: serializeRequestContextScript(requestContext),
+              headHtml: serializeRequestContextScript(
+                requestContext,
+              ),
             },
           }
 
       if (remoteFunctionSecret)
         appendTokenToDocument(document, requestContext, remoteFunctionSecret)
 
+      const fullHead =
+        document.headHtml +
+        (document.headEndHtml ? `\n    ${document.headEndHtml}` : "")
+      const fullBody = body + (document.bodyEndHtml ?? "")
+
       return {
-        status: routeMatch ? 200 : 404,
-        headers: DEFAULT_HEADERS,
-        body:
-          compiledTemplate !== null
-            ? compiledTemplate.render(body, document.headHtml)
-            : body,
+        kind: "string" as const,
+        result: {
+          status: routeMatch ? 200 : 404,
+          headers: DEFAULT_HEADERS,
+          body:
+            compiledTemplate !== null
+              ? compiledTemplate.render(fullBody, fullHead)
+              : fullBody,
+        },
       }
+    } catch (error) {
+      const body = `<!DOCTYPE html><html><head><title>Error</title></head><body><pre>${String(
+        error instanceof Error ? error.message : error
+      ).replace(/</g, "&lt;")}</pre></body></html>`
+      if (options.stream) {
+        return {
+          kind: "stream" as const,
+          result: {
+            status: 500,
+            headers: { ...DEFAULT_HEADERS },
+            body: new ReadableStream<string>({
+              start(controller) {
+                controller.enqueue(body)
+                controller.close()
+              },
+            }),
+          },
+        }
+      }
+      return {
+        kind: "string" as const,
+        result: {
+          status: 500,
+          headers: DEFAULT_HEADERS,
+          body,
+        },
+      }
+    }
+  }
+
+  return { manifest, renderCore }
+}
+
+export function createRenderer(
+  options: CreateRendererOptions & { stream?: false | undefined }
+): Renderer
+export function createRenderer(
+  options: CreateRendererOptions & { stream: true }
+): StreamRenderer
+export function createRenderer(
+  options: CreateRendererOptions
+): Renderer | StreamRenderer {
+  const stream = !!options.stream
+  const { manifest, renderCore } = engine({ ...options, stream })
+
+  if (stream) {
+    return {
+      manifest,
+      async render(url, ctx) {
+        const out = await renderCore(url, ctx)
+        if (!out) return null
+        return out.result as StreamRenderResult
+      },
+    }
+  }
+
+  return {
+    manifest,
+    async render(url, ctx) {
+      const out = await renderCore(url, ctx)
+      if (!out) return null
+      return out.result as RenderResult
     },
   }
 }
 
 export function createStreamRenderer(
-  options: CreateRendererOptions
+  options: Omit<CreateRendererOptions, "stream">
 ): StreamRenderer {
-  const { manifest, compiledTemplate, remoteFunctionSecret } =
-    prepareRenderer(options)
-
-  return {
-    manifest,
-    async render(url, ctx) {
-      const result = await createAppForUrl(url, ctx, manifest)
-      if (!result) return null
-      const { app, routeMatch, requestContext } = result
-
-      const { stream: innerStream, document } = routeMatch
-        ? await renderStreamWithDocument(app, routeMatch, requestContext)
-        : {
-            stream: renderToReadableStream(app),
-            document: {
-              headHtml: serializeRequestContextScript(requestContext),
-            },
-          }
-
-      if (remoteFunctionSecret)
-        appendTokenToDocument(document, requestContext, remoteFunctionSecret)
-
-      return {
-        status: routeMatch ? 200 : 404,
-        headers: { ...DEFAULT_HEADERS, "transfer-encoding": "chunked" },
-        body:
-          compiledTemplate !== null
-            ? createTemplatedStream(
-                innerStream,
-                compiledTemplate.splitForStream(document.headHtml)
-              )
-            : innerStream,
-      }
-    },
-  }
+  return createRenderer({ ...options, stream: true }) as StreamRenderer
 }
 
 /**
@@ -134,7 +220,7 @@ export function createStreamRenderer(
 async function renderStringWithDocument(
   app: JSX.Element,
   match: RouteMatch,
-  requestContext: RequestContextValue
+  requestContext: RequestContextValue,
 ): Promise<{ body: string; document: DocumentHead }> {
   const baseMeta = resolveMetaTemplates(match.route.head, match.params)
   const collector = createHeadCollector(baseMeta)
@@ -155,58 +241,19 @@ async function renderStringWithDocument(
   })
 
   const resolvedMeta = await collector.resolve()
+  const ctxScript = serializeRequestContextScript(requestContext)
   return {
     body,
     document: {
       headHtml:
         serializeDocumentHead(resolvedMeta, { pathname: match.pathname }) +
-        `\n    ${serializeRequestContextScript(requestContext)}`,
+        (ctxScript ? `\n    ${ctxScript}` : ""),
       title: resolvedMeta.title,
     },
   }
 }
 
-export async function loadRouteTree(match: RouteMatch): Promise<{
-  layoutModules: Array<RouteModule | null>
-  routeModule: RouteModule
-}> {
-  const layoutModules = await Promise.all(
-    match.route.scopes.map((scope) => scope.layout?.() ?? null)
-  )
-  const routeModule = await match.route.component()
-  return { layoutModules, routeModule }
-}
-
-export async function loadNotFoundRouteTree(
-  manifest: RouteManifest,
-  pathname: string
-): Promise<{
-  layoutModules: Array<RouteModule | null>
-  routeModule: RouteModule
-} | null> {
-  const scopes = resolveNotFoundScopes(manifest, pathname)
-  if (!scopes) return null
-  const notFoundScope = [...scopes].reverse().find((scope) => !!scope.notFound)
-  if (!notFoundScope?.notFound) return null
-  const [routeModule, layoutModules] = await Promise.all([
-    notFoundScope.notFound(),
-    Promise.all(scopes.map((scope) => scope.layout?.() ?? null)),
-  ])
-  return { layoutModules, routeModule }
-}
-
-/** Layout stack + page only (no RouterProvider). Matches SSR/SSG body HTML. */
-export function buildRoutedSubtree(
-  layoutModules: Array<RouteModule | null>,
-  routeModule: RouteModule
-) {
-  let app = createElement(asComponent(routeModule), {})
-  for (const module of layoutModules.slice().reverse()) {
-    if (!module) continue
-    app = createElement(asComponent(module), { children: app })
-  }
-  return app
-}
+export { buildRoutedSubtree, loadNotFoundRouteTree, loadRouteTree } from "./routeTree.js"
 
 function buildAppElement(
   pathname: string,
@@ -236,7 +283,7 @@ function buildAppElement(
 /** Shared SSG / SSR string render for a matched route. */
 export async function renderMatchToStaticHtml(
   manifest: RouteManifest,
-  match: RouteMatch
+  match: RouteMatch,
 ): Promise<{ body: string; document: DocumentHead }> {
   const { layoutModules, routeModule } = await loadRouteTree(match)
   const app = buildAppElement(
@@ -247,52 +294,67 @@ export async function renderMatchToStaticHtml(
     manifest,
     null
   )
-  return renderStringWithDocument(app, match, null)
+  return renderStringWithDocument(
+    app,
+    match,
+    null,
+  )
 }
 
 const DEFAULT_HEADERS: Record<string, string> = {
   "content-type": "text/html; charset=utf-8",
 }
 
-export interface CreateRendererOptions {
-  /**
-   * The routes to render.
-   */
-  routes: RouteTreeDefinition | RouteManifest
-  /**
-   * The HTML template to use for the rendered page.
-   */
-  htmlTemplate?: string
-  /**
-   * The secret to use for the remote function token.
-   */
-  remoteFunctionSecret?: string
+type PreparedApp = {
+  app: JSX.Element
+  routeMatch: RouteMatch | null
+  requestContext: RequestContextValue
 }
 
-async function createAppForUrl(
+async function prepareAppForUrl(
   url: string,
   ctx: RenderRequestContext | undefined,
   manifest: RouteManifest
-) {
+): Promise<PreparedApp | null> {
   const pathname = toPathname(url)
   const routeMatch = matchRoute(manifest, pathname)
   const notFoundTree = !routeMatch
     ? await loadNotFoundRouteTree(manifest, pathname)
     : null
   if (!routeMatch && !notFoundTree) return null
-  const { layoutModules, routeModule } = routeMatch
-    ? await loadRouteTree(routeMatch)
-    : notFoundTree!
-  const requestContext = (ctx?.context ?? {}) as RequestContextValue
+  const requestContext = (ctx?.context ?? null) as RequestContextValue
+
+  if (routeMatch) {
+    const { layoutModules, routeModule } = await loadRouteTree(routeMatch)
+    const app = buildAppElement(
+      routeMatch.pathname,
+      routeMatch.params,
+      layoutModules,
+      routeModule,
+      manifest,
+      requestContext
+    )
+    return {
+      app,
+      routeMatch,
+      requestContext,
+    }
+  }
+
+  const { layoutModules, routeModule } = notFoundTree!
   const app = buildAppElement(
-    routeMatch?.pathname ?? pathname,
-    routeMatch?.params ?? {},
+    pathname,
+    {},
     layoutModules,
     routeModule,
     manifest,
     requestContext
   )
-  return { app, routeMatch, requestContext }
+  return {
+    app,
+    routeMatch: null,
+    requestContext,
+  }
 }
 
 /**
@@ -303,7 +365,7 @@ async function createAppForUrl(
 async function renderStreamWithDocument(
   app: JSX.Element,
   match: RouteMatch,
-  requestContext: RequestContextValue
+  requestContext: RequestContextValue,
 ): Promise<{ stream: ReadableStream<string>; document: DocumentHead }> {
   const { route, params, pathname } = match
   const collector = createHeadCollector(
@@ -311,12 +373,13 @@ async function renderStreamWithDocument(
   )
   const stream = withHeadCollector(collector, () => renderToReadableStream(app))
   const resolvedMeta = await collector.resolve()
+  const ctxScript = serializeRequestContextScript(requestContext)
   return {
     stream,
     document: {
       headHtml:
         serializeDocumentHead(resolvedMeta, { pathname }) +
-        `\n    ${serializeRequestContextScript(requestContext)}`,
+        (ctxScript ? `\n    ${ctxScript}` : ""),
       title: resolvedMeta.title,
     },
   }
@@ -335,6 +398,7 @@ function appendTokenToDocument(
   requestContext: RequestContextValue,
   secret: string
 ): void {
+  if (!requestContext) return
   const token = makeKiruContextToken(
     requestContext as Record<string, unknown>,
     secret
@@ -365,10 +429,6 @@ function createTemplatedStream(
       }
     },
   })
-}
-
-function asComponent(module: RouteModule): Kiru.FC<any> {
-  return typeof module === "function" ? module : module.default
 }
 
 function toPathname(url: string): string {

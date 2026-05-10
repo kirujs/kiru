@@ -6,7 +6,7 @@ import {
   buildRoutedSubtree,
   loadNotFoundRouteTree,
   loadRouteTree,
-} from "../router/renderer.js"
+} from "../router/routeTree.js"
 import type { RouteManifest, RouteTreeDefinition } from "../router/types.js"
 import {
   readHydratedRequestContext,
@@ -16,7 +16,7 @@ import { signal } from "../signals/index.js"
 import { createElement } from "../element.js"
 
 type ServerActionsClient = {
-  dispatch: (id: string, args: unknown[]) => Promise<unknown>
+  dispatch: (id: string, input: unknown) => Promise<unknown>
 }
 
 function ensureServerActionsClient() {
@@ -28,32 +28,48 @@ function ensureServerActionsClient() {
   if (g.__kiru_serverActions) return
 
   let token = ""
-  let loaded = false
   const getToken = () => {
-    if (loaded) return token
-    loaded = true
+    if (token) return token
     try {
       const s = document.querySelector("[k-request-token]")
-      token = s?.innerHTML ?? ""
-      s?.remove()
-    } catch {}
-    return token
+      const t = s?.textContent?.trim() ?? ""
+      if (t && s) {
+        token = t
+        s.remove()
+      }
+      return token
+    } catch {
+      return token
+    }
   }
 
   g.__kiru_serverActions = {
-    dispatch: async (id, args) => {
+    dispatch: async (id, input) => {
+      const tok = getToken()
+      const payload = input === undefined ? null : input
       const r = await fetch(`/?action=${id}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-kiru-token": getToken(),
+          "x-kiru-token": tok,
         },
-        body: JSON.stringify(args),
+        body: JSON.stringify(payload),
       })
-      if (!r.ok) throw new Error("Action failed")
+      if (!r.ok) {
+        throw new Error("Action failed")
+      }
       return r.json()
     },
   }
+}
+
+export function __kiruEnsureRemoteDispatch(): ServerActionsClient["dispatch"] {
+  ensureServerActionsClient()
+  return (
+    globalThis as typeof globalThis & {
+      __kiru_serverActions?: ServerActionsClient
+    }
+  ).__kiru_serverActions!.dispatch
 }
 
 export interface BootstrapSsrClientOptions {
@@ -71,8 +87,6 @@ export interface BootstrapSsrClientOptions {
 export async function bootstrapSsrClient(
   options: BootstrapSsrClientOptions
 ): Promise<AppHandle> {
-  ensureServerActionsClient()
-
   const manifest =
     "routes" in options.routes
       ? options.routes
@@ -115,7 +129,10 @@ export async function bootstrapSsrClient(
     createElement(
       RequestContextProvider,
       { value: requestContext },
-      createElement(RouterProvider, { router, children: () => children.value })
+      createElement(RouterProvider, {
+        router,
+        children: () => children.value,
+      })
     ),
     container,
     staticHydrate

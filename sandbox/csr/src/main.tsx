@@ -1,12 +1,13 @@
-import { mount } from "kiru"
 import "./index.css"
+import { mount } from "kiru"
+import { createRouter, RouterProvider, RouterView } from "kiru/router"
+import { routes } from "./routes"
 
-const App = () => {
-  return (
-    <div>
-      <h1>hello</h1>
-    </div>
-  )
-}
+const router = createRouter({ routes })
 
-mount(<App />, document.getElementById("app")!)
+mount(
+  <RouterProvider router={router}>
+    <RouterView />
+  </RouterProvider>,
+  document.getElementById("app")!
+)

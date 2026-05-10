@@ -7,7 +7,7 @@ export const routes = defineRouteTree((r) =>
     children: [
       r.get("/", () => import("./pages/index.tsx")),
       r.get("/about", () => import("./pages/about/index.tsx")),
-      r.get("/users/[id]", () => import("./pages/users/user-id.tsx")),
+      r.get("/users/[id]", () => import("./pages/users/[id]/index.tsx")),
       r.get("/guarded", {
         component: async () => ({
           default: () => "Guarded should redirect",
@@ -20,6 +20,7 @@ export const routes = defineRouteTree((r) =>
       r.get("/signals", () => import("./pages/signals/index.tsx")),
       r.get("/style", () => import("./pages/style/index.tsx")),
       r.get("/todos", () => import("./pages/todos/index.tsx")),
+      r.get("/navigation", () => import("./pages/navigation/index.tsx")),
     ],
   })
 )
@@ -35,4 +36,5 @@ export const routeLinks = [
   { path: "/signals", displayName: "signals" },
   { path: "/style", displayName: "style" },
   { path: "/todos", displayName: "todos" },
+  { path: "/navigation", displayName: "navigation" },
 ]

@@ -44,10 +44,24 @@ describe("SSR server", () => {
   })
 
   it("executes remote functions through server action endpoint", () => {
+    // Without the SSR-injected token, the action handler rejects the POST and the UI never updates.
+    cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
+    // Wait for the server round-trip explicitly — avoids races under load / parallel CI.
+    cy.intercept("POST", /\?action=/).as("remoteAction")
     cy.get('[data-testid="ssr-remote-button"]').click()
+    cy.wait("@remoteAction").its("response.statusCode").should("eq", 200)
     cy.get('[data-testid="ssr-remote-result"]').should(
-      "contain",
+      "have.text",
       "hello from server (E2E User)"
+    )
+  })
+
+  it("hydrates the hello route on full load", () => {
+    const port = Cypress.env("port")
+    cy.visit(`http://127.0.0.1:${port}/hello`)
+    cy.get('[data-testid="ssr-loader"]').should(
+      "contain",
+      "Hello route (SSR + hydration smoke test)."
     )
   })
 

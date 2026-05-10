@@ -10,6 +10,7 @@ import type {
   NavigationFailure,
   NavigationGuard,
   NavigationRedirect,
+  NavigationResult,
   RouteLocation,
   RouteManifest,
   RouteMatch,
@@ -17,11 +18,12 @@ import type {
 } from "./types.js"
 import { compileRouteTree } from "./manifest.js"
 import { setup } from "../hooks/index.js"
+import { onMount } from "../hooks/onMount.js"
 import {
   buildRoutedSubtree,
   loadNotFoundRouteTree,
   loadRouteTree,
-} from "./renderer.js"
+} from "./routeTree.js"
 
 function joinPath(base: string, path: string): string {
   if (path.startsWith("/")) return path
@@ -32,6 +34,30 @@ function joinPath(base: string, path: string): string {
 export type RouterNavigationMode = "history" | "static"
 export type RouterQuery = Record<string, string[]>
 
+export type RouteTreeMatchSegment = {
+  id: string
+  kind: "scope" | "route"
+  meta: Record<string, unknown>
+}
+
+function buildMatchSegments(match: RouteMatch | null): RouteTreeMatchSegment[] {
+  if (!match) return []
+  const out: RouteTreeMatchSegment[] = []
+  for (const scope of match.route.scopes) {
+    out.push({
+      id: scope.id,
+      kind: "scope",
+      meta: scope.meta ?? {},
+    })
+  }
+  out.push({
+    id: match.route.id,
+    kind: "route",
+    meta: match.route.meta ?? {},
+  })
+  return out
+}
+
 export interface Router {
   manifest: RouteManifest
   pathname: Kiru.Signal<string>
@@ -41,23 +67,38 @@ export interface Router {
   baseUrl: string
   path: Kiru.Signal<string>
   match: Kiru.Signal<RouteMatch | null>
+  /** Active scope chain + leaf route (for breadcrumbs, meta). */
+  matches: Kiru.Signal<RouteTreeMatchSegment[]>
   navigate: (
     to: string,
     replaceOrOptions?: boolean | { replace?: boolean; transition?: boolean }
-  ) => void
-  setQuery: (query: RouterQuery, options?: { replace?: boolean }) => void
-  setHash: (hash: string, options?: { replace?: boolean }) => void
+  ) => Promise<NavigationResult>
+  setQuery: (
+    query: RouterQuery,
+    options?: { replace?: boolean }
+  ) => Promise<NavigationResult>
+  setHash: (
+    hash: string,
+    options?: { replace?: boolean }
+  ) => Promise<NavigationResult>
   resolveHref: (to: string) => string
   /** `"history"` = SPA navigation; `"static"` = prerender/SSR (native &lt;a&gt; only). */
   navigationMode: RouterNavigationMode
   beforeEach: (guard: NavigationGuard) => () => void
   beforeResolve: (guard: NavigationGuard) => () => void
   afterEach: (hook: AfterEachHook) => () => void
+  isNavigating: Kiru.Signal<boolean>
+  pendingTo: Kiru.Signal<string | null>
+  back: () => void
+  forward: () => void
+  go: (delta: number) => void
+  dispose: () => void
 
   /** @internal */
   __registerComponentGuard?: (
     kind: "leave" | "update" | "enter",
-    guard: NavigationGuard
+    guard: NavigationGuard,
+    routeId?: string
   ) => () => void
   /** @internal */
   __lastNavigation?: {
@@ -219,13 +260,26 @@ export function createRouter({
   const path = pathname
   const match = signal(matchRoute(manifest, initialPathname))
   const params = signal(match.value?.params ?? {})
+  const matches = signal(buildMatchSegments(match.peek()))
+  const isNavigating = signal(false)
+  const pendingTo = signal<string | null>(null)
 
   const beforeEachGuards: NavigationGuard[] = []
   const beforeResolveGuards: NavigationGuard[] = []
   const afterEachHooks: AfterEachHook[] = []
-  const componentLeaveGuards: NavigationGuard[] = []
-  const componentUpdateGuards: NavigationGuard[] = []
+  const leaveByRoute = new Map<string, NavigationGuard[]>()
+  const updateByRoute = new Map<string, NavigationGuard[]>()
   const componentEnterGuards: NavigationGuard[] = []
+  const disposeCleanups: (() => void)[] = []
+
+  const getGuardBucket = (map: Map<string, NavigationGuard[]>, id: string) => {
+    let list = map.get(id)
+    if (!list) {
+      list = []
+      map.set(id, list)
+    }
+    return list
+  }
 
   let navToken = 0
   const transitionsEnabled = !!transition
@@ -251,6 +305,7 @@ export function createRouter({
     const nextMatch = matchRoute(manifest, next.pathname)
     match.value = nextMatch
     params.value = nextMatch?.params ?? {}
+    matches.value = buildMatchSegments(nextMatch)
   }
 
   const runGuards = async (
@@ -282,9 +337,11 @@ export function createRouter({
       fromPopstate: boolean
       enableTransition?: boolean
     }
-  ) => {
+  ): Promise<NavigationResult> => {
     const token = ++navToken
+    isNavigating.value = true
     const resolved = parseResolvedLocation(targetUrl, normalizedBaseUrl)
+    pendingTo.value = resolved.pathname
     const targetPath = resolved.pathname
     const fromMatch = match.peek()
     const from = locationFromMatch(fromMatch)
@@ -295,13 +352,17 @@ export function createRouter({
       : { pathname: targetPath, params: {} }
 
     let failure: NavigationFailure | undefined
+    let navResult: NavigationResult = { status: "committed" }
 
     try {
-      // Component-level leave guards for the currently active route component(s).
       const isLeavingRoute =
         !!fromMatch && (!toMatch || fromMatch.route.id !== toMatch.route.id)
-      if (isLeavingRoute && componentLeaveGuards.length) {
-        const g0 = await runGuards(componentLeaveGuards, to, from)
+      const leaveList =
+        isLeavingRoute && fromMatch
+          ? leaveByRoute.get(fromMatch.route.id) ?? []
+          : []
+      if (leaveList.length) {
+        const g0 = await runGuards(leaveList, to, from)
         if (g0.type === "cancel") {
           failure = { type: "cancelled" }
           if (fromPopstate && from) {
@@ -312,19 +373,20 @@ export function createRouter({
             )
             commitLocation(currentLocationParts())
           }
-          return
+          navResult = { status: "cancelled" }
+          return navResult
         }
         if (g0.type === "redirect") {
           failure = { type: "redirect", to: g0.to }
           const r = toRedirect(g0.to)
-          void navigateInternal(
+          navResult = await navigateInternal(
             new URL(addBase(r.path, normalizedBaseUrl), origin),
             {
               replace: r.replace ?? true,
               fromPopstate: false,
             }
           )
-          return
+          return navResult
         }
       }
 
@@ -335,29 +397,33 @@ export function createRouter({
           history.pushState(null, "", addBase(from.pathname, normalizedBaseUrl))
           commitLocation(currentLocationParts())
         }
-        return
+        navResult = { status: "cancelled" }
+        return navResult
       }
       if (g1.type === "redirect") {
         failure = { type: "redirect", to: g1.to }
         const r = toRedirect(g1.to)
-        void navigateInternal(
+        navResult = await navigateInternal(
           new URL(addBase(r.path, normalizedBaseUrl), origin),
           {
             replace: r.replace ?? true,
             fromPopstate: false,
           }
         )
-        return
+        return navResult
       }
 
-      // Component-level update guards for reused route component(s).
       const isUpdatingRoute =
         !!fromMatch &&
         !!toMatch &&
         fromMatch.route.id === toMatch.route.id &&
         JSON.stringify(fromMatch.params) !== JSON.stringify(toMatch.params)
-      if (isUpdatingRoute && componentUpdateGuards.length) {
-        const gu = await runGuards(componentUpdateGuards, to, from)
+      const updateList =
+        isUpdatingRoute && fromMatch
+          ? updateByRoute.get(fromMatch.route.id) ?? []
+          : []
+      if (updateList.length) {
+        const gu = await runGuards(updateList, to, from)
         if (gu.type === "cancel") {
           failure = { type: "cancelled" }
           if (fromPopstate && from) {
@@ -368,19 +434,20 @@ export function createRouter({
             )
             commitLocation(currentLocationParts())
           }
-          return
+          navResult = { status: "cancelled" }
+          return navResult
         }
         if (gu.type === "redirect") {
           failure = { type: "redirect", to: gu.to }
           const r = toRedirect(gu.to)
-          void navigateInternal(
+          navResult = await navigateInternal(
             new URL(addBase(r.path, normalizedBaseUrl), origin),
             {
               replace: r.replace ?? true,
               fromPopstate: false,
             }
           )
-          return
+          return navResult
         }
       }
 
@@ -399,19 +466,50 @@ export function createRouter({
             )
             commitLocation(currentLocationParts())
           }
-          return
+          navResult = { status: "cancelled" }
+          return navResult
         }
         if (g2.type === "redirect") {
           failure = { type: "redirect", to: g2.to }
           const r = toRedirect(g2.to)
-          void navigateInternal(
+          navResult = await navigateInternal(
             new URL(addBase(r.path, normalizedBaseUrl), origin),
             {
               replace: r.replace ?? true,
               fromPopstate: false,
             }
           )
-          return
+          return navResult
+        }
+      }
+
+      const beforeActivate = toMatch?.route.beforeActivate ?? []
+      if (isEnteringNewRoute && beforeActivate.length) {
+        const ga = await runGuards(beforeActivate, to, from)
+        if (ga.type === "cancel") {
+          failure = { type: "cancelled" }
+          if (fromPopstate && from) {
+            history.pushState(
+              null,
+              "",
+              addBase(from.pathname, normalizedBaseUrl)
+            )
+            commitLocation(currentLocationParts())
+          }
+          navResult = { status: "cancelled" }
+          return navResult
+        }
+        if (ga.type === "redirect") {
+          failure = { type: "redirect", to: ga.to }
+          const r = toRedirect(ga.to)
+          navResult = await navigateInternal(
+            new URL(addBase(r.path, normalizedBaseUrl), origin),
+            {
+              replace: r.replace ?? true,
+              fromPopstate: false,
+            }
+          )
+          return navResult
         }
       }
 
@@ -422,22 +520,26 @@ export function createRouter({
           history.pushState(null, "", addBase(from.pathname, normalizedBaseUrl))
           commitLocation(currentLocationParts())
         }
-        return
+        navResult = { status: "cancelled" }
+        return navResult
       }
       if (g3.type === "redirect") {
         failure = { type: "redirect", to: g3.to }
         const r = toRedirect(g3.to)
-        void navigateInternal(
+        navResult = await navigateInternal(
           new URL(addBase(r.path, normalizedBaseUrl), origin),
           {
             replace: r.replace ?? true,
             fromPopstate: false,
           }
         )
-        return
+        return navResult
       }
 
-      if (token !== navToken) return
+      if (token !== navToken) {
+        navResult = { status: "cancelled" }
+        return navResult
+      }
 
       if (replace) {
         saveScrollAt(historyIndex)
@@ -459,42 +561,50 @@ export function createRouter({
       }
       await runTransition(() => commitLocation(resolved), enableTransition)
 
-      // Component-level enter guards run after commit (best-effort; Kiru has no pre-activation component instance).
       if (isEnteringNewRoute && componentEnterGuards.length) {
         await runGuards(componentEnterGuards, to, from)
       }
+      navResult = { status: "committed" }
     } catch (error) {
       failure = { type: "error", error }
+      navResult = { status: "errored", error }
       if (fromPopstate && from) {
         history.pushState(null, "", addBase(from.pathname, normalizedBaseUrl))
         commitLocation(currentLocationParts())
       }
     } finally {
-      if (token !== navToken)
-        return // Expose latest nav info for component hooks.
-      ;(routerRef.__lastNavigation as Router["__lastNavigation"]) = {
-        to,
-        from,
-        failure,
-      }
-      for (const hook of afterEachHooks) {
-        try {
-          hook(to, from, failure)
-        } catch {
-          // afterEach must not break navigation
+      if (token === navToken) {
+        isNavigating.value = false
+        pendingTo.value = null
+        ;(routerRef.__lastNavigation as Router["__lastNavigation"]) = {
+          to,
+          from,
+          failure,
+        }
+        for (const hook of afterEachHooks) {
+          try {
+            hook(to, from, failure)
+          } catch {
+            // afterEach must not break navigation
+          }
         }
       }
     }
+    return navResult
   }
 
   if (typeof window !== "undefined") {
     window.history.scrollRestoration = "manual"
     historyIndex = ensureHistoryIndex(history)
-    window.addEventListener("beforeunload", () => {
+    const onBeforeUnload = () => {
       saveScrollAt(historyIndex)
       window.history.scrollRestoration = "auto"
-    })
-    window.addEventListener("popstate", (event) => {
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    disposeCleanups.push(() =>
+      window.removeEventListener("beforeunload", onBeforeUnload)
+    )
+    const onPopstate = (event: PopStateEvent) => {
       saveScrollAt(historyIndex)
       const state = event.state as { index?: number } | null
       if (typeof state?.index === "number") {
@@ -507,7 +617,11 @@ export function createRouter({
         const offset = scrollStack[historyIndex]
         if (offset) window.scrollTo(offset[0], offset[1])
       })
-    })
+    }
+    window.addEventListener("popstate", onPopstate)
+    disposeCleanups.push(() =>
+      window.removeEventListener("popstate", onPopstate)
+    )
   }
 
   const removeArrayEntry = <T,>(array: T[], entry: T) => {
@@ -524,6 +638,9 @@ export function createRouter({
     baseUrl: normalizedBaseUrl,
     path,
     match,
+    matches,
+    isNavigating,
+    pendingTo,
     navigationMode: "history",
     navigate(to, replaceOrOptions = false) {
       const options =
@@ -537,11 +654,12 @@ export function createRouter({
         normalizedBaseUrl
       )}`
       const url = new URL(addBase(href, normalizedBaseUrl), currentHref)
-      void navigateInternal(url, {
+      return navigateInternal(url, {
         replace: !!options.replace,
         fromPopstate: false,
         enableTransition: options.transition,
-      }).then(() => {
+      }).then((result) => {
+        if (result.status !== "committed") return result
         const nextHash = parseResolvedLocation(url, normalizedBaseUrl).hash
         if (prevHash !== nextHash && typeof window !== "undefined") {
           window.dispatchEvent(new HashChangeEvent("hashchange"))
@@ -550,12 +668,13 @@ export function createRouter({
           const anchor = document.getElementById(nextHash.slice(1))
           if (anchor) {
             anchor.scrollIntoView()
-            return
+            return result
           }
         }
         if (typeof window !== "undefined" && !options.replace) {
           window.scrollTo(0, 0)
         }
+        return result
       })
     },
     setQuery(nextQuery, options) {
@@ -564,7 +683,7 @@ export function createRouter({
       const url = new URL(current)
       url.hash = hash.peek()
       url.search = queryString ? `?${queryString}` : ""
-      void navigateInternal(url, {
+      return navigateInternal(url, {
         replace: !!options?.replace,
         fromPopstate: false,
       })
@@ -580,10 +699,10 @@ export function createRouter({
         nextHash = `#${nextHash}`
       }
       url.hash = nextHash
-      void navigateInternal(url, {
+      return navigateInternal(url, {
         replace: !!options?.replace,
         fromPopstate: false,
-      }).then(() => {
+      }).then((result) => {
         const normalizedNextHash = parseResolvedLocation(
           url,
           normalizedBaseUrl
@@ -591,6 +710,7 @@ export function createRouter({
         if (prevHash !== normalizedNextHash && typeof window !== "undefined") {
           window.dispatchEvent(new HashChangeEvent("hashchange"))
         }
+        return result
       })
     },
     resolveHref(to) {
@@ -609,15 +729,32 @@ export function createRouter({
       afterEachHooks.push(hook)
       return () => removeArrayEntry(afterEachHooks, hook)
     },
-    __registerComponentGuard(kind, guard) {
-      const list =
-        kind === "leave"
-          ? componentLeaveGuards
-          : kind === "update"
-            ? componentUpdateGuards
-            : componentEnterGuards
-      list.push(guard)
-      return () => removeArrayEntry(list, guard)
+    back() {
+      history.back()
+    },
+    forward() {
+      history.forward()
+    },
+    go(delta) {
+      history.go(delta)
+    },
+    dispose() {
+      for (const fn of disposeCleanups) fn()
+      disposeCleanups.length = 0
+    },
+    __registerComponentGuard(kind, guard, routeId = "_") {
+      if (kind === "leave") {
+        const list = getGuardBucket(leaveByRoute, routeId)
+        list.push(guard)
+        return () => removeArrayEntry(list, guard)
+      }
+      if (kind === "update") {
+        const list = getGuardBucket(updateByRoute, routeId)
+        list.push(guard)
+        return () => removeArrayEntry(list, guard)
+      }
+      componentEnterGuards.push(guard)
+      return () => removeArrayEntry(componentEnterGuards, guard)
     },
     __lastNavigation: undefined,
   }
@@ -644,7 +781,12 @@ export function createStaticRouter({
   const querySignal = signal(query)
   const match = signal(matchRoute(manifest, pathname))
   params.value = match.value?.params ?? {}
+  const matches = signal(buildMatchSegments(match.peek()))
+  const isNavigating = signal(false)
+  const pendingTo = signal<string | null>(null)
   const emptyUnsub = () => {}
+  const committed = (): Promise<NavigationResult> =>
+    Promise.resolve({ status: "committed" })
 
   return {
     manifest,
@@ -655,10 +797,19 @@ export function createStaticRouter({
     baseUrl: normalizeBaseUrl(baseUrl),
     path,
     match,
+    matches,
+    isNavigating,
+    pendingTo,
     navigationMode: "static",
-    navigate() {},
-    setQuery() {},
-    setHash() {},
+    navigate() {
+      return committed()
+    },
+    setQuery() {
+      return committed()
+    },
+    setHash() {
+      return committed()
+    },
     resolveHref(to) {
       return addBase(joinPath(path.value, to), normalizeBaseUrl(baseUrl))
     },
@@ -669,6 +820,13 @@ export function createStaticRouter({
       return emptyUnsub
     },
     afterEach() {
+      return emptyUnsub
+    },
+    back() {},
+    forward() {},
+    go() {},
+    dispose() {},
+    __registerComponentGuard() {
       return emptyUnsub
     },
   }
@@ -691,6 +849,23 @@ export function useRouter(): Router {
   return router
 }
 
+/** Active route match segments (scopes + leaf), for breadcrumbs and `meta`. */
+export function useMatches(): () => RouteTreeMatchSegment[] {
+  const router = useRouter()
+  return () => router.matches.value
+}
+
+function prefetchMatchedRoute(
+  manifest: RouteManifest,
+  href: string,
+  baseUrl: string
+) {
+  const match = matchRoute(manifest, stripBase(href, baseUrl))
+  if (!match) return
+  for (const scope of match.route.scopes) scope.layout?.()
+  void match.route.component()
+}
+
 export type LinkProps = JSX.IntrinsicElements["a"] & {
   to: string
   replace?: boolean
@@ -708,23 +883,30 @@ export const Link: Kiru.FC<LinkProps> = () => {
   ) => {
     $.props.onpointerenter?.(event)
     if (event.defaultPrevented) return
-    if ($.props.prefetch !== "hover" && router.navigationMode !== "history") {
+    if (
+      $.props.prefetch === "none" ||
+      router.navigationMode !== "history" ||
+      $.props.prefetch === "visible"
+    ) {
       return
     }
-    const match = matchRoute(
-      router.manifest,
-      stripBase(href.peek(), router.baseUrl)
-    )
-    if (!match) return
-    for (const scope of match.route.scopes) scope.layout?.()
-    void match.route.component()
+    prefetchMatchedRoute(router.manifest, href.peek(), router.baseUrl)
   }
+
+  onMount(() => {
+    if (
+      $.props.prefetch === "visible" &&
+      router.navigationMode === "history"
+    ) {
+      prefetchMatchedRoute(router.manifest, href.peek(), router.baseUrl)
+    }
+  })
 
   const onclick: Kiru.MouseEventHandler<HTMLAnchorElement> = (event) => {
     $.props.onclick?.(event)
     if (event.defaultPrevented) return
     event.preventDefault()
-    router.navigate($.props.to, $.props.replace)
+    void router.navigate($.props.to, $.props.replace)
   }
 
   return ({ to, replace, children, ...rest }) =>

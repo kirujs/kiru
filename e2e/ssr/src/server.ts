@@ -3,7 +3,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Hono } from "hono"
 import { createRenderer } from "kiru/router"
-import { createRemoteActionHandler } from "kiru/remote"
+import { createRemoteActionHandler, __INTERNAL_REMOTE_REGISTRY } from "kiru/remote"
 import { routes } from "./routes"
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..")
@@ -21,8 +21,16 @@ declare module "kiru/router" {
   }
 }
 
-const renderer = createRenderer({ routes, htmlTemplate, remoteFunctionSecret })
-const handleAction = createRemoteActionHandler(remoteFunctionSecret)
+const renderer = createRenderer({
+  routes,
+  htmlTemplate,
+  remoteFunctionSecret,
+})
+
+const handleAction = createRemoteActionHandler(remoteFunctionSecret, {
+  allowedOrigins: ["*"],
+  exposeErrors: true,
+})
 
 const app = new Hono()
 

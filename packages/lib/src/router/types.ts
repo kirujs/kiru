@@ -28,6 +28,8 @@ export type GenerateStaticParams = (
 /** Declarative SEO / document metadata (layout + route merge; child overrides). */
 export interface RouteHeadMeta {
   title?: string
+  /** When set with `title`, final title is `titleTemplate.replace("%s", title)` (e.g. `"%s | MyApp"`). */
+  titleTemplate?: string
   description?: string
   robots?: string
   /** Absolute or root-relative URL */
@@ -46,6 +48,10 @@ export interface RouteHeadMeta {
   }
   /** Raw &lt;meta&gt; attributes per row, e.g. `{ name: "theme-color", content: "#000" }` */
   extraMeta?: Array<Record<string, string>>
+  /**
+   * &lt;link&gt; rows, e.g. `{ rel: "icon", href: "/favicon.ico" }` or `{ rel: "preload", href: "/font.woff2", as: "font" }`.
+   */
+  links?: Array<Record<string, string>>
 }
 
 export interface RouteLocation {
@@ -89,6 +95,17 @@ export interface RouteDefinitionConfig {
   generateStaticParams?: GenerateStaticParams
   head?: RouteHeadMeta
   beforeEnter?: NavigationGuard | NavigationGuard[]
+  /**
+   * Runs after the target route module is loaded and before the URL commits (CSR).
+   * On SSR, runs after the route module is loaded and before render.
+   */
+  beforeActivate?: NavigationGuard | NavigationGuard[]
+  /** Arbitrary route metadata (merged shallowly from ancestor scopes). */
+  meta?: Record<string, unknown>
+  /** Error UI module for this route (wrapped around subtree when render throws). */
+  error?: RouteLoader
+  /** Pending UI while route subtree is loading (CSR / streaming). */
+  pending?: RouteLoader
 }
 
 export interface RouteDefinition {
@@ -100,6 +117,10 @@ export interface RouteDefinition {
   generateStaticParams?: GenerateStaticParams
   head?: RouteHeadMeta
   beforeEnter?: NavigationGuard | NavigationGuard[]
+  beforeActivate?: NavigationGuard | NavigationGuard[]
+  meta?: Record<string, unknown>
+  error?: RouteLoader
+  pending?: RouteLoader
 }
 
 export interface RouteScopeDefinition {
@@ -108,6 +129,9 @@ export interface RouteScopeDefinition {
   layout?: RouteLoader
   notFound?: RouteLoader
   head?: RouteHeadMeta
+  meta?: Record<string, unknown>
+  error?: RouteLoader
+  pending?: RouteLoader
   children: RouteNodeDefinition[]
 }
 
@@ -120,6 +144,9 @@ export interface RouteBuilder {
     layout?: RouteLoader
     notFound?: RouteLoader
     head?: RouteHeadMeta
+    meta?: Record<string, unknown>
+    error?: RouteLoader
+    pending?: RouteLoader
     children: RouteNodeDefinition[]
   }): RouteScopeDefinition
 }
@@ -134,6 +161,9 @@ export interface CompiledRouteScope {
   layout?: RouteLoader
   notFound?: RouteLoader
   head?: RouteHeadMeta
+  meta?: Record<string, unknown>
+  error?: RouteLoader
+  pending?: RouteLoader
 }
 
 export interface CompiledRoute {
@@ -150,11 +180,18 @@ export interface CompiledRoute {
   scopes: CompiledRouteScope[]
   /** Merged from ancestor scopes and this route */
   head: RouteHeadMeta
+  /** Merged shallow meta from scopes + route */
+  meta: Record<string, unknown>
   beforeEnter?: NavigationGuard[]
+  beforeActivate?: NavigationGuard[]
+  error?: RouteLoader
+  pending?: RouteLoader
 }
 
 export interface RouteManifest {
   routes: CompiledRoute[]
+  /** True when the root scope defines `notFound` (used for SSG `404.html`). */
+  rootHasNotFound?: boolean
 }
 
 export interface RouteMatch {
@@ -169,6 +206,9 @@ export interface DocumentHead {
   headHtml: string
   /** Plain title for quick access */
   title?: string
+  /** Optional extra head slots from the HTML template compiler */
+  headEndHtml?: string
+  bodyEndHtml?: string
 }
 
 export interface StreamRenderResult {
@@ -182,3 +222,9 @@ export interface RenderResult {
   headers: Record<string, string>
   body: string
 }
+
+export type NavigationResult =
+  | { status: "committed" }
+  | { status: "cancelled" }
+  | { status: "redirected"; to: NavigationRedirect }
+  | { status: "errored"; error: unknown }

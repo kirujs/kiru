@@ -13,7 +13,7 @@ export default function TodosPage() {
     inputText.value = ""
   }
 
-  return (
+  return () => (
     <div id="todos">
       <input bind:value={inputText} />
       <button onclick={addItem} />

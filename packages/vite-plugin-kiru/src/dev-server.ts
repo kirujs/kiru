@@ -147,14 +147,19 @@ async function writeFetchResponse(
 }
 
 export interface SsrDevOptions {
-  /** Absolute path to the module that exports the Hono app as `default`. */
+  /**
+   * Absolute path to the module that exports either:
+   * - a Hono-style app as `default` with a `.fetch` method, or
+   * - a `fetch(request: Request) => Response` function as the default export.
+   */
   serverEntry: string
 }
 
 /**
- * Handle a single SSR dev request by loading the user's Hono app fresh via
- * ssrLoadModule (so HMR invalidation is respected), calling `app.fetch`,
- * injecting render-blocking CSS links into HTML responses, then writing the
+ * Handle a single SSR dev request by loading the user's server module fresh via
+ * ssrLoadModule (so HMR invalidation is respected), calling `default.fetch` or
+ * `default` as a fetch handler, injecting render-blocking CSS links into HTML
+ * responses, then writing the
  * result back to the Node.js response.
  *
  * Returns `true` if the request was handled, `false` to let the next
@@ -167,15 +172,27 @@ export async function handleSsrDevRequest(
   opts: SsrDevOptions
 ): Promise<boolean> {
   const appMod = await server.ssrLoadModule(opts.serverEntry)
-  const app = appMod?.default
-  if (typeof app?.fetch !== "function") return false
+  const exported = appMod?.default as
+    | { fetch?: typeof fetch }
+    | typeof fetch
+    | undefined
 
   const fetchReq = nodeToFetchRequest(req)
-  const response: Response = await app.fetch(fetchReq, {
-    incoming: req,
-    outgoing: res,
-    vite: server,
-  })
+  let response: Response
+
+  if (
+    exported &&
+    typeof exported === "object" &&
+    typeof exported.fetch === "function"
+  ) {
+    response = await exported.fetch(fetchReq)
+  } else if (typeof exported === "function") {
+    response = await (exported as (r: Request) => Response | Promise<Response>)(
+      fetchReq
+    )
+  } else {
+    return false
+  }
 
   // If the Hono app couldn't match a route it returns a plain-text 404.
   // Pass those through so Vite's own error overlay can handle them.

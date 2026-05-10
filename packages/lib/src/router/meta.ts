@@ -14,6 +14,20 @@ function mergeExtraMeta(
   return [...byKey.values()]
 }
 
+function mergeLinks(
+  base?: Array<Record<string, string>>,
+  override?: Array<Record<string, string>>
+): Array<Record<string, string>> | undefined {
+  const merged = [...(base ?? []), ...(override ?? [])]
+  if (!merged.length) return undefined
+  const byKey = new Map<string, Record<string, string>>()
+  for (const row of merged) {
+    const key = `${row.rel ?? ""}|${row.href ?? ""}|${row.as ?? ""}`
+    byKey.set(key, row)
+  }
+  return [...byKey.values()]
+}
+
 export function mergeRouteHead(
   base: RouteHeadMeta,
   override?: RouteHeadMeta
@@ -24,6 +38,7 @@ export function mergeRouteHead(
       openGraph: base.openGraph ? { ...base.openGraph } : undefined,
       twitter: base.twitter ? { ...base.twitter } : undefined,
       extraMeta: base.extraMeta ? [...base.extraMeta] : undefined,
+      links: base.links ? [...base.links] : undefined,
     }
   }
   return {
@@ -32,6 +47,7 @@ export function mergeRouteHead(
     openGraph: { ...base.openGraph, ...override.openGraph },
     twitter: { ...base.twitter, ...override.twitter },
     extraMeta: mergeExtraMeta(base.extraMeta, override.extraMeta),
+    links: mergeLinks(base.links, override.links),
   }
 }
 
@@ -49,9 +65,13 @@ export function resolveMetaTemplates(
 ): RouteHeadMeta {
   const og = head.openGraph
   const tw = head.twitter
+  let title = tpl(head.title, params)
+  if (title && head.titleTemplate) {
+    title = head.titleTemplate.replace(/%s/g, title)
+  }
   return {
     ...head,
-    title: tpl(head.title, params),
+    title,
     description: tpl(head.description, params),
     robots: tpl(head.robots, params),
     canonical: tpl(head.canonical, params),
@@ -167,6 +187,13 @@ export function serializeDocumentHead(
       .map(([k, v]) => `${k}="${escAttr(v)}"`)
       .join(" ")
     parts.push(`<meta ${attrs} />`)
+  }
+
+  for (const row of head.links ?? []) {
+    const attrs = Object.entries(row)
+      .map(([k, v]) => `${k}="${escAttr(v)}"`)
+      .join(" ")
+    parts.push(`<link ${attrs} />`)
   }
 
   return parts.join("\n    ")

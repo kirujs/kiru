@@ -1,28 +1,84 @@
-import { AsyncLocalStorage } from "async_hooks"
-import type { CustomRequestContext } from "../router/types.js"
+import type { RemoteActionFunction } from "./action.js"
+import { isRemoteError } from "./errors.js"
 import { unwrapKiruToken } from "./token.js"
 
-type RequestContext = Record<string, unknown>
+export { RemoteError, isRemoteError } from "./errors.js"
+export {
+  makeKiruContextToken,
+  makeKiruContextTokenAsync,
+  unwrapKiruToken,
+  unwrapKiruTokenAsync,
+} from "./token.js"
+export type { TokenHeader, TokenPayload } from "./token.js"
 
-const als = new AsyncLocalStorage<RequestContext>()
-const registry: Record<string, Record<string, unknown>> = {}
+export {
+  action,
+  type RemoteActionFunction,
+  type RemoteActionCallback,
+  type RemoteActionSchema,
+} from "./action.js"
+
+import type { CustomRequestContext } from "../router/types.js"
+
+const registry: Record<string, Record<string, RemoteActionFunction<unknown, unknown>>> = {}
 
 export const __INTERNAL_REMOTE_REGISTRY = {
-  register(id: string, fns: Record<string, unknown>): void {
+  register(
+    id: string,
+    fns: Record<string, RemoteActionFunction<unknown, unknown>>
+  ): void {
     registry[id] = fns
   },
 }
 
+const jsonHeaders = {
+  "content-type": "application/json; charset=utf-8",
+} as const
+
 export function getRequestContext(): CustomRequestContext {
-  const context = als.getStore()
-  if (!context) {
-    throw new Error("[kiru/remote]: Invalid `getRequestContext` invocation.")
+  throw new Error(
+    "[kiru/remote]: `getRequestContext` has been removed. Use `action((ctx, input) => ...)` and read context from `ctx`."
+  )
+}
+
+export type CreateRemoteActionHandlerOptions = {
+  /**
+   * If non-empty, require `Origin` or `Referer` to match one of these strings
+   * (exact origin, e.g. `https://app.example.com`). Use `"*"` to disable the check.
+   */
+  allowedOrigins?: string[]
+  /** When true, {@link RemoteError} instances become JSON `{ error: { code, message, details? } }`. */
+  exposeErrors?: boolean
+}
+
+function isAllowedOrigin(
+  request: Request,
+  allowed: readonly string[]
+): boolean {
+  if (allowed.length === 0) return true
+  if (allowed.includes("*")) return true
+  const origin = request.headers.get("origin") ?? ""
+  if (origin && allowed.includes(origin)) return true
+  const referer = request.headers.get("referer")
+  if (!referer) return false
+  try {
+    const u = new URL(referer)
+    const base = `${u.protocol}//${u.host}`
+    return allowed.includes(base)
+  } catch {
+    return false
   }
-  return context as CustomRequestContext
+}
+
+function isWrappedRemoteAction(
+  value: unknown
+): value is RemoteActionFunction<unknown, unknown> {
+  return !!value && typeof value === "function" && "__kiruRemoteAction" in value
 }
 
 export function createRemoteActionHandler(
-  secret: string
+  secret: string,
+  options?: CreateRemoteActionHandlerOptions
 ): (request: Request) => Promise<Response | null> {
   return async (request: Request) => {
     try {
@@ -41,36 +97,58 @@ export function createRemoteActionHandler(
       const routeId = actionId.slice(0, split)
       const actionName = actionId.slice(split + 1)
 
+      const allowed = options?.allowedOrigins
+      if (allowed && allowed.length > 0 && !isAllowedOrigin(request, allowed)) {
+        return new Response(
+          options?.exposeErrors
+            ? JSON.stringify({
+                error: {
+                  code: "FORBIDDEN_ORIGIN",
+                  message: "Request origin is not allowed",
+                },
+              })
+            : null,
+          {
+            status: 403,
+            headers: options?.exposeErrors ? jsonHeaders : {},
+          }
+        )
+      }
+
       const context = unwrapKiruToken(token, secret)
       if (!context) {
         return new Response(null, { status: 500 })
       }
 
-      const action = registry[routeId]?.[actionName] as
-        | ((...args: unknown[]) => unknown)
-        | undefined
-      const args = await request.json()
-      if (typeof action !== "function" || !Array.isArray(args)) {
+      const handler = registry[routeId]?.[actionName]
+      let input: unknown
+      try {
+        input = await request.json()
+      } catch {
+        return new Response(null, { status: 500 })
+      }
+      if (typeof handler !== "function") {
+        return new Response(null, { status: 500 })
+      }
+      if (!isWrappedRemoteAction(handler)) {
         return new Response(null, { status: 500 })
       }
 
-      return await new Promise<Response>((resolve) => {
-        als.run(context, async () => {
-          try {
-            const result = await action(...args)
-            resolve(
-              new Response(JSON.stringify(result), {
-                status: 200,
-                headers: {
-                  "content-type": "application/json; charset=utf-8",
-                },
-              })
-            )
-          } catch {
-            resolve(new Response(null, { status: 500 }))
-          }
+      try {
+        const result = await handler.__kiruInvoke(context, input)
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: jsonHeaders,
         })
-      })
+      } catch (e) {
+        if (isRemoteError(e) && options?.exposeErrors) {
+          return new Response(JSON.stringify({ error: e.toJSON() }), {
+            status: e.status,
+            headers: jsonHeaders,
+          })
+        }
+        return new Response(null, { status: 500 })
+      }
     } catch {
       return new Response(null, { status: 500 })
     }

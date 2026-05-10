@@ -13,6 +13,22 @@ describe("SSG build", () => {
     cy.get('[data-testid="ssg-about"]').should("exist")
   })
 
+  it("includes dynamic route params in prerendered post pages", () => {
+    cy.visit(`${base()}/posts/one`)
+    cy.get('[data-testid="ssg-post"]').should("contain", "one")
+    cy.get('[data-testid="ssg-loader"]').should("contain", "post:one")
+  })
+
+  it("serves static 404.html for unknown paths", () => {
+    cy.request({
+      url: `${base()}/does-not-exist`,
+      failOnStatusCode: false,
+    }).then((res) => {
+      expect(res.status).to.eq(404)
+      expect(res.body).to.include("ssg-not-found")
+    })
+  })
+
   it("supports browser history between prerendered routes", () => {
     cy.visit(base())
     cy.visit(`${base()}/about`)

@@ -30,17 +30,48 @@ export async function prerenderStaticRoutes({
 
   const outputs: StaticRouteOutput[] = []
   for (const path of paths) {
-    const match = matchRoute(manifest, path)
-    if (!match) continue
-    const { body, document } = await renderMatchToStaticHtml(manifest, match)
-    let html: string | undefined
+    const routeMatch = matchRoute(manifest, path)
+    if (!routeMatch) continue
+
     if (renderer) {
       const rendered = await renderer.render(path)
-      if (rendered && typeof rendered.body === "string") {
-        html = rendered.body
+      if (!rendered || typeof rendered.body !== "string") continue
+      const { body, document } = await renderMatchToStaticHtml(
+        manifest,
+        routeMatch,
+      )
+      outputs.push({ path, body, document, html: rendered.body })
+      continue
+    }
+
+    const { body, document } = await renderMatchToStaticHtml(
+      manifest,
+      routeMatch,
+    )
+    outputs.push({ path, body, document })
+  }
+
+  if (manifest.rootHasNotFound) {
+    const nfPath = "/__kiru_ssg_not_found__"
+    const inner = createRenderer({ routes: manifest })
+    const frag = await inner.render(nfPath)
+    if (frag && typeof frag.body === "string") {
+      const doc: DocumentHead = { headHtml: "", title: "Not Found" }
+      if (renderer) {
+        const full = await renderer.render(nfPath)
+        if (full && typeof full.body === "string") {
+          outputs.push({
+            path: "/404",
+            body: frag.body,
+            document: doc,
+            html: full.body,
+          })
+        }
+      } else {
+        outputs.push({ path: "/404", body: frag.body, document: doc })
       }
     }
-    outputs.push({ path, body, document, html })
   }
+
   return outputs
 }

@@ -3,15 +3,42 @@ import type { MaybeDom, SomeDom } from "./types.utils.js"
 const parents: SomeDom[] = []
 const childIdx: number[] = []
 
+function isHydrationSkippableNode(node: ChildNode | undefined): boolean {
+  if (!node) return true
+  if (node.nodeType === Node.COMMENT_NODE) return true // comment
+  if (node.nodeType === Node.CDATA_SECTION_NODE) return true // CDATA
+  if (node.nodeType === Node.TEXT_NODE) {
+    const t = (node as Text).textContent ?? ""
+    return !/\S/.test(t)
+  }
+  return false
+}
+
 export const hydrationStack = {
   bumpChildIndex() {
-    childIdx[childIdx.length - 1]++
+    const parent = this.getCurrentParent()
+    let idx = childIdx[childIdx.length - 1]
+    while (
+      idx < parent.childNodes.length &&
+      isHydrationSkippableNode(parent.childNodes[idx])
+    ) {
+      idx++
+    }
+    if (idx < parent.childNodes.length) idx++
+    childIdx[childIdx.length - 1] = idx
   },
   getCurrentChild(): MaybeDom {
-    const idx = childIdx[childIdx.length - 1]
-    // @ts-expect-error TODO: We're ignoring the possibility of encountering comment or cdata nodes.
-    // Not really a problem for now since we don't render those but should be checked anyway.
-    return this.getCurrentParent().childNodes[idx]
+    const parent = this.getCurrentParent()
+    let idx = childIdx[childIdx.length - 1]
+    while (
+      idx < parent.childNodes.length &&
+      isHydrationSkippableNode(parent.childNodes[idx])
+    ) {
+      idx++
+    }
+    const node = parent.childNodes[idx]
+    if (!node || isHydrationSkippableNode(node)) return undefined
+    return node as SomeDom
   },
   getCurrentParent() {
     return parents[parents.length - 1]

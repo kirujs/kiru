@@ -11,7 +11,7 @@ export default function Home() {
     return
   })
 
-  return (
+  return () => (
     <>
       <p data-testid="ssr-home">SSR e2e home</p>
       <p data-testid="ssr-user">User: {ctx.user?.name ?? "none"}</p>
@@ -23,7 +23,7 @@ export default function Home() {
       >
         Call remote
       </button>
-      <p data-testid="ssr-remote-result">{() => remoteResult.value}</p>
+      <p data-testid="ssr-remote-result">{remoteResult}</p>
     </>
   )
 }

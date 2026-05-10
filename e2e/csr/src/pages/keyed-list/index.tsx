@@ -54,7 +54,7 @@ export default function KeyedListPage() {
     items.value = newItems
   }
 
-  return (
+  return () => (
     <div id="keyed-list">
       <h2>Keyed List Test</h2>
       <div style="display: flex; flex-direction: column; gap: 0.5rem;">

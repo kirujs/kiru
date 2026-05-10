@@ -33,12 +33,14 @@ export function useRequestContext(): CustomRequestContext {
 }
 
 function escapeScriptJson(json: string): string {
-  // Prevent breaking out of <script> and reduce XSS surface.
-  return json.replace(/</g, "\\u003c")
+  return json
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029")
 }
 
 export function serializeRequestContextScript(
-  ctx: RequestContextValue
+  ctx: RequestContextValue,
 ): string {
   if (!ctx) return ""
   const json = escapeScriptJson(JSON.stringify(ctx))

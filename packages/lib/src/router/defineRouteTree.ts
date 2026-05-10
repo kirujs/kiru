@@ -32,6 +32,10 @@ const routeBuilder: RouteBuilder = {
       generateStaticParams: value.generateStaticParams,
       head: value.head,
       beforeEnter: value.beforeEnter,
+      beforeActivate: value.beforeActivate,
+      meta: value.meta,
+      error: value.error,
+      pending: value.pending,
     }
   },
   scope(config): RouteScopeDefinition {
@@ -41,6 +45,9 @@ const routeBuilder: RouteBuilder = {
       layout: config.layout,
       notFound: config.notFound,
       head: config.head,
+      meta: config.meta,
+      error: config.error,
+      pending: config.pending,
       children: config.children,
     }
   },

@@ -19,6 +19,24 @@ import { glob } from "tinyglobby"
 import type { KiruPluginOptions } from "./types.js"
 import type { Plugin, PluginOption, ResolvedConfig } from "vite"
 
+async function readViteClientManifest(
+  outDir: string
+): Promise<Record<string, unknown> | undefined> {
+  const candidates = [
+    path.join(outDir, ".vite", "manifest.json"),
+    path.join(outDir, "manifest.json"),
+  ]
+  for (const p of candidates) {
+    try {
+      const raw = await fs.readFile(p, "utf8")
+      return JSON.parse(raw) as Record<string, unknown>
+    } catch {
+      /* try next */
+    }
+  }
+  return undefined
+}
+
 export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   let state: PluginState
   let log: (...data: any[]) => void
@@ -309,14 +327,18 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             (p) => p !== routePath && p.startsWith(routePath + "/")
           )
 
+        const clientManifest = await readViteClientManifest(state.outDir)
+
         for (const output of outputs) {
           let html: string
           if (opts.router?.htmlShell) {
-            html = opts.router.htmlShell(
+            const shellResult = opts.router.htmlShell(
               output.body,
               output.path,
-              output.document
+              output.document,
+              { manifest: clientManifest }
             )
+            html = await Promise.resolve(shellResult)
           } else {
             if (!output.html) {
               throw new Error(

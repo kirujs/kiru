@@ -51,6 +51,12 @@ export default function Layout() {
           >
             User 0 (guarded)
           </Link>
+          <Link
+            to="/demo-loader"
+            className="rounded-full border border-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:border-cyan-400 hover:text-cyan-200"
+          >
+            Route demo
+          </Link>
         </nav>
         <p
           data-testid="guard-events"

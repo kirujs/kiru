@@ -37,4 +37,13 @@ describe("router", () => {
     cy.visit(`http://localhost:${port}/this-route-does-not-exist`)
     cy.get('[data-testid="csr-not-found"]').should("contain", "Not Found")
   })
+
+  it("awaitable navigate returns committed and updates matches", () => {
+    cy.visit(`http://localhost:${Cypress.env("port")}/navigation`)
+    cy.get('[data-testid="match-depth"]').should("contain", "2")
+    cy.get('[data-testid="nav-programmatic"]').click()
+    cy.window().its("__KIRU_NAV_RESULT__").should("eq", "committed")
+    cy.location("pathname").should("eq", "/about")
+    cy.get("main #router-outlet h2").should("have.text", "About")
+  })
 })

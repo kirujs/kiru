@@ -42,9 +42,9 @@ function clientFormatRemoteFunctions(
   route: string
 ) {
   code.prepend(
-    `const __$r__ = ${JSON.stringify(
+    `import { __kiruEnsureRemoteDispatch } from "kiru/ssr/router";\nconst __$r__ = ${JSON.stringify(
       route
-    )}; const __$d__ = globalThis.__kiru_serverActions.dispatch;\n`
+    )};\nconst __$dispatch = () => __kiruEnsureRemoteDispatch();\n`
   )
 
   bodyNodes.forEach((node) => {
@@ -56,7 +56,7 @@ function clientFormatRemoteFunctions(
     code.overwrite(
       node.start,
       node.end,
-      `export async function ${match.name}() { return __$d__(\`\${__$r__}:${match.name}\`, Array.from(arguments)); }`
+      `export async function ${match.name}(input) { return __$dispatch()(\`\${__$r__}:${match.name}\`, arguments.length === 0 ? null : input); }`
     )
   })
 }
@@ -85,6 +85,28 @@ function findExportedNamedFunctions(bodyNodes: AstNode[]) {
       matches.push({
         node,
         name: node.declaration.id?.name || `anonymous_fn_${i++}`,
+      })
+      continue
+    }
+    if (
+      node.type === "ExportNamedDeclaration" &&
+      node.declaration?.type === "VariableDeclaration"
+    ) {
+      const declarations = node.declaration.declarations ?? []
+      if (declarations.length !== 1) continue
+      const declaration = declarations[0]
+      if (declaration.type !== "VariableDeclarator") continue
+      if (!declaration.id?.name) continue
+      if (
+        declaration.init?.type !== "CallExpression" ||
+        declaration.init.callee?.type !== "Identifier" ||
+        declaration.init.callee.name !== "action"
+      ) {
+        continue
+      }
+      matches.push({
+        node,
+        name: declaration.id.name,
       })
     }
   }
