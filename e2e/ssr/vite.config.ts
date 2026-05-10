@@ -3,7 +3,7 @@ import { defineConfig, type PluginOption } from "vite"
 import kiru from "vite-plugin-kiru"
 
 export default defineConfig({
-  /** One Node copy of `kiru/remote` so the action registry matches `createRemoteActionHandler`. */
+  /** One Node copy of `kiru` so the remote action registry matches `createRenderer({ actions })`. */
   ssr: {
     external: ["kiru"],
   },

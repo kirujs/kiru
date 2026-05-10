@@ -114,6 +114,31 @@ function nodeToFetchRequest(req: IncomingMessage): Request {
 }
 
 /**
+ * Kiru streaming SSR uses `ReadableStream<string>`; undici's
+ * `response.text()` / `arrayBuffer()` only accept byte chunks. Read manually.
+ */
+async function readFetchBodyAsBuffer(response: Response): Promise<Buffer> {
+  if (!response.body) return Buffer.alloc(0)
+  const reader = response.body.getReader()
+  const parts: Buffer[] = []
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (value === undefined || value === null) continue
+    if (typeof value === "string") {
+      parts.push(Buffer.from(value, "utf8"))
+    } else if (value instanceof Uint8Array) {
+      parts.push(Buffer.from(value))
+    } else {
+      throw new TypeError(
+        `[vite-plugin-kiru] Unexpected response body chunk type: ${typeof value}`,
+      )
+    }
+  }
+  return Buffer.concat(parts)
+}
+
+/**
  * Write a Fetch API Response back to a Node.js ServerResponse, optionally
  * transforming HTML bodies (e.g. to inject CSS link tags).
  */
@@ -131,11 +156,11 @@ async function writeFetchResponse(
 
   let body: Buffer
   if (isHtml && transformHtml) {
-    const html = await response.text()
+    const html = (await readFetchBodyAsBuffer(response)).toString("utf8")
     const transformed = await transformHtml(html)
     body = Buffer.from(transformed, "utf8")
   } else {
-    body = Buffer.from(await response.arrayBuffer())
+    body = await readFetchBodyAsBuffer(response)
   }
 
   res.statusCode = response.status

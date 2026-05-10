@@ -29,6 +29,7 @@ import type {
   CustomRequestContext,
 } from "./types.js"
 import { makeKiruContextToken } from "../remote/token.js"
+import { createRemoteActionHandler } from "../remote/index.js"
 
 export interface RenderRequestContext {
   headers?: HeadersInit
@@ -36,32 +37,47 @@ export interface RenderRequestContext {
   context?: CustomRequestContext
 }
 
+export type RendererActionsOptions = {
+  secret: string
+  /**
+   * If non-empty, require `Origin` or `Referer` to match one of these strings
+   * (exact origin). Use `"*"` to disable the check.
+   */
+  allowedOrigins?: string[]
+  /** When true, `RemoteError` instances are serialized as JSON responses. */
+  exposeErrors?: boolean
+}
+
 export interface StreamRenderer {
   manifest: RouteManifest
-  render: (
-    url: string,
+  render(
+    requestOrUrl: Request | string,
     context?: RenderRequestContext
-  ) => Promise<StreamRenderResult | null>
+  ): Promise<StreamRenderResult | null>
 }
 
 export interface Renderer {
   manifest: RouteManifest
-  render: (
-    url: string,
+  render(
+    requestOrUrl: Request | string,
     context?: RenderRequestContext
-  ) => Promise<RenderResult | null>
+  ): Promise<RenderResult | null>
 }
 
 export type CreateRendererOptions = {
   routes: RouteTreeDefinition | RouteManifest
   htmlTemplate?: string
-  remoteFunctionSecret?: string
+  /**
+   * When set, HTML responses include the signed context token and
+   * {@link Renderer.render} handles remote `action` POSTs for the same `Request`.
+   */
+  actions?: RendererActionsOptions
   /** When true, `createRenderer` returns a streaming renderer contract. */
   stream?: boolean
 }
 
 function engine(options: CreateRendererOptions & { stream: boolean }) {
-  const { manifest, compiledTemplate, remoteFunctionSecret } =
+  const { manifest, compiledTemplate, actionsSecret, handleRemoteAction } =
     prepareRenderer(options)
 
   const renderCore = async (url: string, ctx?: RenderRequestContext) => {
@@ -87,8 +103,8 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
               },
             }
 
-        if (remoteFunctionSecret)
-          appendTokenToDocument(document, requestContext, remoteFunctionSecret)
+        if (actionsSecret)
+          appendTokenToDocument(document, requestContext, actionsSecret)
 
         return {
           kind: "stream" as const,
@@ -121,8 +137,8 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
             },
           }
 
-      if (remoteFunctionSecret)
-        appendTokenToDocument(document, requestContext, remoteFunctionSecret)
+      if (actionsSecret)
+        appendTokenToDocument(document, requestContext, actionsSecret)
 
       const fullHead =
         document.headHtml +
@@ -141,6 +157,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         },
       }
     } catch (error) {
+      // TODO: implement custom error pages
       const body = `<!DOCTYPE html><html><head><title>Error</title></head><body><pre>${String(
         error instanceof Error ? error.message : error
       ).replace(/</g, "&lt;")}</pre></body></html>`
@@ -170,7 +187,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     }
   }
 
-  return { manifest, renderCore }
+  return { manifest, renderCore, handleRemoteAction }
 }
 
 export function createRenderer(
@@ -183,12 +200,22 @@ export function createRenderer(
   options: CreateRendererOptions
 ): Renderer | StreamRenderer {
   const stream = !!options.stream
-  const { manifest, renderCore } = engine({ ...options, stream })
+  const { manifest, renderCore, handleRemoteAction } = engine({
+    ...options,
+    stream,
+  })
 
   if (stream) {
     return {
       manifest,
-      async render(url, ctx) {
+      async render(requestOrUrl, ctx) {
+        if (handleRemoteAction && requestOrUrl instanceof Request) {
+          const actionResponse = await handleRemoteAction(requestOrUrl)
+          if (actionResponse)
+            return responseToStreamRenderResult(actionResponse)
+        }
+        const url =
+          typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url
         const out = await renderCore(url, ctx)
         if (!out) return null
         return out.result as StreamRenderResult
@@ -198,18 +225,18 @@ export function createRenderer(
 
   return {
     manifest,
-    async render(url, ctx) {
+    async render(requestOrUrl, ctx) {
+      if (handleRemoteAction && requestOrUrl instanceof Request) {
+        const actionResponse = await handleRemoteAction(requestOrUrl)
+        if (actionResponse) return responseToRenderResult(actionResponse)
+      }
+      const url =
+        typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url
       const out = await renderCore(url, ctx)
       if (!out) return null
       return out.result as RenderResult
     },
   }
-}
-
-export function createStreamRenderer(
-  options: Omit<CreateRendererOptions, "stream">
-): StreamRenderer {
-  return createRenderer({ ...options, stream: true }) as StreamRenderer
 }
 
 /**
@@ -305,6 +332,38 @@ const DEFAULT_HEADERS: Record<string, string> = {
   "content-type": "text/html; charset=utf-8",
 }
 
+function headersRecordFromResponse(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {}
+  headers.forEach((value, key) => {
+    out[key] = value
+  })
+  return out
+}
+
+async function responseToRenderResult(res: Response): Promise<RenderResult> {
+  return {
+    status: res.status,
+    headers: headersRecordFromResponse(res.headers),
+    body: await res.text(),
+  }
+}
+
+async function responseToStreamRenderResult(
+  res: Response
+): Promise<StreamRenderResult> {
+  const text = await res.text()
+  return {
+    status: res.status,
+    headers: headersRecordFromResponse(res.headers),
+    body: new ReadableStream<string>({
+      start(controller) {
+        controller.enqueue(text)
+        controller.close()
+      },
+    }),
+  }
+}
+
 type PreparedApp = {
   app: JSX.Element
   routeMatch: RouteMatch | null
@@ -386,11 +445,18 @@ async function renderStreamWithDocument(
 }
 
 function prepareRenderer(options: CreateRendererOptions) {
-  const { routes, htmlTemplate, remoteFunctionSecret } = options
+  const { routes, htmlTemplate, actions } = options
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
   const compiledTemplate =
     htmlTemplate !== undefined ? compileRouteHtmlTemplate(htmlTemplate) : null
-  return { manifest, compiledTemplate, remoteFunctionSecret }
+  const actionsSecret = actions?.secret
+  const handleRemoteAction = actions
+    ? createRemoteActionHandler(actions.secret, {
+        allowedOrigins: actions.allowedOrigins,
+        exposeErrors: actions.exposeErrors,
+      })
+    : null
+  return { manifest, compiledTemplate, actionsSecret, handleRemoteAction }
 }
 
 function appendTokenToDocument(

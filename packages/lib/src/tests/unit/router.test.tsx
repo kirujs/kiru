@@ -4,7 +4,6 @@ import assert from "node:assert"
 import {
   compileRouteTree,
   createRenderer,
-  createStreamRenderer,
   createRouter,
   defineRouteTree,
   fillRouteHtmlTemplate,
@@ -219,7 +218,8 @@ describe("router", () => {
       })
     )
 
-    const renderer = createStreamRenderer({
+    const renderer = createRenderer({
+      stream: true,
       routes: r,
       htmlTemplate: MINIMAL_TPL,
     })
@@ -451,10 +451,11 @@ describe("router", () => {
     assert.ok((response.body as string).includes("<main><h1>1</h1></main>"))
   })
 
-  it("createStreamRenderer applies htmlTemplate", async () => {
+  it("createRenderer applies htmlTemplate for stream mode", async () => {
     const tpl =
       '<!doctype html><html><head>{{kiru_head}}</head><body><div id="app">{{kiru_body}}</div></body></html>'
-    const renderer = createStreamRenderer({
+    const renderer = createRenderer({
+      stream: true,
       routes,
       htmlTemplate: tpl,
     })
