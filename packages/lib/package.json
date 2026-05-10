@@ -58,10 +58,6 @@
       "types": "./dist/remote/index.d.ts",
       "default": "./dist/remote/index.js"
     },
-    "./remote/action": {
-      "types": "./dist/remote/action.d.ts",
-      "default": "./dist/remote/action.js"
-    },
     "./jsx-dev-runtime": {
       "types": "./dist/jsx.d.ts",
       "default": "./dist/jsx.js"

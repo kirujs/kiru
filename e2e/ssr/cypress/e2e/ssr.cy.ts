@@ -10,9 +10,11 @@ describe("SSR server", () => {
     cy.get('[data-testid="ssr-user"]').should("contain", "E2E User")
     cy.get('[data-testid="ssr-layout"]').should("exist")
 
+    // /guarded has beforeEnter → / ; client navigation should never commit the guarded page.
     cy.contains("a", "Guarded").click()
-    cy.location("pathname").should("eq", "/guarded")
-    cy.contains("This page should be redirected away.").should("exist")
+    cy.location("pathname").should("eq", "/")
+    cy.get('[data-testid="ssr-home"]').should("contain", "SSR e2e home")
+    cy.contains("This page should be redirected away.").should("not.exist")
 
     cy.contains("a", "Home").click()
     cy.location("pathname").should("eq", "/")
@@ -21,6 +23,15 @@ describe("SSR server", () => {
     cy.location("pathname").should((pathname) => {
       expect(["/", "/blocked"]).to.include(pathname)
     })
+  })
+
+  it("runs beforeEnter on full load and follows SSR redirect", () => {
+    const port = Cypress.env("port")
+    cy.visit(`http://127.0.0.1:${port}/guarded`)
+    cy.location("pathname").should("eq", "/")
+    cy.title().should("eq", "E2E SSR Home")
+    cy.get('[data-testid="ssr-home"]').should("contain", "SSR e2e home")
+    cy.contains("This page should be redirected away.").should("not.exist")
   })
 
   it("handles standard route navigation and dynamic params", () => {

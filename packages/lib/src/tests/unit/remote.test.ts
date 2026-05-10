@@ -10,8 +10,8 @@ import {
   __INTERNAL_REMOTE_REGISTRY,
   action,
   createRemoteActionHandler,
-  RemoteActionFunction,
   RemoteError,
+  type RemoteActionFunction,
 } from "../../remote/index.js"
 
 const SECRET = "test-secret-abc"

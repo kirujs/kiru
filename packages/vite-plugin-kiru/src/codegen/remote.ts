@@ -1,6 +1,6 @@
 import path from "node:path"
 import * as AST from "./ast.js"
-import { MagicString, TransformCTX } from "./shared.js"
+import { MagicString, TransformCTX, createAliasHandler } from "./shared.js"
 
 type AstNode = AST.AstNode
 
@@ -25,7 +25,13 @@ export function prepareRemoteFunctions(
 ) {
   const { code, ast } = ctx
   const bodyNodes = ast.body as AstNode[]
-  const matches = findExportedNamedFunctions(bodyNodes)
+  const actionHandler = createAliasHandler("action", "kiru/remote")
+  for (const node of bodyNodes) {
+    if (node.type === "ImportDeclaration") {
+      actionHandler.addAliases(node)
+    }
+  }
+  const matches = findExportedActionCalls(bodyNodes, actionHandler)
   if (matches.length === 0) return
 
   if (ssr) {
@@ -56,7 +62,7 @@ function clientFormatRemoteFunctions(
     code.overwrite(
       node.start,
       node.end,
-      `export async function ${match.name}(input) { return __$dispatch()(\`\${__$r__}:${match.name}\`, arguments.length === 0 ? null : input); }`
+      `export async function ${match.name}(input) { return __$dispatch()(\`\${__$r__}:${match.name}\`, input); }`
     )
   })
 }
@@ -74,41 +80,31 @@ function serverRegisterRemoteFunctions(
   )
 }
 
-function findExportedNamedFunctions(bodyNodes: AstNode[]) {
-  let i = 0
+function findExportedActionCalls(
+  bodyNodes: AstNode[],
+  actionHandler: {
+    isMatchingCallExpression: (node: AstNode) => boolean
+  }
+) {
   const matches: FunctionMatch[] = []
   for (const node of bodyNodes) {
     if (
-      node.type === "ExportNamedDeclaration" &&
-      node.declaration?.type === "FunctionDeclaration"
+      node.type !== "ExportNamedDeclaration" ||
+      node.declaration?.type !== "VariableDeclaration"
     ) {
-      matches.push({
-        node,
-        name: node.declaration.id?.name || `anonymous_fn_${i++}`,
-      })
       continue
     }
-    if (
-      node.type === "ExportNamedDeclaration" &&
-      node.declaration?.type === "VariableDeclaration"
-    ) {
-      const declarations = node.declaration.declarations ?? []
-      if (declarations.length !== 1) continue
-      const declaration = declarations[0]
-      if (declaration.type !== "VariableDeclarator") continue
-      if (!declaration.id?.name) continue
-      if (
-        declaration.init?.type !== "CallExpression" ||
-        declaration.init.callee?.type !== "Identifier" ||
-        declaration.init.callee.name !== "action"
-      ) {
-        continue
-      }
-      matches.push({
-        node,
-        name: declaration.id.name,
-      })
-    }
+    const declarations = node.declaration.declarations ?? []
+    if (declarations.length !== 1) continue
+    const declaration = declarations[0]
+    if (declaration.type !== "VariableDeclarator") continue
+    if (!declaration.id?.name) continue
+    const init = declaration.init
+    if (!init || !actionHandler.isMatchingCallExpression(init)) continue
+    matches.push({
+      node,
+      name: declaration.id.name,
+    })
   }
   return matches
 }

@@ -9,13 +9,13 @@ import type {
   AfterEachHook,
   NavigationFailure,
   NavigationGuard,
-  NavigationRedirect,
   NavigationResult,
   RouteLocation,
   RouteManifest,
   RouteMatch,
   RouteTreeDefinition,
 } from "./types.js"
+import { runGuards, toRedirect } from "./runNavigationGuards.js"
 import { compileRouteTree } from "./manifest.js"
 import { setup } from "../hooks/index.js"
 import { onMount } from "../hooks/onMount.js"
@@ -111,14 +111,6 @@ export interface Router {
 function locationFromMatch(match: RouteMatch | null): RouteLocation | null {
   if (!match) return null
   return { pathname: match.pathname, params: match.params }
-}
-
-function toRedirect(value: NavigationRedirect): {
-  path: string
-  replace?: boolean
-} {
-  if (typeof value === "string") return { path: value }
-  return value
 }
 
 type RouteLocationParts = {
@@ -306,24 +298,6 @@ export function createRouter({
     match.value = nextMatch
     params.value = nextMatch?.params ?? {}
     matches.value = buildMatchSegments(nextMatch)
-  }
-
-  const runGuards = async (
-    guards: NavigationGuard[],
-    to: RouteLocation,
-    from: RouteLocation | null
-  ): Promise<
-    | { type: "continue" }
-    | { type: "cancel" }
-    | { type: "redirect"; to: NavigationRedirect }
-  > => {
-    for (const guard of guards) {
-      const out = await guard(to, from)
-      if (out === false) return { type: "cancel" }
-      if (out === true || out === undefined) continue
-      return { type: "redirect", to: out }
-    }
-    return { type: "continue" }
   }
 
   const navigateInternal = async (

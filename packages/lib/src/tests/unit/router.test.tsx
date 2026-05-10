@@ -302,6 +302,31 @@ describe("router", () => {
     assert.ok(historyEvents.some((e) => e.to === "/login"))
   })
 
+  it("SSR runs beforeEnter and returns redirect when the guard redirects", async () => {
+    const r = defineRouteTree((x) =>
+      x.scope({
+        children: [
+          x.get("/about", async () => ({ default: () => <p>about</p> })),
+          x.get("/users/[id]", {
+            component: async () => ({ default: () => <p>user</p> }),
+            beforeEnter: (to) => {
+              if (to.params.id === "0") return "/about"
+              return undefined
+            },
+          }),
+        ],
+      })
+    )
+    const renderer = createRenderer({ routes: r })
+    const response = await renderer.render("/users/0")
+    assert.strictEqual(response?.status, 302)
+    assert.strictEqual(response?.headers.location, "/about")
+
+    const ok = await renderer.render("/users/1")
+    assert.strictEqual(ok?.status, 200)
+    assert.ok(ok?.body.includes("user"))
+  })
+
   it("runs per-route beforeEnter guards", async () => {
     const guarded = defineRouteTree((x) =>
       x.scope({

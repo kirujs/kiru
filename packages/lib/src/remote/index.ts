@@ -18,8 +18,6 @@ export {
   type RemoteActionSchema,
 } from "./action.js"
 
-import type { CustomRequestContext } from "../router/types.js"
-
 const registry: Record<string, Record<string, RemoteActionFunction<unknown, unknown>>> = {}
 
 export const __INTERNAL_REMOTE_REGISTRY = {
@@ -34,12 +32,6 @@ export const __INTERNAL_REMOTE_REGISTRY = {
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
 } as const
-
-export function getRequestContext(): CustomRequestContext {
-  throw new Error(
-    "[kiru/remote]: `getRequestContext` has been removed. Use `action((ctx, input) => ...)` and read context from `ctx`."
-  )
-}
 
 export type CreateRemoteActionHandlerOptions = {
   /**

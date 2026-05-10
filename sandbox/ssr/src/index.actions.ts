@@ -1,5 +1,7 @@
-import { action } from "kiru/remote/action"
+import { action } from "kiru/remote"
+import { test } from "./test"
 
+console.log(test)
 interface Schema<T> {
   parse: (input: unknown) => input is T
 }
@@ -14,7 +16,7 @@ const mySchema: Schema<{ name: string }> = {
 
 export const getSandboxServerEcho = action(async (ctx, _input: unknown) => {
   const name = ctx.user?.name ?? "guest"
-  return `Remote OK: ${name}`
+  return `Remote OK: ${name} ${test}`
 })
 
 

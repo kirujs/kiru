@@ -30,6 +30,7 @@ import type {
 } from "./types.js"
 import { makeKiruContextToken } from "../remote/token.js"
 import { createRemoteActionHandler } from "../remote/index.js"
+import { runGuards, toRedirect } from "./runNavigationGuards.js"
 
 export interface RenderRequestContext {
   headers?: HeadersInit
@@ -84,6 +85,35 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     try {
       const prepared = await prepareAppForUrl(url, ctx, manifest)
       if (!prepared) return null
+
+      if (isPrepareRedirect(prepared)) {
+        const redirectHeaders = {
+          ...DEFAULT_HEADERS,
+          location: prepared.location,
+        }
+        if (options.stream) {
+          return {
+            kind: "stream" as const,
+            result: {
+              status: 302,
+              headers: redirectHeaders,
+              body: new ReadableStream<string>({
+                start(controller) {
+                  controller.close()
+                },
+              }),
+            },
+          }
+        }
+        return {
+          kind: "string" as const,
+          result: {
+            status: 302,
+            headers: redirectHeaders,
+            body: "",
+          },
+        }
+      }
 
       const { app, routeMatch, requestContext } = prepared
 
@@ -370,20 +400,77 @@ type PreparedApp = {
   requestContext: RequestContextValue
 }
 
+type PrepareAppResult =
+  | PreparedApp
+  | { kind: "redirect"; location: string }
+  | null
+
+type PrepareRedirect = { kind: "redirect"; location: string }
+
+function isPrepareRedirect(
+  p: Exclude<PrepareAppResult, null>
+): p is PrepareRedirect {
+  return "kind" in p && p.kind === "redirect"
+}
+
+const MAX_SSR_BEFORE_ENTER_REDIRECTS = 16
+
 async function prepareAppForUrl(
   url: string,
   ctx: RenderRequestContext | undefined,
   manifest: RouteManifest
-): Promise<PreparedApp | null> {
-  const pathname = toPathname(url)
-  const routeMatch = matchRoute(manifest, pathname)
-  const notFoundTree = !routeMatch
-    ? await loadNotFoundRouteTree(manifest, pathname)
-    : null
-  if (!routeMatch && !notFoundTree) return null
-  const requestContext = (ctx?.context ?? null) as RequestContextValue
+): Promise<PrepareAppResult> {
+  const requestedPathname = toPathname(url)
+  let path = requestedPathname
 
-  if (routeMatch) {
+  for (let depth = 0; depth < MAX_SSR_BEFORE_ENTER_REDIRECTS; depth++) {
+    const routeMatch = matchRoute(manifest, path)
+
+    if (!routeMatch) {
+      if (path === requestedPathname) {
+        const notFoundTree = await loadNotFoundRouteTree(
+          manifest,
+          requestedPathname
+        )
+        if (!notFoundTree) return null
+        const requestContext = (ctx?.context ?? {}) as RequestContextValue
+        const { layoutModules, routeModule } = notFoundTree
+        const app = buildAppElement(
+          requestedPathname,
+          {},
+          layoutModules,
+          routeModule,
+          manifest,
+          requestContext
+        )
+        return {
+          app,
+          routeMatch: null,
+          requestContext,
+        }
+      }
+      return null
+    }
+
+    const routeGuards = routeMatch.route.beforeEnter ?? []
+    if (routeGuards.length) {
+      const to = {
+        pathname: routeMatch.pathname,
+        params: routeMatch.params,
+      }
+      const g2 = await runGuards(routeGuards, to, null)
+      if (g2.type === "cancel") return null
+      if (g2.type === "redirect") {
+        path = toPathname(toRedirect(g2.to).path)
+        continue
+      }
+    }
+
+    if (path !== requestedPathname) {
+      return { kind: "redirect", location: path }
+    }
+
+    const requestContext = (ctx?.context ?? null) as RequestContextValue
     const { layoutModules, routeModule } = await loadRouteTree(routeMatch)
     const app = buildAppElement(
       routeMatch.pathname,
@@ -400,20 +487,7 @@ async function prepareAppForUrl(
     }
   }
 
-  const { layoutModules, routeModule } = notFoundTree!
-  const app = buildAppElement(
-    pathname,
-    {},
-    layoutModules,
-    routeModule,
-    manifest,
-    requestContext
-  )
-  return {
-    app,
-    routeMatch: null,
-    requestContext,
-  }
+  return null
 }
 
 /**

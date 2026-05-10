@@ -21,7 +21,10 @@ export type TransformCTX = {
   filePath: string
 }
 
-export function createAliasHandler(name: string, namespace = "kiru") {
+export function createAliasHandler(
+  name: string,
+  namespace: string = "kiru"
+) {
   const aliases = new Set<string>()
 
   const isMatchingCallExpression = (node: AstNode) =>
@@ -31,7 +34,8 @@ export function createAliasHandler(name: string, namespace = "kiru") {
     aliases.has(node.callee.name)
 
   const addAliases = (node: AstNode): boolean => {
-    if (node.source?.value !== namespace) return false
+    const src = node.source?.value
+    if (typeof src !== "string" || src !== namespace) return false
     let didAdd = false
     const specifiers = node.specifiers || []
     for (let i = 0; i < specifiers.length; i++) {
