@@ -98,8 +98,11 @@ function updateDomProps(vNode: DomVNode) {
   for (const key in prevProps) {
     const prevVal = prevProps[key]
     const nextVal = nextProps[key]
+    const isUserInputProp = key === "value" || key === "checked"
 
-    if (prevVal === nextVal) continue // unchanged
+    if (isUserInputProp) {
+      if (dom[key as keyof typeof dom] === nextVal) continue
+    } else if (prevVal === nextVal) continue
 
     // Event removal
     if (
