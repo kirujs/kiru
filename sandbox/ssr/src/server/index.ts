@@ -4,13 +4,17 @@ import { fileURLToPath } from "node:url"
 import { Hono } from "hono"
 import { serveStatic } from "@hono/node-server/serve-static"
 import { createRenderer } from "kiru/router"
-import { routes } from "./routes"
+import { routes } from "../routes"
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..")
-const isServe = process.env.SERVE === "1"
+const isProd = process.env.NODE_ENV === "production"
+const entryDir = dirname(fileURLToPath(import.meta.url))
+/** Production runs the Vite SSR bundle under `dist/server/`; dev uses `src/`. */
+const root = isProd ? join(entryDir, "..", "..") : join(entryDir, "..")
+
+const clientDist = join(root, "dist", "client")
 const templatePath =
-  isServe && existsSync(join(root, "dist", "index.html"))
-    ? join(root, "dist", "index.html")
+  isProd && existsSync(join(clientDist, "index.html"))
+    ? join(clientDist, "index.html")
     : join(root, "index.html")
 const htmlTemplate = readFileSync(templatePath, "utf8")
 
@@ -41,16 +45,16 @@ const renderer = createRenderer({
 
 const app = new Hono()
 
-if (isServe) {
+if (isProd) {
   app.use(
     "/assets/*",
     serveStatic({
-      root: join(root, "dist", "assets"),
+      root: join(clientDist, "assets"),
       rewriteRequestPath: (p) => {
         const rel = p.slice("/assets".length).replace(/^\//, "")
         return rel || "."
       },
-    })
+    }),
   )
 }
 
@@ -73,7 +77,7 @@ app.all("*", async (c, next) => {
 
 export default app
 
-if (process.env.SERVE === "1") {
+if (isProd) {
   const { serve } = await import("@hono/node-server")
   const port = Number(process.env.PORT) || 5179
   serve({ fetch: app.fetch, port }, () => {

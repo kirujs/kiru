@@ -1,5 +1,4 @@
-import devServer from "@hono/vite-dev-server"
-import { defineConfig, type PluginOption } from "vite"
+import { defineConfig } from "vite"
 import tailwindcss from "@tailwindcss/vite"
 import kiru from "vite-plugin-kiru"
 
@@ -11,13 +10,9 @@ export default defineConfig({
     tailwindcss(),
     kiru({
       router: {
-        serverEntry: "./src/server.ts",
+        serverEntry: "./src/server/index.ts",
         remote: "**/*.actions.ts",
       },
     }),
-    devServer({
-      entry: "src/server.ts",
-      injectClientScript: false,
-    }),
-  ] as PluginOption[],
+  ],
 })

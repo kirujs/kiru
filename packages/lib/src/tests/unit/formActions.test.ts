@@ -32,18 +32,33 @@ function makeFormRequest(
     contentType?: string
   }
 ): Request {
-  const fd = new FormData()
-  fd.set(KIRU_FORM_TOKEN_FIELD, token)
-  for (const [key, value] of Object.entries(formData)) {
-    fd.set(key, value)
-  }
-
   const headers: Record<string, string> = {}
 
-  // Only set content-type if explicitly provided
-  // Otherwise, let the Request constructor set it automatically for FormData
-  if (options?.contentType) {
-    headers["content-type"] = options.contentType
+  let body: BodyInit
+
+  if (options?.contentType === "application/x-www-form-urlencoded") {
+    const params = new URLSearchParams()
+    params.set(KIRU_FORM_TOKEN_FIELD, token)
+    for (const [key, value] of Object.entries(formData)) {
+      params.set(key, value)
+    }
+    body = params
+    headers["content-type"] = "application/x-www-form-urlencoded"
+  } else {
+    const fd = new FormData()
+    fd.set(KIRU_FORM_TOKEN_FIELD, token)
+    for (const [key, value] of Object.entries(formData)) {
+      fd.set(key, value)
+    }
+    body = fd
+    // multipart/form-data must include a boundary; only set Content-Type for
+    // urlencoded above. For FormData, omit it so the runtime adds boundary=...
+    if (
+      options?.contentType &&
+      options.contentType !== "multipart/form-data"
+    ) {
+      headers["content-type"] = options.contentType
+    }
   }
 
   if (options?.enhanced) {
@@ -60,7 +75,7 @@ function makeFormRequest(
   return new Request(`http://localhost/?action=${actionId}`, {
     method: "POST",
     headers,
-    body: fd,
+    body,
   })
 }
 

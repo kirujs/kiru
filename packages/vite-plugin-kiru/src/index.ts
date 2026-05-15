@@ -16,7 +16,18 @@ import path from "node:path"
 import { glob } from "tinyglobby"
 
 import type { KiruPluginOptions } from "./types.js"
-import type { Plugin, PluginOption, ResolvedConfig } from "vite"
+import type {
+  ConfigEnv,
+  Plugin,
+  PluginOption,
+  ResolvedConfig,
+  UserConfig,
+} from "vite"
+
+function isSsrBundleBuild(userConfig: UserConfig): boolean {
+  const ssr = userConfig.build?.ssr
+  return ssr === true || typeof ssr === "string"
+}
 
 async function readViteClientManifest(
   outDir: string
@@ -44,11 +55,22 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
 
   const mainPlugin = {
     name: "vite-plugin-kiru",
-    config(config) {
-      return {
-        ...config,
+    config(config: UserConfig, env: ConfigEnv) {
+      const partial: UserConfig = {
         esbuild: { ...defaultEsBuildOptions, ...config.esbuild },
       }
+      if (
+        opts.router?.serverEntry &&
+        env.command === "build" &&
+        !isSsrBundleBuild(config)
+      ) {
+        partial.build = {
+          ...config.build,
+          outDir: config.build?.outDir ?? "dist/client",
+          emptyOutDir: config.build?.emptyOutDir ?? true,
+        }
+      }
+      return partial
     },
     async configResolved(config) {
       resolvedViteConfig = config
@@ -238,6 +260,51 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         code: result,
         map: map.toString(),
       }
+    },
+    async closeBundle() {
+      if (!state.isBuild || state.isSSRBuild) return
+      const serverEntry = state.router.serverEntry
+      if (!serverEntry || state.router.ssg) return
+      if (!resolvedViteConfig) {
+        throw new Error(
+          "[vite-plugin-kiru]: internal error — missing resolved Vite config for SSR server build"
+        )
+      }
+
+      const root = resolvedViteConfig.root
+      const clientOutAbs = path.resolve(root, state.outDir)
+      const serverOutAbs = path.join(path.dirname(clientOutAbs), "server")
+      const serverEntryAbs = path.resolve(root, serverEntry)
+      const serverEntryRelative =
+        path.relative(root, serverEntryAbs).replace(/\\/g, "/") || "."
+
+      log(
+        `${ANSI.green("✓")} SSR server bundle → ${path.relative(root, path.join(serverOutAbs, "server.js"))}`
+      )
+
+      const configFile =
+        typeof resolvedViteConfig.configFile === "string" &&
+        resolvedViteConfig.configFile
+          ? resolvedViteConfig.configFile
+          : path.resolve(state.projectRoot, "vite.config.ts")
+
+      const { build } = await import("vite")
+      await build({
+        configFile,
+        root,
+        mode: resolvedViteConfig.mode,
+        logLevel: resolvedViteConfig.logLevel,
+        build: {
+          ssr: serverEntryRelative,
+          outDir: serverOutAbs,
+          emptyOutDir: true,
+          rollupOptions: {
+            output: {
+              entryFileNames: "index.js",
+            },
+          },
+        },
+      })
     },
     generateBundle() {
       if (!state.isBuild || !state.router.ssg?.routesModule) return
