@@ -1,6 +1,5 @@
 import { MagicString, TransformCTX } from "./codegen/shared.js"
-import { prepareHMR, prepareJSXHoisting } from "./codegen/index.js"
-import { getRouteId, prepareRemoteFunctions } from "./codegen/remote.js"
+import { prepareHMR, prepareJSXHoisting, prepareRemoteFunctions } from "./codegen/index.js"
 import { ANSI } from "./ansi.js"
 import {
   createPluginState,
@@ -188,7 +187,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       if (!(raw in virtualModules)) return null
       return virtualModules[raw]()
     },
-    async transform(src, id, options) {
+    async transform(src, id) {
       if (!shouldTransformFile(id, state)) {
         if (
           !state.includedPaths.some((p) => id.startsWith(p)) &&
@@ -386,8 +385,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         log,
       }
 
-      const routeId = getRouteId(normalizedId, state.projectRoot)
-      prepareRemoteFunctions(ctx, routeId, !!options?.ssr)
+      prepareRemoteFunctions(ctx, state.projectRoot, !!options?.ssr)
 
       if (!code.hasChanged()) return null
 

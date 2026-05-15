@@ -4,21 +4,19 @@ import type { CustomRequestContext } from "./types.js"
 
 export const REQUEST_CONTEXT_SCRIPT_ID = "__kiru_request_context__"
 
-export type RequestContextValue = CustomRequestContext | null
-
-const RequestContext = createContext<RequestContextValue>(null)
+const RequestContext = createContext<CustomRequestContext>({})
 
 export function RequestContextProvider({
   value,
   children,
 }: {
-  value: RequestContextValue
+  value: CustomRequestContext
   children?: JSX.Children
 }) {
   return createElement(RequestContext, { value, children })
 }
 
-export function useOptionalRequestContext(): RequestContextValue {
+export function useOptionalRequestContext(): CustomRequestContext {
   return useContext(RequestContext)
 }
 
@@ -40,23 +38,23 @@ function escapeScriptJson(json: string): string {
 }
 
 export function serializeRequestContextScript(
-  ctx: RequestContextValue,
+  ctx: CustomRequestContext
 ): string {
   if (!ctx) return ""
   const json = escapeScriptJson(JSON.stringify(ctx))
   return `<script id="${REQUEST_CONTEXT_SCRIPT_ID}" type="application/json">${json}</script>`
 }
 
-export function readHydratedRequestContext(): RequestContextValue {
-  if (typeof document === "undefined") return null
+export function readHydratedRequestContext(): CustomRequestContext {
+  if (typeof document === "undefined") return {}
   const el = document.getElementById(REQUEST_CONTEXT_SCRIPT_ID)
-  if (!el) return null
+  if (!el) return {}
   try {
-    const parsed = JSON.parse(el.textContent || "null") as RequestContextValue
+    const parsed = JSON.parse(el.textContent || "{}") as CustomRequestContext
     el.remove()
     return parsed
   } catch {
     el.remove()
-    return null
+    return {}
   }
 }

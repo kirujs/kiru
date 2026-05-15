@@ -16,7 +16,6 @@ import { createHeadCollector, withHeadCollector } from "./headContext.js"
 import {
   RequestContextProvider,
   serializeRequestContextScript,
-  type RequestContextValue,
 } from "./requestContext.js"
 import type {
   DocumentHead,
@@ -30,6 +29,7 @@ import type {
 } from "./types.js"
 import { makeKiruContextToken } from "../remote/token.js"
 import { createRemoteActionHandler } from "../remote/index.js"
+import { __setSsrRequestContext } from "../remote/action.js"
 import { runGuards, toRedirect } from "./runNavigationGuards.js"
 
 export interface RenderRequestContext {
@@ -119,19 +119,18 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
 
       if (options.stream) {
         const { stream: innerStream, document } = routeMatch
-          ? await renderStreamWithDocument(
-              app,
-              routeMatch,
-              requestContext,
-            )
-          : {
-              stream: renderToReadableStream(app),
-              document: {
-                headHtml: serializeRequestContextScript(
-                  requestContext,
-                ),
-              },
-            }
+          ? await renderStreamWithDocument(app, routeMatch, requestContext)
+          : (() => {
+              __setSsrRequestContext(requestContext)
+              const result = {
+                stream: renderToReadableStream(app),
+                document: {
+                  headHtml: serializeRequestContextScript(requestContext),
+                },
+              }
+              __setSsrRequestContext({})
+              return result
+            })()
 
         if (actionsSecret)
           appendTokenToDocument(document, requestContext, actionsSecret)
@@ -153,17 +152,11 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
       }
 
       const { body, document } = routeMatch
-        ? await renderStringWithDocument(
-            app,
-            routeMatch,
-            requestContext,
-          )
+        ? await renderStringWithDocument(app, routeMatch, requestContext)
         : {
             body: renderToString(app),
             document: {
-              headHtml: serializeRequestContextScript(
-                requestContext,
-              ),
+              headHtml: serializeRequestContextScript(requestContext),
             },
           }
 
@@ -277,7 +270,7 @@ export function createRenderer(
 async function renderStringWithDocument(
   app: JSX.Element,
   match: RouteMatch,
-  requestContext: RequestContextValue,
+  requestContext: CustomRequestContext
 ): Promise<{ body: string; document: DocumentHead }> {
   const baseMeta = resolveMetaTemplates(match.route.head, match.params)
   const collector = createHeadCollector(baseMeta)
@@ -286,14 +279,19 @@ async function renderStringWithDocument(
   withHeadCollector(collector, () => {
     const prev = renderMode.current
     renderMode.current = "stream"
-    headlessRender(
-      {
-        write(chunk) {
-          body += chunk
+    __setSsrRequestContext(requestContext as Record<string, unknown>)
+    try {
+      headlessRender(
+        {
+          write(chunk) {
+            body += chunk
+          },
         },
-      },
-      Fragment({ children: app })
-    )
+        Fragment({ children: app })
+      )
+    } finally {
+      __setSsrRequestContext({})
+    }
     renderMode.current = prev
   })
 
@@ -310,7 +308,11 @@ async function renderStringWithDocument(
   }
 }
 
-export { buildRoutedSubtree, loadNotFoundRouteTree, loadRouteTree } from "./routeTree.js"
+export {
+  buildRoutedSubtree,
+  loadNotFoundRouteTree,
+  loadRouteTree,
+} from "./routeTree.js"
 
 function buildAppElement(
   pathname: string,
@@ -318,7 +320,7 @@ function buildAppElement(
   layoutModules: Array<RouteModule | null>,
   routeModule: RouteModule,
   manifest: RouteManifest,
-  requestContext: RequestContextValue
+  requestContext: CustomRequestContext
 ) {
   const staticRouter = createStaticRouter({
     manifest,
@@ -332,7 +334,7 @@ function buildAppElement(
     value: requestContext,
     children: createElement(RouterProvider, {
       router: staticRouter,
-      children: subtree,
+      children: () => subtree,
     }),
   })
 }
@@ -340,7 +342,7 @@ function buildAppElement(
 /** Shared SSG / SSR string render for a matched route. */
 export async function renderMatchToStaticHtml(
   manifest: RouteManifest,
-  match: RouteMatch,
+  match: RouteMatch
 ): Promise<{ body: string; document: DocumentHead }> {
   const { layoutModules, routeModule } = await loadRouteTree(match)
   const app = buildAppElement(
@@ -349,13 +351,9 @@ export async function renderMatchToStaticHtml(
     layoutModules,
     routeModule,
     manifest,
-    null
+    {}
   )
-  return renderStringWithDocument(
-    app,
-    match,
-    null,
-  )
+  return renderStringWithDocument(app, match, {})
 }
 
 const DEFAULT_HEADERS: Record<string, string> = {
@@ -397,7 +395,7 @@ async function responseToStreamRenderResult(
 type PreparedApp = {
   app: JSX.Element
   routeMatch: RouteMatch | null
-  requestContext: RequestContextValue
+  requestContext: CustomRequestContext
 }
 
 type PrepareAppResult =
@@ -433,7 +431,7 @@ async function prepareAppForUrl(
           requestedPathname
         )
         if (!notFoundTree) return null
-        const requestContext = (ctx?.context ?? {}) as RequestContextValue
+        const requestContext = (ctx?.context ?? {}) as CustomRequestContext
         const { layoutModules, routeModule } = notFoundTree
         const app = buildAppElement(
           requestedPathname,
@@ -470,7 +468,7 @@ async function prepareAppForUrl(
       return { kind: "redirect", location: path }
     }
 
-    const requestContext = (ctx?.context ?? null) as RequestContextValue
+    const requestContext = (ctx?.context ?? null) as CustomRequestContext
     const { layoutModules, routeModule } = await loadRouteTree(routeMatch)
     const app = buildAppElement(
       routeMatch.pathname,
@@ -498,13 +496,15 @@ async function prepareAppForUrl(
 async function renderStreamWithDocument(
   app: JSX.Element,
   match: RouteMatch,
-  requestContext: RequestContextValue,
+  requestContext: CustomRequestContext
 ): Promise<{ stream: ReadableStream<string>; document: DocumentHead }> {
   const { route, params, pathname } = match
   const collector = createHeadCollector(
     resolveMetaTemplates(route.head, params)
   )
+  __setSsrRequestContext(requestContext)
   const stream = withHeadCollector(collector, () => renderToReadableStream(app))
+  __setSsrRequestContext({})
   const resolvedMeta = await collector.resolve()
   const ctxScript = serializeRequestContextScript(requestContext)
   return {
@@ -535,14 +535,11 @@ function prepareRenderer(options: CreateRendererOptions) {
 
 function appendTokenToDocument(
   document: DocumentHead,
-  requestContext: RequestContextValue,
+  requestContext: CustomRequestContext,
   secret: string
 ): void {
   if (!requestContext) return
-  const token = makeKiruContextToken(
-    requestContext as Record<string, unknown>,
-    secret
-  )
+  const token = makeKiruContextToken(requestContext, secret)
   document.headHtml += `\n    <script type="application/json" k-request-token>${token}</script>`
 }
 

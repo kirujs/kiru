@@ -10,9 +10,15 @@ import {
   isStreamDataThrowValue,
 } from "./utils/index.js"
 import { Signal } from "./signals/base.js"
-import { $ERROR_BOUNDARY, voidElements, $STREAM_DATA } from "./constants.js"
+import {
+  $ERROR_BOUNDARY,
+  voidElements,
+  $STREAM_DATA,
+  $INLINE_FN,
+} from "./constants.js"
 import { __DEV__ } from "./env.js"
-import type { ErrorBoundaryNode } from "./types.utils.js"
+import type { ErrorBoundaryNode, InlineFnNode } from "./types.utils.js"
+import { createElement } from "./element.js"
 
 export interface HeadlessRenderContext {
   write(chunk: string): void
@@ -38,7 +44,12 @@ export function headlessRender(
     return el.forEach((c, i) => headlessRender(ctx, c, parent, i))
   }
   if (typeof el === "function") {
-    return headlessRender(ctx, el(), parent, idx)
+    return headlessRender(
+      ctx,
+      createElement($INLINE_FN, { expr: el }),
+      parent,
+      idx
+    )
   }
   if (Signal.isSignal(el)) {
     const value = el.peek()
@@ -65,7 +76,7 @@ export function headlessRender(
     return ctx.write(encodeHtmlEntities(props.nodeValue ?? ""))
   }
 
-  const children = props.children
+  let children = props.children
   if (isExoticType(type)) {
     if (type === $ERROR_BOUNDARY) {
       let boundaryBuffer = ""
@@ -95,6 +106,14 @@ export function headlessRender(
         headlessRender(ctx, fallbackContent, el, 0)
       }
       return
+    } else if (type === $INLINE_FN) {
+      node.current = el
+      let render = (props as InlineFnNode["props"]).expr
+      try {
+        children = render()
+      } finally {
+        node.current = null
+      }
     }
 
     headlessRender(ctx, children, el, idx)

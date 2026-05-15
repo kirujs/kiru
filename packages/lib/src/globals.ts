@@ -1,6 +1,13 @@
 import { Setup } from "./hooks/index.js"
 import { isBrowser } from "./env.js"
-export { node, renderMode, hydrationMode, setups, postEffectCleanups }
+export {
+  node,
+  renderMode,
+  hydrationMode,
+  setups,
+  postEffectCleanups,
+  requestToken,
+}
 
 /**
  * A reference to the current VNode (always a component) being rendered.
@@ -34,3 +41,17 @@ const setups: WeakMap<Kiru.VNode, Setup<any>> = new WeakMap()
  * have been unmounted and the browser has painted.
  */
 const postEffectCleanups: (() => void)[] = []
+
+let tkn: string
+const requestToken = {
+  get current() {
+    if (!("window" in globalThis)) {
+      return ""
+    }
+    if (tkn) return tkn
+    const s = document.head.querySelector("[k-request-token]")
+    const t = s?.textContent?.trim() ?? ""
+    s?.remove()
+    return (tkn = t)
+  },
+}

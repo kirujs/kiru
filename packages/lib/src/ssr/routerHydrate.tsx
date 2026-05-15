@@ -14,9 +14,14 @@ import {
 } from "../router/requestContext.js"
 import { signal } from "../signals/index.js"
 import { createElement } from "../element.js"
+import { requestToken } from "../globals.js"
 
 type ServerActionsClient = {
-  dispatch: (id: string, input: unknown) => Promise<unknown>
+  dispatch: (
+    id: string,
+    input: unknown,
+    opts?: { signal?: AbortSignal }
+  ) => Promise<unknown>
 }
 
 function ensureServerActionsClient() {
@@ -27,31 +32,15 @@ function ensureServerActionsClient() {
 
   if (g.__kiru_serverActions) return
 
-  let token = ""
-  const getToken = () => {
-    if (token) return token
-    try {
-      const s = document.querySelector("[k-request-token]")
-      const t = s?.textContent?.trim() ?? ""
-      if (t && s) {
-        token = t
-        s.remove()
-      }
-      return token
-    } catch {
-      return token
-    }
-  }
-
   g.__kiru_serverActions = {
-    dispatch: async (id, input) => {
-      const tok = getToken()
+    dispatch: async (id, input, opts) => {
       const payload = input === undefined ? null : input
       const r = await fetch(`/?action=${id}`, {
         method: "POST",
+        signal: opts?.signal,
         headers: {
           "Content-Type": "application/json",
-          "x-kiru-token": tok,
+          "x-kiru-token": requestToken.current,
         },
         body: JSON.stringify(payload),
       })

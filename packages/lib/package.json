@@ -3,11 +3,11 @@
   "version": "1.5.3",
   "description": "A batteries-included, easy-to-use rendering library with a tiny footprint",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "type": "module",
   "homepage": "https://kirujs.dev",
   "author": "LankyMoose",
   "license": "ISC",
-  "types": "index.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/kirujs/kiru"

@@ -298,7 +298,7 @@ type IFrameSandbox = string | boolean
 
 type InputAccept = "audio/*" | "video/*" | "image/*" | MimeType
 type AutoComplete = string
-type FormMethod = "get" | "post" | "dialog"
+type FormMethod = "GET" | "POST" | "DIALOG"
 
 type Direction = "ltr" | "rtl" | "auto"
 

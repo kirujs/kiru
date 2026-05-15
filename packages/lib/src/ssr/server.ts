@@ -3,21 +3,17 @@ import { renderMode } from "../globals.js"
 import { STREAMED_DATA_EVENT } from "../constants.js"
 import { headlessRender, HeadlessRenderContext } from "../headlessRender.js"
 
-/** Inline after each `k-data` script so hydration resolves before stream closes. */
-function perChunkHydrationBoot(promiseId: string): string {
-  const ev = STREAMED_DATA_EVENT
-  return `<script type="text/javascript">(function(){var s=document.getElementById(${JSON.stringify(
-    promiseId
-  )});if(!s)return;var m=(window[${JSON.stringify(
-    ev
-  )}]??=new Map());try{var j=JSON.parse(s.textContent||"null");m.set(${JSON.stringify(
-    promiseId
-  )},{data:j.data,error:j.error});window.dispatchEvent(new CustomEvent(${JSON.stringify(
-    ev
-  )},{detail:{id:${JSON.stringify(promiseId)},data:j.data,error:j.error}}));}catch(e){m.set(${JSON.stringify(
-    promiseId
-  )},{data:void 0,error:String(e)});}s.remove();document.currentScript.remove();})();</script>`
-}
+const STREAMED_DATA_SETUP = `
+<script type="text/javascript">
+const d = document, w = window, m = (w["${STREAMED_DATA_EVENT}"] ??= new Map());
+w.__$k_data = (id, data) => {
+  m.set(id, data);
+  w.dispatchEvent(new CustomEvent("${STREAMED_DATA_EVENT}", { detail: { id, ...data } }));
+  d.currentScript.remove();
+};
+d.currentScript.remove()
+</script>
+`.replace(/\s+/g, " ")
 
 export function renderToReadableStream(
   element: JSX.Element
@@ -32,10 +28,15 @@ export function renderToReadableStream(
   const rootNode = Fragment({ children: element })
   const streamPromises = new Set<Kiru.StatefulPromise<unknown>>()
   const pendingWritePromises: Promise<void>[] = []
+  let didQueueStreamedDataSetup = false
 
   const ctx: HeadlessRenderContext = {
     write: (chunk) => controller.enqueue(chunk),
     onStreamData(data) {
+      if (!didQueueStreamedDataSetup) {
+        controller.enqueue(STREAMED_DATA_SETUP)
+        didQueueStreamedDataSetup = true
+      }
       for (const promise of data) {
         if (streamPromises.has(promise)) continue
         streamPromises.add(promise)
@@ -44,12 +45,9 @@ export function renderToReadableStream(
           .then(() => ({ data: promise.value }))
           .catch(() => ({ error: promise.error?.message }))
           .then((value) => {
-            const content = JSON.stringify(value)
-            const id = promise.id
             controller.enqueue(
-              `<script id="${id}" k-data type="application/json">${content}</script>`
+              `<script type="text/javascript">__$k_data("${promise.id}",${JSON.stringify(value)})</script>`
             )
-            controller.enqueue(perChunkHydrationBoot(id))
           })
 
         pendingWritePromises.push(writePromise)
@@ -62,13 +60,6 @@ export function renderToReadableStream(
   headlessRender(ctx, rootNode)
   renderMode.current = prev
 
-  if (pendingWritePromises.length > 0) {
-    Promise.all(pendingWritePromises).then(() => {
-      controller.close()
-    })
-  } else {
-    controller.close()
-  }
-
+  Promise.all(pendingWritePromises).then(() => controller.close())
   return stream
 }

@@ -6,7 +6,6 @@ import { serveStatic } from "@hono/node-server/serve-static"
 import { createRenderer } from "kiru/router"
 import { routes } from "./routes"
 
-
 const root = join(dirname(fileURLToPath(import.meta.url)), "..")
 const isServe = process.env.SERVE === "1"
 const templatePath =
@@ -40,7 +39,6 @@ const renderer = createRenderer({
   },
 })
 
-
 const app = new Hono()
 
 if (isServe) {
@@ -52,11 +50,11 @@ if (isServe) {
         const rel = p.slice("/assets".length).replace(/^\//, "")
         return rel || "."
       },
-    }),
+    })
   )
 }
 
-app.all("*", async (c) => {
+app.all("*", async (c, next) => {
   const rendered = await renderer.render(c.req.raw, {
     context: {
       user: {
@@ -66,7 +64,7 @@ app.all("*", async (c) => {
     },
   })
   if (!rendered) {
-    return c.text("Not found", 404)
+    return await next()
   }
 
   const { status, headers, body } = rendered

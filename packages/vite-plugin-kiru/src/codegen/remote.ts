@@ -1,57 +1,53 @@
 import path from "node:path"
+import { createHash } from "node:crypto"
 import * as AST from "./ast.js"
 import { MagicString, TransformCTX, createAliasHandler } from "./shared.js"
 
 type AstNode = AST.AstNode
 
-interface FunctionMatch {
+interface ActionMatch {
   node: AstNode
   name: string
-}
-
-export function getRouteId(filePath: string, projectRoot: string): string {
-  const normalizedFile = filePath.replace(/\\/g, "/")
-  const normalizedRoot = projectRoot.replace(/\\/g, "/").replace(/\/+$/, "")
-  const relativePath = normalizedFile.startsWith(normalizedRoot + "/")
-    ? normalizedFile.slice(normalizedRoot.length + 1)
-    : path.basename(normalizedFile)
-  return relativePath.replace(/\.[^./]+$/, "")
+  kind: "action" | "formAction"
 }
 
 export function prepareRemoteFunctions(
   ctx: TransformCTX,
-  route: string,
+  projectRoot: string,
   ssr: boolean
 ) {
   const { code, ast } = ctx
   const bodyNodes = ast.body as AstNode[]
-  const actionHandler = createAliasHandler("action", "kiru/remote")
-  for (const node of bodyNodes) {
-    if (node.type === "ImportDeclaration") {
-      actionHandler.addAliases(node)
-    }
-  }
-  const matches = findExportedActionCalls(bodyNodes, actionHandler)
+  const matches = findExportedActionCalls(bodyNodes)
   if (matches.length === 0) return
 
+  const routeId = generateRouteId(ctx.filePath, projectRoot)
+
   if (ssr) {
-    serverRegisterRemoteFunctions(matches, code, route)
+    serverRegisterRemoteFunctions(matches, code, routeId)
   } else {
-    clientFormatRemoteFunctions(bodyNodes, matches, code, route)
+    clientFormatRemoteFunctions(bodyNodes, matches, code, routeId)
   }
 }
 
 function clientFormatRemoteFunctions(
   bodyNodes: AstNode[],
-  matches: FunctionMatch[],
+  matches: ActionMatch[],
   code: MagicString,
   route: string
 ) {
-  code.prepend(
-    `import { __kiruEnsureRemoteDispatch } from "kiru/ssr/router";\nconst __$r__ = ${JSON.stringify(
-      route
-    )};\nconst __$dispatch = () => __kiruEnsureRemoteDispatch();\n`
-  )
+  const hasJsonActions = matches.some((m) => m.kind === "action")
+
+  if (hasJsonActions) {
+    code.prepend(
+      `import { __kiruEnsureRemoteDispatch } from "kiru/ssr/router";\nconst __$r__ = ${JSON.stringify(
+        route
+      )};\nconst __$dispatch = () => __kiruEnsureRemoteDispatch();\n`
+    )
+  } else {
+    // Only form actions: still need the route constant for action IDs.
+    code.prepend(`const __$r__ = ${JSON.stringify(route)};\n`)
+  }
 
   bodyNodes.forEach((node) => {
     const match = matches.find((entry) => entry.node === node)
@@ -59,16 +55,25 @@ function clientFormatRemoteFunctions(
       code.overwrite(node.start, node.end, "")
       return
     }
-    code.overwrite(
-      node.start,
-      node.end,
-      `export async function ${match.name}(input) { return __$dispatch()(\`\${__$r__}:${match.name}\`, input); }`
-    )
+
+    if (match.kind === "formAction") {
+      code.overwrite(
+        node.start,
+        node.end,
+        `export const ${match.name} = { __kiruFormAction: true, __kiruFormActionId: \`\${__$r__}:${match.name}\` };`
+      )
+    } else {
+      code.overwrite(
+        node.start,
+        node.end,
+        `export async function ${match.name}(input) { return __$dispatch()(\`\${__$r__}:${match.name}\`, input); }`
+      )
+    }
   })
 }
 
 function serverRegisterRemoteFunctions(
-  matches: FunctionMatch[],
+  matches: ActionMatch[],
   code: MagicString,
   route: string
 ) {
@@ -80,14 +85,17 @@ function serverRegisterRemoteFunctions(
   )
 }
 
-function findExportedActionCalls(
-  bodyNodes: AstNode[],
-  actionHandler: {
-    isMatchingCallExpression: (node: AstNode) => boolean
-  }
-) {
-  const matches: FunctionMatch[] = []
+function findExportedActionCalls(bodyNodes: AstNode[]): ActionMatch[] {
+  const actionAliasHandler = createAliasHandler("action", "kiru/remote")
+  const formActionAliasHandler = createAliasHandler("formAction", "kiru/remote")
+  const matches: ActionMatch[] = []
+
   for (const node of bodyNodes) {
+    if (node.type === "ImportDeclaration") {
+      actionAliasHandler.addAliases(node)
+      formActionAliasHandler.addAliases(node)
+      continue
+    }
     if (
       node.type !== "ExportNamedDeclaration" ||
       node.declaration?.type !== "VariableDeclaration"
@@ -100,11 +108,24 @@ function findExportedActionCalls(
     if (declaration.type !== "VariableDeclarator") continue
     if (!declaration.id?.name) continue
     const init = declaration.init
-    if (!init || !actionHandler.isMatchingCallExpression(init)) continue
-    matches.push({
-      node,
-      name: declaration.id.name,
-    })
+    if (!init) continue
+
+    if (actionAliasHandler.isMatchingCallExpression(init)) {
+      matches.push({ node, name: declaration.id.name, kind: "action" })
+    } else if (formActionAliasHandler.isMatchingCallExpression(init)) {
+      matches.push({ node, name: declaration.id.name, kind: "formAction" })
+    }
   }
   return matches
+}
+
+function generateRouteId(filePath: string, projectRoot: string): string {
+  const normalizedFile = filePath.replace(/\\/g, "/")
+  const normalizedRoot = projectRoot.replace(/\\/g, "/").replace(/\/+$/, "")
+  const relativePath = normalizedFile.startsWith(normalizedRoot + "/")
+    ? normalizedFile.slice(normalizedRoot.length + 1)
+    : path.basename(normalizedFile)
+  const routePath = relativePath.replace(/\.[^./]+$/, "")
+  const digest = createHash("sha256").update(routePath).digest("hex").slice(0, 12)
+  return `r_${digest}`
 }

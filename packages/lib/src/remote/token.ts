@@ -1,4 +1,5 @@
 import crypto from "crypto"
+import { CustomRequestContext } from "../router/types.js"
 
 /* ----------------------------- Token Format ---------------------------
 Compact format (inspired by JWT):
@@ -15,11 +16,11 @@ Keep payload compact: only values necessary to reconstruct context on RPC.
 export type TokenHeader = { alg: "HS256" | "ED25519"; typ: "KRT" }
 export type TokenPayload = {
   iat: number
-  ctx: Record<string, unknown>
+  ctx: CustomRequestContext
 }
 
 export function makeKiruContextToken(
-  ctx: Record<string, unknown>,
+  ctx: CustomRequestContext,
   secret: string
 ): string {
   const iat = Date.now()
@@ -55,7 +56,7 @@ export async function makeKiruContextTokenAsync(
 export function unwrapKiruToken(
   token: string,
   secret: string
-): Record<string, unknown> | null {
+): CustomRequestContext | null {
   const payload = verifySignedTokenHmac(token, secret)
   if (!payload) return null
   return payload.ctx
@@ -65,7 +66,7 @@ export function unwrapKiruToken(
 export async function unwrapKiruTokenAsync(
   token: string,
   secret: string
-): Promise<Record<string, unknown> | null> {
+): Promise<CustomRequestContext | null> {
   const subtle = getSubtle()
   if (!subtle) return unwrapKiruToken(token, secret)
   const payload = await verifySignedTokenHmacWeb(subtle, token, secret)
@@ -209,8 +210,7 @@ function base64UrlEncodeBytes(buf: Uint8Array): string {
     return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
   }
   let binary = ""
-  for (let i = 0; i < buf.length; i++)
-    binary += String.fromCharCode(buf[i]!)
+  for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]!)
   const b64 = btoa(binary)
   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
