@@ -42,9 +42,20 @@ import {
   type StreamRenderResult,
   toRenderError,
 } from "./types.js"
-import { makeKiruContextToken, createRemoteActionHandler } from "../remote/index.js"
+import {
+  makeKiruContextToken,
+  createRemoteActionHandler,
+} from "../remote/index.js"
 import { __setSsrRequestContext } from "../remote/action.js"
 import { runGuards, toRedirect } from "./runNavigationGuards.js"
+
+export {
+  buildRoutedSubtree,
+  loadErrorRouteTree,
+  loadNotFoundRouteTree,
+  loadRootErrorRouteTree,
+  loadRouteTree,
+} from "./routeTree.js"
 
 /** Serialized `k-request-token` script for remote actions (SSR / prerender hydration). */
 export function serializeKiruRequestTokenScript(
@@ -55,7 +66,6 @@ export function serializeKiruRequestTokenScript(
   const token = makeKiruContextToken(ctx, secret)
   return `<script type="application/json" k-request-token>${token}</script>`
 }
-
 
 export interface RenderRequestContext {
   headers?: HeadersInit
@@ -152,8 +162,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
           { staticPaths: await getPrerenderPathSet() }
         )
         if (html) {
-          const requestContext = (ctx?.context ??
-            null) as CustomRequestContext
+          const requestContext = (ctx?.context ?? null) as CustomRequestContext
           const hydrated = hydratePrerenderedHtmlForRequest(
             html,
             requestContext,
@@ -525,14 +534,6 @@ async function renderStringWithDocument(
     },
   }
 }
-
-export {
-  buildRoutedSubtree,
-  loadErrorRouteTree,
-  loadNotFoundRouteTree,
-  loadRootErrorRouteTree,
-  loadRouteTree,
-} from "./routeTree.js"
 
 function buildAppElement(
   pathname: string,

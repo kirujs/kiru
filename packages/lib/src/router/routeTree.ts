@@ -7,63 +7,60 @@ import type {
   RouteModule,
 } from "./types.js"
 
-export async function loadRouteTree(match: RouteMatch): Promise<{
+interface RouteTreeLoadResult {
   layoutModules: Array<RouteModule | null>
   routeModule: RouteModule
-}> {
-  const layoutModules = await Promise.all(
-    match.route.scopes.map((scope) => scope.layout?.() ?? null)
-  )
-  const routeModule = await match.route.component()
+}
+
+export async function loadRouteTree(
+  match: RouteMatch
+): Promise<RouteTreeLoadResult> {
+  const [routeModule, ...layoutModules] = await Promise.all([
+    match.route.component(),
+    ...match.route.scopes.map((scope) => scope.layout?.() ?? null),
+  ])
   return { layoutModules, routeModule }
 }
 
 export async function loadNotFoundRouteTree(
   manifest: RouteManifest,
   pathname: string
-): Promise<{
-  layoutModules: Array<RouteModule | null>
-  routeModule: RouteModule
-} | null> {
+): Promise<RouteTreeLoadResult | null> {
   const scopes = resolveNotFoundScopes(manifest, pathname)
   if (!scopes) return null
   const notFoundScope = [...scopes].reverse().find((scope) => !!scope.notFound)
   if (!notFoundScope?.notFound) return null
-  const [routeModule, layoutModules] = await Promise.all([
+  const [routeModule, ...layoutModules] = await Promise.all([
     notFoundScope.notFound(),
-    Promise.all(scopes.map((scope) => scope.layout?.() ?? null)),
+    ...scopes.map((scope) => scope.layout?.() ?? null),
   ])
   return { layoutModules, routeModule }
 }
 
 export async function loadErrorRouteTree(
   match: RouteMatch
-): Promise<{
-  layoutModules: Array<RouteModule | null>
-  routeModule: RouteModule
-} | null> {
+): Promise<RouteTreeLoadResult | null> {
   const errorLoader = match.route.error
   if (!errorLoader) return null
-  const [routeModule, layoutModules] = await Promise.all([
+  const [routeModule, ...layoutModules] = await Promise.all([
     errorLoader(),
-    Promise.all(match.route.scopes.map((scope) => scope.layout?.() ?? null)),
+    ...match.route.scopes.map((scope) => scope.layout?.() ?? null),
   ])
   return { layoutModules, routeModule }
 }
 
 export async function loadRootErrorRouteTree(
   manifest: RouteManifest
-): Promise<{
-  layoutModules: Array<RouteModule | null>
-  routeModule: RouteModule
-} | null> {
+): Promise<RouteTreeLoadResult | null> {
   const rootError = manifest.rootError
   if (!rootError) return null
   const [routeModule, rootLayout] = await Promise.all([
     rootError(),
     manifest.rootLayout?.() ?? Promise.resolve(null),
   ])
-  const layoutModules: Array<RouteModule | null> = rootLayout ? [rootLayout] : []
+  const layoutModules: Array<RouteModule | null> = rootLayout
+    ? [rootLayout]
+    : []
   return { layoutModules, routeModule }
 }
 
