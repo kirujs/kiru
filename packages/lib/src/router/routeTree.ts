@@ -1,11 +1,17 @@
 import { createElement } from "../element.js"
 import { resolveNotFoundScopes } from "./manifest.js"
+import type { KiruLoader, PageProps } from "./loaders.js"
 import type {
   ErrorPageProps,
   RouteManifest,
   RouteMatch,
   RouteModule,
 } from "./types.js"
+
+export type LeafRouteProps =
+  | ErrorPageProps
+  | PageProps<KiruLoader<unknown>>
+  | Record<string, never>
 
 interface RouteTreeLoadResult {
   layoutModules: Array<RouteModule | null>
@@ -68,7 +74,7 @@ export async function loadRootErrorRouteTree(
 export function buildRoutedSubtree(
   layoutModules: Array<RouteModule | null>,
   routeModule: RouteModule,
-  leafProps?: ErrorPageProps
+  leafProps?: LeafRouteProps
 ) {
   let app = createElement(
     asComponent(routeModule),

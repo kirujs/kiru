@@ -7,6 +7,10 @@ export const routes = defineRouteTree((r) =>
       r.get("/", () => import("./pages/home.tsx")),
       r.get("/about", () => import("./pages/about.tsx")),
       r.get("/navigation", () => import("./pages/navigation.tsx")),
+      r.get("/loaders/client", () => import("./pages/loaders-client.tsx")),
+      r.get("/loaders/universal", () =>
+        import("./pages/loaders-universal.tsx")
+      ),
     ],
   })
 )

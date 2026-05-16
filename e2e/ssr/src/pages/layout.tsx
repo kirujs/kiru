@@ -6,7 +6,7 @@ export default function Layout({ children }: { children: JSX.Children }) {
       <nav>
         <Link to="/">Home</Link>
         {" | "}
-        <Link to="/hello">Loader</Link>
+        <Link to="/loaders/server">Server loader</Link>
         {" | "}
         <Link to="/about">About</Link>
         {" | "}

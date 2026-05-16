@@ -63,7 +63,14 @@ export const routes = defineRouteTree((r) =>
         component: () => import("./pages/demo-loader.tsx"),
         head: {
           title: "Route demo — Kiru SSR",
-          description: "Live pathname via useRouter (no route loaders).",
+          description: "serverLoader + usePageData.",
+        },
+      }),
+      r.get("/loaders/server", {
+        component: () => import("./pages/loaders-server.tsx"),
+        head: {
+          title: "serverLoader — Kiru SSR",
+          description: "Server-only route loader with CSR RPC.",
         },
       }),
       r.get("/break-ssr", {

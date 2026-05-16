@@ -4,6 +4,25 @@ describe("SSR server", () => {
     cy.visit(`http://127.0.0.1:${port}/`)
   })
 
+  it("renders serverLoader data on first paint and after client navigation", () => {
+    const port = Cypress.env("port")
+    cy.request(`http://127.0.0.1:${port}/loaders/server`).then((res) => {
+      expect(res.status).to.eq(200)
+      expect(res.body).to.include("server@/loaders/server")
+    })
+    cy.visit(`http://127.0.0.1:${port}/loaders/server`)
+    cy.get('[data-testid="loader-data"]').should(
+      "contain",
+      "server@/loaders/server"
+    )
+    cy.contains("a", "Home").click()
+    cy.visit(`http://127.0.0.1:${port}/loaders/server`)
+    cy.get('[data-testid="loader-data"]').should(
+      "contain",
+      "server@/loaders/server"
+    )
+  })
+
   it("serves hybrid static /docs route", () => {
     const port = Cypress.env("port")
     // Request context is injected in SSR HTML but removed from the DOM during

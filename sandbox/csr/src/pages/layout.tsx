@@ -14,6 +14,12 @@ export default function Layout({ children }: { children: JSX.Children }) {
         <Link className="text-blue-600 underline" to="/navigation">
           Navigation API
         </Link>
+        <Link className="text-blue-600 underline" to="/loaders/client">
+          clientLoader
+        </Link>
+        <Link className="text-blue-600 underline" to="/loaders/universal">
+          loader
+        </Link>
       </nav>
       <div className="rounded border border-slate-200 bg-white p-4 shadow-sm">
         {children}

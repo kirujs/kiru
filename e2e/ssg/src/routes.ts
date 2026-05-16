@@ -33,19 +33,16 @@ export const routes = defineRouteTree((r) =>
         component: () => import("./pages/about"),
         head: { title: "E2E SSG About" },
       }),
+      r.get("/loaders/static", {
+        component: () => import("./pages/loaders-static"),
+        head: { title: "E2E SSG static loader" },
+      }),
       r.get("/posts/[slug]", {
-        static: true,
         component: () => import("./pages/post"),
-        generateStaticParams: () => [{ slug: "one" }, { slug: "two" }],
         head: { title: "E2E SSG Post {slug}" },
       }),
       r.get("/posts/[slug]/comments/[id]", {
-        static: true,
         component: () => import("./pages/comment"),
-        generateStaticParams: ({ params }) => [
-          { id: `${params.slug}-c1` },
-          { id: `${params.slug}-c2` },
-        ],
         head: { title: "Comment {id} on {slug}" },
       }),
     ],

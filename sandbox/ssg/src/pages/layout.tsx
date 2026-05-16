@@ -39,6 +39,12 @@ export default function Layout({ children }: { children: JSX.Children }) {
             Blog: kiru
           </Link>
           <Link
+            to="/loaders/static"
+            className="rounded-full border border-slate-300 px-3 py-1 text-sm font-medium text-slate-700 hover:border-emerald-300 hover:text-emerald-700"
+          >
+            staticLoader
+          </Link>
+          <Link
             to="/seo"
             className="rounded-full border border-emerald-600 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
           >

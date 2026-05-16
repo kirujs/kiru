@@ -21,6 +21,16 @@ export const routes = defineRouteTree((r) =>
       r.get("/style", () => import("./pages/style/index.tsx")),
       r.get("/todos", () => import("./pages/todos/index.tsx")),
       r.get("/navigation", () => import("./pages/navigation/index.tsx")),
+      r.get("/slow-target", {
+        component: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 400))
+          return import("./pages/slow-target/index.tsx")
+        },
+      }),
+      r.get("/loaders/client", () => import("./pages/loaders/client.tsx")),
+      r.get("/loaders/universal", () =>
+        import("./pages/loaders/universal.tsx")
+      ),
     ],
   })
 )
@@ -37,4 +47,6 @@ export const routeLinks = [
   { path: "/style", displayName: "style" },
   { path: "/todos", displayName: "todos" },
   { path: "/navigation", displayName: "navigation" },
+  { path: "/loaders/client", displayName: "loaders-client" },
+  { path: "/loaders/universal", displayName: "loaders-universal" },
 ]

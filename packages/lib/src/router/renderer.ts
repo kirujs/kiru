@@ -18,6 +18,7 @@ import {
   loadNotFoundRouteTree,
   loadRootErrorRouteTree,
   loadRouteTree,
+  type LeafRouteProps,
 } from "./routeTree.js"
 import { resolveMetaTemplates, serializeDocumentHead } from "./meta.js"
 import {
@@ -36,6 +37,9 @@ import {
   RequestContextProvider,
   serializeRequestContextScript,
 } from "./requestContext.js"
+import { createLoaderHandler } from "./loaderRegistry.js"
+import { serializePageDataScript } from "./pageData.js"
+import { buildLoaderContext, resolvePagePropsFromModule } from "./runPageLoad.js"
 import {
   type CustomRequestContext,
   type DocumentHead,
@@ -249,7 +253,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         }
       }
 
-      const { app, routeMatch, requestContext } = prepared
+      const { app, routeMatch, requestContext, serializedPageData } = prepared
       failureContext = {
         match: routeMatch,
         requestContext,
@@ -272,6 +276,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
           ? renderStreamForRouteMatch(app, routeMatch, requestContext, {
               compiledTemplate,
               decorateDocument,
+              pageData: serializedPageData,
             })
           : (() => {
               __setSsrRequestContext(requestContext)
@@ -302,7 +307,13 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
       }
 
       const { body, document } = routeMatch
-        ? await renderStringWithDocument(app, routeMatch, requestContext)
+        ? await renderStringWithDocument(
+            app,
+            routeMatch,
+            requestContext,
+            pathPolicy,
+            serializedPageData
+          )
         : {
             body: renderToString(app),
             document: {
@@ -510,7 +521,8 @@ async function renderStringWithDocument(
   app: JSX.Element,
   match: RouteMatch,
   requestContext: CustomRequestContext,
-  pathPolicy?: RouterPathPolicy
+  pathPolicy?: RouterPathPolicy,
+  pageData?: unknown
 ): Promise<{ body: string; document: DocumentHead }> {
   const baseMeta = resolveMetaTemplates(match.route.head, match.params)
   const collector = createHeadCollector(baseMeta)
@@ -537,6 +549,8 @@ async function renderStringWithDocument(
 
   const resolvedMeta = await collector.resolve()
   const ctxScript = serializeRequestContextScript(requestContext)
+  const pageDataScript =
+    pageData !== undefined ? serializePageDataScript(pageData) : ""
   return {
     body,
     document: {
@@ -544,7 +558,9 @@ async function renderStringWithDocument(
         serializeDocumentHead(resolvedMeta, {
           pathname: match.pathname,
           pathPolicy,
-        }) + (ctxScript ? `\n    ${ctxScript}` : ""),
+        }) +
+        (ctxScript ? `\n    ${ctxScript}` : "") +
+        (pageDataScript ? `\n    ${pageDataScript}` : ""),
       title: resolvedMeta.title,
     },
   }
@@ -557,7 +573,7 @@ function buildAppElement(
   routeModule: RouteModule,
   manifest: RouteManifest,
   requestContext: CustomRequestContext,
-  leafProps?: ErrorPageProps
+  leafProps?: LeafRouteProps
 ) {
   const staticRouter = createStaticRouter({
     manifest,
@@ -576,12 +592,22 @@ function buildAppElement(
   })
 }
 
+function serializedDataFromPageProps(
+  pageProps: Record<string, unknown>
+): unknown | undefined {
+  if ("error" in pageProps && pageProps.error === null && "data" in pageProps) {
+    return pageProps.data
+  }
+  return undefined
+}
+
 /** Shared SSG / SSR string render for a matched route. */
 export async function renderMatchToStaticHtml(
   manifest: RouteManifest,
   match: RouteMatch,
   pathPolicy?: RouterPathPolicy
 ): Promise<{ body: string; document: DocumentHead }> {
+  const pageProps = await resolvePagePropsForMatch(match, {}, match.pathname)
   const { layoutModules, routeModule } = await loadRouteTree(match)
   const app = buildAppElement(
     match.pathname,
@@ -589,9 +615,16 @@ export async function renderMatchToStaticHtml(
     layoutModules,
     routeModule,
     manifest,
-    {}
+    {},
+    pageProps
   )
-  return renderStringWithDocument(app, match, {}, pathPolicy)
+  return renderStringWithDocument(
+    app,
+    match,
+    {},
+    pathPolicy,
+    serializedDataFromPageProps(pageProps)
+  )
 }
 
 const DEFAULT_HEADERS: Record<string, string> = {
@@ -634,6 +667,32 @@ type PreparedApp = {
   app: JSX.Element
   routeMatch: RouteMatch | null
   requestContext: CustomRequestContext
+  /** Loader data embedded in HTML for hydration (success path only). */
+  serializedPageData?: unknown
+}
+
+async function resolvePagePropsForMatch(
+  match: RouteMatch,
+  requestContext: CustomRequestContext,
+  requestUrl: string
+) {
+  const parsed = new URL(requestUrl, "http://localhost")
+  const query: Record<string, string[]> = {}
+  parsed.searchParams.forEach((value, key) => {
+    ;(query[key] ??= []).push(value)
+  })
+  const mod = await match.route.component()
+  return resolvePagePropsFromModule(
+    mod,
+    buildLoaderContext({
+      params: match.params,
+      pathname: match.pathname,
+      search: parsed.search,
+      hash: parsed.hash,
+      query,
+      context: requestContext,
+    })
+  )
 }
 
 type PrepareAppResult =
@@ -710,7 +769,12 @@ async function prepareAppForUrl(
       return { kind: "redirect", location: path }
     }
 
-    const requestContext = (ctx?.context ?? null) as CustomRequestContext
+    const requestContext = (ctx?.context ?? {}) as CustomRequestContext
+    const pageProps = await resolvePagePropsForMatch(
+      routeMatch,
+      requestContext,
+      url
+    )
     const { layoutModules, routeModule } = await loadRouteTree(routeMatch)
     const app = buildAppElement(
       routeMatch.pathname,
@@ -718,12 +782,14 @@ async function prepareAppForUrl(
       layoutModules,
       routeModule,
       manifest,
-      requestContext
+      requestContext,
+      pageProps
     )
     return {
       app,
       routeMatch,
       requestContext,
+      serializedPageData: serializedDataFromPageProps(pageProps),
     }
   }
 
@@ -746,6 +812,7 @@ function renderStreamForRouteMatch(
   opts: {
     compiledTemplate: CompiledRouteHtmlTemplate | null
     decorateDocument: (document: DocumentHead) => void
+    pageData?: unknown
   }
 ): ReadableStream<string> {
   const { route, params, pathname } = match
@@ -758,10 +825,15 @@ function renderStreamForRouteMatch(
       onShellReady: async (shell, controller) => {
         const resolvedMeta = await collector.resolve()
         const ctxScript = serializeRequestContextScript(requestContext)
+        const pageDataScript =
+          opts.pageData !== undefined
+            ? serializePageDataScript(opts.pageData)
+            : ""
         const document: DocumentHead = {
           headHtml:
             serializeDocumentHead(resolvedMeta, { pathname }) +
-            (ctxScript ? `\n    ${ctxScript}` : ""),
+            (ctxScript ? `\n    ${ctxScript}` : "") +
+            (pageDataScript ? `\n    ${pageDataScript}` : ""),
           title: resolvedMeta.title,
         }
         opts.decorateDocument(document)
@@ -814,7 +886,30 @@ function prepareRenderer(options: CreateRendererOptions) {
         exposeErrors: actions.exposeErrors,
       })
     : null
-  return { manifest, compiledTemplate, actionsSecret, handleRemoteAction }
+  const handleLoader = actions
+    ? createLoaderHandler(actions.secret, {
+        allowedOrigins: actions.allowedOrigins,
+      })
+    : null
+  const handlePost =
+    handleRemoteAction || handleLoader
+      ? async (request: Request) => {
+          if (handleLoader) {
+            const loaderResponse = await handleLoader(request)
+            if (loaderResponse) return loaderResponse
+          }
+          if (handleRemoteAction) {
+            return handleRemoteAction(request)
+          }
+          return null
+        }
+      : null
+  return {
+    manifest,
+    compiledTemplate,
+    actionsSecret,
+    handleRemoteAction: handlePost,
+  }
 }
 
 /**

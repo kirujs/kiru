@@ -133,7 +133,7 @@ export const site = defineSiteConfig({
 
 You can also re-export `site` from your routes module instead of using a separate file.
 
-Paths in the sitemap come from the same `generateStaticPaths` list used for prerender. Nested dynamic routes can use parent params in `generateStaticParams({ params })` when a static parent route exists (for example `/posts/[slug]` before `/posts/[slug]/comments/[id]`).
+Paths in the sitemap come from the same `generateStaticPaths` list used for prerender. Export `generateStaticParams` from the **page module** (not `defineRouteTree`) so it stays out of the client bundle. Nested dynamic routes can use parent params in `generateStaticParams({ params })` when a static parent route exists (for example `/posts/[slug]` before `/posts/[slug]/comments/[id]`).
 
 Route `head.jsonLd` objects are serialized as `<script type="application/ld+json">` tags in SSR/SSG output.
 

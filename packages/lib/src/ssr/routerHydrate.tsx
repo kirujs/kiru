@@ -12,6 +12,13 @@ import {
   readHydratedRequestContext,
   RequestContextProvider,
 } from "../router/requestContext.js"
+import { readHydratedPageData } from "../router/pageData.js"
+import {
+  buildLoaderContext,
+  buildPageProps,
+  resolvePagePropsFromModule,
+} from "../router/runPageLoad.js"
+import { readPageLoadExport } from "../router/loaders.js"
 import { signal } from "../signals/index.js"
 import { createElement } from "../element.js"
 import { requestToken } from "../globals.js"
@@ -61,12 +68,75 @@ export function __kiruEnsureRemoteDispatch(): ServerActionsClient["dispatch"] {
   ).__kiru_serverActions!.dispatch
 }
 
+type LoaderDispatch = (
+  routeId: string,
+  ctx: import("../router/loaders.js").LoaderContext
+) => Promise<unknown>
+
+function ensureLoaderClient() {
+  if (typeof window === "undefined") return
+  const g = globalThis as typeof globalThis & {
+    __kiru_loaders?: { dispatch: LoaderDispatch }
+  }
+  if (g.__kiru_loaders) return
+  g.__kiru_loaders = {
+    dispatch: async (routeId, ctx) => {
+      const r = await fetch(
+        `/?loader=${encodeURIComponent(`${routeId}:load`)}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-kiru-token": requestToken.current,
+          },
+          body: JSON.stringify(ctx),
+        }
+      )
+      if (!r.ok) throw new Error("Loader request failed")
+      return r.json()
+    },
+  }
+}
+
+export function __kiruEnsureLoaderDispatch(): LoaderDispatch {
+  ensureLoaderClient()
+  return (
+    globalThis as typeof globalThis & {
+      __kiru_loaders?: { dispatch: LoaderDispatch }
+    }
+  ).__kiru_loaders!.dispatch
+}
+
 export interface BootstrapSsrClientOptions {
   routes: RouteTreeDefinition | RouteManifest
   container: HTMLElement
   hydrateOptions?: AppHandleOptions & {
     hydrationMode?: "static" | "dynamic"
   }
+}
+
+async function resolveLeafPropsForMatch(
+  routeMatch: { route: { component: () => Promise<unknown> }; params: Record<string, string> },
+  pathname: string,
+  router: ReturnType<typeof createRouter>
+) {
+  const pageMod = await routeMatch.route.component()
+  if (!readPageLoadExport(pageMod)) return {}
+  const hydrated = readHydratedPageData()
+  if (hydrated !== undefined) {
+    return buildPageProps(hydrated)
+  }
+  return resolvePagePropsFromModule(
+    pageMod,
+    buildLoaderContext({
+      params: router.params.peek(),
+      pathname,
+      search: typeof window !== "undefined" ? window.location.search : "",
+      hash: router.hash.peek(),
+      query: router.query.peek(),
+      context: readHydratedRequestContext(),
+    })
+  )
 }
 
 /**
@@ -89,14 +159,20 @@ export async function bootstrapSsrClient(
   }
 
   const requestContext = readHydratedRequestContext()
+  const pathname = router.pathname.peek()
   const match = router.match.peek()
   const first = match
     ? await loadRouteTree(match)
-    : await loadNotFoundRouteTree(manifest, router.pathname.peek())
+    : await loadNotFoundRouteTree(manifest, pathname)
 
-  const children = signal(
-    first ? buildRoutedSubtree(first.layoutModules, first.routeModule) : null
-  )
+  const children = signal<JSX.Element | null>(null)
+  if (first && match) {
+    children.value = buildRoutedSubtree(
+      first.layoutModules,
+      first.routeModule,
+      await resolveLeafPropsForMatch(match, pathname, router)
+    )
+  }
   let epoch = 0
   router.match.subscribe((match) => {
     const e = ++epoch
@@ -110,7 +186,18 @@ export async function bootstrapSsrClient(
         children.value = null
         return
       }
-      children.value = buildRoutedSubtree(tree.layoutModules, tree.routeModule)
+      const leafProps = match
+        ? await resolveLeafPropsForMatch(
+            match,
+            router.pathname.peek(),
+            router
+          )
+        : {}
+      children.value = buildRoutedSubtree(
+        tree.layoutModules,
+        tree.routeModule,
+        leafProps
+      )
     })()
   })
 

@@ -4,10 +4,14 @@ import {
   pathnameForMatch,
   type RouterPathPolicy,
 } from "./pathPolicy.js"
+import {
+  discoverRouteBuildMeta,
+  getRouteGenerateStaticParams,
+  type RouteBuildMeta,
+} from "./routeBuildMeta.js"
 import type {
   CompiledRoute,
   CompiledRouteScope,
-  GenerateStaticParams,
   RouteManifest,
   RouteMatch,
   RouteHeadMeta,
@@ -117,7 +121,6 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
         head: node.head,
         meta: node.meta,
         error: node.error,
-        pending: node.pending,
       }
       const nextParents = parents.concat(scope)
       for (const child of node.children) walk(child, nextParents)
@@ -141,7 +144,6 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
     meta = mergeShallowMeta(meta, node.meta)
 
     const scopeError = [...parents].reverse().find((s) => s.error)?.error
-    const scopePending = [...parents].reverse().find((s) => s.pending)?.pending
 
     routes.push({
       id: `route:${routeId++}`,
@@ -152,9 +154,6 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
       score: computeScore(segments),
       params,
       static: isStatic,
-      generateStaticParams: node.generateStaticParams as
-        | GenerateStaticParams
-        | undefined,
       component: node.component,
       scopes: parents,
       head,
@@ -170,7 +169,6 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
           ? [node.beforeActivate]
           : undefined,
       error: node.error ?? scopeError,
-      pending: node.pending ?? scopePending,
     })
   }
 
@@ -304,7 +302,8 @@ function findStaticParentRoute(
 async function collectParamSetsForRoute(
   route: CompiledRoute,
   staticRoutes: CompiledRoute[],
-  cache: Map<string, Array<Record<string, string>>>
+  cache: Map<string, Array<Record<string, string>>>,
+  buildMeta: RouteBuildMeta
 ): Promise<Array<Record<string, string>>> {
   const cached = cache.get(route.id)
   if (cached) return cached
@@ -315,16 +314,17 @@ async function collectParamSetsForRoute(
     return empty
   }
 
-  if (!route.generateStaticParams) {
+  const generateStaticParams = getRouteGenerateStaticParams(route, buildMeta)
+  if (!generateStaticParams) {
     throw new Error(
-      `Route "${route.path}" is static and dynamic, but generateStaticParams is missing`
+      `Route "${route.path}" is static and dynamic, but generateStaticParams is missing from the page module`
     )
   }
 
   const parent = findStaticParentRoute(route, staticRoutes)
-  if (parent?.params.length && !parent.generateStaticParams) {
+  if (parent?.params.length && !getRouteGenerateStaticParams(parent, buildMeta)) {
     throw new Error(
-      `Route "${route.path}" has static parent "${parent.path}" with dynamic segments, but parent generateStaticParams is missing`
+      `Route "${route.path}" has static parent "${parent.path}" with dynamic segments, but parent generateStaticParams is missing from the page module`
     )
   }
 
@@ -336,7 +336,7 @@ async function collectParamSetsForRoute(
   let result: Array<Record<string, string>> = []
 
   if (!parent || parent.params.length === 0) {
-    const generated = await route.generateStaticParams({ params: {} })
+    const generated = await generateStaticParams({ params: {} })
     for (const row of generated) {
       validateChildParams(route.path, row, {}, ownParamNames, route.params)
       result.push(mergeParamRow({}, row, route.params))
@@ -345,10 +345,11 @@ async function collectParamSetsForRoute(
     const parentSets = await collectParamSetsForRoute(
       parent,
       staticRoutes,
-      cache
+      cache,
+      buildMeta
     )
     for (const parentParams of parentSets) {
-      const generated = await route.generateStaticParams({
+      const generated = await generateStaticParams({
         params: { ...parentParams },
       })
       for (const row of generated) {
@@ -408,8 +409,12 @@ function mergeParamRow(
 
 export async function generateStaticPaths(
   manifest: RouteManifest,
-  pathPolicy?: RouterPathPolicy
+  pathPolicy?: RouterPathPolicy,
+  buildMeta?: RouteBuildMeta
 ): Promise<string[]> {
+  const meta =
+    buildMeta ??
+    (await discoverRouteBuildMeta(manifest, (route) => route.component()))
   const out = new Set<string>()
   const staticRoutes = manifest.routes
     .filter((r) => r.static)
@@ -422,7 +427,12 @@ export async function generateStaticPaths(
       continue
     }
 
-    const paramSets = await collectParamSetsForRoute(route, staticRoutes, cache)
+    const paramSets = await collectParamSetsForRoute(
+      route,
+      staticRoutes,
+      cache,
+      meta
+    )
     for (const params of paramSets) {
       out.add(
         formatPathname(

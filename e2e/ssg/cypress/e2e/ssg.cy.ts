@@ -19,6 +19,14 @@ describe("SSG build", () => {
     cy.get('[data-testid="ssg-loader"]').should("contain", "post:one")
   })
 
+  it("embeds staticLoader data in prerendered HTML", () => {
+    cy.visit(`${base()}/loaders/static`)
+    cy.get('[data-testid="loader-data"]').should(
+      "contain",
+      "static:prerendered loader data"
+    )
+  })
+
   it("prerenders nested static params from parent generateStaticParams", () => {
     cy.visit(`${base()}/posts/one/comments/one-c1`)
     cy.get('[data-testid="comment"]').should("contain", "one:one-c1")

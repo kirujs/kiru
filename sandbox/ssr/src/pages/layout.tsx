@@ -70,6 +70,12 @@ export default function Layout() {
             Route demo
           </Link>
           <Link
+            to="/loaders/server"
+            className="rounded-full border border-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:border-cyan-400 hover:text-cyan-200"
+          >
+            serverLoader
+          </Link>
+          <Link
             to="/break-ssr"
             className="rounded-full border border-rose-800/80 px-3 py-1 text-sm font-medium text-rose-200 hover:border-rose-400"
           >

@@ -3,6 +3,7 @@ import {
   prepareHMR,
   prepareJSXHoisting,
   prepareRemoteFunctions,
+  preparePageLoaders,
 } from "./codegen/index.js"
 import { ANSI } from "./ansi.js"
 import {
@@ -569,23 +570,28 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     name: "vite-plugin-kiru:remote",
     enforce: "post" as const,
     transform(src, id, options) {
-      if (!state?.router?.remote) return null
       const cleanedId = id.split("?")[0].split("#")[0]
       const normalizedId = path.resolve(cleanedId).replace(/\\/g, "/")
-      if (!state.remotePaths.includes(normalizedId)) return null
+      const isRemote = state?.router?.remote
+        ? state.remotePaths.includes(normalizedId)
+        : false
+      if (!isRemote && (!state || !shouldTransformFile(id, state))) return null
 
       const ast = this.parse(src)
       const code = new MagicString(src)
       const ctx: TransformCTX = {
         code,
         ast,
-        isBuild: state.isBuild,
-        fileLinkFormatter: state.fileLinkFormatter,
+        isBuild: state!.isBuild,
+        fileLinkFormatter: state!.fileLinkFormatter,
         filePath: id,
         log,
       }
 
-      prepareRemoteFunctions(ctx, state.projectRoot, !!options?.ssr)
+      preparePageLoaders(ctx, state!.projectRoot, !!options?.ssr)
+      if (isRemote) {
+        prepareRemoteFunctions(ctx, state!.projectRoot, !!options?.ssr)
+      }
 
       if (!code.hasChanged()) return null
 

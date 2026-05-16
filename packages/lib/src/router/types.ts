@@ -76,6 +76,19 @@ export interface RouteLocation {
   params: Record<string, string>
 }
 
+/** Full location snapshot for in-flight navigation UI. */
+export interface RouteLocationSnapshot {
+  pathname: string
+  params: Record<string, string>
+  query: Record<string, string[]>
+  hash: string
+}
+
+export interface CurrentNavigation {
+  from: RouteLocationSnapshot | null
+  to: RouteLocationSnapshot
+}
+
 export type NavigationRedirect =
   | string
   | {
@@ -109,7 +122,6 @@ export type AfterEachHook = (
 export interface RouteDefinitionConfig {
   component: RouteLoader
   static?: boolean
-  generateStaticParams?: GenerateStaticParams
   head?: RouteHeadMeta
   beforeEnter?: NavigationGuard | NavigationGuard[]
   /**
@@ -121,8 +133,6 @@ export interface RouteDefinitionConfig {
   meta?: Record<string, unknown>
   /** Error UI module for this route (wrapped around subtree when render throws). */
   error?: RouteLoader
-  /** Pending UI while route subtree is loading (CSR / streaming). */
-  pending?: RouteLoader
 }
 
 export interface RouteDefinition {
@@ -131,13 +141,11 @@ export interface RouteDefinition {
   path: string
   component: RouteLoader
   static?: boolean
-  generateStaticParams?: GenerateStaticParams
   head?: RouteHeadMeta
   beforeEnter?: NavigationGuard | NavigationGuard[]
   beforeActivate?: NavigationGuard | NavigationGuard[]
   meta?: Record<string, unknown>
   error?: RouteLoader
-  pending?: RouteLoader
 }
 
 export interface RouteScopeDefinition {
@@ -148,7 +156,6 @@ export interface RouteScopeDefinition {
   head?: RouteHeadMeta
   meta?: Record<string, unknown>
   error?: RouteLoader
-  pending?: RouteLoader
   children: RouteNodeDefinition[]
 }
 
@@ -163,7 +170,6 @@ export interface RouteBuilder {
     head?: RouteHeadMeta
     meta?: Record<string, unknown>
     error?: RouteLoader
-    pending?: RouteLoader
     children: RouteNodeDefinition[]
   }): RouteScopeDefinition
 }
@@ -180,7 +186,6 @@ export interface CompiledRouteScope {
   head?: RouteHeadMeta
   meta?: Record<string, unknown>
   error?: RouteLoader
-  pending?: RouteLoader
 }
 
 export interface CompiledRoute {
@@ -192,7 +197,6 @@ export interface CompiledRoute {
   score: number
   params: string[]
   static: boolean
-  generateStaticParams?: GenerateStaticParams
   component: RouteLoader
   scopes: CompiledRouteScope[]
   /** Merged from ancestor scopes and this route */
@@ -202,7 +206,6 @@ export interface CompiledRoute {
   beforeEnter?: NavigationGuard[]
   beforeActivate?: NavigationGuard[]
   error?: RouteLoader
-  pending?: RouteLoader
 }
 
 export interface RouteManifest {

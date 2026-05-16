@@ -16,6 +16,8 @@ import {
   mergeRouteHead,
   serializeDocumentHead,
   hydratePrerenderedHtmlForRequest,
+  PAGE_DATA_SCRIPT_ID,
+  serverLoader,
   loadErrorRouteTree,
   loadRootErrorRouteTree,
   prerenderStaticRoutes,
@@ -46,8 +48,8 @@ describe("router", () => {
               const router = useRouter()
               return <h1>{router.params.value.id}</h1>
             },
+            generateStaticParams: async () => [{ id: "1" }, { id: "2" }],
           }),
-          generateStaticParams: async () => [{ id: "1" }, { id: "2" }],
         }),
       ],
     })
@@ -72,15 +74,23 @@ describe("router", () => {
         static: true,
         children: [
           r.get("/posts/[slug]", {
-            component: async () => ({ default: () => <h1>post</h1> }),
-            generateStaticParams: () => [{ slug: "a" }, { slug: "b" }],
+            component: async () => ({
+              default: () => <h1>post</h1>,
+              generateStaticParams: () => [{ slug: "a" }, { slug: "b" }],
+            }),
           }),
           r.get("/posts/[slug]/comments/[id]", {
-            component: async () => ({ default: () => <h1>comment</h1> }),
-            generateStaticParams: ({ params }) => [
-              { id: `${params.slug}-1` },
-              { id: `${params.slug}-2` },
-            ],
+            component: async () => ({
+              default: () => <h1>comment</h1>,
+              generateStaticParams: ({
+                params,
+              }: {
+                params: Record<string, string>
+              }) => [
+                { id: `${params.slug}-1` },
+                { id: `${params.slug}-2` },
+              ],
+            }),
           }),
         ],
       })
@@ -103,12 +113,16 @@ describe("router", () => {
         static: true,
         children: [
           r.get("/posts/[slug]", {
-            component: async () => ({ default: () => null }),
-            generateStaticParams: () => [{ slug: "a" }],
+            component: async () => ({
+              default: () => null,
+              generateStaticParams: () => [{ slug: "a" }],
+            }),
           }),
           r.get("/posts/[slug]/comments/[id]", {
-            component: async () => ({ default: () => null }),
-            generateStaticParams: () => [{ slug: "x", id: "1" }],
+            component: async () => ({
+              default: () => null,
+              generateStaticParams: () => [{ slug: "x", id: "1" }],
+            }),
           }),
         ],
       })
@@ -148,8 +162,10 @@ describe("router", () => {
             component: async () => ({ default: () => null }),
           }),
           r.get("/posts/[slug]/comments/[id]", {
-            component: async () => ({ default: () => null }),
-            generateStaticParams: () => [{ id: "1" }],
+            component: async () => ({
+              default: () => null,
+              generateStaticParams: () => [{ id: "1" }],
+            }),
           }),
         ],
       })
@@ -168,8 +184,10 @@ describe("router", () => {
         static: true,
         children: [
           r.get("/items/[id]", {
-            component: async () => ({ default: () => null }),
-            generateStaticParams: () => [{ id: "solo" }],
+            component: async () => ({
+              default: () => null,
+              generateStaticParams: () => [{ id: "solo" }],
+            }),
           }),
         ],
       })
@@ -241,12 +259,20 @@ describe("router", () => {
         static: true,
         children: [
           r.get("/posts/[slug]", {
-            component: async () => ({ default: () => <p>post</p> }),
-            generateStaticParams: () => [{ slug: "x" }],
+            component: async () => ({
+              default: () => <p>post</p>,
+              generateStaticParams: () => [{ slug: "x" }],
+            }),
           }),
           r.get("/posts/[slug]/comments/[id]", {
-            component: async () => ({ default: () => <p>c</p> }),
-            generateStaticParams: ({ params }) => [{ id: `${params.slug}-1` }],
+            component: async () => ({
+              default: () => <p>c</p>,
+              generateStaticParams: ({
+                params,
+              }: {
+                params: Record<string, string>
+              }) => [{ id: `${params.slug}-1` }],
+            }),
           }),
         ],
       })
@@ -1001,6 +1027,47 @@ describe("router", () => {
     assert.strictEqual(typeof response.body, "string")
     assert.ok((response.body as string).includes("<!doctype html>"))
     assert.ok((response.body as string).includes("<main><h1>1</h1></main>"))
+  })
+
+  it("streaming SSR embeds serverLoader page data in the document head", async () => {
+    const load = serverLoader(async (ctx) => ({
+      pathname: ctx.url.pathname,
+      note: "from-server",
+    }))
+    const r = defineRouteTree((x) =>
+      x.scope({
+        children: [
+          x.get("/loader", {
+            component: async () => ({
+              load,
+              default: () => <p data-testid="ok">ok</p>,
+            }),
+          }),
+        ],
+      })
+    )
+    const renderer = createRenderer({
+      stream: true,
+      routes: r,
+      htmlTemplate: MINIMAL_TPL,
+    })
+    const response = await renderer.render("/loader")
+    assert.ok(response)
+    const reader = (response.body as ReadableStream<string>).getReader()
+    let out = ""
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      out += next.value
+    }
+    reader.releaseLock()
+    assert.ok(
+      out.includes(
+        `<script id="${PAGE_DATA_SCRIPT_ID}" type="application/json">`
+      )
+    )
+    assert.ok(out.includes('"pathname":"/loader"'))
+    assert.ok(out.includes('"note":"from-server"'))
   })
 
   it("createRenderer applies htmlTemplate for stream mode", async () => {

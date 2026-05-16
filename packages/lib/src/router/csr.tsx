@@ -14,10 +14,12 @@ import {
 import { createElement } from "../element.js"
 import type {
   AfterEachHook,
+  CurrentNavigation,
   NavigationFailure,
   NavigationGuard,
   NavigationResult,
   RouteLocation,
+  RouteLocationSnapshot,
   RouteManifest,
   RouteMatch,
   RouteTreeDefinition,
@@ -30,7 +32,11 @@ import {
   buildRoutedSubtree,
   loadNotFoundRouteTree,
   loadRouteTree,
+  type LeafRouteProps,
 } from "./routeTree.js"
+import { buildLoaderContext, resolvePagePropsFromModule } from "./runPageLoad.js"
+import { resetHydratedPageData } from "./pageData.js"
+import type { CustomRequestContext } from "./types.js"
 
 function joinPath(base: string, path: string): string {
   if (path.startsWith("/")) return path
@@ -95,7 +101,7 @@ export interface Router {
   beforeResolve: (guard: NavigationGuard) => () => void
   afterEach: (hook: AfterEachHook) => () => void
   isNavigating: Kiru.Signal<boolean>
-  pendingTo: Kiru.Signal<string | null>
+  currentNavigation: Kiru.Signal<CurrentNavigation | null>
   back: () => void
   forward: () => void
   go: (delta: number) => void
@@ -118,6 +124,18 @@ export interface Router {
 function locationFromMatch(match: RouteMatch | null): RouteLocation | null {
   if (!match) return null
   return { pathname: match.pathname, params: match.params }
+}
+
+function snapshotFromParts(
+  parts: RouteLocationParts,
+  params: Record<string, string>
+): RouteLocationSnapshot {
+  return {
+    pathname: parts.pathname,
+    params,
+    query: parts.query,
+    hash: parts.hash,
+  }
 }
 
 type RouteLocationParts = {
@@ -243,8 +261,7 @@ export function createRouter({
   const params = signal(match.value?.params ?? {})
   const matches = signal(buildMatchSegments(match.peek()))
   const isNavigating = signal(false)
-  const pendingTo = signal<string | null>(null)
-
+  const currentNavigation = signal<CurrentNavigation | null>(null)
   const beforeEachGuards: NavigationGuard[] = []
   const beforeResolveGuards: NavigationGuard[] = []
   const afterEachHooks: AfterEachHook[] = []
@@ -280,6 +297,9 @@ export function createRouter({
   })
 
   const commitLocation = (next: RouteLocationParts) => {
+    if (next.pathname !== pathname.peek()) {
+      resetHydratedPageData()
+    }
     pathname.value = next.pathname
     hash.value = next.hash
     query.value = next.query
@@ -304,15 +324,29 @@ export function createRouter({
     const token = ++navToken
     isNavigating.value = true
     const resolved = parseResolvedLocation(targetUrl, normalizedBaseUrl)
-    pendingTo.value = resolved.pathname
     const targetPath = resolved.pathname
     const fromMatch = match.peek()
+    const fromParts = currentLocationParts()
     const from = locationFromMatch(fromMatch)
     const toMatch = matchRoute(manifest, targetPath, resolvedPathPolicy)
 
     const to: RouteLocation = toMatch
       ? locationFromMatch(toMatch)!
       : { pathname: targetPath, params: {} }
+
+    currentNavigation.value = {
+      from: fromMatch
+        ? snapshotFromParts(fromParts, fromMatch.params)
+        : null,
+      to: snapshotFromParts(
+        {
+          pathname: resolved.pathname,
+          hash: resolved.hash,
+          query: resolved.query,
+        },
+        toMatch?.params ?? {}
+      ),
+    }
 
     let failure: NavigationFailure | undefined
     let navResult: NavigationResult = { status: "committed" }
@@ -538,7 +572,7 @@ export function createRouter({
     } finally {
       if (token === navToken) {
         isNavigating.value = false
-        pendingTo.value = null
+        currentNavigation.value = null
         ;(routerRef.__lastNavigation as Router["__lastNavigation"]) = {
           to,
           from,
@@ -603,7 +637,7 @@ export function createRouter({
     match,
     matches,
     isNavigating,
-    pendingTo,
+    currentNavigation,
     navigationMode: "history",
     navigate(to, replaceOrOptions = false) {
       const options =
@@ -755,7 +789,7 @@ export function createStaticRouter({
   params.value = match.value?.params ?? {}
   const matches = signal(buildMatchSegments(match.peek()))
   const isNavigating = signal(false)
-  const pendingTo = signal<string | null>(null)
+  const currentNavigation = signal<CurrentNavigation | null>(null)
   const emptyUnsub = () => {}
   const committed = (): Promise<NavigationResult> =>
     Promise.resolve({ status: "committed" })
@@ -771,7 +805,7 @@ export function createStaticRouter({
     match,
     matches,
     isNavigating,
-    pendingTo,
+    currentNavigation,
     navigationMode: "static",
     navigate() {
       return committed()
@@ -887,7 +921,7 @@ export const Link: Kiru.Component<LinkProps> = () => {
 
 export function RouterView() {
   const router = useRouter()
-  const { match, pathname, manifest } = router
+  const { match, pathname, manifest, hash, query } = router
   let epoch = 0
   const children = resource(
     { match, pathname },
@@ -898,8 +932,25 @@ export function RouterView() {
         : await loadNotFoundRouteTree(manifest, pathname)
       if (epoch !== e) return
 
+      let leafProps: LeafRouteProps = {}
+      if (match) {
+        const mod = await match.route.component()
+        const qs = buildQueryString(query.peek())
+        leafProps = await resolvePagePropsFromModule(
+          mod,
+          buildLoaderContext({
+            params: match.params,
+            pathname: match.pathname,
+            search: qs ? `?${qs}` : "",
+            hash: hash.peek(),
+            query: query.peek(),
+            context: {} as CustomRequestContext,
+          })
+        )
+      }
+
       return tree
-        ? buildRoutedSubtree(tree.layoutModules, tree.routeModule)
+        ? buildRoutedSubtree(tree.layoutModules, tree.routeModule, leafProps)
         : null
     }
   )

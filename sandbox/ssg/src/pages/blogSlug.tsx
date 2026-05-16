@@ -1,4 +1,9 @@
 import { useRouter } from "kiru/router"
+import type { GenerateStaticParamsContext } from "kiru/router"
+
+export async function generateStaticParams(_ctx: GenerateStaticParamsContext) {
+  return [{ slug: "hello" }, { slug: "kiru" }]
+}
 
 export default function BlogSlugPage() {
   const router = useRouter()

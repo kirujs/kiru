@@ -41,10 +41,10 @@ export const routes = defineRouteTree((r) =>
           description: "About this static site.",
         },
       }),
+      r.get("/loaders/static", () => import("./pages/loadersStatic.tsx")),
       r.get("/blog", () => import("./pages/blog.tsx")),
       r.get("/blog/[slug]", {
         component: () => import("./pages/blogSlug.tsx"),
-        generateStaticParams: async () => [{ slug: "hello" }, { slug: "kiru" }],
         head: {
           title: "Blog: {slug} — Kiru SSG",
           description: "A statically generated blog post.",
@@ -52,10 +52,6 @@ export const routes = defineRouteTree((r) =>
       }),
       r.get("/blog/[slug]/comments/[id]", {
         component: () => import("./pages/blogComment.tsx"),
-        generateStaticParams: ({ params }) => [
-          { id: `${params.slug}-1` },
-          { id: `${params.slug}-2` },
-        ],
         head: {
           title: "Comment {id} on {slug}",
           description:
