@@ -8,7 +8,11 @@ import {
   type PluginState,
 } from "./config.js"
 import { createDevtoolsHtmlTransform, setupDevtools } from "./devtools.js"
-import { injectDevCssLinks, handleSsrDevRequest } from "./dev-server.js"
+import {
+  extractEntryUrls,
+  handleSsrDevRequest,
+  injectDevCssLinks,
+} from "./dev-server.js"
 import { createSsgPreviewMiddleware } from "./preview-server.js"
 import { createLogger, shouldTransformFile } from "./utils.js"
 import { promises as fs } from "node:fs"
@@ -120,6 +124,28 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       // the Response object before anything hits the socket — no patching needed.
       if (!router.ssg && router.serverEntry) {
         const serverEntry = path.resolve(state.projectRoot, router.serverEntry)
+
+        // The streaming SSR response carries the entry `<script>` tag in the
+        // suffix (after the body), so we can't extract it from the response in
+        // time to inject CSS into the head. Instead, derive entry URLs from
+        // the project's index.html template once and invalidate on edit.
+        const templateName = opts.router?.htmlTemplate ?? "index.html"
+        const templatePath = path.resolve(state.projectRoot, templateName)
+        let cachedEntryUrls: string[] | null = null
+        const getEntryUrls = async (): Promise<string[]> => {
+          if (cachedEntryUrls) return cachedEntryUrls
+          try {
+            const tpl = await fs.readFile(templatePath, "utf8")
+            cachedEntryUrls = extractEntryUrls(tpl)
+          } catch {
+            cachedEntryUrls = []
+          }
+          return cachedEntryUrls
+        }
+        server.watcher.on("change", (file) => {
+          if (path.resolve(file) === templatePath) cachedEntryUrls = null
+        })
+
         server.middlewares.use(async (req, res, next) => {
           const pathname = (req.originalUrl ?? "/").split("?")[0]
           if (
@@ -132,6 +158,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           try {
             const handled = await handleSsrDevRequest(server, req, res, {
               serverEntry,
+              getEntryUrls,
             })
             if (!handled) next()
           } catch (e) {

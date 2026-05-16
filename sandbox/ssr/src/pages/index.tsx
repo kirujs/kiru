@@ -1,11 +1,13 @@
-import { Derive, ErrorBoundary, resource } from "kiru"
+import { Derive, ErrorBoundary, resource, signal } from "kiru"
 import { getTodos, createTodo, updateTodo } from "../index.actions"
 
 export default function HomePage() {
   const todosData = resource(({ signal }) => getTodos(void 0, { signal }))
+  const count = signal(0)
 
   return () => (
     <div className="space-y-3">
+      <button onclick={() => count.value++}>Count: {count}</button>
       <h2 className="text-xl font-semibold text-slate-100">Todos</h2>
       <ErrorBoundary onError={console.log}>
         <Derive from={todosData} fallback={<p>Loading...</p>}>

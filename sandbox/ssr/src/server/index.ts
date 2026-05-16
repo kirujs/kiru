@@ -9,7 +9,7 @@ import { routes } from "../routes"
 const isProd = process.env.NODE_ENV === "production"
 const entryDir = dirname(fileURLToPath(import.meta.url))
 /** Production runs the Vite SSR bundle under `dist/server/`; dev uses `src/`. */
-const root = isProd ? join(entryDir, "..", "..") : join(entryDir, "..")
+const root = join(entryDir, "..", "..")
 
 const clientDist = join(root, "dist", "client")
 const templatePath =

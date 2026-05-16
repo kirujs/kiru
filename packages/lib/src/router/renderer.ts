@@ -10,7 +10,10 @@ import {
   loadRouteTree,
 } from "./routeTree.js"
 import { resolveMetaTemplates, serializeDocumentHead } from "./meta.js"
-import { compileRouteHtmlTemplate } from "./htmlTemplate.js"
+import {
+  compileRouteHtmlTemplate,
+  type CompiledRouteHtmlTemplate,
+} from "./htmlTemplate.js"
 import { RouterProvider, createStaticRouter } from "./csr.js"
 import { createHeadCollector, withHeadCollector } from "./headContext.js"
 import {
@@ -118,35 +121,46 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
       const { app, routeMatch, requestContext } = prepared
 
       if (options.stream) {
-        const { stream: innerStream, document } = routeMatch
-          ? await renderStreamWithDocument(app, routeMatch, requestContext)
+        // Assemble the full static document (prefix + shell + suffix) in a
+        // single `onShellReady` flush so the browser sees `</html>` before
+        // the streamed data scripts arrive. That lets `DOMContentLoaded`
+        // fire on the closing tag (rather than on connection close), so an
+        // implicitly-deferred `<script type="module">` entry tag hydrates
+        // immediately instead of waiting on the slowest in-flight resource.
+        const decorateDocument = (document: DocumentHead) => {
+          if (actionsSecret)
+            appendTokenToDocument(document, requestContext, actionsSecret)
+        }
+
+        const stream = routeMatch
+          ? renderStreamForRouteMatch(app, routeMatch, requestContext, {
+              compiledTemplate,
+              decorateDocument,
+            })
           : (() => {
               __setSsrRequestContext(requestContext)
-              const result = {
-                stream: renderToReadableStream(app),
-                document: {
-                  headHtml: serializeRequestContextScript(requestContext),
-                },
+              const document: DocumentHead = {
+                headHtml: serializeRequestContextScript(requestContext),
               }
+              decorateDocument(document)
+              const s = renderToReadableStream(app, {
+                onShellReady: (shell, controller) =>
+                  enqueueTemplatedShell(controller, {
+                    compiledTemplate,
+                    headHtml: document.headHtml,
+                    shell,
+                  }),
+              })
               __setSsrRequestContext({})
-              return result
+              return s
             })()
-
-        if (actionsSecret)
-          appendTokenToDocument(document, requestContext, actionsSecret)
 
         return {
           kind: "stream" as const,
           result: {
             status: routeMatch ? 200 : 404,
-            headers: { ...DEFAULT_HEADERS },
-            body:
-              compiledTemplate !== null
-                ? createTemplatedStream(
-                    innerStream,
-                    compiledTemplate.splitForStream(document.headHtml)
-                  )
-                : innerStream,
+            headers: { ...DEFAULT_HEADERS, "transfer-encoding": "chunked" },
+            body: stream,
           },
         }
       }
@@ -489,33 +503,72 @@ async function prepareAppForUrl(
 }
 
 /**
- * Streaming counterpart to renderStringWithDocument: starts the readable
- * stream inside the head collector so meta tags are captured, then resolves
- * the document head before returning.
+ * Streaming counterpart to {@link renderStringWithDocument}: starts the
+ * readable stream inside the head collector so meta tags are captured, then
+ * defers full document assembly into the stream's `onShellReady` hook —
+ * which fires only after the head collector has resolved, so the prefix
+ * (containing the serialized head) can be flushed atomically with the
+ * shell and the document close tags. Streamed data scripts arrive after
+ * `</html>`, keeping `DOMContentLoaded` (and hydration) prompt.
  */
-async function renderStreamWithDocument(
+function renderStreamForRouteMatch(
   app: JSX.Element,
   match: RouteMatch,
-  requestContext: CustomRequestContext
-): Promise<{ stream: ReadableStream<string>; document: DocumentHead }> {
+  requestContext: CustomRequestContext,
+  opts: {
+    compiledTemplate: CompiledRouteHtmlTemplate | null
+    decorateDocument: (document: DocumentHead) => void
+  }
+): ReadableStream<string> {
   const { route, params, pathname } = match
   const collector = createHeadCollector(
     resolveMetaTemplates(route.head, params)
   )
   __setSsrRequestContext(requestContext)
-  const stream = withHeadCollector(collector, () => renderToReadableStream(app))
+  const stream = withHeadCollector(collector, () =>
+    renderToReadableStream(app, {
+      onShellReady: async (shell, controller) => {
+        const resolvedMeta = await collector.resolve()
+        const ctxScript = serializeRequestContextScript(requestContext)
+        const document: DocumentHead = {
+          headHtml:
+            serializeDocumentHead(resolvedMeta, { pathname }) +
+            (ctxScript ? `\n    ${ctxScript}` : ""),
+          title: resolvedMeta.title,
+        }
+        opts.decorateDocument(document)
+        enqueueTemplatedShell(controller, {
+          compiledTemplate: opts.compiledTemplate,
+          headHtml: document.headHtml,
+          shell,
+        })
+      },
+    })
+  )
   __setSsrRequestContext({})
-  const resolvedMeta = await collector.resolve()
-  const ctxScript = serializeRequestContextScript(requestContext)
-  return {
-    stream,
-    document: {
-      headHtml:
-        serializeDocumentHead(resolvedMeta, { pathname }) +
-        (ctxScript ? `\n    ${ctxScript}` : ""),
-      title: resolvedMeta.title,
-    },
+  return stream
+}
+
+/**
+ * Flush prefix + shell + suffix into the streaming controller in one shot.
+ * When no template is configured we pass the shell through unchanged.
+ */
+function enqueueTemplatedShell(
+  controller: ReadableStreamDefaultController<string>,
+  args: {
+    compiledTemplate: CompiledRouteHtmlTemplate | null
+    headHtml: string
+    shell: string
   }
+): void {
+  if (!args.compiledTemplate) {
+    controller.enqueue(args.shell)
+    return
+  }
+  const split = args.compiledTemplate.splitForStream(args.headHtml)
+  controller.enqueue(split.prefix)
+  controller.enqueue(args.shell)
+  controller.enqueue(split.suffix)
 }
 
 function prepareRenderer(options: CreateRendererOptions) {
@@ -523,6 +576,9 @@ function prepareRenderer(options: CreateRendererOptions) {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
   const compiledTemplate =
     htmlTemplate !== undefined ? compileRouteHtmlTemplate(htmlTemplate) : null
+  if (options.stream && htmlTemplate !== undefined) {
+    warnIfStreamingTemplateLacksAsyncEntry(htmlTemplate)
+  }
   const actionsSecret = actions?.secret
   const handleRemoteAction = actions
     ? createRemoteActionHandler(actions.secret, {
@@ -533,6 +589,42 @@ function prepareRenderer(options: CreateRendererOptions) {
   return { manifest, compiledTemplate, actionsSecret, handleRemoteAction }
 }
 
+/**
+ * Streaming SSR holds the document parser open until the slowest in-flight
+ * resource resolves. `<script type="module" src="…">` is implicitly
+ * deferred to `DOMContentLoaded` — which doesn't fire until the parser hits
+ * EOF (i.e. connection close) — so without `async` the entry script
+ * doesn't run and hydration stalls until the slowest resource completes.
+ *
+ * We emit a one-shot console warning at `createRenderer({ stream: true })`
+ * time listing the offending entry scripts and showing the recommended
+ * fix. Auto-rewriting would be invasive (and could surprise users with
+ * explicit ordering needs), so we just nudge.
+ */
+function warnIfStreamingTemplateLacksAsyncEntry(template: string): void {
+  const re =
+    /<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["']([^"']+)["'][^>]*><\/script>/g
+  const offenders: { tag: string; src: string }[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(template)) !== null) {
+    if (/\basync\b/.test(m[0])) continue
+    offenders.push({ tag: m[0], src: m[1] })
+  }
+  if (offenders.length === 0) return
+
+  const list = offenders
+    .map(({ src }) => `  • <script type="module" src="${src}">`)
+    .join("\n")
+  const example = `  <script type="module" async src="${offenders[0].src}">`
+
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[kiru] Streaming SSR is enabled but the HTML template contains entry script tag(s) without \`async\`:\n${list}\n\n` +
+      `\`<script type="module">\` is implicitly deferred to \`DOMContentLoaded\`, which does not fire until the streamed response closes — so hydration will block on the slowest in-flight \`resource()\` call.\n\n` +
+      `Add \`async\` to hydrate as soon as the script downloads:\n${example}\n`
+  )
+}
+
 function appendTokenToDocument(
   document: DocumentHead,
   requestContext: CustomRequestContext,
@@ -541,31 +633,6 @@ function appendTokenToDocument(
   if (!requestContext) return
   const token = makeKiruContextToken(requestContext, secret)
   document.headHtml += `\n    <script type="application/json" k-request-token>${token}</script>`
-}
-
-function createTemplatedStream(
-  source: ReadableStream<string>,
-  template: { prefix: string; suffix: string }
-): ReadableStream<string> {
-  return new ReadableStream<string>({
-    async start(controller) {
-      controller.enqueue(template.prefix)
-      const reader = source.getReader()
-      try {
-        while (true) {
-          const next = await reader.read()
-          if (next.done) break
-          controller.enqueue(next.value)
-        }
-        controller.enqueue(template.suffix)
-        controller.close()
-      } catch (error) {
-        controller.error(error)
-      } finally {
-        reader.releaseLock()
-      }
-    },
-  })
 }
 
 function toPathname(url: string): string {

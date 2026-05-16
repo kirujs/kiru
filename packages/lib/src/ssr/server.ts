@@ -15,8 +15,35 @@ d.currentScript.remove()
 </script>
 `.replace(/\s+/g, " ")
 
+export interface RenderToReadableStreamOptions {
+  /**
+   * Invoked once the synchronous shell render is complete, with the full
+   * shell HTML buffered into a string. Whatever the callback writes to the
+   * supplied controller becomes the first emission(s) of the stream;
+   * streamed data scripts are then appended as their resolving promises
+   * settle.
+   *
+   * Use this to assemble surrounding template fragments (prefix/suffix),
+   * inject CSS into the shell, or otherwise transform the static portion
+   * of the document atomically. Crucially, this lets streaming SSR flush
+   * the document close tags (`</body></html>`) *before* the async data
+   * scripts arrive, so the HTML parser sees `</html>` early and any
+   * implicitly-deferred `<script type="module">` entry tag can hydrate
+   * without waiting for the slowest in-flight resource.
+   *
+   * If omitted, the shell is enqueued verbatim as the first chunk.
+   *
+   * May be sync or async; data-script enqueues wait until this resolves.
+   */
+  onShellReady?: (
+    shell: string,
+    controller: ReadableStreamDefaultController<string>
+  ) => void | Promise<void>
+}
+
 export function renderToReadableStream(
-  element: JSX.Element
+  element: JSX.Element,
+  options?: RenderToReadableStreamOptions
 ): ReadableStream<string> {
   let controller!: ReadableStreamDefaultController<string>
   const stream = new ReadableStream<string>({
@@ -30,11 +57,24 @@ export function renderToReadableStream(
   const pendingWritePromises: Promise<void>[] = []
   let didQueueStreamedDataSetup = false
 
+  // Buffer sync shell writes so the caller can transform / wrap the whole
+  // shell in `onShellReady` instead of intercepting individual chunks.
+  let shellBuffer = ""
+  let resolveShellFlushed!: () => void
+  const shellFlushed = new Promise<void>((r) => {
+    resolveShellFlushed = r
+  })
+
   const ctx: HeadlessRenderContext = {
-    write: (chunk) => controller.enqueue(chunk),
+    write: (chunk) => {
+      shellBuffer += chunk
+    },
     onStreamData(data) {
       if (!didQueueStreamedDataSetup) {
-        controller.enqueue(STREAMED_DATA_SETUP)
+        // The setup script primes `window.__$k_data`. It must execute
+        // before any `__$k_data(...)` callsite, so it belongs in the
+        // shell (which is flushed first), not in the streamed data tail.
+        shellBuffer += STREAMED_DATA_SETUP
         didQueueStreamedDataSetup = true
       }
       for (const promise of data) {
@@ -44,7 +84,11 @@ export function renderToReadableStream(
         const writePromise = promise
           .then(() => ({ data: promise.value }))
           .catch(() => ({ error: promise.error?.message }))
-          .then((value) => {
+          .then(async (value) => {
+            // Hold each data-script enqueue until the shell is flushed,
+            // even if `onShellReady` is async. Without this, a fast-
+            // resolving promise could race ahead of the shell.
+            await shellFlushed
             controller.enqueue(
               `<script type="text/javascript">__$k_data("${promise.id}",${JSON.stringify(value)})</script>`
             )
@@ -57,9 +101,32 @@ export function renderToReadableStream(
 
   const prev = renderMode.current
   renderMode.current = "stream"
-  headlessRender(ctx, rootNode)
-  renderMode.current = prev
+  try {
+    headlessRender(ctx, rootNode)
+  } finally {
+    renderMode.current = prev
+  }
 
-  Promise.all(pendingWritePromises).then(() => controller.close())
+  void (async () => {
+    try {
+      if (options?.onShellReady) {
+        await options.onShellReady(shellBuffer, controller)
+      } else {
+        controller.enqueue(shellBuffer)
+      }
+    } catch (error) {
+      controller.error(error)
+      return
+    } finally {
+      resolveShellFlushed()
+    }
+    try {
+      await Promise.all(pendingWritePromises)
+      controller.close()
+    } catch (error) {
+      controller.error(error)
+    }
+  })()
+
   return stream
 }

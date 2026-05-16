@@ -15,6 +15,8 @@ export default function Layout({ children }: { children: JSX.Children }) {
         <Link to="/guarded">Guarded</Link>
         {" | "}
         <Link to="/blocked">Blocked (leave-guarded)</Link>
+        {" | "}
+        <Link to="/streaming-test">Streaming test</Link>
       </nav>
       {children}
     </main>

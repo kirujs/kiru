@@ -7,6 +7,12 @@
   </head>
   <body>
     <div id="app">{{kiru_body}}</div>
-    <script type="module" src="/src/client.tsx"></script>
+    <!--
+      `async` is required for streaming SSR: `<script type="module">` is
+      implicitly deferred to `DOMContentLoaded`, which doesn't fire until
+      the streamed response closes. The renderer logs a warning at startup
+      if this attribute is missing.
+    -->
+    <script type="module" async src="/src/client.tsx"></script>
   </body>
 </html>

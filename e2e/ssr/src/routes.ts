@@ -22,6 +22,10 @@ export const routes = defineRouteTree((r) =>
         component: () => import("./pages/user"),
         head: { title: "E2E SSR User {id}" },
       }),
+      r.get("/streaming-test", {
+        component: () => import("./pages/streaming-test"),
+        head: { title: "E2E SSR Streaming test" },
+      }),
       r.get("/guarded", {
         component: async () => ({
           default: () => "This page should be redirected away.",

@@ -4,7 +4,12 @@ import type { ViteDevServer, ModuleNode } from "vite"
 
 // ─── CSS helpers ────────────────────────────────────────────────────────────
 
-function extractEntryUrls(html: string): string[] {
+/**
+ * Extract `src` URLs from `<script type="module" src="…">` tags. Used to
+ * discover the application's entry script(s) — typically `/src/client.tsx` —
+ * so we can walk Vite's module graph for CSS dependencies.
+ */
+export function extractEntryUrls(html: string): string[] {
   const urls: string[] = []
   const re =
     /<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["']([^"']+)["'][^>]*>/g
@@ -14,6 +19,15 @@ function extractEntryUrls(html: string): string[] {
     if (!src.startsWith("/@") && !src.startsWith("/__")) urls.push(src)
   }
   return urls
+}
+
+function extractExistingStylesheetHrefs(html: string): Set<string> {
+  const hrefs = new Set<string>()
+  const re =
+    /<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["']([^"']+)["'][^>]*>/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) hrefs.add(m[1])
+  return hrefs
 }
 
 function gatherCssFromModule(root: ModuleNode): string[] {
@@ -36,19 +50,12 @@ function gatherCssFromModule(root: ModuleNode): string[] {
   return css
 }
 
-async function collectDevCssUrls(
+async function collectDevCssUrlsForEntries(
   server: ViteDevServer,
-  html: string
+  entryUrls: string[],
+  existingHrefs: Set<string>
 ): Promise<string[]> {
-  const entryUrls = extractEntryUrls(html)
   if (entryUrls.length === 0) return []
-
-  const existingHrefs = new Set<string>()
-  const linkRe =
-    /<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["']([^"']+)["'][^>]*>/g
-  let m: RegExpExecArray | null
-  while ((m = linkRe.exec(html)) !== null) existingHrefs.add(m[1])
-
   const cssUrls = new Set<string>()
   for (const url of entryUrls) {
     let mod = await server.moduleGraph.getModuleByUrl(url)
@@ -68,16 +75,53 @@ async function collectDevCssUrls(
   return [...cssUrls]
 }
 
+function formatCssLinkTags(urls: string[]): string {
+  if (urls.length === 0) return ""
+  return urls
+    .map((href) => `<link rel="stylesheet" href="${href}">`)
+    .join("\n    ")
+}
+
+/**
+ * Inject dev-mode CSS link tags into a full HTML string. Used by the SSG dev
+ * path which already has the entire rendered document in memory.
+ */
 export async function injectDevCssLinks(
   server: ViteDevServer,
   html: string
 ): Promise<string> {
-  const urls = await collectDevCssUrls(server, html)
-  if (urls.length === 0) return html
-  const tags = urls
-    .map((href) => `    <link rel="stylesheet" href="${href}">`)
-    .join("\n")
+  const entryUrls = extractEntryUrls(html)
+  if (entryUrls.length === 0) return html
+  const existing = extractExistingStylesheetHrefs(html)
+  const cssUrls = await collectDevCssUrlsForEntries(server, entryUrls, existing)
+  const tags = formatCssLinkTags(cssUrls)
+  if (!tags) return html
   return html.replace("</head>", `${tags}\n  </head>`)
+}
+
+/**
+ * Resolve dev-mode CSS link tags for the streaming SSR path.
+ *
+ * The streaming SSR response carries the entry `<script type="module">` in
+ * the template *suffix*, which only flushes after the synchronous body
+ * render. We therefore can't extract entries from the response in time to
+ * inject CSS into the head — caller passes the pre-resolved entry URLs
+ * (cached from the static `index.html` template) instead.
+ *
+ * Returns the formatted `<link rel="stylesheet">` tags, or `""` when no CSS
+ * needs to be injected.
+ */
+async function resolveDevCssLinkTagsForEntries(
+  server: ViteDevServer,
+  entryUrls: string[]
+): Promise<string> {
+  if (entryUrls.length === 0) return ""
+  const cssUrls = await collectDevCssUrlsForEntries(
+    server,
+    entryUrls,
+    new Set()
+  )
+  return formatCssLinkTags(cssUrls)
 }
 
 // ─── SSR request bridge ──────────────────────────────────────────────────────
@@ -85,7 +129,7 @@ export async function injectDevCssLinks(
 /**
  * Convert a Node.js IncomingMessage into a Fetch API Request so we can call
  * a Hono app's `fetch` handler directly — giving us the Response object
- * before anything hits the socket, which lets us inject CSS cleanly.
+ * before anything hits the socket.
  */
 function nodeToFetchRequest(req: IncomingMessage): Request {
   const host = req.headers["host"] ?? "localhost"
@@ -113,40 +157,65 @@ function nodeToFetchRequest(req: IncomingMessage): Request {
   return new Request(url, { method, headers })
 }
 
-/**
- * Kiru streaming SSR uses `ReadableStream<string>`; undici's
- * `response.text()` / `arrayBuffer()` only accept byte chunks. Read manually.
- */
-async function readFetchBodyAsBuffer(response: Response): Promise<Buffer> {
-  if (!response.body) return Buffer.alloc(0)
-  const reader = response.body.getReader()
-  const parts: Buffer[] = []
+// ─── Response writers ────────────────────────────────────────────────────────
+
+const HEAD_CLOSE_RE = /<\/head\s*>/i
+const HEAD_LOOKAHEAD_CAP_BYTES = 256 * 1024
+
+function chunkToString(value: unknown, decoder: TextDecoder): string {
+  if (typeof value === "string") return value
+  if (value instanceof Uint8Array) {
+    return decoder.decode(value, { stream: true })
+  }
+  return ""
+}
+
+function applyResponseHeaders(response: Response, res: ServerResponse): void {
+  res.statusCode = response.status
+  response.headers.forEach((value, key) => {
+    if (key.toLowerCase() === "content-length") return
+    res.setHeader(key, value)
+  })
+}
+
+async function pipeReaderRaw(
+  reader: ReadableStreamDefaultReader<unknown>,
+  res: ServerResponse
+): Promise<void> {
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
-    if (value === undefined || value === null) continue
     if (typeof value === "string") {
-      parts.push(Buffer.from(value, "utf8"))
+      res.write(value)
     } else if (value instanceof Uint8Array) {
-      parts.push(Buffer.from(value))
-    } else {
-      throw new TypeError(
-        `[vite-plugin-kiru] Unexpected response body chunk type: ${typeof value}`,
-      )
+      res.write(Buffer.from(value))
     }
   }
-  return Buffer.concat(parts)
 }
 
 /**
- * Write a Fetch API Response back to a Node.js ServerResponse, optionally
- * transforming HTML bodies (e.g. to inject CSS link tags).
+ * Stream a Fetch Response to a Node ServerResponse, preserving chunked
+ * delivery so streaming SSR actually streams in dev. For HTML responses,
+ * the first occurrence of `</head>` triggers a one-shot head-injection
+ * callback (used to add dev CSS link tags); every subsequent chunk is
+ * forwarded verbatim with no further inspection.
+ *
+ * The pre-`</head>` buffer is bounded by {@link HEAD_LOOKAHEAD_CAP_BYTES};
+ * if the close tag never arrives, the buffered prefix is flushed as-is and
+ * injection is skipped — the response is never held back indefinitely.
  */
-async function writeFetchResponse(
+async function streamFetchResponseToNode(
   response: Response,
   res: ServerResponse,
-  transformHtml?: (html: string) => Promise<string>
+  injectHeadHtml?: () => Promise<string>
 ): Promise<void> {
+  applyResponseHeaders(response, res)
+
+  if (!response.body) {
+    res.end()
+    return
+  }
+
   const contentType = response.headers.get("content-type") ?? ""
   const isHtml =
     contentType.includes("text/html") ||
@@ -154,22 +223,63 @@ async function writeFetchResponse(
       response.status < 300 &&
       contentType === "")
 
-  let body: Buffer
-  if (isHtml && transformHtml) {
-    const html = (await readFetchBodyAsBuffer(response)).toString("utf8")
-    const transformed = await transformHtml(html)
-    body = Buffer.from(transformed, "utf8")
-  } else {
-    body = await readFetchBodyAsBuffer(response)
-  }
+  const reader = response.body.getReader()
+  try {
+    if (!isHtml || !injectHeadHtml) {
+      await pipeReaderRaw(reader, res)
+      return
+    }
 
-  res.statusCode = response.status
-  response.headers.forEach((value, key) => {
-    if (key.toLowerCase() !== "content-length") res.setHeader(key, value)
-  })
-  res.setHeader("content-length", body.byteLength)
-  res.end(body)
+    const decoder = new TextDecoder("utf-8", { fatal: false })
+    let headBuffer = ""
+    let injected = false
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const text = chunkToString(value, decoder)
+      if (!text) continue
+
+      if (injected) {
+        res.write(text)
+        continue
+      }
+
+      headBuffer += text
+      const match = HEAD_CLOSE_RE.exec(headBuffer)
+      if (match) {
+        const tags = await injectHeadHtml()
+        const insertion = tags ? `${tags}\n    ` : ""
+        res.write(
+          headBuffer.slice(0, match.index) +
+            insertion +
+            headBuffer.slice(match.index)
+        )
+        headBuffer = ""
+        injected = true
+      } else if (headBuffer.length > HEAD_LOOKAHEAD_CAP_BYTES) {
+        // `</head>` is suspiciously far away — give up and pass through.
+        res.write(headBuffer)
+        headBuffer = ""
+        injected = true
+      }
+    }
+
+    // Flush any remaining decoder state and pending buffer.
+    const tail = decoder.decode()
+    if (injected) {
+      if (tail) res.write(tail)
+    } else {
+      if (tail) headBuffer += tail
+      if (headBuffer) res.write(headBuffer)
+    }
+  } finally {
+    reader.releaseLock()
+    res.end()
+  }
 }
+
+// ─── Public entry point ──────────────────────────────────────────────────────
 
 export interface SsrDevOptions {
   /**
@@ -178,14 +288,21 @@ export interface SsrDevOptions {
    * - a `fetch(request: Request) => Response` function as the default export.
    */
   serverEntry: string
+  /**
+   * Returns the application's entry script URLs (e.g. `["/src/client.tsx"]`).
+   * These are walked through Vite's module graph to gather CSS that needs to
+   * be link-injected into `<head>` to prevent FOUC in dev. The caller is
+   * expected to derive these from the static HTML template once and cache
+   * them — reading them on every chunk would force re-buffering.
+   */
+  getEntryUrls: () => Promise<string[]>
 }
 
 /**
  * Handle a single SSR dev request by loading the user's server module fresh via
- * ssrLoadModule (so HMR invalidation is respected), calling `default.fetch` or
- * `default` as a fetch handler, injecting render-blocking CSS links into HTML
- * responses, then writing the
- * result back to the Node.js response.
+ * `ssrLoadModule` (so HMR invalidation is respected), calling `default.fetch`
+ * or `default` as a fetch handler, and streaming the result back to the Node
+ * response with render-blocking CSS links injected into `<head>` on the fly.
  *
  * Returns `true` if the request was handled, `false` to let the next
  * middleware run (e.g. for plain-text 404s where no kiru route matched).
@@ -228,8 +345,9 @@ export async function handleSsrDevRequest(
     return false
   }
 
-  await writeFetchResponse(response, res, (html) =>
-    injectDevCssLinks(server, html)
-  )
+  await streamFetchResponseToNode(response, res, async () => {
+    const entryUrls = await opts.getEntryUrls()
+    return resolveDevCssLinkTagsForEntries(server, entryUrls)
+  })
   return true
 }

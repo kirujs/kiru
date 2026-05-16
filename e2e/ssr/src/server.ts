@@ -26,6 +26,7 @@ declare module "kiru/router" {
 }
 
 const renderer = createRenderer({
+  stream: true,
   routes,
   htmlTemplate,
   actions: {

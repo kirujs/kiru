@@ -56,7 +56,7 @@ const todos: TodoItem[] = [
 ]
 
 export const getTodos = action(async () => {
-  await new Promise((r) => setTimeout(r, 1000))
+  await new Promise((r) => setTimeout(r, 4000))
   return todos
 })
 
