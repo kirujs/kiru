@@ -1,24 +1,10 @@
-import { readFileSync, existsSync } from "node:fs"
-import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
 import { Hono } from "hono"
 import { serveStatic } from "@hono/node-server/serve-static"
-import { createRenderer } from "kiru/router"
+import { createRenderer, resolveStatic } from "kiru/router"
 import { routes } from "../routes"
 
 const isProd = process.env.NODE_ENV === "production"
-const entryDir = dirname(fileURLToPath(import.meta.url))
-/** Production runs the Vite SSR bundle under `dist/server/`; dev uses `src/`. */
-const root = join(entryDir, "..", "..")
-
-const clientDist = join(root, "dist", "client")
-const templatePath =
-  isProd && existsSync(join(clientDist, "index.html"))
-    ? join(clientDist, "index.html")
-    : join(root, "index.html")
-const htmlTemplate = readFileSync(templatePath, "utf8")
-
-const remoteSecret = "sandbox-ssr-remote-secret"
+const { clientDir, htmlTemplate } = resolveStatic(import.meta.url, { dev: !isProd })
 
 interface User {
   name: string
@@ -36,7 +22,7 @@ const renderer = createRenderer({
   routes,
   htmlTemplate,
   actions: {
-    secret: remoteSecret,
+    secret: "sandbox-ssr-remote-secret",
     /** Wildcard keeps `pnpm dev` working regardless of host/port; tighten in production. */
     allowedOrigins: ["*"],
     exposeErrors: true,
@@ -46,16 +32,7 @@ const renderer = createRenderer({
 const app = new Hono()
 
 if (isProd) {
-  app.use(
-    "/assets/*",
-    serveStatic({
-      root: join(clientDist, "assets"),
-      rewriteRequestPath: (p) => {
-        const rel = p.slice("/assets".length).replace(/^\//, "")
-        return rel || "."
-      },
-    }),
-  )
+  app.use("/assets/*", serveStatic({ root: clientDir }))
 }
 
 app.all("*", async (c, next) => {
