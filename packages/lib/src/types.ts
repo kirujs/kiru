@@ -274,7 +274,7 @@ declare global {
       | Kiru.Element
       | PrimitiveChild
       | Kiru.Signal<PrimitiveChild>
-      | Kiru.FC<any>
+      | Kiru.Component<any>
 
     interface ElementAttributes {
       key?: JSX.ElementKey
@@ -293,19 +293,19 @@ declare global {
       children?: JSX.Children
     }
 
-    interface Context<T> extends Kiru.FC<ContextProps<T>> {
+    interface Context<T> extends Kiru.Component<ContextProps<T>> {
       [$CONTEXT]: () => T
     }
 
-    export interface FC<T = {}> {
+    export interface Component<T = {}> {
       (
         props: T
-      ): Exclude<JSX.Element, Kiru.FC<any>> | ((props: T) => JSX.Element)
+      ): Exclude<JSX.Element, Kiru.Component<any>> | ((props: T) => JSX.Element)
       /** Used to display the name of the component in devtools  */
       displayName?: string
     }
 
-    type InferProps<T> = T extends Kiru.FC<infer P> ? P : never
+    type InferProps<T> = T extends Kiru.Component<infer P> ? P : never
 
     interface RefObject<T> {
       current: T

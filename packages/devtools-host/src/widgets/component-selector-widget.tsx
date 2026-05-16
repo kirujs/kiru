@@ -29,7 +29,7 @@ interface ComponentSelectorWidgetProps {
   state: kiru.TransitionState
 }
 
-export const ComponentSelectorWidget: Kiru.FC<
+export const ComponentSelectorWidget: Kiru.Component<
   ComponentSelectorWidgetProps
 > = () => {
   const [mousePos, disposeMousePositionTracker] = createMousePositionTracker()

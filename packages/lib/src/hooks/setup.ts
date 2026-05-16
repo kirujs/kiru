@@ -11,11 +11,11 @@ const OWN_KEYS = `__KEYS__`
 
 export interface Setup<Props extends {}> {
   readonly derive: <T>(
-    selector: (props: Props extends Kiru.FC<infer P> ? P : Props) => T
+    selector: (props: Props extends Kiru.Component<infer P> ? P : Props) => T
   ) => Signal<T>
   readonly id: Signal<string>
   // Not reactive — for use in render functions only
-  readonly props: Readonly<Props extends Kiru.FC<infer P> ? P : Props>
+  readonly props: Readonly<Props extends Kiru.Component<infer P> ? P : Props>
 }
 
 /**
@@ -48,7 +48,7 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
   let id: Signal<string>
   let propsProxy: InferredProps
 
-  type InferredProps = Props extends Kiru.FC<infer R> ? R : Props
+  type InferredProps = Props extends Kiru.Component<infer R> ? R : Props
   const propSyncs = (vNode.propSyncs = []) as ((props: InferredProps) => void)[]
 
   let prevIndex = -1
@@ -84,7 +84,7 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
 
   const setupResult: Setup<Props> = {
     derive<T>(
-      selector: (props: Props extends Kiru.FC<infer P> ? P : Props) => T
+      selector: (props: Props extends Kiru.Component<infer P> ? P : Props) => T
     ) {
       const resultSig = signal(undefined!) as Signal<T>
       const unsubs = new Map<string, () => void>()

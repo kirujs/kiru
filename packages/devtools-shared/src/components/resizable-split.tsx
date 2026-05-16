@@ -10,7 +10,7 @@ interface ResizableSplitProps
   children: [JSX.Element, JSX.Element]
   minContainerWidth?: number
 }
-export const ResizableSplit: Kiru.FC<ResizableSplitProps> = (props) => {
+export const ResizableSplit: Kiru.Component<ResizableSplitProps> = (props) => {
   const minContainerWidth = props.minContainerWidth ?? 250
   const cleanups: (() => void)[] = []
   const dispose = () => {

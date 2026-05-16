@@ -237,7 +237,7 @@ interface TooltipMenuButtonProps extends kiru.ElementProps<"button"> {
   active?: kiru.Signal<boolean>
 }
 
-const TooltipMenuButton: Kiru.FC<TooltipMenuButtonProps> = () => {
+const TooltipMenuButton: Kiru.Component<TooltipMenuButtonProps> = () => {
   const { derive } = kiru.setup<TooltipMenuButtonProps>()
 
   const $class = derive(({ className, active }) => {

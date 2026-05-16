@@ -16,7 +16,7 @@ interface EmbeddedOverlayProps {
 
 const OVERLAY_POSITION_STORAGE_KEY = "kiru.devtools.overlayPosition"
 
-export const EmbeddedOverlay: Kiru.FC<EmbeddedOverlayProps> = () => {
+export const EmbeddedOverlay: Kiru.Component<EmbeddedOverlayProps> = () => {
   const overlayController = createDraggableController({
     storage: sessionStorage,
     key: OVERLAY_POSITION_STORAGE_KEY,

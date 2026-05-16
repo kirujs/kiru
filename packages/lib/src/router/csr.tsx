@@ -847,7 +847,7 @@ export type LinkProps = JSX.IntrinsicElements["a"] & {
   children?: JSX.Children
 }
 
-export const Link: Kiru.FC<LinkProps> = () => {
+export const Link: Kiru.Component<LinkProps> = () => {
   const $ = setup<typeof Link>()
   const router = useRouter()
 

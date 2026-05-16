@@ -5,10 +5,10 @@ import { node } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"
 
 interface FCModule {
-  default: Kiru.FC<any>
+  default: Kiru.Component<any>
 }
 
-type LazyImportValue = Kiru.FC<any> | FCModule
+type LazyImportValue = Kiru.Component<any> | FCModule
 
 type InferLazyImportProps<T extends LazyImportValue> = T extends FCModule
   ? Kiru.InferProps<T["default"]>
@@ -16,7 +16,7 @@ type InferLazyImportProps<T extends LazyImportValue> = T extends FCModule
 
 interface LazyState {
   promise: Promise<LazyImportValue>
-  result: Kiru.FC | null
+  result: Kiru.Component | null
   error?: Error
 }
 
@@ -35,7 +35,7 @@ const lazyCache: Map<string, LazyState> = isBrowser
  */
 export function lazy<T extends LazyImportValue>(
   componentPromiseFn: () => Promise<T>
-): Kiru.FC<LazyComponentProps<T>> {
+): Kiru.Component<LazyComponentProps<T>> {
   function LazyWrapper(props: LazyComponentProps<T>) {
     const { fallback = null, ...rest } = props
     const nodeRef = node.current!

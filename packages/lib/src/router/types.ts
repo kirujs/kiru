@@ -1,4 +1,4 @@
-export type RouteModule = { default: Kiru.FC<any> } | Kiru.FC<any>
+export type RouteModule = { default: Kiru.Component<any> } | Kiru.Component<any>
 export type RouteLoader = () => Promise<RouteModule>
 
 /** Props passed to SSR `error` route modules after a thrown render failure. */
@@ -6,7 +6,7 @@ export interface ErrorPageProps {
   error: Error
 }
 
-export type ErrorPage = Kiru.FC<ErrorPageProps>
+export type ErrorPage = Kiru.Component<ErrorPageProps>
 
 /** Coerce any thrown value into `Error` for {@link ErrorPageProps}. */
 export function toRenderError(thrown: unknown): Error {

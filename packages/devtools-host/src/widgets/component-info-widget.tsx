@@ -90,7 +90,7 @@ function getComponentBoundingBox(component: Kiru.VNode) {
   return { top: minTop, left: minLeft, width, height }
 }
 
-const ComponentInfoPanel: Kiru.FC<{
+const ComponentInfoPanel: Kiru.Component<{
   panel: ComponentInfoPanelState
   index: number
   state: kiru.TransitionState
@@ -407,7 +407,7 @@ const ComponentInfoPanel: Kiru.FC<{
   }
 }
 
-export const ComponentInfoWidget: Kiru.FC<ComponentInfoWidgetProps> = ({
+export const ComponentInfoWidget: Kiru.Component<ComponentInfoWidgetProps> = ({
   state,
 }) => (
   <kiru.For each={componentInfoPanels}>

@@ -25,7 +25,7 @@ interface TransitionProps {
  * Enables control of the DOM in a procedural/coroutine-like fashion. Useful for modals, drawers, dialogs and more.
  * @see https://kirujs.dev/docs/components/transition
  */
-export const Transition: Kiru.FC<TransitionProps> = () => {
+export const Transition: Kiru.Component<TransitionProps> = () => {
   const $ = setup<typeof Transition>()
   const tState = $.derive<TransitionState>((p) => p.initialState || "exited")
   const inState = $.derive((p) => unwrap(p.in, true))

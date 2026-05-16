@@ -18,7 +18,7 @@ const PROFILER_SIZE_STORAGE_KEY = "kiru.devtools.profilerSize"
 interface ProfilingWidgetProps {
   state: kiru.TransitionState
 }
-export const ProfilingWidget: Kiru.FC<ProfilingWidgetProps> = () => {
+export const ProfilingWidget: Kiru.Component<ProfilingWidgetProps> = () => {
   const dragController = createDraggableController({
     key: PROFILER_POSITION_STORAGE_KEY,
     storage: sessionStorage,

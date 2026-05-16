@@ -27,7 +27,7 @@ const DEBUGGER_SIZE_STORAGE_KEY = "kiru.devtools.debuggerSize"
 interface DebuggerWidgetProps {
   state: kiru.TransitionState
 }
-export const DebuggerWidget: Kiru.FC<DebuggerWidgetProps> = () => {
+export const DebuggerWidget: Kiru.Component<DebuggerWidgetProps> = () => {
   const dragController = createDraggableController({
     key: DEBUGGER_POSITION_STORAGE_KEY,
     storage: sessionStorage,
@@ -118,7 +118,7 @@ interface DebuggerEntryWithLink extends DebuggerEntry {
   link: string | null
 }
 
-const DebuggerView: Kiru.FC = () => {
+const DebuggerView: Kiru.Component = () => {
   const debuggerEntries = kiru.signal<DebuggerEntryWithLink[]>([])
 
   kiru.onMount(() => {
@@ -160,7 +160,7 @@ const DebuggerView: Kiru.FC = () => {
   )
 }
 
-const DebuggerEntryCard: Kiru.FC<{ entry: DebuggerEntryWithLink }> = ({
+const DebuggerEntryCard: Kiru.Component<{ entry: DebuggerEntryWithLink }> = ({
   entry,
 }) => {
   const settings = devtoolsState.viewerSettings.peek()
@@ -217,7 +217,7 @@ const DebuggerEntryCard: Kiru.FC<{ entry: DebuggerEntryWithLink }> = ({
   )
 }
 
-const FileLink: Kiru.FC<{ link: string | null }> = ({ link }) => {
+const FileLink: Kiru.Component<{ link: string | null }> = ({ link }) => {
   if (!link) return null
 
   return (

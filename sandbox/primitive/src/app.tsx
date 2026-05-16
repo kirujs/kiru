@@ -21,7 +21,7 @@ interface CounterProps {
   items: number[]
 }
 
-const Counter: Kiru.FC<CounterProps> = () => {
+const Counter: Kiru.Component<CounterProps> = () => {
   const { derive, props } = setup<typeof Counter>()
   const count = derive((props) => props.foo.initialCount)
 

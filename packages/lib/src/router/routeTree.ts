@@ -84,6 +84,6 @@ export function buildRoutedSubtree(
   return app
 }
 
-function asComponent(module: RouteModule): Kiru.FC<any> {
+function asComponent(module: RouteModule): Kiru.Component<any> {
   return typeof module === "function" ? module : module.default
 }
