@@ -296,6 +296,12 @@ export interface SsrDevOptions {
    * them — reading them on every chunk would force re-buffering.
    */
   getEntryUrls: () => Promise<string[]>
+  /**
+   * Loads dev-only side-effect modules before the app handles the request.
+   * Used for remote action registration so action POSTs see hot updates even
+   * when no page module has been refreshed in the browser.
+   */
+  loadRemoteRegistry?: () => Promise<void>
 }
 
 /**
@@ -313,6 +319,7 @@ export async function handleSsrDevRequest(
   res: ServerResponse,
   opts: SsrDevOptions
 ): Promise<boolean> {
+  await opts.loadRemoteRegistry?.()
   const appMod = await server.ssrLoadModule(opts.serverEntry)
   const exported = appMod?.default as
     | { fetch?: typeof fetch }

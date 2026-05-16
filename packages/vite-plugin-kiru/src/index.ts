@@ -28,6 +28,8 @@ import type {
   UserConfig,
 } from "vite"
 
+const REMOTE_REGISTRY_VIRTUAL_ID = "virtual:kiru:remote-registry"
+
 function isSsrBundleBuild(userConfig: UserConfig): boolean {
   const ssr = userConfig.build?.ssr
   return ssr === true || typeof ssr === "string"
@@ -90,6 +92,18 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             onlyFiles: true,
           })
         ).map((filePath) => filePath.replace(/\\/g, "/"))
+
+        virtualModules[REMOTE_REGISTRY_VIRTUAL_ID] = () => {
+          const imports = state.remotePaths
+            .map((filePath) => {
+              const viteId =
+                "/" +
+                path.relative(state.projectRoot, filePath).replace(/\\/g, "/")
+              return `import ${JSON.stringify(viteId)};`
+            })
+            .join("\n")
+          return `${imports}\nexport {};`
+        }
       }
     },
     transformIndexHtml() {
@@ -123,14 +137,29 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       // The plugin owns the full request pipeline here, giving us access to
       // the Response object before anything hits the socket — no patching needed.
       if (!router.ssg && router.serverEntry) {
-        const serverEntry = path.resolve(state.projectRoot, router.serverEntry)
+        const serverEntry = path
+          .resolve(state.projectRoot, router.serverEntry)
+          .replace(/\\/g, "/")
 
         // The streaming SSR response carries the entry `<script>` tag in the
         // suffix (after the body), so we can't extract it from the response in
         // time to inject CSS into the head. Instead, derive entry URLs from
         // the project's index.html template once and invalidate on edit.
         const templateName = opts.router?.htmlTemplate ?? "index.html"
-        const templatePath = path.resolve(state.projectRoot, templateName)
+        const templatePath = path
+          .resolve(state.projectRoot, templateName)
+          .replace(/\\/g, "/")
+        const invalidateRemoteRegistry = () => {
+          const mod = server.moduleGraph.getModuleById(
+            "\0" + REMOTE_REGISTRY_VIRTUAL_ID
+          )
+          if (mod) server.moduleGraph.invalidateModule(mod)
+        }
+        let serverEntryVersion = 0
+        const getServerEntry = () =>
+          serverEntryVersion === 0
+            ? serverEntry
+            : `${serverEntry}?kiru-html=${serverEntryVersion}`
         let cachedEntryUrls: string[] | null = null
         const getEntryUrls = async (): Promise<string[]> => {
           if (cachedEntryUrls) return cachedEntryUrls
@@ -143,7 +172,19 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           return cachedEntryUrls
         }
         server.watcher.on("change", (file) => {
-          if (path.resolve(file) === templatePath) cachedEntryUrls = null
+          const resolvedFile = path.resolve(file).replace(/\\/g, "/")
+          if (resolvedFile === templatePath) {
+            cachedEntryUrls = null
+            serverEntryVersion++
+            const serverEntryModules =
+              server.moduleGraph.getModulesByFile(serverEntry) ?? []
+            for (const mod of serverEntryModules) {
+              server.moduleGraph.invalidateModule(mod)
+            }
+          }
+          if (state.remotePaths.includes(resolvedFile)) {
+            invalidateRemoteRegistry()
+          }
         })
 
         server.middlewares.use(async (req, res, next) => {
@@ -157,8 +198,13 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           }
           try {
             const handled = await handleSsrDevRequest(server, req, res, {
-              serverEntry,
+              serverEntry: getServerEntry(),
               getEntryUrls,
+              loadRemoteRegistry: state.router.remote
+                ? async () => {
+                    await server.ssrLoadModule(REMOTE_REGISTRY_VIRTUAL_ID)
+                  }
+                : undefined,
             })
             if (!handled) next()
           } catch (e) {
