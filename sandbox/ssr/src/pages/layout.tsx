@@ -63,6 +63,18 @@ export default function Layout() {
           >
             Route demo
           </Link>
+          <Link
+            to="/break-ssr"
+            className="rounded-full border border-rose-800/80 px-3 py-1 text-sm font-medium text-rose-200 hover:border-rose-400"
+          >
+            Break SSR
+          </Link>
+          <Link
+            to="/break-ssr-leaf"
+            className="rounded-full border border-amber-800/80 px-3 py-1 text-sm font-medium text-amber-200 hover:border-amber-400"
+          >
+            Break (leaf error)
+          </Link>
         </nav>
         <p
           data-testid="guard-events"

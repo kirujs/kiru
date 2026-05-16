@@ -175,7 +175,12 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
     return a.path.localeCompare(b.path)
   })
 
-  return { routes, rootHasNotFound }
+  return {
+    routes,
+    rootHasNotFound,
+    rootLayout: tree.root.layout,
+    rootError: tree.root.error,
+  }
 }
 
 export function matchRoute(

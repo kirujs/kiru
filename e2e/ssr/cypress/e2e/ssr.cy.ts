@@ -6,13 +6,22 @@ describe("SSR server", () => {
 
   it("serves hybrid static /docs route", () => {
     const port = Cypress.env("port")
+    // Request context is injected in SSR HTML but removed from the DOM during
+    // hydration (readHydratedRequestContext), so assert it on the raw response.
+    cy.request(`http://127.0.0.1:${port}/docs`).then((res) => {
+      expect(res.status).to.eq(200)
+      expect(res.body).to.include('id="__kiru_request_context__"')
+      expect(res.body).to.include("E2E User")
+      expect(res.body).to.include("Hybrid static docs")
+    })
+
     cy.visit(`http://127.0.0.1:${port}/docs`)
     cy.title().should("eq", "E2E SSR Docs (static)")
     cy.get('[data-testid="ssr-docs-static"]').should(
       "contain",
       "Hybrid static docs"
     )
-    cy.get("#__kiru_request_context__").should("contain", "E2E User")
+    cy.get('[data-testid="ssr-docs-user"]').should("contain", "E2E User")
     cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
   })
 
@@ -94,6 +103,53 @@ describe("SSR server", () => {
       failOnStatusCode: false,
     })
     cy.get('[data-testid="ssr-not-found"]').should("contain", "SSR not found")
+  })
+
+  describe("SSR error pages", () => {
+    it("renders scope error module when a matched route throws (500)", () => {
+      const port = Cypress.env("port")
+      cy.request({
+        url: `http://127.0.0.1:${port}/ssr-break`,
+        failOnStatusCode: false,
+      }).then((res) => {
+        expect(res.status).to.eq(500)
+        expect(res.body).to.include("e2e-ssr-boom")
+        expect(res.body).to.include('data-testid="ssr-error-page"')
+        expect(res.body).to.include('data-testid="ssr-layout"')
+      })
+
+      cy.visit(`http://127.0.0.1:${port}/ssr-break`, {
+        failOnStatusCode: false,
+      })
+      cy.get('[data-testid="ssr-layout"]').should("exist")
+      cy.get('[data-testid="ssr-error-page"]').should(
+        "contain",
+        "SSR error boundary: e2e-ssr-boom"
+      )
+    })
+
+    it("uses leaf route error over scope error", () => {
+      const port = Cypress.env("port")
+      cy.request({
+        url: `http://127.0.0.1:${port}/ssr-break-leaf`,
+        failOnStatusCode: false,
+      }).then((res) => {
+        expect(res.status).to.eq(500)
+        expect(res.body).to.include("e2e-ssr-leaf-boom")
+        expect(res.body).to.include('data-testid="ssr-leaf-error-page"')
+        expect(res.body).not.to.include('data-testid="ssr-error-page"')
+      })
+
+      cy.visit(`http://127.0.0.1:${port}/ssr-break-leaf`, {
+        failOnStatusCode: false,
+      })
+      cy.get('[data-testid="ssr-layout"]').should("exist")
+      cy.get('[data-testid="ssr-leaf-error-page"]').should(
+        "contain",
+        "Leaf error: e2e-ssr-leaf-boom"
+      )
+      cy.get('[data-testid="ssr-error-page"]').should("not.exist")
+    })
   })
 
   describe("streaming SSR", () => {

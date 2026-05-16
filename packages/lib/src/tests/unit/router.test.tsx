@@ -12,8 +12,11 @@ import {
   Link,
   matchRoute,
   hydratePrerenderedHtmlForRequest,
+  loadErrorRouteTree,
+  loadRootErrorRouteTree,
   prerenderStaticRoutes,
   stripPrerenderedRequestInjections,
+  toRenderError,
   useRouter,
   useRequestContext,
 } from "../../router/index.js"
@@ -445,6 +448,339 @@ describe("router", () => {
     const response = await renderer.render("/does-not-exist")
     assert.strictEqual(response?.status, 404)
     assert.ok((response?.body).includes("<main><p>missing</p></main>"))
+  })
+
+  it("renders scope error module when SSR throws after a matched route", async () => {
+    const errRoutes = defineRouteTree((x) =>
+      x.scope({
+        layout: async () => ({
+          default: ({ children }: { children: JSX.Children }) => (
+            <main data-layout="yes">{children}</main>
+          ),
+        }),
+        error: async () => ({
+          default: ({ error }: { error: Error }) => (
+            <p data-msg={error.message}>err-scope</p>
+          ),
+        }),
+        children: [
+          x.get(
+            "/break",
+            async () => ({
+              default: () => {
+                throw new Error("boom-matched")
+              },
+            })
+          ),
+        ],
+      })
+    )
+    const renderer = createRenderer({ routes: errRoutes })
+    const response = await renderer.render("/break")
+    assert.ok(response)
+    assert.strictEqual(response.status, 500)
+    assert.ok(
+      response.body.includes(
+        `<main data-layout="yes"><p data-msg="boom-matched">err-scope</p></main>`
+      )
+    )
+
+    const m = matchRoute(renderer.manifest, "/break")
+    assert.ok(m)
+    const tree = await loadErrorRouteTree(m!)
+    assert.ok(tree)
+    assert.strictEqual(typeof m.route.error, "function")
+  })
+
+  it("renders root error module when notFound subtree throws SSR", async () => {
+    const nfErr = defineRouteTree((x) =>
+      x.scope({
+        layout: async () => ({
+          default: ({ children }: { children: JSX.Children }) => (
+            <div className="shell">{children}</div>
+          ),
+        }),
+        notFound: async () => ({
+          default: () => {
+            throw "nf-string"
+          },
+        }),
+        error: async () => ({
+          default: ({ error }: { error: Error }) => (
+            <p className="roe">{error.message}</p>
+          ),
+        }),
+        children: [
+          x.get("/", async () => ({
+            default: () => <p>ok</p>,
+          })),
+        ],
+      })
+    )
+    const renderer = createRenderer({ routes: nfErr })
+    const response = await renderer.render("/gone")
+    assert.ok(response)
+    assert.strictEqual(response.status, 500)
+    assert.ok(response.body.includes(`<div class="shell"><p class="roe">nf-string</p></div>`))
+    const rootTree = await loadRootErrorRouteTree(renderer.manifest)
+    assert.ok(rootTree)
+  })
+
+  it("streaming SSR renders custom error page with HTML template", async () => {
+    const errRoutes = defineRouteTree((x) =>
+      x.scope({
+        error: async () => ({
+          default: ({ error }: { error: Error }) => (
+            <p>t-stream-{error.message}</p>
+          ),
+        }),
+        children: [
+          x.get(
+            "/bad",
+            async () => ({
+              default: () => {
+                throw new Error("sink")
+              },
+            })
+          ),
+        ],
+      })
+    )
+    const renderer = createRenderer({
+      stream: true,
+      routes: errRoutes,
+      htmlTemplate: MINIMAL_TPL,
+    })
+    const response = await renderer.render("/bad")
+    assert.ok(response)
+    assert.strictEqual(response.status, 500)
+    const reader = (response!.body as ReadableStream<string>).getReader()
+    let out = ""
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      out += next.value
+    }
+    reader.releaseLock()
+    assert.ok(out.includes("<!doctype html>"))
+    assert.ok(out.includes("t-stream-sink"))
+
+    assert.ok(renderer.manifest.rootError)
+  })
+
+  it("falls back to generic 500 HTML when route has no error module", async () => {
+    const plain = defineRouteTree((x) =>
+      x.scope({
+        children: [
+          x.get(
+            "/x",
+            async () => ({
+              default: () => {
+                throw new Error("silent")
+              },
+            })
+          ),
+        ],
+      })
+    )
+    const renderer = createRenderer({ routes: plain })
+    const response = await renderer.render("/x")
+    assert.ok(response)
+    assert.strictEqual(response.status, 500)
+    assert.ok(response.body.includes("<pre>silent</pre>"))
+  })
+
+  it("toRenderError preserves Error and wraps primitives", () => {
+    const e = new Error("exact")
+    assert.strictEqual(toRenderError(e), e)
+    assert.strictEqual(toRenderError("msg").message, "msg")
+    assert.strictEqual(toRenderError(42).message, "42")
+  })
+
+  it("uses leaf route error over ancestor scope error", async () => {
+    const layered = defineRouteTree((x) =>
+      x.scope({
+        layout: async () => ({
+          default: ({ children }: { children: JSX.Children }) => (
+            <aside>{children}</aside>
+          ),
+        }),
+        error: async () => ({
+          default: () => <p>wrong-scope-error</p>,
+        }),
+        children: [
+          x.get("/deep", {
+            error: async () => ({
+              default: ({ error }: { error: Error }) => (
+                <p>caught-leaf-{error.message}</p>
+              ),
+            }),
+            component: async () => ({
+              default: () => {
+                throw new Error("leaf-throw")
+              },
+            }),
+          }),
+        ],
+      })
+    )
+    const renderer = createRenderer({ routes: layered })
+    const response = await renderer.render("/deep")
+    assert.ok(response)
+    assert.strictEqual(response.status, 500)
+    assert.ok(response.body.includes("caught-leaf-leaf-throw"))
+    assert.ok(!response.body.includes("wrong-scope-error"))
+  })
+
+  it("uses innermost scope error when route does not define error", async () => {
+    const nested = defineRouteTree((x) =>
+      x.scope({
+        children: [
+          x.scope({
+            layout: async () => ({
+              default: ({ children }: { children: JSX.Children }) => (
+                <section id="inner">{children}</section>
+              ),
+            }),
+            error: async () => ({
+              default: ({ error }: { error: Error }) => (
+                <p>inner-{error.message}</p>
+              ),
+            }),
+            children: [
+              x.get(
+                "/inner-fail",
+                async () => ({
+                  default: () => {
+                    throw new Error("no-leaf-error")
+                  },
+                })
+              ),
+            ],
+          }),
+        ],
+      })
+    )
+    const renderer = createRenderer({ routes: nested })
+    const response = await renderer.render("/inner-fail")
+    assert.ok(response)
+    assert.strictEqual(response.status, 500)
+    assert.ok(
+      response.body.includes(
+        '<section id="inner"><p>inner-no-leaf-error</p></section>'
+      )
+    )
+  })
+
+  it("applies htmlTemplate in string mode for custom 500", async () => {
+    const r = defineRouteTree((x) =>
+      x.scope({
+        error: async () => ({
+          default: ({ error }: { error: Error }) => (
+            <p>string-err-{error.message}</p>
+          ),
+        }),
+        children: [
+          x.get(
+            "/se",
+            async () => ({
+              default: () => {
+                throw new Error("tpl")
+              },
+            })
+          ),
+        ],
+      })
+    )
+    const renderer = createRenderer({
+      routes: r,
+      htmlTemplate: MINIMAL_TPL,
+    })
+    const response = await renderer.render("/se")
+    assert.ok(response)
+    assert.strictEqual(response.status, 500)
+    assert.ok((response.body as string).toLowerCase().includes("<!doctype html>"))
+    assert.ok((response.body as string).includes("string-err-tpl"))
+  })
+
+  it("root error without root layout still renders for notFound failure", async () => {
+    const rootOnly = defineRouteTree((x) =>
+      x.scope({
+        notFound: async () => ({
+          default: () => {
+            throw new Error("nf-err")
+          },
+        }),
+        error: async () => ({
+          default: ({ error }: { error: Error }) => (
+            <p id="root-only">{error.message}</p>
+          ),
+        }),
+        children: [
+          x.get("/", async () => ({
+            default: () => <p>home</p>,
+          })),
+        ],
+      })
+    )
+    const manifest = compileRouteTree(rootOnly)
+    assert.strictEqual(manifest.rootLayout, undefined)
+    assert.ok(typeof manifest.rootError === "function")
+    assert.strictEqual((await loadRootErrorRouteTree(manifest))!.layoutModules.length, 0)
+
+    const renderer = createRenderer({ routes: rootOnly })
+    const response = await renderer.render("/nope")
+    assert.ok(response)
+    assert.strictEqual(response.status, 500)
+    assert.ok(response.body.includes('<p id="root-only">nf-err</p>'))
+  })
+
+  it("falls back to generic 500 when custom error loader rejects", async () => {
+    const badLoader = defineRouteTree((x) =>
+      x.scope({
+        children: [
+          x.get("/z", {
+            error: async () => {
+              throw new Error("loader-broke")
+            },
+            component: async () => ({
+              default: () => {
+                throw new Error("original-page")
+              },
+            }),
+          }),
+        ],
+      })
+    )
+    const renderer = createRenderer({ routes: badLoader })
+    const response = await renderer.render("/z")
+    assert.ok(response)
+    assert.strictEqual(response.status, 500)
+    assert.ok(response.body.includes("<pre>original-page</pre>"))
+    assert.ok(!response.body.includes("loader-broke"))
+  })
+
+  it("returns null from loadRootErrorRouteTree without root scope error", async () => {
+    const routesNoRootErr = defineRouteTree((x) =>
+      x.scope({
+        children: [
+          x.get("/", async () => ({
+            default: () => <p>home</p>,
+          })),
+        ],
+      })
+    )
+    const m = compileRouteTree(routesNoRootErr)
+    assert.strictEqual(await loadRootErrorRouteTree(m), null)
+    assert.strictEqual(m.rootError, undefined)
+    assert.strictEqual(m.rootLayout, undefined)
+  })
+
+  it("loadErrorRouteTree returns null when compiled route has no error", async () => {
+    const r = compileRouteTree(routes)
+    const match = matchRoute(r, "/")
+    assert.ok(match)
+    assert.strictEqual(await loadErrorRouteTree(match), null)
   })
 
   it("fillRouteHtmlTemplate injects head and body into a shell", () => {

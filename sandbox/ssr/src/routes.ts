@@ -6,6 +6,7 @@ export const routes = defineRouteTree((r) =>
       description: "Kiru server-rendered sandbox.",
     },
     layout: () => import("./pages/layout.tsx"),
+    error: () => import("./pages/error-page.tsx"),
     children: [
       r.get("/", {
         component: () => import("./pages/index.tsx"),
@@ -46,6 +47,21 @@ export const routes = defineRouteTree((r) =>
         head: {
           title: "Route demo — Kiru SSR",
           description: "Live pathname via useRouter (no route loaders).",
+        },
+      }),
+      r.get("/break-ssr", {
+        component: () => import("./pages/break-ssr.tsx"),
+        head: {
+          title: "SSR error demo — Kiru SSR",
+          description: "Throws during render; scope error module recovers.",
+        },
+      }),
+      r.get("/break-ssr-leaf", {
+        component: () => import("./pages/break-ssr-leaf.tsx"),
+        error: () => import("./pages/leaf-error-page.tsx"),
+        head: {
+          title: "SSR leaf error — Kiru SSR",
+          description: "Leaf error handler overrides scope error.",
         },
       }),
     ],

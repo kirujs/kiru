@@ -1,6 +1,5 @@
 import { createContext, useContext } from "../context.js"
 import { createElement } from "../element.js"
-import { makeKiruContextToken } from "../remote/token.js"
 import type { CustomRequestContext } from "./types.js"
 
 export const REQUEST_CONTEXT_SCRIPT_ID = "__kiru_request_context__"
@@ -44,16 +43,6 @@ export function serializeRequestContextScript(
   if (!ctx) return ""
   const json = escapeScriptJson(JSON.stringify(ctx))
   return `<script id="${REQUEST_CONTEXT_SCRIPT_ID}" type="application/json">${json}</script>`
-}
-
-/** Serialized `k-request-token` script for remote actions (SSR / prerender hydration). */
-export function serializeKiruRequestTokenScript(
-  ctx: CustomRequestContext | null | undefined,
-  secret: string
-): string {
-  if (!ctx) return ""
-  const token = makeKiruContextToken(ctx, secret)
-  return `<script type="application/json" k-request-token>${token}</script>`
 }
 
 export function readHydratedRequestContext(): CustomRequestContext {

@@ -19,6 +19,10 @@ export default function Layout({ children }: { children: JSX.Children }) {
         <Link to="/blocked">Blocked (leave-guarded)</Link>
         {" | "}
         <Link to="/streaming-test">Streaming test</Link>
+        {" | "}
+        <Link to="/ssr-break">SSR break</Link>
+        {" | "}
+        <Link to="/ssr-break-leaf">SSR break (leaf)</Link>
       </nav>
       {children}
     </main>

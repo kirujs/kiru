@@ -1,6 +1,19 @@
 export type RouteModule = { default: Kiru.FC<any> } | Kiru.FC<any>
 export type RouteLoader = () => Promise<RouteModule>
 
+/** Props passed to SSR `error` route modules after a thrown render failure. */
+export interface ErrorPageProps {
+  error: Error
+}
+
+export type ErrorPage = Kiru.FC<ErrorPageProps>
+
+/** Coerce any thrown value into `Error` for {@link ErrorPageProps}. */
+export function toRenderError(thrown: unknown): Error {
+  if (thrown instanceof Error) return thrown
+  return new Error(String(thrown))
+}
+
 /**
  * Custom per-request context for SSR/hydration.
  *
@@ -192,6 +205,10 @@ export interface RouteManifest {
   routes: CompiledRoute[]
   /** True when the root scope defines `notFound` (used for SSG `404.html`). */
   rootHasNotFound?: boolean
+  /** Root layout loader (SSR error UI when {@link rootError} runs without a matched route). */
+  rootLayout?: RouteLoader
+  /** Root scope `error` module for failures with no usable {@link CompiledRoute}. */
+  rootError?: RouteLoader
 }
 
 export interface RouteMatch {

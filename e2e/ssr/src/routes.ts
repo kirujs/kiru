@@ -5,6 +5,7 @@ export const routes = defineRouteTree((r) =>
     head: { description: "E2E SSR app." },
     layout: () => import("./pages/layout.tsx"),
     notFound: () => import("./pages/not-found"),
+    error: () => import("./pages/error-page"),
     children: [
       r.get("/", {
         component: () => import("./pages/index.tsx"),
@@ -43,6 +44,15 @@ export const routes = defineRouteTree((r) =>
           default: () => "If you see this, leave guard failed.",
         }),
         head: { title: "Blocked Route" },
+      }),
+      r.get("/ssr-break", {
+        component: () => import("./pages/ssr-break"),
+        head: { title: "SSR error (scope)" },
+      }),
+      r.get("/ssr-break-leaf", {
+        component: () => import("./pages/ssr-break-leaf"),
+        error: () => import("./pages/leaf-error-page"),
+        head: { title: "SSR error (leaf)" },
       }),
     ],
   })

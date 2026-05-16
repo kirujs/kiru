@@ -3,9 +3,9 @@ import { extname, join } from "node:path"
 import type { CustomRequestContext } from "./types.js"
 import {
   REQUEST_CONTEXT_SCRIPT_ID,
-  serializeKiruRequestTokenScript,
   serializeRequestContextScript,
 } from "./requestContext.js"
+import { serializeKiruRequestTokenScript } from "./renderer.js"
 
 /** Same shape as paths from {@link generateStaticPaths} / the route manifest. */
 export function normalizeRoutePathname(urlOrPath: string): string {

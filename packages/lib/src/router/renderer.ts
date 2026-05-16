@@ -14,7 +14,9 @@ import {
 } from "./prerenderedHtml.js"
 import {
   buildRoutedSubtree,
+  loadErrorRouteTree,
   loadNotFoundRouteTree,
+  loadRootErrorRouteTree,
   loadRouteTree,
 } from "./routeTree.js"
 import { resolveMetaTemplates, serializeDocumentHead } from "./meta.js"
@@ -26,22 +28,34 @@ import { RouterProvider, createStaticRouter } from "./csr.js"
 import { createHeadCollector, withHeadCollector } from "./headContext.js"
 import {
   RequestContextProvider,
-  serializeKiruRequestTokenScript,
   serializeRequestContextScript,
 } from "./requestContext.js"
-import type {
-  DocumentHead,
-  RenderResult,
-  StreamRenderResult,
-  RouteManifest,
-  RouteMatch,
-  RouteModule,
-  RouteTreeDefinition,
-  CustomRequestContext,
+import {
+  type CustomRequestContext,
+  type DocumentHead,
+  type ErrorPageProps,
+  type RenderResult,
+  type RouteManifest,
+  type RouteMatch,
+  type RouteModule,
+  type RouteTreeDefinition,
+  type StreamRenderResult,
+  toRenderError,
 } from "./types.js"
-import { createRemoteActionHandler } from "../remote/index.js"
+import { makeKiruContextToken, createRemoteActionHandler } from "../remote/index.js"
 import { __setSsrRequestContext } from "../remote/action.js"
 import { runGuards, toRedirect } from "./runNavigationGuards.js"
+
+/** Serialized `k-request-token` script for remote actions (SSR / prerender hydration). */
+export function serializeKiruRequestTokenScript(
+  ctx: CustomRequestContext | null | undefined,
+  secret: string
+): string {
+  if (!ctx) return ""
+  const token = makeKiruContextToken(ctx, secret)
+  return `<script type="application/json" k-request-token>${token}</script>`
+}
+
 
 export interface RenderRequestContext {
   headers?: HeadersInit
@@ -172,6 +186,15 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
       }
     }
 
+    const requestedPathForErrors = toPathname(url)
+    let failureContext:
+      | {
+          match: RouteMatch | null
+          requestContext: CustomRequestContext
+          pathname: string
+        }
+      | undefined
+
     try {
       const prepared = await prepareAppForUrl(url, ctx, manifest)
       if (!prepared) return null
@@ -206,6 +229,11 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
       }
 
       const { app, routeMatch, requestContext } = prepared
+      failureContext = {
+        match: routeMatch,
+        requestContext,
+        pathname: routeMatch?.pathname ?? requestedPathForErrors,
+      }
 
       if (options.stream) {
         // Assemble the full static document (prefix + shell + suffix) in a
@@ -280,10 +308,103 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
               : fullBody,
         },
       }
-    } catch (error) {
-      // TODO: implement custom error pages
+    } catch (caught) {
+      const renderErr = toRenderError(caught)
+
+      let recovery:
+        | {
+            app: JSX.Element
+            requestContext: CustomRequestContext
+          }
+        | undefined
+      try {
+        const tree =
+          failureContext?.match != null
+            ? await loadErrorRouteTree(failureContext.match)
+            : await loadRootErrorRouteTree(manifest)
+        if (tree) {
+          const requestContext =
+            failureContext?.requestContext ??
+            ((ctx?.context ?? {}) as CustomRequestContext)
+          recovery = {
+            app: buildAppElement(
+              failureContext?.pathname ?? requestedPathForErrors,
+              failureContext?.match?.params ?? {},
+              tree.layoutModules,
+              tree.routeModule,
+              manifest,
+              requestContext,
+              { error: renderErr } satisfies ErrorPageProps
+            ),
+            requestContext,
+          }
+        }
+      } catch {
+        recovery = undefined
+      }
+
+      if (recovery) {
+        const { app: recoveryApp, requestContext: recoveryCtx } = recovery
+
+        if (options.stream) {
+          __setSsrRequestContext(recoveryCtx)
+          const document: DocumentHead = {
+            headHtml: serializeRequestContextScript(recoveryCtx),
+          }
+          if (actionsSecret)
+            appendTokenToDocument(document, recoveryCtx, actionsSecret)
+          const stream = renderToReadableStream(recoveryApp, {
+            onShellReady: (shell, controller) =>
+              enqueueTemplatedShell(controller, {
+                compiledTemplate,
+                headHtml: document.headHtml,
+                shell,
+              }),
+          })
+          __setSsrRequestContext({})
+
+          return {
+            kind: "stream" as const,
+            result: {
+              status: 500,
+              headers: { ...DEFAULT_HEADERS, "transfer-encoding": "chunked" },
+              body: stream,
+            },
+          }
+        }
+
+        let body = ""
+        __setSsrRequestContext(recoveryCtx)
+        try {
+          body = renderToString(recoveryApp)
+        } finally {
+          __setSsrRequestContext({})
+        }
+
+        const documentHead: DocumentHead = {
+          headHtml: serializeRequestContextScript(recoveryCtx),
+        }
+        if (actionsSecret)
+          appendTokenToDocument(documentHead, recoveryCtx, actionsSecret)
+        const fullHead =
+          documentHead.headHtml +
+          (documentHead.headEndHtml ? `\n    ${documentHead.headEndHtml}` : "")
+        const fullBody = body + (documentHead.bodyEndHtml ?? "")
+        return {
+          kind: "string" as const,
+          result: {
+            status: 500,
+            headers: DEFAULT_HEADERS,
+            body:
+              compiledTemplate !== null
+                ? compiledTemplate.render(fullBody, fullHead)
+                : fullBody,
+          },
+        }
+      }
+
       const body = `<!DOCTYPE html><html><head><title>Error</title></head><body><pre>${String(
-        error instanceof Error ? error.message : error
+        renderErr.message
       ).replace(/</g, "&lt;")}</pre></body></html>`
       if (options.stream) {
         return {
@@ -407,7 +528,9 @@ async function renderStringWithDocument(
 
 export {
   buildRoutedSubtree,
+  loadErrorRouteTree,
   loadNotFoundRouteTree,
+  loadRootErrorRouteTree,
   loadRouteTree,
 } from "./routeTree.js"
 
@@ -417,7 +540,8 @@ function buildAppElement(
   layoutModules: Array<RouteModule | null>,
   routeModule: RouteModule,
   manifest: RouteManifest,
-  requestContext: CustomRequestContext
+  requestContext: CustomRequestContext,
+  leafProps?: ErrorPageProps
 ) {
   const staticRouter = createStaticRouter({
     manifest,
@@ -426,7 +550,7 @@ function buildAppElement(
     hash: "",
   })
   staticRouter.params.value = params
-  const subtree = buildRoutedSubtree(layoutModules, routeModule)
+  const subtree = buildRoutedSubtree(layoutModules, routeModule, leafProps)
   return createElement(RequestContextProvider, {
     value: requestContext,
     children: createElement(RouterProvider, {
