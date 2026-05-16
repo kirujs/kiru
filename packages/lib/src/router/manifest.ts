@@ -1,4 +1,9 @@
 import { mergeRouteHead } from "./meta.js"
+import {
+  formatPathname,
+  pathnameForMatch,
+  type RouterPathPolicy,
+} from "./pathPolicy.js"
 import type {
   CompiledRoute,
   CompiledRouteScope,
@@ -157,13 +162,13 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
       beforeEnter: Array.isArray(node.beforeEnter)
         ? node.beforeEnter
         : node.beforeEnter
-        ? [node.beforeEnter]
-        : undefined,
+          ? [node.beforeEnter]
+          : undefined,
       beforeActivate: Array.isArray(node.beforeActivate)
         ? node.beforeActivate
         : node.beforeActivate
-        ? [node.beforeActivate]
-        : undefined,
+          ? [node.beforeActivate]
+          : undefined,
       error: node.error ?? scopeError,
       pending: node.pending ?? scopePending,
     })
@@ -185,9 +190,12 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
 
 export function matchRoute(
   manifest: RouteManifest,
-  pathname: string
+  pathname: string,
+  pathPolicy?: RouterPathPolicy
 ): RouteMatch | null {
-  const normalizedPath = normalizePath(pathname.split("?")[0] || "/")
+  const normalizedPath = normalizePath(
+    pathnameForMatch(pathname.split("?")[0] || "/", pathPolicy)
+  )
 
   for (const route of manifest.routes) {
     const match = normalizedPath.match(route.pattern)
@@ -267,26 +275,161 @@ function applyParamsToPath(
   return normalizePath(path)
 }
 
+function isSegmentPrefix(
+  parentSegments: string[],
+  childSegments: string[]
+): boolean {
+  if (parentSegments.length >= childSegments.length) return false
+  for (let i = 0; i < parentSegments.length; i++) {
+    if (parentSegments[i] !== childSegments[i]) return false
+  }
+  return true
+}
+
+function findStaticParentRoute(
+  route: CompiledRoute,
+  staticRoutes: CompiledRoute[]
+): CompiledRoute | null {
+  let best: CompiledRoute | null = null
+  for (const candidate of staticRoutes) {
+    if (candidate.id === route.id) continue
+    if (!isSegmentPrefix(candidate.segments, route.segments)) continue
+    if (!best || candidate.segments.length > best.segments.length) {
+      best = candidate
+    }
+  }
+  return best
+}
+
+async function collectParamSetsForRoute(
+  route: CompiledRoute,
+  staticRoutes: CompiledRoute[],
+  cache: Map<string, Array<Record<string, string>>>
+): Promise<Array<Record<string, string>>> {
+  const cached = cache.get(route.id)
+  if (cached) return cached
+
+  if (route.params.length === 0) {
+    const empty: Array<Record<string, string>> = [{}]
+    cache.set(route.id, empty)
+    return empty
+  }
+
+  if (!route.generateStaticParams) {
+    throw new Error(
+      `Route "${route.path}" is static and dynamic, but generateStaticParams is missing`
+    )
+  }
+
+  const parent = findStaticParentRoute(route, staticRoutes)
+  if (parent?.params.length && !parent.generateStaticParams) {
+    throw new Error(
+      `Route "${route.path}" has static parent "${parent.path}" with dynamic segments, but parent generateStaticParams is missing`
+    )
+  }
+
+  const parentParamNames = parent?.params ?? []
+  const ownParamNames = route.params.filter(
+    (p) => !parentParamNames.includes(p)
+  )
+
+  let result: Array<Record<string, string>> = []
+
+  if (!parent || parent.params.length === 0) {
+    const generated = await route.generateStaticParams({ params: {} })
+    for (const row of generated) {
+      validateChildParams(route.path, row, {}, ownParamNames, route.params)
+      result.push(mergeParamRow({}, row, route.params))
+    }
+  } else {
+    const parentSets = await collectParamSetsForRoute(
+      parent,
+      staticRoutes,
+      cache
+    )
+    for (const parentParams of parentSets) {
+      const generated = await route.generateStaticParams({
+        params: { ...parentParams },
+      })
+      for (const row of generated) {
+        validateChildParams(
+          route.path,
+          row,
+          parentParams,
+          ownParamNames,
+          route.params
+        )
+        result.push(mergeParamRow(parentParams, row, route.params))
+      }
+    }
+  }
+
+  cache.set(route.id, result)
+  return result
+}
+
+function validateChildParams(
+  routePath: string,
+  childRow: Record<string, string>,
+  parentParams: Record<string, string>,
+  ownParamNames: string[],
+  allParamNames: string[]
+): void {
+  for (const key of Object.keys(childRow)) {
+    if (key in parentParams || !ownParamNames.includes(key)) {
+      throw new Error(
+        `generateStaticParams for "${routePath}" must only return params for [${ownParamNames.join(", ")}], got unexpected key "${key}"`
+      )
+    }
+  }
+  const merged = { ...parentParams, ...childRow }
+  for (const key of allParamNames) {
+    if (!(key in merged)) {
+      throw new Error(
+        `generateStaticParams for "${routePath}" did not provide "${key}"`
+      )
+    }
+  }
+}
+
+function mergeParamRow(
+  parentParams: Record<string, string>,
+  childRow: Record<string, string>,
+  allParamNames: string[]
+): Record<string, string> {
+  const merged = { ...parentParams, ...childRow }
+  for (const key of allParamNames) {
+    if (!(key in merged)) {
+      throw new Error(`generateStaticParams merge missing "${key}"`)
+    }
+  }
+  return merged
+}
+
 export async function generateStaticPaths(
-  manifest: RouteManifest
+  manifest: RouteManifest,
+  pathPolicy?: RouterPathPolicy
 ): Promise<string[]> {
   const out = new Set<string>()
+  const staticRoutes = manifest.routes
+    .filter((r) => r.static)
+    .sort((a, b) => a.segments.length - b.segments.length)
+  const cache = new Map<string, Array<Record<string, string>>>()
 
-  for (const route of manifest.routes) {
-    if (!route.static) continue
+  for (const route of staticRoutes) {
     if (route.params.length === 0) {
-      out.add(route.path)
+      out.add(formatPathname(route.path, pathPolicy))
       continue
     }
 
-    if (!route.generateStaticParams) {
-      throw new Error(
-        `Route "${route.path}" is static and dynamic, but generateStaticParams is missing`
+    const paramSets = await collectParamSetsForRoute(route, staticRoutes, cache)
+    for (const params of paramSets) {
+      out.add(
+        formatPathname(
+          applyParamsToPath(route.path, params, route.params),
+          pathPolicy
+        )
       )
-    }
-    const generated = await route.generateStaticParams({ params: {} })
-    for (const params of generated) {
-      out.add(applyParamsToPath(route.path, params, route.params))
     }
   }
 

@@ -1,6 +1,15 @@
-import { compileRouteTree, generateStaticPaths, matchRoute } from "./manifest.js"
+import {
+  compileRouteTree,
+  generateStaticPaths,
+  matchRoute,
+} from "./manifest.js"
+import type { RouterPathPolicy } from "./pathPolicy.js"
 import { createRenderer, renderMatchToStaticHtml } from "./renderer.js"
-import type { DocumentHead, RouteManifest, RouteTreeDefinition } from "./types.js"
+import type {
+  DocumentHead,
+  RouteManifest,
+  RouteTreeDefinition,
+} from "./types.js"
 
 export interface StaticRouteOutput {
   path: string
@@ -14,23 +23,26 @@ export interface StaticRouteOutput {
 export async function prerenderStaticRoutes({
   routes,
   htmlTemplate,
+  pathPolicy,
 }: {
   routes: RouteTreeDefinition | RouteManifest
   htmlTemplate?: string
+  pathPolicy?: RouterPathPolicy
 }): Promise<StaticRouteOutput[]> {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
-  const paths = await generateStaticPaths(manifest)
+  const paths = await generateStaticPaths(manifest, pathPolicy)
   const renderer =
     htmlTemplate !== undefined
       ? createRenderer({
           routes: manifest,
           htmlTemplate,
+          pathPolicy,
         })
       : null
 
   const outputs: StaticRouteOutput[] = []
   for (const path of paths) {
-    const routeMatch = matchRoute(manifest, path)
+    const routeMatch = matchRoute(manifest, path, pathPolicy)
     if (!routeMatch) continue
 
     if (renderer) {
@@ -39,6 +51,7 @@ export async function prerenderStaticRoutes({
       const { body, document } = await renderMatchToStaticHtml(
         manifest,
         routeMatch,
+        pathPolicy
       )
       outputs.push({ path, body, document, html: rendered.body })
       continue
@@ -47,6 +60,7 @@ export async function prerenderStaticRoutes({
     const { body, document } = await renderMatchToStaticHtml(
       manifest,
       routeMatch,
+      pathPolicy
     )
     outputs.push({ path, body, document })
   }

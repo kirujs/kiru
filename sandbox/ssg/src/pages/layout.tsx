@@ -7,7 +7,9 @@ export default function Layout({ children }: { children: JSX.Children }) {
         <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
           Static Site Generation
         </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">Kiru SSG Sandbox</h1>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight">
+          Kiru SSG Sandbox
+        </h1>
         <p className="mt-2 text-sm text-slate-600">
           Tailwind CSS v4 is configured with the Vite plugin.
         </p>
@@ -35,6 +37,18 @@ export default function Layout({ children }: { children: JSX.Children }) {
             className="rounded-full border border-slate-300 px-3 py-1 text-sm font-medium text-slate-700 hover:border-emerald-300 hover:text-emerald-700"
           >
             Blog: kiru
+          </Link>
+          <Link
+            to="/seo"
+            className="rounded-full border border-emerald-600 bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
+          >
+            SEO
+          </Link>
+          <Link
+            to="/blog/hello/comments/hello-1"
+            className="rounded-full border border-slate-300 px-3 py-1 text-sm font-medium text-slate-700 hover:border-emerald-300 hover:text-emerald-700"
+          >
+            Nested static
           </Link>
         </nav>
         <section className="mt-8 rounded-xl border border-slate-200 bg-slate-50 p-4 md:p-6">

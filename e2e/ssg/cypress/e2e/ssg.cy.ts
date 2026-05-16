@@ -19,6 +19,11 @@ describe("SSG build", () => {
     cy.get('[data-testid="ssg-loader"]').should("contain", "post:one")
   })
 
+  it("prerenders nested static params from parent generateStaticParams", () => {
+    cy.visit(`${base()}/posts/one/comments/one-c1`)
+    cy.get('[data-testid="comment"]').should("contain", "one:one-c1")
+  })
+
   it("serves static 404.html for unknown paths", () => {
     cy.request({
       url: `${base()}/does-not-exist`,
@@ -27,6 +32,45 @@ describe("SSG build", () => {
       expect(res.status).to.eq(404)
       expect(res.body).to.include("ssg-not-found")
     })
+  })
+
+  it("serves sitemap.xml generated from static paths", () => {
+    cy.request(`${base()}/sitemap.xml`).then((res) => {
+      expect(res.status).to.eq(200)
+      expect(res.headers["content-type"]).to.match(/xml/i)
+      expect(res.body).to.include("https://e2e-ssg.example/")
+      expect(res.body).to.include("/posts/one")
+      expect(res.body).to.include("/posts/one/comments/one-c1")
+    })
+  })
+
+  it("serves robots.txt referencing the sitemap", () => {
+    cy.request(`${base()}/robots.txt`).then((res) => {
+      expect(res.status).to.eq(200)
+      expect(res.body).to.include(
+        "Sitemap: https://e2e-ssg.example/sitemap.xml"
+      )
+    })
+  })
+
+  it("includes JSON-LD in prerendered document head", () => {
+    cy.visit(base())
+    cy.get('script[type="application/ld+json"]')
+      .should("have.length.at.least", 1)
+      .first()
+      .invoke("text")
+      .then((text) => {
+        const data = JSON.parse(text)
+        expect(data["@type"]).to.eq("WebPage")
+        expect(data.name).to.eq("E2E SSG Home")
+      })
+  })
+
+  it("serves the SEO demo page with structured data", () => {
+    cy.visit(`${base()}/seo`)
+    cy.title().should("eq", "E2E SSG SEO")
+    cy.get('[data-testid="ssg-seo"]').should("exist")
+    cy.get('script[type="application/ld+json"]').should("exist")
   })
 
   it("supports browser history between prerendered routes", () => {

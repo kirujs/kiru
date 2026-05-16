@@ -4,6 +4,13 @@ import { nextIdle } from "../scheduler.js"
 import { resource } from "../resource.js"
 import { ViewTransitions } from "../viewTransitions.js"
 import { matchRoute } from "./manifest.js"
+import {
+  addBase,
+  formatPathname,
+  resolvePathPolicy,
+  stripBase,
+  type RouterPathPolicy,
+} from "./pathPolicy.js"
 import { createElement } from "../element.js"
 import type {
   AfterEachHook,
@@ -119,33 +126,6 @@ type RouteLocationParts = {
   query: RouterQuery
 }
 
-function normalizePathname(pathname: string): string {
-  const clean = pathname.split("?")[0]?.split("#")[0] || "/"
-  if (clean === "/") return "/"
-  return "/" + clean.split("/").filter(Boolean).join("/")
-}
-
-function normalizeBaseUrl(baseUrl: string): string {
-  const normalized = normalizePathname(baseUrl)
-  return normalized === "/" ? "/" : normalized.replace(/\/$/, "")
-}
-
-function stripBase(pathname: string, baseUrl: string): string {
-  if (baseUrl === "/") return normalizePathname(pathname)
-  if (pathname === baseUrl) return "/"
-  if (pathname.startsWith(`${baseUrl}/`)) {
-    return normalizePathname(pathname.slice(baseUrl.length))
-  }
-  return normalizePathname(pathname)
-}
-
-function addBase(pathname: string, baseUrl: string): string {
-  if (baseUrl === "/") return normalizePathname(pathname)
-  const normalized = normalizePathname(pathname)
-  if (normalized === "/") return baseUrl
-  return `${baseUrl}${normalized}`
-}
-
 function parseQuery(search: string): RouterQuery {
   const out: RouterQuery = {}
   const params = new URLSearchParams(search)
@@ -233,16 +213,23 @@ export function createRouter({
   history = window.history,
   location = window.location,
   baseUrl = "/",
+  pathPolicy,
   transition = false,
 }: {
   routes: RouteTreeDefinition | RouteManifest
   history?: History
   location?: Location
+  /** @deprecated Prefer `pathPolicy.baseUrl` */
   baseUrl?: string
+  pathPolicy?: RouterPathPolicy
   transition?: boolean
 }): Router {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl)
+  const resolvedPathPolicy = resolvePathPolicy({
+    ...pathPolicy,
+    baseUrl: pathPolicy?.baseUrl ?? baseUrl,
+  })
+  const normalizedBaseUrl = resolvedPathPolicy.baseUrl
   const initialPathname = pathFromLocation(location, normalizedBaseUrl)
   const origin =
     (location as Location & { origin?: string }).origin || "http://localhost"
@@ -250,7 +237,9 @@ export function createRouter({
   const hash = signal(location.hash)
   const query = signal(parseQuery(location.search))
   const path = pathname
-  const match = signal(matchRoute(manifest, initialPathname))
+  const match = signal(
+    matchRoute(manifest, initialPathname, resolvedPathPolicy)
+  )
   const params = signal(match.value?.params ?? {})
   const matches = signal(buildMatchSegments(match.peek()))
   const isNavigating = signal(false)
@@ -294,7 +283,7 @@ export function createRouter({
     pathname.value = next.pathname
     hash.value = next.hash
     query.value = next.query
-    const nextMatch = matchRoute(manifest, next.pathname)
+    const nextMatch = matchRoute(manifest, next.pathname, resolvedPathPolicy)
     match.value = nextMatch
     params.value = nextMatch?.params ?? {}
     matches.value = buildMatchSegments(nextMatch)
@@ -319,7 +308,7 @@ export function createRouter({
     const targetPath = resolved.pathname
     const fromMatch = match.peek()
     const from = locationFromMatch(fromMatch)
-    const toMatch = matchRoute(manifest, targetPath)
+    const toMatch = matchRoute(manifest, targetPath, resolvedPathPolicy)
 
     const to: RouteLocation = toMatch
       ? locationFromMatch(toMatch)!
@@ -333,7 +322,7 @@ export function createRouter({
         !!fromMatch && (!toMatch || fromMatch.route.id !== toMatch.route.id)
       const leaveList =
         isLeavingRoute && fromMatch
-          ? leaveByRoute.get(fromMatch.route.id) ?? []
+          ? (leaveByRoute.get(fromMatch.route.id) ?? [])
           : []
       if (leaveList.length) {
         const g0 = await runGuards(leaveList, to, from)
@@ -394,7 +383,7 @@ export function createRouter({
         JSON.stringify(fromMatch.params) !== JSON.stringify(toMatch.params)
       const updateList =
         isUpdatingRoute && fromMatch
-          ? updateByRoute.get(fromMatch.route.id) ?? []
+          ? (updateByRoute.get(fromMatch.route.id) ?? [])
           : []
       if (updateList.length) {
         const gu = await runGuards(updateList, to, from)
@@ -689,7 +678,10 @@ export function createRouter({
     },
     resolveHref(to) {
       const joined = joinPath(pathname.value, to)
-      return addBase(joined, normalizedBaseUrl)
+      return addBase(
+        formatPathname(joined, resolvedPathPolicy),
+        normalizedBaseUrl
+      )
     },
     beforeEach(guard) {
       beforeEachGuards.push(guard)
@@ -742,18 +734,24 @@ export function createStaticRouter({
   hash = "",
   query = {},
   baseUrl = "/",
+  pathPolicy,
 }: {
   manifest: RouteManifest
   pathname: string
   hash?: string
   query?: RouterQuery
   baseUrl?: string
+  pathPolicy?: RouterPathPolicy
 }): Router {
+  const resolvedPathPolicy = resolvePathPolicy({
+    ...pathPolicy,
+    baseUrl: pathPolicy?.baseUrl ?? baseUrl,
+  })
   const path = signal(pathname)
   const params = signal<Record<string, string>>({})
   const hashSignal = signal(hash)
   const querySignal = signal(query)
-  const match = signal(matchRoute(manifest, pathname))
+  const match = signal(matchRoute(manifest, pathname, resolvedPathPolicy))
   params.value = match.value?.params ?? {}
   const matches = signal(buildMatchSegments(match.peek()))
   const isNavigating = signal(false)
@@ -768,7 +766,7 @@ export function createStaticRouter({
     params,
     hash: hashSignal,
     query: querySignal,
-    baseUrl: normalizeBaseUrl(baseUrl),
+    baseUrl: resolvedPathPolicy.baseUrl,
     path,
     match,
     matches,
@@ -785,7 +783,10 @@ export function createStaticRouter({
       return committed()
     },
     resolveHref(to) {
-      return addBase(joinPath(path.value, to), normalizeBaseUrl(baseUrl))
+      return addBase(
+        formatPathname(joinPath(path.value, to), resolvedPathPolicy),
+        resolvedPathPolicy.baseUrl
+      )
     },
     beforeEach() {
       return emptyUnsub
@@ -868,10 +869,7 @@ export const Link: Kiru.Component<LinkProps> = () => {
   }
 
   onMount(() => {
-    if (
-      $.props.prefetch === "visible" &&
-      router.navigationMode === "history"
-    ) {
+    if ($.props.prefetch === "visible" && router.navigationMode === "history") {
       prefetchMatchedRoute(router.manifest, href.peek(), router.baseUrl)
     }
   })

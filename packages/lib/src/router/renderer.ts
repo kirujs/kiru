@@ -21,6 +21,12 @@ import {
 } from "./routeTree.js"
 import { resolveMetaTemplates, serializeDocumentHead } from "./meta.js"
 import {
+  formatPathname,
+  pathnameForMatch,
+  resolvePathPolicy,
+  type RouterPathPolicy,
+} from "./pathPolicy.js"
+import {
   compileRouteHtmlTemplate,
   type CompiledRouteHtmlTemplate,
 } from "./htmlTemplate.js"
@@ -123,16 +129,19 @@ export type CreateRendererOptions = {
   actions?: RendererActionsOptions
   /** When true, `createRenderer` returns a streaming renderer contract. */
   stream?: boolean
+  /** Base path and trailing-slash rules for URLs, prerender lookup, and head metadata. */
+  pathPolicy?: RouterPathPolicy
 }
 
 function engine(options: CreateRendererOptions & { stream: boolean }) {
   const { manifest, compiledTemplate, actionsSecret, handleRemoteAction } =
     prepareRenderer(options)
+  const pathPolicy = resolvePathPolicy(options.pathPolicy)
 
   let prerenderPathSet: Promise<ReadonlySet<string>> | undefined
   const getPrerenderPathSet = (): Promise<ReadonlySet<string>> => {
     if (!prerenderPathSet) {
-      prerenderPathSet = generateStaticPaths(manifest).then(
+      prerenderPathSet = generateStaticPaths(manifest, pathPolicy).then(
         (paths) => new Set(paths)
       )
     }
@@ -159,7 +168,10 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         const html = tryReadPrerenderedHtml(
           options.prerenderedHtmlDir!,
           pathname,
-          { staticPaths: await getPrerenderPathSet() }
+          {
+            staticPaths: await getPrerenderPathSet(),
+            pathPolicy,
+          }
         )
         if (html) {
           const requestContext = (ctx?.context ?? null) as CustomRequestContext
@@ -205,7 +217,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
       | undefined
 
     try {
-      const prepared = await prepareAppForUrl(url, ctx, manifest)
+      const prepared = await prepareAppForUrl(url, ctx, manifest, pathPolicy)
       if (!prepared) return null
 
       if (isPrepareRedirect(prepared)) {
@@ -497,7 +509,8 @@ export function createRenderer(
 async function renderStringWithDocument(
   app: JSX.Element,
   match: RouteMatch,
-  requestContext: CustomRequestContext
+  requestContext: CustomRequestContext,
+  pathPolicy?: RouterPathPolicy
 ): Promise<{ body: string; document: DocumentHead }> {
   const baseMeta = resolveMetaTemplates(match.route.head, match.params)
   const collector = createHeadCollector(baseMeta)
@@ -528,8 +541,10 @@ async function renderStringWithDocument(
     body,
     document: {
       headHtml:
-        serializeDocumentHead(resolvedMeta, { pathname: match.pathname }) +
-        (ctxScript ? `\n    ${ctxScript}` : ""),
+        serializeDocumentHead(resolvedMeta, {
+          pathname: match.pathname,
+          pathPolicy,
+        }) + (ctxScript ? `\n    ${ctxScript}` : ""),
       title: resolvedMeta.title,
     },
   }
@@ -564,7 +579,8 @@ function buildAppElement(
 /** Shared SSG / SSR string render for a matched route. */
 export async function renderMatchToStaticHtml(
   manifest: RouteManifest,
-  match: RouteMatch
+  match: RouteMatch,
+  pathPolicy?: RouterPathPolicy
 ): Promise<{ body: string; document: DocumentHead }> {
   const { layoutModules, routeModule } = await loadRouteTree(match)
   const app = buildAppElement(
@@ -575,7 +591,7 @@ export async function renderMatchToStaticHtml(
     manifest,
     {}
   )
-  return renderStringWithDocument(app, match, {})
+  return renderStringWithDocument(app, match, {}, pathPolicy)
 }
 
 const DEFAULT_HEADERS: Record<string, string> = {
@@ -638,13 +654,17 @@ const MAX_SSR_BEFORE_ENTER_REDIRECTS = 16
 async function prepareAppForUrl(
   url: string,
   ctx: RenderRequestContext | undefined,
-  manifest: RouteManifest
+  manifest: RouteManifest,
+  pathPolicy: ReturnType<typeof resolvePathPolicy>
 ): Promise<PrepareAppResult> {
-  const requestedPathname = toPathname(url)
+  const requestedPathname = formatPathname(
+    pathnameForMatch(toPathname(url), pathPolicy),
+    pathPolicy
+  )
   let path = requestedPathname
 
   for (let depth = 0; depth < MAX_SSR_BEFORE_ENTER_REDIRECTS; depth++) {
-    const routeMatch = matchRoute(manifest, path)
+    const routeMatch = matchRoute(manifest, path, pathPolicy)
 
     if (!routeMatch) {
       if (path === requestedPathname) {

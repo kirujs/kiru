@@ -11,7 +11,10 @@ export default defineConfig({
     kiru({
       router: {
         serverEntry: "./src/server/index.ts",
-        ssg: true,
+        ssg: {
+          routes: "./src/routes.ts",
+          siteModule: "./src/site.config.{ts,js}",
+        },
         remote: "**/*.actions.ts",
       },
     }),

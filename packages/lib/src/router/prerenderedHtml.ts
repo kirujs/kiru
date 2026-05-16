@@ -1,5 +1,11 @@
 import { existsSync, readFileSync } from "node:fs"
 import { extname, join } from "node:path"
+import {
+  formatPathname,
+  normalizePathname,
+  pathnameForMatch,
+  type RouterPathPolicy,
+} from "./pathPolicy.js"
 import type { CustomRequestContext } from "./types.js"
 import {
   REQUEST_CONTEXT_SCRIPT_ID,
@@ -9,9 +15,7 @@ import { serializeKiruRequestTokenScript } from "./renderer.js"
 
 /** Same shape as paths from {@link generateStaticPaths} / the route manifest. */
 export function normalizeRoutePathname(urlOrPath: string): string {
-  const raw = urlOrPath.split("?")[0].split("#")[0] || "/"
-  if (raw === "/") return "/"
-  return "/" + raw.split("/").filter(Boolean).join("/")
+  return normalizePathname(urlOrPath)
 }
 
 /**
@@ -20,19 +24,28 @@ export function normalizeRoutePathname(urlOrPath: string): string {
  */
 export function prerenderedHtmlCandidates(
   clientDir: string,
-  pathname: string
+  pathname: string,
+  pathPolicy?: RouterPathPolicy
 ): string[] {
-  const pathnameOnly = normalizeRoutePathname(pathname)
-  const clean = pathnameOnly.replace(/^\/+/, "")
-  const joined = join(clientDir, clean)
+  const pathnameOnly = formatPathname(
+    pathnameForMatch(pathname, pathPolicy),
+    pathPolicy
+  )
+  const clean = pathnameOnly.replace(/^\/+/, "").replace(/\/$/, "")
+  const joined = clean ? join(clientDir, clean) : join(clientDir)
   const ext = extname(joined)
 
   if (ext === ".html") return [joined]
   if (ext) return []
 
   const candidates: string[] = []
-  if (pathnameOnly.endsWith("/")) {
+  const preferIndex =
+    pathnameOnly.endsWith("/") || pathPolicy?.trailingSlash === "always"
+  if (preferIndex) {
     candidates.push(join(joined, "index.html"))
+    if (pathnameOnly !== "/" && !pathnameOnly.endsWith("/")) {
+      candidates.push(`${joined}.html`)
+    }
   } else {
     candidates.push(`${joined}.html`)
     candidates.push(join(joined, "index.html"))
@@ -48,6 +61,7 @@ export interface TryReadPrerenderedHtmlOptions {
    * shell for SSR-only routes (e.g. `/` is dynamic).
    */
   staticPaths?: ReadonlySet<string>
+  pathPolicy?: RouterPathPolicy
 }
 
 /**
@@ -64,12 +78,20 @@ export function tryReadPrerenderedHtml(
   pathname: string,
   options?: TryReadPrerenderedHtmlOptions
 ): string | null {
-  const pathnameOnly = normalizeRoutePathname(pathname)
+  const pathPolicy = options?.pathPolicy
+  const pathnameOnly = formatPathname(
+    pathnameForMatch(pathname, pathPolicy),
+    pathPolicy
+  )
   if (options?.staticPaths && !options.staticPaths.has(pathnameOnly)) {
     return null
   }
 
-  for (const candidate of prerenderedHtmlCandidates(clientDir, pathnameOnly)) {
+  for (const candidate of prerenderedHtmlCandidates(
+    clientDir,
+    pathnameOnly,
+    pathPolicy
+  )) {
     if (existsSync(candidate)) {
       return readFileSync(candidate, "utf8")
     }

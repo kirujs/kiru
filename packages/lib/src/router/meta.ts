@@ -1,3 +1,8 @@
+import {
+  absoluteRouteUrl,
+  formatPathname,
+  type RouterPathPolicy,
+} from "./pathPolicy.js"
 import type { RouteHeadMeta } from "./types.js"
 
 function mergeExtraMeta(
@@ -28,6 +33,17 @@ function mergeLinks(
   return [...byKey.values()]
 }
 
+function mergeJsonLd(
+  base?: RouteHeadMeta["jsonLd"],
+  override?: RouteHeadMeta["jsonLd"]
+): RouteHeadMeta["jsonLd"] {
+  if (!override) return base
+  if (!base) return override
+  const baseArr = Array.isArray(base) ? base : [base]
+  const overrideArr = Array.isArray(override) ? override : [override]
+  return [...baseArr, ...overrideArr]
+}
+
 export function mergeRouteHead(
   base: RouteHeadMeta,
   override?: RouteHeadMeta
@@ -39,6 +55,11 @@ export function mergeRouteHead(
       twitter: base.twitter ? { ...base.twitter } : undefined,
       extraMeta: base.extraMeta ? [...base.extraMeta] : undefined,
       links: base.links ? [...base.links] : undefined,
+      jsonLd: base.jsonLd
+        ? Array.isArray(base.jsonLd)
+          ? [...base.jsonLd]
+          : { ...base.jsonLd }
+        : undefined,
     }
   }
   return {
@@ -48,6 +69,7 @@ export function mergeRouteHead(
     twitter: { ...base.twitter, ...override.twitter },
     extraMeta: mergeExtraMeta(base.extraMeta, override.extraMeta),
     links: mergeLinks(base.links, override.links),
+    jsonLd: mergeJsonLd(base.jsonLd, override.jsonLd),
   }
 }
 
@@ -109,21 +131,30 @@ function escText(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
 }
 
+function escJsonLdScript(json: string): string {
+  return json.replace(/</g, "\\u003c")
+}
+
 /**
  * Returns HTML fragment for inside <head> (no <title> wrapper duplication if title empty).
  */
 export function serializeDocumentHead(
   head: RouteHeadMeta,
-  context?: { pathname?: string; origin?: string }
+  context?: {
+    pathname?: string
+    origin?: string
+    pathPolicy?: RouterPathPolicy
+  }
 ): string {
   const parts: string[] = []
-  const pathname = context?.pathname ?? "/"
+  const pathname = formatPathname(context?.pathname ?? "/", context?.pathPolicy)
   const origin = context?.origin ?? ""
+  const pathPolicy = context?.pathPolicy
   const abs = (url: string | undefined) => {
     if (!url) return undefined
     if (url.startsWith("http://") || url.startsWith("https://")) return url
     if (url.startsWith("/") && origin)
-      return `${origin.replace(/\/$/, "")}${url}`
+      return absoluteRouteUrl(origin, url, pathPolicy)
     return url
   }
 
@@ -156,10 +187,10 @@ export function serializeDocumentHead(
       parts.push(`<meta property="og:image" content="${escAttr(u)}" />`)
     }
     const ogUrl = og.url
-      ? abs(og.url) ?? og.url
+      ? (abs(og.url) ?? og.url)
       : origin
-      ? `${origin}${pathname}`
-      : ""
+        ? absoluteRouteUrl(origin, pathname, pathPolicy)
+        : ""
     if (ogUrl)
       parts.push(`<meta property="og:url" content="${escAttr(ogUrl)}" />`)
   }
@@ -194,6 +225,16 @@ export function serializeDocumentHead(
       .map(([k, v]) => `${k}="${escAttr(v)}"`)
       .join(" ")
     parts.push(`<link ${attrs} />`)
+  }
+
+  const jsonLdRows = head.jsonLd
+    ? Array.isArray(head.jsonLd)
+      ? head.jsonLd
+      : [head.jsonLd]
+    : []
+  for (const row of jsonLdRows) {
+    const json = escJsonLdScript(JSON.stringify(row))
+    parts.push(`<script type="application/ld+json">${json}</script>`)
   }
 
   return parts.join("\n    ")

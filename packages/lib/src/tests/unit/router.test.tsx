@@ -8,9 +8,13 @@ import {
   defineRouteTree,
   fillRouteHtmlTemplate,
   generateStaticPaths,
+  buildSitemapXml,
+  defineSiteConfig,
   Head,
   Link,
   matchRoute,
+  mergeRouteHead,
+  serializeDocumentHead,
   hydratePrerenderedHtmlForRequest,
   loadErrorRouteTree,
   loadRootErrorRouteTree,
@@ -60,6 +64,196 @@ describe("router", () => {
     const manifest = compileRouteTree(routes)
     const paths = await generateStaticPaths(manifest)
     assert.deepStrictEqual(paths, ["/users/1", "/users/2"])
+  })
+
+  it("composes nested generateStaticParams from parent routes", async () => {
+    const nested = defineRouteTree((r) =>
+      r.scope({
+        static: true,
+        children: [
+          r.get("/posts/[slug]", {
+            component: async () => ({ default: () => <h1>post</h1> }),
+            generateStaticParams: () => [{ slug: "a" }, { slug: "b" }],
+          }),
+          r.get("/posts/[slug]/comments/[id]", {
+            component: async () => ({ default: () => <h1>comment</h1> }),
+            generateStaticParams: ({ params }) => [
+              { id: `${params.slug}-1` },
+              { id: `${params.slug}-2` },
+            ],
+          }),
+        ],
+      })
+    )
+    const manifest = compileRouteTree(nested)
+    const paths = await generateStaticPaths(manifest)
+    assert.deepStrictEqual(paths, [
+      "/posts/a",
+      "/posts/a/comments/a-1",
+      "/posts/a/comments/a-2",
+      "/posts/b",
+      "/posts/b/comments/b-1",
+      "/posts/b/comments/b-2",
+    ])
+  })
+
+  it("rejects child generateStaticParams with parent param keys", async () => {
+    const bad = defineRouteTree((r) =>
+      r.scope({
+        static: true,
+        children: [
+          r.get("/posts/[slug]", {
+            component: async () => ({ default: () => null }),
+            generateStaticParams: () => [{ slug: "a" }],
+          }),
+          r.get("/posts/[slug]/comments/[id]", {
+            component: async () => ({ default: () => null }),
+            generateStaticParams: () => [{ slug: "x", id: "1" }],
+          }),
+        ],
+      })
+    )
+    await assert.rejects(
+      () => generateStaticPaths(compileRouteTree(bad)),
+      /unexpected key "slug"/
+    )
+  })
+
+  it("serializes jsonLd in document head", () => {
+    const html = serializeDocumentHead({
+      title: "T",
+      jsonLd: { "@type": "WebPage", name: "Home" },
+    })
+    assert.ok(html.includes('type="application/ld+json"'))
+    assert.ok(html.includes("WebPage"))
+  })
+
+  it("builds sitemap xml from static paths", () => {
+    const site = defineSiteConfig({
+      url: "https://example.com",
+      sitemap: { changefreq: "weekly", priority: 0.8 },
+    })
+    const xml = buildSitemapXml(["/", "/about"], site)
+    assert.ok(xml.includes("<loc>https://example.com/</loc>"))
+    assert.ok(xml.includes("<loc>https://example.com/about</loc>"))
+    assert.ok(xml.includes("<changefreq>weekly</changefreq>"))
+  })
+
+  it("errors when static parent route lacks generateStaticParams", async () => {
+    const bad = defineRouteTree((r) =>
+      r.scope({
+        static: true,
+        children: [
+          r.get("/posts/[slug]", {
+            component: async () => ({ default: () => null }),
+          }),
+          r.get("/posts/[slug]/comments/[id]", {
+            component: async () => ({ default: () => null }),
+            generateStaticParams: () => [{ id: "1" }],
+          }),
+        ],
+      })
+    )
+    await assert.rejects(
+      async () => generateStaticPaths(compileRouteTree(bad)),
+      (err: Error) =>
+        /generateStaticParams is missing/.test(err.message) &&
+        err.message.includes("/posts/[slug]")
+    )
+  })
+
+  it("uses empty parent params when no static parent route exists", async () => {
+    const solo = defineRouteTree((r) =>
+      r.scope({
+        static: true,
+        children: [
+          r.get("/items/[id]", {
+            component: async () => ({ default: () => null }),
+            generateStaticParams: () => [{ id: "solo" }],
+          }),
+        ],
+      })
+    )
+    const paths = await generateStaticPaths(compileRouteTree(solo))
+    assert.deepStrictEqual(paths, ["/items/solo"])
+  })
+
+  it("generateStaticPaths applies trailingSlash always policy", async () => {
+    const manifest = compileRouteTree(routes)
+    const paths = await generateStaticPaths(manifest, {
+      trailingSlash: "always",
+    })
+    assert.ok(paths.every((p) => p === "/" || p.endsWith("/")))
+    assert.ok(paths.includes("/users/1/"))
+  })
+
+  it("matchRoute accepts trailing slash in pathname when policy is always", () => {
+    const manifest = compileRouteTree(routes)
+    const match = matchRoute(manifest, "/users/1/", {
+      trailingSlash: "always",
+    })
+    assert.ok(match)
+    assert.strictEqual(match!.params.id, "1")
+  })
+
+  it("mergeRouteHead concatenates jsonLd from layout and route", () => {
+    const merged = mergeRouteHead(
+      { jsonLd: { "@type": "WebSite", name: "App" } },
+      { jsonLd: { "@type": "WebPage", name: "Page" } }
+    )
+    assert.ok(Array.isArray(merged.jsonLd))
+    assert.strictEqual((merged.jsonLd as unknown[]).length, 2)
+  })
+
+  it("serializeDocumentHead escapes angle brackets in jsonLd payload", () => {
+    const html = serializeDocumentHead({
+      jsonLd: { html: "</script><script>alert(1)</script>" },
+    })
+    assert.ok(html.includes("application/ld+json"))
+    assert.ok(html.includes("\\u003c/script>"))
+    const payload = html.slice(html.indexOf("{"), html.lastIndexOf("}") + 1)
+    assert.ok(!payload.includes("<script"))
+  })
+
+  it("SSR render includes jsonLd in document head", async () => {
+    const r = defineRouteTree((x) =>
+      x.scope({
+        children: [
+          x.get("/schema", {
+            component: async () => ({ default: () => <h1>Schema</h1> }),
+            head: {
+              title: "Schema page",
+              jsonLd: { "@type": "WebPage", name: "Schema" },
+            },
+          }),
+        ],
+      })
+    )
+    const renderer = createRenderer({ routes: r, htmlTemplate: MINIMAL_TPL })
+    const res = await renderer.render("/schema")
+    assert.ok(res?.body.includes("application/ld+json"))
+    assert.ok(res?.body.includes("WebPage"))
+  })
+
+  it("prerenderStaticRoutes includes nested static paths", async () => {
+    const nested = defineRouteTree((r) =>
+      r.scope({
+        static: true,
+        children: [
+          r.get("/posts/[slug]", {
+            component: async () => ({ default: () => <p>post</p> }),
+            generateStaticParams: () => [{ slug: "x" }],
+          }),
+          r.get("/posts/[slug]/comments/[id]", {
+            component: async () => ({ default: () => <p>c</p> }),
+            generateStaticParams: ({ params }) => [{ id: `${params.slug}-1` }],
+          }),
+        ],
+      })
+    )
+    const outputs = await prerenderStaticRoutes({ routes: nested })
+    const paths = outputs.map((o) => o.path).sort()
+    assert.deepStrictEqual(paths, ["/posts/x", "/posts/x/comments/x-1"])
   })
 
   it("renders with framework-agnostic renderer contract", async () => {
@@ -464,14 +658,11 @@ describe("router", () => {
           ),
         }),
         children: [
-          x.get(
-            "/break",
-            async () => ({
-              default: () => {
-                throw new Error("boom-matched")
-              },
-            })
-          ),
+          x.get("/break", async () => ({
+            default: () => {
+              throw new Error("boom-matched")
+            },
+          })),
         ],
       })
     )
@@ -521,7 +712,11 @@ describe("router", () => {
     const response = await renderer.render("/gone")
     assert.ok(response)
     assert.strictEqual(response.status, 500)
-    assert.ok(response.body.includes(`<div class="shell"><p class="roe">nf-string</p></div>`))
+    assert.ok(
+      response.body.includes(
+        `<div class="shell"><p class="roe">nf-string</p></div>`
+      )
+    )
     const rootTree = await loadRootErrorRouteTree(renderer.manifest)
     assert.ok(rootTree)
   })
@@ -535,14 +730,11 @@ describe("router", () => {
           ),
         }),
         children: [
-          x.get(
-            "/bad",
-            async () => ({
-              default: () => {
-                throw new Error("sink")
-              },
-            })
-          ),
+          x.get("/bad", async () => ({
+            default: () => {
+              throw new Error("sink")
+            },
+          })),
         ],
       })
     )
@@ -572,14 +764,11 @@ describe("router", () => {
     const plain = defineRouteTree((x) =>
       x.scope({
         children: [
-          x.get(
-            "/x",
-            async () => ({
-              default: () => {
-                throw new Error("silent")
-              },
-            })
-          ),
+          x.get("/x", async () => ({
+            default: () => {
+              throw new Error("silent")
+            },
+          })),
         ],
       })
     )
@@ -648,14 +837,11 @@ describe("router", () => {
               ),
             }),
             children: [
-              x.get(
-                "/inner-fail",
-                async () => ({
-                  default: () => {
-                    throw new Error("no-leaf-error")
-                  },
-                })
-              ),
+              x.get("/inner-fail", async () => ({
+                default: () => {
+                  throw new Error("no-leaf-error")
+                },
+              })),
             ],
           }),
         ],
@@ -681,14 +867,11 @@ describe("router", () => {
           ),
         }),
         children: [
-          x.get(
-            "/se",
-            async () => ({
-              default: () => {
-                throw new Error("tpl")
-              },
-            })
-          ),
+          x.get("/se", async () => ({
+            default: () => {
+              throw new Error("tpl")
+            },
+          })),
         ],
       })
     )
@@ -699,7 +882,9 @@ describe("router", () => {
     const response = await renderer.render("/se")
     assert.ok(response)
     assert.strictEqual(response.status, 500)
-    assert.ok((response.body as string).toLowerCase().includes("<!doctype html>"))
+    assert.ok(
+      (response.body as string).toLowerCase().includes("<!doctype html>")
+    )
     assert.ok((response.body as string).includes("string-err-tpl"))
   })
 
@@ -726,7 +911,10 @@ describe("router", () => {
     const manifest = compileRouteTree(rootOnly)
     assert.strictEqual(manifest.rootLayout, undefined)
     assert.ok(typeof manifest.rootError === "function")
-    assert.strictEqual((await loadRootErrorRouteTree(manifest))!.layoutModules.length, 0)
+    assert.strictEqual(
+      (await loadRootErrorRouteTree(manifest))!.layoutModules.length,
+      0
+    )
 
     const renderer = createRenderer({ routes: rootOnly })
     const response = await renderer.render("/nope")

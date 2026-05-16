@@ -1,13 +1,23 @@
 import { MagicString, TransformCTX } from "./codegen/shared.js"
-import { prepareHMR, prepareJSXHoisting, prepareRemoteFunctions } from "./codegen/index.js"
+import {
+  prepareHMR,
+  prepareJSXHoisting,
+  prepareRemoteFunctions,
+} from "./codegen/index.js"
 import { ANSI } from "./ansi.js"
 import {
   createPluginState,
   defaultEsBuildOptions,
+  resolveRouterModulePaths,
   updatePluginState,
   type PluginState,
 } from "./config.js"
-import { createDevtoolsHtmlTransform, devtoolsHeadInjectionHtml, setupDevtools } from "./devtools.js"
+import { toViteModuleId } from "./resolveModulePattern.js"
+import {
+  createDevtoolsHtmlTransform,
+  devtoolsHeadInjectionHtml,
+  setupDevtools,
+} from "./devtools.js"
 import {
   extractEntryUrls,
   handleSsrDevRequest,
@@ -82,6 +92,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       resolvedViteConfig = config
       const initialState = createPluginState(opts)
       state = updatePluginState(initialState, config, opts)
+      await resolveRouterModulePaths(state, state.projectRoot)
       log = createLogger(state)
 
       if (state.router.remote) {
@@ -138,10 +149,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       // the Response object before anything hits the socket — no patching needed.
       // When `serverEntry` is set, always use the SSR dev pipeline — including
       // hybrid apps with `router.ssg` (prerender is build-time only; dev stays SSR).
-      if (router.serverEntry) {
-        const serverEntry = path
-          .resolve(state.projectRoot, router.serverEntry)
-          .replace(/\\/g, "/")
+      if (router.serverEntryAbs) {
+        const serverEntry = router.serverEntryAbs
 
         // The streaming SSR response carries the entry `<script>` tag in the
         // suffix (after the body), so we can't extract it from the response in
@@ -223,8 +232,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         return
       }
 
-      const routesModule = router.ssg?.routesModule
-      if (!routesModule) return
+      const routesModuleAbs = router.ssg?.routesModuleAbs
+      if (!routesModuleAbs) return
 
       // SSG dev mode: register directly so this runs before Vite's
       // indexHtmlMiddleware. We render pages and inject CSS links into the
@@ -250,10 +259,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             templateSource
           )
 
-          const routesAbs = path.resolve(state.projectRoot, routesModule)
-          const routesViteId =
-            "/" +
-            path.relative(state.projectRoot, routesAbs).replace(/\\/g, "/")
+          const routesViteId = toViteModuleId(
+            routesModuleAbs,
+            state.projectRoot
+          )
           const routesMod = await server.ssrLoadModule(routesViteId)
           const routes = routesMod.routes
           if (!routes) return next()
@@ -344,10 +353,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
     async closeBundle() {
       if (!state.isBuild || state.isSSRBuild) return
-      const serverEntry = state.router.serverEntry
+      const serverEntryAbs = state.router.serverEntryAbs
       // `router.ssg` prerenders HTML in `writeBundle`; it is not mutually
       // exclusive with `serverEntry` — hybrid apps still need the SSR bundle.
-      if (!serverEntry) return
+      if (!serverEntryAbs) return
       if (!resolvedViteConfig) {
         throw new Error(
           "[vite-plugin-kiru]: internal error — missing resolved Vite config for SSR server build"
@@ -357,7 +366,6 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       const root = resolvedViteConfig.root
       const clientOutAbs = path.resolve(root, state.outDir)
       const serverOutAbs = path.join(path.dirname(clientOutAbs), "server")
-      const serverEntryAbs = path.resolve(root, serverEntry)
       const serverEntryRelative =
         path.relative(root, serverEntryAbs).replace(/\\/g, "/") || "."
 
@@ -390,7 +398,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       })
     },
     generateBundle() {
-      if (!state.isBuild || !state.router.ssg?.routesModule) return
+      if (!state.isBuild || !state.router.ssg?.routesModuleAbs) return
       this.emitFile({
         type: "asset",
         fileName: "kiru-route-manifest.json",
@@ -407,7 +415,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     async writeBundle() {
       if (
         !state.isBuild ||
-        !state.router.ssg?.routesModule ||
+        !state.router.ssg?.routesModuleAbs ||
         state.isSSRBuild
       ) {
         return
@@ -423,12 +431,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       const templatePath = path.resolve(state.outDir, templateName)
       const templateHtml = await fs.readFile(templatePath, "utf8")
 
-      const routesAbs = path.resolve(
-        state.projectRoot,
-        state.router.ssg.routesModule
-      )
-      const routesViteId =
-        "/" + path.relative(state.projectRoot, routesAbs).replace(/\\/g, "/")
+      const routesAbs = state.router.ssg.routesModuleAbs
+      const routesViteId = toViteModuleId(routesAbs, state.projectRoot)
 
       const { createServer } = await import("vite")
       const configFile =
@@ -451,9 +455,40 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           )
         }
 
-        const { prerenderStaticRoutes } = await vite.ssrLoadModule(
+        const {
+          siteConfigModuleCandidates,
+          prerenderStaticRoutes,
+          compileRouteTree,
+          generateStaticPaths,
+          writeSiteArtifacts,
+        } = (await vite.ssrLoadModule(
           "kiru/router"
-        )
+          // @ts-ignore TODO: update peer dep to kiru v2
+        )) as typeof import("../../lib/src/router/index.js")
+
+        let site = routesMod.site
+        if (!site) {
+          const candidates =
+            state.router.ssg.siteModuleAbsPaths ??
+            siteConfigModuleCandidates(routesAbs, null).map((candidate) =>
+              path.isAbsolute(candidate)
+                ? candidate
+                : path.resolve(state.projectRoot, candidate)
+            )
+          for (const siteAbs of candidates) {
+            try {
+              await fs.access(siteAbs)
+              const siteViteId = toViteModuleId(siteAbs, state.projectRoot)
+              const siteMod = await vite.ssrLoadModule(siteViteId)
+              site = siteMod.site ?? siteMod.default
+              break
+            } catch {
+              // try next candidate
+            }
+          }
+        }
+
+        const pathPolicy = site?.pathPolicy
         const outputs: {
           path: string
           body: string
@@ -461,6 +496,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           html?: string
         }[] = await prerenderStaticRoutes({
           routes,
+          pathPolicy,
           ...(opts.router?.htmlShell
             ? {}
             : {
@@ -505,6 +541,20 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           const target = path.resolve(state.outDir, relativePath)
           await fs.mkdir(path.dirname(target), { recursive: true })
           await fs.writeFile(target, html, "utf8")
+        }
+
+        if (site?.sitemap || site?.robots) {
+          const manifest = compileRouteTree(routes)
+          const staticPaths = await generateStaticPaths(
+            manifest,
+            site.pathPolicy
+          )
+          await writeSiteArtifacts({
+            outDir: state.outDir,
+            paths: staticPaths,
+            site,
+            buildDate: new Date().toISOString().slice(0, 10),
+          })
         }
       } finally {
         await vite.close()

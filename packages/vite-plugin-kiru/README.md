@@ -46,13 +46,13 @@ kiru({
 
   // Declarative router integration
   router: {
-    // SSR dev entry (exports default Hono app)
-    serverEntry: "./src/server.ts",
-    // SSG / prerender (optional alongside serverEntry for hybrid apps):
-    // - false: disable SSG
-    // - true: enable SSG using ./src/routes.ts
-    // - { routes }: enable SSG with custom routes module path
-    ssg: { routes: "./src/routes.ts" },
+    // Paths and globs (routes + serverEntry must match exactly one file)
+    serverEntry: "./src/server/index.{ts,js}",
+    ssg: {
+      routes: "./src/routes.{ts,tsx}",
+      siteModule: "./src/site.config.{ts,js}",
+    },
+    remote: "**/*.actions.ts",
     // HTML file in outDir to use as the shell after the client build (default: index.html).
     // Must include `{{kiru_head}}` and `{{kiru_body}}` template tokens.
     htmlTemplate: "index.html",
@@ -74,6 +74,68 @@ With `router.ssg` enabled (`true` or `{ routes }`), the plugin:
 Your source `index.html` should include `{{kiru_head}}` in `<head>` and `{{kiru_body}}` at the app mount location (for example `<div id="app">{{kiru_body}}</div>`).
 
 You do **not** need a separate `prerender.ts` script.
+
+### Site config (`src/site.config.ts`)
+
+Add **`src/site.config.ts`** (or use a glob like **`router.ssg.siteModule: "./src/site.config.{ts,js}"`**). Export `site` from `defineSiteConfig()` to generate `sitemap.xml` and optional `robots.txt` after prerender.
+
+`router.ssg.routes`, `router.ssg.siteModule`, and `router.serverEntry` accept [tinyglobby](https://github.com/SuperchupuDev/tinyglobby) patterns. Routes and server entry must match **exactly one** file; `siteModule` may match multiple files (`.ts` preferred over `.js`). `router.remote` already accepts multi-match globs.
+
+```ts
+// vite.config.ts — glob examples
+router: {
+  ssg: { routes: "./src/routes.ts", siteModule: "./src/site.config.{ts,js}" },
+  serverEntry: "./src/server.{ts,js}",
+  remote: "**/*.actions.ts",
+}
+```
+
+```ts
+// src/site.config.ts
+import { defineSiteConfig } from "kiru/router"
+
+export const site = defineSiteConfig({
+  url: "https://example.com",
+  sitemap: true,
+  robots: true,
+  pathPolicy: { trailingSlash: "never", baseUrl: "/" },
+})
+```
+
+`url` is the canonical site origin (canonical URLs, robots). Sitemap options can override the origin with `domain`, set defaults, and tune individual static paths:
+
+```ts
+export const site = defineSiteConfig({
+  url: "https://example.com",
+  sitemap: {
+    domain: "https://example.com",
+    changefreq: "weekly",
+    priority: 0.8,
+    lastmod: "build",
+    overrides: {
+      "/": { changefreq: "daily", priority: 1 },
+      "/blog": {
+        priority: 0.9,
+        images: ["/images/hero.png"],
+        videos: [
+          {
+            title: "Intro",
+            thumbnail_loc: "/images/hero.png",
+            description: "Site overview",
+          },
+        ],
+      },
+    },
+  },
+  robots: true,
+})
+```
+
+You can also re-export `site` from your routes module instead of using a separate file.
+
+Paths in the sitemap come from the same `generateStaticPaths` list used for prerender. Nested dynamic routes can use parent params in `generateStaticParams({ params })` when a static parent route exists (for example `/posts/[slug]` before `/posts/[slug]/comments/[id]`).
+
+Route `head.jsonLd` objects are serialized as `<script type="application/ld+json">` tags in SSR/SSG output.
 
 ## Hybrid static routes + SSR
 

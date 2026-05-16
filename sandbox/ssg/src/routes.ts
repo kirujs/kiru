@@ -14,6 +14,24 @@ export const routes = defineRouteTree((r) =>
         head: {
           title: "Home — Kiru SSG",
           description: "Welcome to the Kiru SSG demo.",
+          jsonLd: {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            name: "Kiru SSG Sandbox",
+            url: "https://kiru-ssg-sandbox.example",
+          },
+        },
+      }),
+      r.get("/seo", {
+        component: () => import("./pages/seo.tsx"),
+        head: {
+          title: "SEO — Kiru SSG",
+          description:
+            "Site config, sitemap, JSON-LD, and nested static params.",
+          jsonLd: {
+            "@type": "WebPage",
+            name: "SEO examples",
+          },
         },
       }),
       r.get("/about", {
@@ -30,6 +48,18 @@ export const routes = defineRouteTree((r) =>
         head: {
           title: "Blog: {slug} — Kiru SSG",
           description: "A statically generated blog post.",
+        },
+      }),
+      r.get("/blog/[slug]/comments/[id]", {
+        component: () => import("./pages/blogComment.tsx"),
+        generateStaticParams: ({ params }) => [
+          { id: `${params.slug}-1` },
+          { id: `${params.slug}-2` },
+        ],
+        head: {
+          title: "Comment {id} on {slug}",
+          description:
+            "Nested generateStaticParams (parent slug in ctx.params).",
         },
       }),
     ],

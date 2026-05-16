@@ -282,4 +282,22 @@ describe("SSR server", () => {
         .should("contain", "Count: 1")
     })
   })
+
+  describe("SEO and structured data", () => {
+    it("includes JSON-LD in SSR HTML", () => {
+      const port = Cypress.env("port")
+      cy.request(`http://127.0.0.1:${port}/`).then((res) => {
+        expect(res.status).to.eq(200)
+        expect(res.body).to.include("application/ld+json")
+        expect(res.body).to.include("E2E SSR Home")
+      })
+    })
+
+    it("renders the SEO demo route with document title", () => {
+      const port = Cypress.env("port")
+      cy.visit(`http://127.0.0.1:${port}/seo`)
+      cy.title().should("eq", "E2E SSR SEO")
+      cy.get('[data-testid="ssr-seo"]').should("exist")
+    })
+  })
 })

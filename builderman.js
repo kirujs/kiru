@@ -46,21 +46,27 @@ const devtoolsHost = task({
   },
 })
 
+const vitePluginCacheConfig = {
+  inputs: [
+    "src",
+    lib.artifact("build"),
+    devtoolsHost.artifact("build"),
+    pnpm.package(),
+  ],
+  outputs: ["dist"],
+}
+
 const vitePlugin = task({
   name: "vite-plugin-kiru",
   cwd: "packages/vite-plugin-kiru",
   commands: {
     build: {
       run: "pnpm build",
-      cache: {
-        inputs: [
-          "src",
-          lib.artifact("build"),
-          devtoolsHost.artifact("build"),
-          pnpm.package(),
-        ],
-        outputs: ["dist"],
-      },
+      cache: vitePluginCacheConfig,
+    },
+    test: {
+      run: "pnpm test",
+      cache: vitePluginCacheConfig,
     },
     dev: {
       run: "pnpm dev",

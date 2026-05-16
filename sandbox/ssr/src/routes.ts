@@ -13,6 +13,19 @@ export const routes = defineRouteTree((r) =>
         head: {
           title: "Home — Kiru SSR",
           description: "Welcome to the Kiru SSR demo.",
+          jsonLd: {
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            name: "Kiru SSR Sandbox Home",
+          },
+        },
+      }),
+      r.get("/seo", {
+        component: () => import("./pages/seo.tsx"),
+        head: {
+          title: "SEO — Kiru SSR",
+          description: "JSON-LD and document head on server-rendered pages.",
+          jsonLd: { "@type": "WebPage", name: "SEO — Kiru SSR" },
         },
       }),
       r.get("/about", {
@@ -28,6 +41,10 @@ export const routes = defineRouteTree((r) =>
         head: {
           title: "Docs — Kiru SSR (static)",
           description: "Prerendered documentation slice.",
+          jsonLd: {
+            "@type": "TechArticle",
+            name: "Hybrid static docs",
+          },
         },
       }),
       r.get("/users/[id]", {

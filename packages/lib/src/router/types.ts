@@ -65,7 +65,11 @@ export interface RouteHeadMeta {
    * &lt;link&gt; rows, e.g. `{ rel: "icon", href: "/favicon.ico" }` or `{ rel: "preload", href: "/font.woff2", as: "font" }`.
    */
   links?: Array<Record<string, string>>
+  /** Structured data objects serialized as `application/ld+json` script tags. */
+  jsonLd?: Record<string, unknown> | Array<Record<string, unknown>>
 }
+
+export type { RouterPathPolicy, TrailingSlashPolicy } from "./pathPolicy.js"
 
 export interface RouteLocation {
   pathname: string

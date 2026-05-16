@@ -46,6 +46,12 @@ export default function Layout() {
             Docs (static)
           </Link>
           <Link
+            to="/seo"
+            className="rounded-full border border-cyan-600 bg-cyan-950 px-3 py-1 text-sm font-medium text-cyan-200 hover:bg-cyan-900"
+          >
+            SEO
+          </Link>
+          <Link
             to="/users/42"
             className="rounded-full border border-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:border-cyan-400 hover:text-cyan-200"
           >

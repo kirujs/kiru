@@ -9,7 +9,21 @@ export const routes = defineRouteTree((r) =>
     children: [
       r.get("/", {
         component: () => import("./pages/index.tsx"),
-        head: { title: "E2E SSR Home" },
+        head: {
+          title: "E2E SSR Home",
+          jsonLd: {
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            name: "E2E SSR Home",
+          },
+        },
+      }),
+      r.get("/seo", {
+        component: () => import("./pages/seo"),
+        head: {
+          title: "E2E SSR SEO",
+          jsonLd: { "@type": "WebPage", name: "E2E SSR SEO" },
+        },
       }),
       r.get("/hello", {
         component: () => import("./pages/hello.tsx"),

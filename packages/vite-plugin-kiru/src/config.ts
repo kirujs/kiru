@@ -1,6 +1,11 @@
 import path from "node:path"
 import type { ESBuildOptions, ResolvedConfig } from "vite"
 import type { KiruPluginOptions, FileLinkFormatter } from "./types.js"
+import {
+  resolveModulePattern,
+  resolveSingleModulePattern,
+  sortSiteConfigPaths,
+} from "./resolveModulePattern.js"
 
 export const defaultEsBuildOptions: ESBuildOptions = {
   jsxInject: `import { createElement as _jsx, Fragment as _jsxFragment } from "kiru"`,
@@ -32,10 +37,51 @@ export interface PluginState {
   remotePaths: string[]
   router: {
     ssg: null | {
+      /** User pattern (may be a glob); also emitted to `kiru-route-manifest.json`. */
       routesModule: string
+      /** Resolved absolute path to the routes module file. */
+      routesModuleAbs: string
+      /** User pattern when set; otherwise default discovery at build time. */
+      siteModule: string | null
+      /** Resolved site config paths (from glob or literal); `null` → plugin defaults. */
+      siteModuleAbsPaths: string[] | null
     }
     serverEntry: string | null
+    /** Resolved absolute path to the SSR server entry. */
+    serverEntryAbs: string | null
     remote: string | null
+  }
+}
+
+export async function resolveRouterModulePaths(
+  state: PluginState,
+  projectRoot: string
+): Promise<void> {
+  if (state.router.ssg) {
+    state.router.ssg.routesModuleAbs = await resolveSingleModulePattern(
+      state.router.ssg.routesModule,
+      projectRoot,
+      "router.ssg.routes"
+    )
+    if (state.router.ssg.siteModule) {
+      const paths = await resolveModulePattern(
+        state.router.ssg.siteModule,
+        projectRoot,
+        "router.ssg.siteModule"
+      )
+      state.router.ssg.siteModuleAbsPaths = sortSiteConfigPaths(paths)
+    } else {
+      state.router.ssg.siteModuleAbsPaths = null
+    }
+  }
+  if (state.router.serverEntry) {
+    state.router.serverEntryAbs = await resolveSingleModulePattern(
+      state.router.serverEntry,
+      projectRoot,
+      "router.serverEntry"
+    )
+  } else {
+    state.router.serverEntryAbs = null
   }
 }
 
@@ -60,7 +106,12 @@ export function createPluginState(
 
   const ssg = opts.router?.ssg
   const routesModule =
-    ssg === true ? "./src/routes.ts" : typeof ssg === "object" ? ssg.routes : null
+    ssg === true
+      ? "./src/routes.ts"
+      : typeof ssg === "object"
+        ? ssg.routes
+        : null
+  const siteModule = typeof ssg === "object" ? (ssg.siteModule ?? null) : null
 
   return {
     projectRoot: process.cwd().replace(/\\/g, "/"),
@@ -74,8 +125,16 @@ export function createPluginState(
       staticHoisting: opts.experimental?.staticHoisting === true,
     },
     router: {
-      ssg: routesModule ? { routesModule } : null,
+      ssg: routesModule
+        ? {
+            routesModule,
+            routesModuleAbs: "",
+            siteModule,
+            siteModuleAbsPaths: null,
+          }
+        : null,
       serverEntry: opts.router?.serverEntry ?? null,
+      serverEntryAbs: null,
       remote: opts.router?.remote ?? null,
     },
   }
@@ -125,6 +184,7 @@ export function updatePluginState(
     router: {
       ssg: state.router?.ssg ?? null,
       serverEntry: state.router?.serverEntry ?? null,
+      serverEntryAbs: state.router?.serverEntryAbs ?? null,
       remote: state.router?.remote ?? null,
     },
   } satisfies PluginState

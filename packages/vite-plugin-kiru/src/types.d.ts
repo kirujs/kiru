@@ -83,17 +83,34 @@ export interface KiruPluginOptions {
      * when `serverEntry` is set, the SSR dev pipeline still handles navigation;
      * use `node dist/server` (or equivalent) to verify hybrid static + SSR in prod.
      */
-    ssg?: boolean | { routes: string }
+    ssg?:
+      | boolean
+      | {
+          /**
+           * Routes module path or glob (must match exactly one file).
+           * @example "./src/routes.ts"
+           * @example "./src/routes.{ts,tsx}"
+           */
+          routes: string
+          /**
+           * Site config module path or glob (exports `site` from `defineSiteConfig()`).
+           * Globs may match multiple files — `.ts` is tried before `.js`.
+           * @default sibling `site.config.ts` then `site.config.js` when omitted.
+           * @example "./src/site.config.{ts,js}"
+           */
+          siteModule?: string
+        }
     /**
-     * Path to the module that exports the Hono app as `default` (SSR only).
+     * SSR server entry path or glob (must match exactly one file).
      * When set, the kiru plugin handles dev-mode SSR requests directly —
      * loading your app via `ssrLoadModule`, calling `app.fetch`, and injecting
      * render-blocking CSS links — so `@hono/vite-dev-server` is not needed.
      * @example "./src/server.ts"
+     * @example "./src/server/index.{ts,js}"
      */
     serverEntry?: string
     /**
-     * Glob pattern for remote function files.
+     * Glob pattern for remote function files (may match many files).
      * Matching modules will be transformed to client fetch stubs and made
      * available on the server via `virtual:kiru:remote-registry`.
      * @example "*.actions.ts"
