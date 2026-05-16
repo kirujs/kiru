@@ -302,6 +302,12 @@ export interface SsrDevOptions {
    * when no page module has been refreshed in the browser.
    */
   loadRemoteRegistry?: () => Promise<void>
+  /**
+   * Raw HTML snippets for `<head>` (e.g. Kiru devtools scripts), injected
+   * before dev CSS link tags. Same markup as {@link transformIndexHtml} for
+   * the devtools plugin hook.
+   */
+  devtoolsHeadHtml?: string
 }
 
 /**
@@ -353,8 +359,12 @@ export async function handleSsrDevRequest(
   }
 
   await streamFetchResponseToNode(response, res, async () => {
+    const chunks: string[] = []
+    if (opts.devtoolsHeadHtml) chunks.push(opts.devtoolsHeadHtml)
     const entryUrls = await opts.getEntryUrls()
-    return resolveDevCssLinkTagsForEntries(server, entryUrls)
+    const cssTags = await resolveDevCssLinkTagsForEntries(server, entryUrls)
+    if (cssTags) chunks.push(cssTags)
+    return chunks.join("\n    ")
   })
   return true
 }

@@ -11,10 +11,13 @@ import {
   Head,
   Link,
   matchRoute,
+  hydratePrerenderedHtmlForRequest,
   prerenderStaticRoutes,
+  stripPrerenderedRequestInjections,
   useRouter,
   useRequestContext,
 } from "../../router/index.js"
+import type { CustomRequestContext } from "../../router/types.js"
 
 const MINIMAL_TPL =
   "<!doctype html><html><head>{{kiru_head}}</head><body>{{kiru_body}}</body></html>"
@@ -500,5 +503,28 @@ describe("router", () => {
     assert.ok(out.includes("<!doctype html>"))
     assert.ok(out.includes("<main><h1>1</h1></main>"))
     assert.ok(out.includes("</html>"))
+  })
+
+  it("stripPrerenderedRequestInjections removes context and token scripts", () => {
+    const html = `<!doctype html><html><head><script id="__kiru_request_context__" type="application/json">{}</script><script type="application/json" k-request-token>tok</script></head><body></body></html>`
+    const out = stripPrerenderedRequestInjections(html)
+    assert.ok(!out.includes("__kiru_request_context__"))
+    assert.ok(!out.includes("k-request-token"))
+    assert.ok(out.includes("</head>"))
+  })
+
+  it("hydratePrerenderedHtmlForRequest replaces context and token for the request", () => {
+    const html = `<!doctype html><html><head><title>t</title><script id="__kiru_request_context__" type="application/json">{"user":{"name":"Stale"}}</script><script type="application/json" k-request-token>stale</script></head><body>x</body></html>`
+    const secret = "unit-test-secret-for-hydrate"
+    const out = hydratePrerenderedHtmlForRequest(
+      html,
+      { user: { name: "Fresh" } } as CustomRequestContext,
+      secret
+    )
+    assert.ok(out.includes('"name":"Fresh"'))
+    assert.ok(!out.includes("Stale"))
+    assert.ok(!out.includes("stale"))
+    assert.ok(out.includes("k-request-token"))
+    assert.match(out, /k-request-token>[^<]+\.[^<]+\.[^<]+</)
   })
 })

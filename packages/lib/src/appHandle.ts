@@ -70,6 +70,9 @@ export function mount(
     // @ts-expect-error
     globalThis.__KIRU_READY__ = true
 
+    window.addEventListener("kiru:devtools-ready", () => {
+      window.dispatchEvent(new Event("kiru:ready"))
+    })
     queueMicrotask(() => {
       window.dispatchEvent(new Event("kiru:ready"))
     })

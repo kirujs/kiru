@@ -127,7 +127,7 @@ if ("window" in globalThis) {
       if (isDevtoolsApp(app)) return
       apps.value = apps.value.filter((a) => a !== app)
     })
-  })
+  }, { once: true })
 
   const VIEWER_SETTINGS_STORAGE_KEY = "kiru-devtools:viewerSettings"
   viewerSettings.subscribe((value) => {

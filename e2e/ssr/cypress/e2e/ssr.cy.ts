@@ -4,6 +4,18 @@ describe("SSR server", () => {
     cy.visit(`http://127.0.0.1:${port}/`)
   })
 
+  it("serves hybrid static /docs route", () => {
+    const port = Cypress.env("port")
+    cy.visit(`http://127.0.0.1:${port}/docs`)
+    cy.title().should("eq", "E2E SSR Docs (static)")
+    cy.get('[data-testid="ssr-docs-static"]').should(
+      "contain",
+      "Hybrid static docs"
+    )
+    cy.get("#__kiru_request_context__").should("contain", "E2E User")
+    cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
+  })
+
   it("hydrates SSR context and enforces navigation guards", () => {
     cy.title().should("eq", "E2E SSR Home")
     cy.get('[data-testid="ssr-home"]').should("contain", "SSR e2e home")

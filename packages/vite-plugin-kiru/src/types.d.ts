@@ -77,6 +77,11 @@ export interface KiruPluginOptions {
      * - `true` uses the default `"./src/routes.ts"`
      * - `{ routes: "..." }` uses a custom routes module path
      * @default false
+     *
+     * Can be combined with {@link serverEntry}: `vite build` emits prerendered
+     * HTML for routes marked `static: true`, then bundles the SSR server. In dev,
+     * when `serverEntry` is set, the SSR dev pipeline still handles navigation;
+     * use `node dist/server` (or equivalent) to verify hybrid static + SSR in prod.
      */
     ssg?: boolean | { routes: string }
     /**

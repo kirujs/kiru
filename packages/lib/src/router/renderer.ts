@@ -3,7 +3,15 @@ import { renderToString } from "../renderToString.js"
 import { renderToReadableStream } from "../ssr/server.js"
 import { headlessRender } from "../headlessRender.js"
 import { renderMode } from "../globals.js"
-import { compileRouteTree, matchRoute } from "./manifest.js"
+import {
+  compileRouteTree,
+  generateStaticPaths,
+  matchRoute,
+} from "./manifest.js"
+import {
+  hydratePrerenderedHtmlForRequest,
+  tryReadPrerenderedHtml,
+} from "./prerenderedHtml.js"
 import {
   buildRoutedSubtree,
   loadNotFoundRouteTree,
@@ -18,6 +26,7 @@ import { RouterProvider, createStaticRouter } from "./csr.js"
 import { createHeadCollector, withHeadCollector } from "./headContext.js"
 import {
   RequestContextProvider,
+  serializeKiruRequestTokenScript,
   serializeRequestContextScript,
 } from "./requestContext.js"
 import type {
@@ -30,7 +39,6 @@ import type {
   RouteTreeDefinition,
   CustomRequestContext,
 } from "./types.js"
-import { makeKiruContextToken } from "../remote/token.js"
 import { createRemoteActionHandler } from "../remote/index.js"
 import { __setSsrRequestContext } from "../remote/action.js"
 import { runGuards, toRedirect } from "./runNavigationGuards.js"
@@ -72,6 +80,19 @@ export type CreateRendererOptions = {
   routes: RouteTreeDefinition | RouteManifest
   htmlTemplate?: string
   /**
+   * Absolute path to the Vite client output directory (e.g.
+   * `resolveStatic(import.meta.url).clientDir`).
+   *
+   * When **`process.env.NODE_ENV === "production"`**, {@link Renderer.render}
+   * serves prerendered HTML from disk for URLs in {@link generateStaticPaths}
+   * before SSR. In development, disk reads are never used — static routes are
+   * always server-rendered like any other route.
+   *
+   * Safe with SSR-only routes because reads are gated by {@link generateStaticPaths}
+   * (see {@link tryReadPrerenderedHtml}).
+   */
+  prerenderedHtmlDir?: string
+  /**
    * When set, HTML responses include the signed context token and
    * {@link Renderer.render} handles remote `action` POSTs for the same `Request`.
    */
@@ -84,7 +105,73 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
   const { manifest, compiledTemplate, actionsSecret, handleRemoteAction } =
     prepareRenderer(options)
 
-  const renderCore = async (url: string, ctx?: RenderRequestContext) => {
+  let prerenderPathSet: Promise<ReadonlySet<string>> | undefined
+  const getPrerenderPathSet = (): Promise<ReadonlySet<string>> => {
+    if (!prerenderPathSet) {
+      prerenderPathSet = generateStaticPaths(manifest).then(
+        (paths) => new Set(paths)
+      )
+    }
+    return prerenderPathSet
+  }
+
+  const servePrerenderedFromDisk =
+    !!options.prerenderedHtmlDir &&
+    typeof process !== "undefined" &&
+    process.env.NODE_ENV === "production"
+
+  const renderCore = async (
+    requestOrUrl: Request | string,
+    ctx?: RenderRequestContext
+  ) => {
+    const url =
+      typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url
+
+    if (servePrerenderedFromDisk) {
+      const allowPrerenderRead =
+        typeof requestOrUrl === "string" || requestOrUrl.method === "GET"
+      if (allowPrerenderRead) {
+        const pathname = new URL(url, "http://localhost").pathname
+        const html = tryReadPrerenderedHtml(
+          options.prerenderedHtmlDir!,
+          pathname,
+          { staticPaths: await getPrerenderPathSet() }
+        )
+        if (html) {
+          const requestContext = (ctx?.context ??
+            null) as CustomRequestContext
+          const hydrated = hydratePrerenderedHtmlForRequest(
+            html,
+            requestContext,
+            actionsSecret
+          )
+          if (options.stream) {
+            return {
+              kind: "stream" as const,
+              result: {
+                status: 200,
+                headers: { ...DEFAULT_HEADERS },
+                body: new ReadableStream<string>({
+                  start(controller) {
+                    controller.enqueue(hydrated)
+                    controller.close()
+                  },
+                }),
+              },
+            }
+          }
+          return {
+            kind: "string" as const,
+            result: {
+              status: 200,
+              headers: DEFAULT_HEADERS,
+              body: hydrated,
+            },
+          }
+        }
+      }
+    }
+
     try {
       const prepared = await prepareAppForUrl(url, ctx, manifest)
       if (!prepared) return null
@@ -251,9 +338,7 @@ export function createRenderer(
           if (actionResponse)
             return responseToStreamRenderResult(actionResponse)
         }
-        const url =
-          typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url
-        const out = await renderCore(url, ctx)
+        const out = await renderCore(requestOrUrl, ctx)
         if (!out) return null
         return out.result as StreamRenderResult
       },
@@ -267,9 +352,7 @@ export function createRenderer(
         const actionResponse = await handleRemoteAction(requestOrUrl)
         if (actionResponse) return responseToRenderResult(actionResponse)
       }
-      const url =
-        typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url
-      const out = await renderCore(url, ctx)
+      const out = await renderCore(requestOrUrl, ctx)
       if (!out) return null
       return out.result as RenderResult
     },
@@ -630,9 +713,9 @@ function appendTokenToDocument(
   requestContext: CustomRequestContext,
   secret: string
 ): void {
-  if (!requestContext) return
-  const token = makeKiruContextToken(requestContext, secret)
-  document.headHtml += `\n    <script type="application/json" k-request-token>${token}</script>`
+  const tag = serializeKiruRequestTokenScript(requestContext, secret)
+  if (!tag) return
+  document.headHtml += `\n    ${tag}`
 }
 
 function toPathname(url: string): string {

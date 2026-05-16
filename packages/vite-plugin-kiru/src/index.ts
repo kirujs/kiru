@@ -7,7 +7,7 @@ import {
   updatePluginState,
   type PluginState,
 } from "./config.js"
-import { createDevtoolsHtmlTransform, setupDevtools } from "./devtools.js"
+import { createDevtoolsHtmlTransform, devtoolsHeadInjectionHtml, setupDevtools } from "./devtools.js"
 import {
   extractEntryUrls,
   handleSsrDevRequest,
@@ -136,7 +136,9 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       // requests before Vite's indexHtmlMiddleware would serve index.html.
       // The plugin owns the full request pipeline here, giving us access to
       // the Response object before anything hits the socket — no patching needed.
-      if (!router.ssg && router.serverEntry) {
+      // When `serverEntry` is set, always use the SSR dev pipeline — including
+      // hybrid apps with `router.ssg` (prerender is build-time only; dev stays SSR).
+      if (router.serverEntry) {
         const serverEntry = path
           .resolve(state.projectRoot, router.serverEntry)
           .replace(/\\/g, "/")
@@ -200,6 +202,12 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             const handled = await handleSsrDevRequest(server, req, res, {
               serverEntry: getServerEntry(),
               getEntryUrls,
+              devtoolsHeadHtml: devtoolsEnabled
+                ? devtoolsHeadInjectionHtml(
+                    state.dtClientPathname,
+                    dtHostScriptPath
+                  )
+                : undefined,
               loadRemoteRegistry: state.router.remote
                 ? async () => {
                     await server.ssrLoadModule(REMOTE_REGISTRY_VIRTUAL_ID)
@@ -337,7 +345,9 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     async closeBundle() {
       if (!state.isBuild || state.isSSRBuild) return
       const serverEntry = state.router.serverEntry
-      if (!serverEntry || state.router.ssg) return
+      // `router.ssg` prerenders HTML in `writeBundle`; it is not mutually
+      // exclusive with `serverEntry` — hybrid apps still need the SSR bundle.
+      if (!serverEntry) return
       if (!resolvedViteConfig) {
         throw new Error(
           "[vite-plugin-kiru]: internal error — missing resolved Vite config for SSR server build"

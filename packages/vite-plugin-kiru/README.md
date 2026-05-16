@@ -48,7 +48,7 @@ kiru({
   router: {
     // SSR dev entry (exports default Hono app)
     serverEntry: "./src/server.ts",
-    // SSG options:
+    // SSG / prerender (optional alongside serverEntry for hybrid apps):
     // - false: disable SSG
     // - true: enable SSG using ./src/routes.ts
     // - { routes }: enable SSG with custom routes module path
@@ -74,6 +74,18 @@ With `router.ssg` enabled (`true` or `{ routes }`), the plugin:
 Your source `index.html` should include `{{kiru_head}}` in `<head>` and `{{kiru_body}}` at the app mount location (for example `<div id="app">{{kiru_body}}</div>`).
 
 You do **not** need a separate `prerender.ts` script.
+
+## Hybrid static routes + SSR
+
+You can set **`router.ssg`** and **`router.serverEntry`** together. The client build still prerenders every route with `static: true` (and optional `generateStaticParams` on dynamic segments) into `dist/client`, then the plugin bundles your SSR server into `dist/server` as usual.
+
+At runtime, **do not** serve `index.html` from disk for every path: the built shell still contains `{{kiru_head}}` / `{{kiru_body}}` placeholders until `createRenderer` fills them. Pass **`prerenderedHtmlDir: clientDir`** (from `resolveStatic`) into `createRenderer` — in **`NODE_ENV=production`** it serves `dist/client/*.html` for static routes (`generateStaticPaths`); **in development** disk is never read under that path, so static routes stay live SSR and are not overridden by stale builds.
+
+`vite preview` with `router.ssg` serves static HTML like a static host; it does not run your SSR server. Use `pnpm start` / `node dist/server` to exercise hybrid behavior.
+
+In development, **`router.serverEntry` always wins**: when both `ssg` and `serverEntry` are set, the plugin keeps the SSR dev middleware (so streaming, request context, and remote actions behave like a pure SSR app). Prerendered HTML is produced at `vite build` time only.
+
+**Kiru devtools and `transformIndexHtml`:** SSG dev reads `index.html` through `server.transformIndexHtml`, so Vite plugin HTML transforms apply. SSR dev serves HTML from your server bundle (for example `resolveStatic` reading `index.html` from disk), which bypasses that pipeline. The plugin therefore injects the same Kiru devtools `<head>` snippet used by the `transformIndexHtml` hook into the SSR dev response (alongside dev CSS link injection). Other plugins that only contribute via `transformIndexHtml` still do not run on SSR-rendered documents unless you integrate them separately (for example by transforming the template before passing it to `createRenderer`).
 
 ## SSR client entry
 

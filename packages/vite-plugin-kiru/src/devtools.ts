@@ -24,6 +24,16 @@ export function setupDevtools(
   // })
 }
 
+export function devtoolsHeadInjectionHtml(
+  dtClientPathname: string,
+  dtHostScriptPath: string
+): string {
+  return (
+    `<script>window.__KIRU_DEVTOOLS_PATHNAME__ = ${JSON.stringify(dtClientPathname)};</script>\n    ` +
+    `<script type="module" src="${dtHostScriptPath}" async></script>`
+  )
+}
+
 export function createDevtoolsHtmlTransform(
   dtClientPathname: string,
   dtHostScriptPath: string
@@ -33,13 +43,14 @@ export function createDevtoolsHtmlTransform(
     tags: [
       {
         tag: "script",
-        children: `window.__KIRU_DEVTOOLS_PATHNAME__ = "${dtClientPathname}";`,
+        children: `window.__KIRU_DEVTOOLS_PATHNAME__ = ${JSON.stringify(dtClientPathname)};`,
       },
       {
         tag: "script",
         attrs: {
           type: "module",
           src: dtHostScriptPath,
+          async: true,
         },
       },
     ],

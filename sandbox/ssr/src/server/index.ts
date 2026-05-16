@@ -21,6 +21,7 @@ const renderer = createRenderer({
   stream: true,
   routes,
   htmlTemplate,
+  prerenderedHtmlDir: clientDir,
   actions: {
     secret: "sandbox-ssr-remote-secret",
     /** Wildcard keeps `pnpm dev` working regardless of host/port; tighten in production. */

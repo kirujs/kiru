@@ -16,6 +16,7 @@ const renderer = createRenderer({
   stream: true,
   routes,
   htmlTemplate,
+  prerenderedHtmlDir: clientDir,
   actions: {
     secret: "kiru-e2e-remote-secret",
     allowedOrigins: ["*"],

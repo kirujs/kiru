@@ -10,6 +10,8 @@ export default function Layout({ children }: { children: JSX.Children }) {
         {" | "}
         <Link to="/about">About</Link>
         {" | "}
+        <Link to="/docs">Docs (static)</Link>
+        {" | "}
         <Link to="/users/99">User 99</Link>
         {" | "}
         <Link to="/guarded">Guarded</Link>

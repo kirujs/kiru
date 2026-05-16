@@ -8,7 +8,7 @@
     "build": "vite build",
     "server:e2e": "cross-env NODE_ENV=production PORT=5192 node dist/server",
     "cy:run": "cypress run",
-    "test": "pnpm exec cypress run"
+    "test": "pnpm run build && node ./scripts/verify-hybrid-prerender.mjs && pnpm exec cypress run"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

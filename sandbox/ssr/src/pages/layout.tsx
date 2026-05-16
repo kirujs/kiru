@@ -40,6 +40,12 @@ export default function Layout() {
             About
           </Link>
           <Link
+            to="/docs"
+            className="rounded-full border border-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:border-cyan-400 hover:text-cyan-200"
+          >
+            Docs (static)
+          </Link>
+          <Link
             to="/users/42"
             className="rounded-full border border-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:border-cyan-400 hover:text-cyan-200"
           >

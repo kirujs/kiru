@@ -21,6 +21,14 @@ export const routes = defineRouteTree((r) =>
           description: "About this server-rendered app.",
         },
       }),
+      r.get("/docs", {
+        static: true,
+        component: () => import("./pages/docs.tsx"),
+        head: {
+          title: "Docs — Kiru SSR (static)",
+          description: "Prerendered documentation slice.",
+        },
+      }),
       r.get("/users/[id]", {
         component: () => import("./pages/user.tsx"),
         beforeEnter: (to) => {

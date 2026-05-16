@@ -60,6 +60,11 @@ export interface ResolveSsrPathsOptions {
  * detecting prod vs. dev, locating the project root, finding `dist/client`,
  * and choosing the right `index.html` to feed `createRenderer`.
  *
+ * For hybrid static prerender + SSR, pass **`prerenderedHtmlDir`** (typically
+ * {@link SsrPaths.clientDir} from this helper) into `createRenderer`;
+ * **`NODE_ENV=production`** triggers disk-backed static HTML for `generateStaticPaths`
+ * before SSR — **development never reads from disk** under `prerenderedHtmlDir`.
+ *
  * @example
  * ```ts
  * import { Hono } from "hono"

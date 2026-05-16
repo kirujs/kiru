@@ -10,6 +10,7 @@ Templates scaffold modern Kiru app modes (CSR, SSG, SSR) and can consume declara
 - **SEO**: add a `meta` object on scopes and routes (`title`, `description`, `openGraph`, `twitter`, `canonical`, …). Titles/descriptions support `{param}` placeholders for dynamic segments.
 - **SSG**: enable `router.ssg: true` in `vite-plugin-kiru` and a single `vite build` prerenders pages into your built `index.html` shell—no separate prerender script. Use template tokens in source `index.html`: `{{kiru_head}}` in `<head>` and `{{kiru_body}}` where app markup should be injected.
 - **SSR**: use `createRenderer` from `kiru/router` and assemble the response with `fillRouteHtmlTemplate(templateHtml, { body, headHtml: document.headHtml })`, using the same `index.html` shape as SSG when possible. Hydrate with `bootstrapSsrClient` from `kiru/ssr/router` (not `RouterView` alone—non-streaming SSR does not inject deferred resource payloads).
+- **Hybrid (static docs + SSR app)**: keep the root scope non-static (or mark individual routes `static: true` only where you want HTML files). Enable both `router.ssg` and `router.serverEntry`. Pass **`prerenderedHtmlDir`** (e.g. `resolveStatic(import.meta.url).clientDir`) into `createRenderer`; **production** serves build-time HTML for static paths before SSR falls through. **Development** never reads under that directory — routes stay live-rendered. Static prerender does not receive your server's per-request context, so those pages must not depend on it.
 
 #### interactive setup:
 

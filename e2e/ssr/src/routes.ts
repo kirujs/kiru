@@ -18,6 +18,11 @@ export const routes = defineRouteTree((r) =>
         component: () => import("./pages/about"),
         head: { title: "E2E SSR About" },
       }),
+      r.get("/docs", {
+        static: true,
+        component: () => import("./pages/docs"),
+        head: { title: "E2E SSR Docs (static)" },
+      }),
       r.get("/users/[id]", {
         component: () => import("./pages/user"),
         head: { title: "E2E SSR User {id}" },

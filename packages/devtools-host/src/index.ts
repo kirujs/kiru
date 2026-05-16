@@ -29,4 +29,5 @@ if ("window" in globalThis) {
   }
 
   window.addEventListener("kiru:ready", init, { once: true })
+  window.dispatchEvent(new Event("kiru:devtools-ready"))
 }
