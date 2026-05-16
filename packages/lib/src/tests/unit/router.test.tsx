@@ -17,6 +17,7 @@ import {
   serializeDocumentHead,
   hydratePrerenderedHtmlForRequest,
   serverLoader,
+  staticLoader,
   loadErrorRouteTree,
   loadRootErrorRouteTree,
   prerenderStaticRoutes,
@@ -332,6 +333,56 @@ describe("router", () => {
     const byPath = Object.fromEntries(outputs.map((v) => [v.path, v.body]))
     assert.strictEqual(byPath["/users/1"], "<main><h1>1</h1></main>")
     assert.strictEqual(byPath["/users/2"], "<main><h1>2</h1></main>")
+  })
+
+  it("prerenderStaticRoutes respects maxConcurrentRenders", async () => {
+    let inFlight = 0
+    let peak = 0
+    const delayMs = 30
+    const pageCount = 8
+
+    const trackLoad = staticLoader(async () => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+      inFlight -= 1
+      return { ok: true as const }
+    })
+
+    const concurrentRoutes = defineRouteTree((r) =>
+      r.scope({
+        static: true,
+        layout: async () => ({
+          default: ({ children }: { children: JSX.Children }) => (
+            <main>{children}</main>
+          ),
+        }),
+        children: Array.from({ length: pageCount }, (_, i) =>
+          r.get(`/pages/${i}`, {
+            component: async () => ({
+              load: trackLoad,
+              default: () => <p>{i}</p>,
+            }),
+          })
+        ),
+      })
+    )
+
+    inFlight = 0
+    peak = 0
+    await prerenderStaticRoutes({
+      routes: concurrentRoutes,
+      maxConcurrentRenders: 2,
+    })
+    assert.ok(peak <= 2, `expected peak <= 2, got ${peak}`)
+
+    inFlight = 0
+    peak = 0
+    await prerenderStaticRoutes({
+      routes: concurrentRoutes,
+      maxConcurrentRenders: Infinity,
+    })
+    assert.ok(peak > 2, `expected peak > 2 with Infinity, got ${peak}`)
   })
 
   it("returns document head from renderer with merged route meta", async () => {

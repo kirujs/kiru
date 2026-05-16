@@ -20,14 +20,46 @@ export interface StaticRouteOutput {
   document: DocumentHead
 }
 
+const DEFAULT_MAX_CONCURRENT_RENDERS = 10
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return []
+  if (concurrency === Infinity) {
+    return Promise.all(items.map((item, index) => fn(item, index)))
+  }
+
+  const results: R[] = new Array(items.length)
+  let nextIndex = 0
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const index = nextIndex++
+      if (index >= items.length) return
+      results[index] = await fn(items[index], index)
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => worker())
+  )
+  return results
+}
+
 export async function prerenderStaticRoutes({
   routes,
   htmlTemplate,
   pathPolicy,
+  maxConcurrentRenders = DEFAULT_MAX_CONCURRENT_RENDERS,
 }: {
   routes: RouteTreeDefinition | RouteManifest
   htmlTemplate?: string
   pathPolicy?: RouterPathPolicy
+  /** @default 10 */
+  maxConcurrentRenders?: number
 }): Promise<StaticRouteOutput[]> {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
   const paths = await generateStaticPaths(manifest, pathPolicy)
@@ -40,30 +72,36 @@ export async function prerenderStaticRoutes({
         })
       : null
 
-  const outputs: StaticRouteOutput[] = []
-  for (const path of paths) {
-    const routeMatch = matchRoute(manifest, path, pathPolicy)
-    if (!routeMatch) continue
+  const renderedPaths = await mapWithConcurrency(
+    paths,
+    maxConcurrentRenders,
+    async (path) => {
+      const routeMatch = matchRoute(manifest, path, pathPolicy)
+      if (!routeMatch) return null
 
-    if (renderer) {
-      const rendered = await renderer.render(path)
-      if (!rendered || typeof rendered.body !== "string") continue
+      if (renderer) {
+        const rendered = await renderer.render(path)
+        if (!rendered || typeof rendered.body !== "string") return null
+        const { body, document } = await renderMatchToStaticHtml(
+          manifest,
+          routeMatch,
+          pathPolicy
+        )
+        return { path, body, document, html: rendered.body }
+      }
+
       const { body, document } = await renderMatchToStaticHtml(
         manifest,
         routeMatch,
         pathPolicy
       )
-      outputs.push({ path, body, document, html: rendered.body })
-      continue
+      return { path, body, document }
     }
+  )
 
-    const { body, document } = await renderMatchToStaticHtml(
-      manifest,
-      routeMatch,
-      pathPolicy
-    )
-    outputs.push({ path, body, document })
-  }
+  const outputs: StaticRouteOutput[] = renderedPaths.filter(
+    (output): output is StaticRouteOutput => output !== null
+  )
 
   if (manifest.rootHasNotFound) {
     const nfPath = "/__kiru_ssg_not_found__"

@@ -99,6 +99,16 @@ export interface KiruPluginOptions {
            * @example "./src/site.config.{ts,js}"
            */
           siteModule?: string
+          /**
+           * SSG build-time options (used during `vite build` prerender only).
+           */
+          build?: {
+            /**
+             * Maximum number of static routes rendered in parallel during prerender.
+             * @default 10
+             */
+            maxConcurrentRenders?: number
+          }
         }
     /**
      * SSR server entry path or glob (must match exactly one file).

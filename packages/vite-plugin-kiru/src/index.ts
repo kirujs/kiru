@@ -498,6 +498,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         }[] = await prerenderStaticRoutes({
           routes,
           pathPolicy,
+          maxConcurrentRenders: state.router.ssg.maxConcurrentRenders,
           ...(opts.router?.htmlShell
             ? {}
             : {

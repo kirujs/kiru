@@ -7,6 +7,20 @@ import {
   sortSiteConfigPaths,
 } from "./resolveModulePattern.js"
 
+const DEFAULT_MAX_CONCURRENT_RENDERS = 10
+
+export function resolveMaxConcurrentRenders(
+  value: number | undefined
+): number {
+  const n = value ?? DEFAULT_MAX_CONCURRENT_RENDERS
+  if (n !== Infinity && (!Number.isFinite(n) || n < 1)) {
+    throw new Error(
+      "[vite-plugin-kiru]: router.ssg.build.maxConcurrentRenders must be a positive number or Infinity"
+    )
+  }
+  return n
+}
+
 export const defaultEsBuildOptions: ESBuildOptions = {
   jsxInject: `import { createElement as _jsx, Fragment as _jsxFragment } from "kiru"`,
   jsx: "transform",
@@ -45,6 +59,8 @@ export interface PluginState {
       siteModule: string | null
       /** Resolved site config paths (from glob or literal); `null` → plugin defaults. */
       siteModuleAbsPaths: string[] | null
+      /** Parallel static route renders during `vite build` prerender. */
+      maxConcurrentRenders: number
     }
     serverEntry: string | null
     /** Resolved absolute path to the SSR server entry. */
@@ -112,6 +128,9 @@ export function createPluginState(
         ? ssg.routes
         : null
   const siteModule = typeof ssg === "object" ? (ssg.siteModule ?? null) : null
+  const maxConcurrentRenders = resolveMaxConcurrentRenders(
+    typeof ssg === "object" ? ssg.build?.maxConcurrentRenders : undefined
+  )
 
   return {
     projectRoot: process.cwd().replace(/\\/g, "/"),
@@ -131,6 +150,7 @@ export function createPluginState(
             routesModuleAbs: "",
             siteModule,
             siteModuleAbsPaths: null,
+            maxConcurrentRenders,
           }
         : null,
       serverEntry: opts.router?.serverEntry ?? null,
