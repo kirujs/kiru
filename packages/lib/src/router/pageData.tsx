@@ -1,4 +1,3 @@
-export const PAGE_DATA_SCRIPT_ID = "__kiru_page_data__"
 
 function escapeScriptJson(json: string): string {
   return json
@@ -9,7 +8,7 @@ function escapeScriptJson(json: string): string {
 
 export function serializePageDataScript(data: unknown): string {
   const json = escapeScriptJson(JSON.stringify(data))
-  return `<script id="${PAGE_DATA_SCRIPT_ID}" type="application/json">${json}</script>`
+  return `<script type="application/json" k-page-data>${json}</script>`
 }
 
 let hydratedPageData: unknown | undefined
@@ -20,7 +19,7 @@ export function readHydratedPageData(): unknown {
   if (typeof document === "undefined") return undefined
   if (hydratedPageDataRead) return hydratedPageData
   hydratedPageDataRead = true
-  const el = document.getElementById(PAGE_DATA_SCRIPT_ID)
+  const el = document.querySelector("script[k-page-data]")
   if (!el) return undefined
   try {
     hydratedPageData = JSON.parse(el.textContent || "null")

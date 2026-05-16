@@ -34,7 +34,6 @@ export default function NavigationDemoPage() {
 
   return () => {
     syncNavProbe()
-    const nav = router.currentNavigation.value
     return (
       <div>
         <h2>Navigation demo</h2>
@@ -64,16 +63,16 @@ export default function NavigationDemoPage() {
           {() => (router.isNavigating.value ? "yes" : "no")}
         </p>
         <p data-testid="nav-from">
-          {() =>
-            nav?.from
-              ? formatSnapshot(nav.from.pathname, nav.from.params)
-              : ""
-          }
+          {() => {
+            const from = router.currentNavigation.value?.from
+            return from ? formatSnapshot(from.pathname, from.params) : ""
+          }}
         </p>
         <p data-testid="nav-to">
-          {() =>
-            nav?.to ? formatSnapshot(nav.to.pathname, nav.to.params) : ""
-          }
+          {() => {
+            const to = router.currentNavigation.value?.to
+            return to ? formatSnapshot(to.pathname, to.params) : ""
+          }}
         </p>
       </div>
     )

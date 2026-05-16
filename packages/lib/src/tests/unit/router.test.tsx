@@ -16,7 +16,6 @@ import {
   mergeRouteHead,
   serializeDocumentHead,
   hydratePrerenderedHtmlForRequest,
-  PAGE_DATA_SCRIPT_ID,
   serverLoader,
   loadErrorRouteTree,
   loadRootErrorRouteTree,
@@ -319,7 +318,7 @@ describe("router", () => {
     })
     assert.ok(response)
     assert.ok(response.body.includes("<p>John</p>"))
-    assert.ok(response.body.includes('id="__kiru_request_context__"'))
+    assert.ok(response.body.includes('k-request-context'))
   })
 
   it("returns null when route is unmatched", async () => {
@@ -1063,7 +1062,7 @@ describe("router", () => {
     reader.releaseLock()
     assert.ok(
       out.includes(
-        `<script id="${PAGE_DATA_SCRIPT_ID}" type="application/json">`
+        `<script type="application/json" k-page-data>`
       )
     )
     assert.ok(out.includes('"pathname":"/loader"'))
@@ -1097,15 +1096,15 @@ describe("router", () => {
   })
 
   it("stripPrerenderedRequestInjections removes context and token scripts", () => {
-    const html = `<!doctype html><html><head><script id="__kiru_request_context__" type="application/json">{}</script><script type="application/json" k-request-token>tok</script></head><body></body></html>`
+    const html = `<!doctype html><html><head><script type="application/json" k-request-context>{}</script><script type="application/json" k-request-token>tok</script></head><body></body></html>`
     const out = stripPrerenderedRequestInjections(html)
-    assert.ok(!out.includes("__kiru_request_context__"))
+    assert.ok(!out.includes("k-request-context"))
     assert.ok(!out.includes("k-request-token"))
     assert.ok(out.includes("</head>"))
   })
 
   it("hydratePrerenderedHtmlForRequest replaces context and token for the request", () => {
-    const html = `<!doctype html><html><head><title>t</title><script id="__kiru_request_context__" type="application/json">{"user":{"name":"Stale"}}</script><script type="application/json" k-request-token>stale</script></head><body>x</body></html>`
+    const html = `<!doctype html><html><head><title>t</title><script type="application/json" k-request-context>{"user":{"name":"Stale"}}</script><script type="application/json" k-request-token>stale</script></head><body>x</body></html>`
     const secret = "unit-test-secret-for-hydrate"
     const out = hydratePrerenderedHtmlForRequest(
       html,

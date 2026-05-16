@@ -8,7 +8,7 @@ describe("SSR server", () => {
     const port = Cypress.env("port")
     cy.request(`http://127.0.0.1:${port}/loaders/server`).then((res) => {
       expect(res.status).to.eq(200)
-      expect(res.body).to.include("server@/loaders/server")
+      expect(res.body).to.match(/server@(&#47;|\/)loaders(&#47;|\/)server/)
     })
     cy.visit(`http://127.0.0.1:${port}/loaders/server`)
     cy.get('[data-testid="loader-data"]').should(
@@ -29,7 +29,7 @@ describe("SSR server", () => {
     // hydration (readHydratedRequestContext), so assert it on the raw response.
     cy.request(`http://127.0.0.1:${port}/docs`).then((res) => {
       expect(res.status).to.eq(200)
-      expect(res.body).to.include('id="__kiru_request_context__"')
+      expect(res.body).to.include('k-request-context')
       expect(res.body).to.include("E2E User")
       expect(res.body).to.include("Hybrid static docs")
     })

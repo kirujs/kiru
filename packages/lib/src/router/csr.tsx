@@ -138,6 +138,15 @@ function snapshotFromParts(
   }
 }
 
+function formatNavigationSnapshotLabel(
+  snap: RouteLocationSnapshot | null | undefined
+): string {
+  if (!snap) return ""
+  const keys = Object.keys(snap.params)
+  if (!keys.length) return snap.pathname
+  return `${snap.pathname}?${keys.map((k) => `${k}=${snap.params[k]}`).join("&")}`
+}
+
 type RouteLocationParts = {
   pathname: string
   hash: string
@@ -262,6 +271,23 @@ export function createRouter({
   const matches = signal(buildMatchSegments(match.peek()))
   const isNavigating = signal(false)
   const currentNavigation = signal<CurrentNavigation | null>(null)
+
+  const syncWindowNavigationProbe = () => {
+    if (typeof window === "undefined") return
+    const nav = currentNavigation.peek()
+    const w = window as Window & {
+      __KIRU_NAV__?: { isNavigating: boolean; from: string; to: string }
+    }
+    w.__KIRU_NAV__ = {
+      isNavigating: isNavigating.peek(),
+      from: formatNavigationSnapshotLabel(nav?.from),
+      to: formatNavigationSnapshotLabel(nav?.to),
+    }
+  }
+  isNavigating.subscribe(syncWindowNavigationProbe)
+  currentNavigation.subscribe(syncWindowNavigationProbe)
+  syncWindowNavigationProbe()
+
   const beforeEachGuards: NavigationGuard[] = []
   const beforeResolveGuards: NavigationGuard[] = []
   const afterEachHooks: AfterEachHook[] = []
@@ -571,8 +597,10 @@ export function createRouter({
       }
     } finally {
       if (token === navToken) {
-        isNavigating.value = false
-        currentNavigation.value = null
+        if (navResult.status !== "committed") {
+          isNavigating.value = false
+          currentNavigation.value = null
+        }
         ;(routerRef.__lastNavigation as Router["__lastNavigation"]) = {
           to,
           from,
@@ -953,6 +981,15 @@ export function RouterView() {
         ? buildRoutedSubtree(tree.layoutModules, tree.routeModule, leafProps)
         : null
     }
+  )
+
+  onMount(() =>
+    children.isPending.subscribe((pending) => {
+      if (!pending && router.isNavigating.peek()) {
+        router.isNavigating.value = false
+        router.currentNavigation.value = null
+      }
+    })
   )
 
   return () => children.value

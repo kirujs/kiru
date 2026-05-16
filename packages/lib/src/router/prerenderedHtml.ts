@@ -8,7 +8,6 @@ import {
 } from "./pathPolicy.js"
 import type { CustomRequestContext } from "./types.js"
 import {
-  REQUEST_CONTEXT_SCRIPT_ID,
   serializeRequestContextScript,
 } from "./requestContext.js"
 import { serializeKiruRequestTokenScript } from "./renderer.js"
@@ -102,19 +101,12 @@ export function tryReadPrerenderedHtml(
 const HEAD_CLOSE_RE = /<\/head\s*>/i
 const BODY_OPEN_RE = /<body\b[^>]*>/i
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-}
 
 /** Removes Kiru request-context and action-token `<script>` tags from full HTML. */
 export function stripPrerenderedRequestInjections(html: string): string {
   let out = html
-  const ctxId = escapeRegExp(REQUEST_CONTEXT_SCRIPT_ID)
   out = out.replace(
-    new RegExp(
-      `<script\\b[^>]*\\bid=["']${ctxId}["'][^>]*>[\\s\\S]*?<\\/script>`,
-      "gi"
-    ),
+    /<script\b[^>]*\bk-request-context\b[^>]*>[\s\S]*?<\/script>/gi,
     ""
   )
   out = out.replace(

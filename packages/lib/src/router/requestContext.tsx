@@ -2,8 +2,6 @@ import { createContext, useContext } from "../context.js"
 import { createElement } from "../element.js"
 import type { CustomRequestContext } from "./types.js"
 
-export const REQUEST_CONTEXT_SCRIPT_ID = "__kiru_request_context__"
-
 const RequestContext = createContext<CustomRequestContext>({})
 
 export function RequestContextProvider({
@@ -42,12 +40,12 @@ export function serializeRequestContextScript(
 ): string {
   if (!ctx) return ""
   const json = escapeScriptJson(JSON.stringify(ctx))
-  return `<script id="${REQUEST_CONTEXT_SCRIPT_ID}" type="application/json">${json}</script>`
+  return `<script type="application/json" k-request-context>${json}</script>`
 }
 
 export function readHydratedRequestContext(): CustomRequestContext {
   if (typeof document === "undefined") return {}
-  const el = document.getElementById(REQUEST_CONTEXT_SCRIPT_ID)
+  const el = document.querySelector("script[k-request-context]")
   if (!el) return {}
   try {
     const parsed = JSON.parse(el.textContent || "{}") as CustomRequestContext
