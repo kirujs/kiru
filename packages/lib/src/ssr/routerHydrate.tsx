@@ -22,6 +22,9 @@ import { readPageLoadExport } from "../router/loaders.js"
 import { signal } from "../signals/index.js"
 import { createElement } from "../element.js"
 import { requestToken } from "../globals.js"
+import { syncDocumentHeadForPage } from "../router/pageHead.js"
+import type { PageProps } from "../router/loaders.js"
+import type { KiruLoader } from "../router/loaders.js"
 
 type ServerActionsClient = {
   dispatch: (
@@ -171,10 +174,25 @@ export async function bootstrapSsrClient(
 
   const children = signal<JSX.Element | null>(null)
   if (first && match) {
+    const leafProps = await resolveLeafPropsForMatch(match, pathname, router)
+    if (typeof document !== "undefined") {
+      await syncDocumentHeadForPage(
+        match,
+        buildLoaderContext({
+          params: match.params,
+          pathname,
+          search: typeof window !== "undefined" ? window.location.search : "",
+          hash: router.hash.peek(),
+          query: router.query.peek(),
+          context: requestContext,
+        }),
+        leafProps as PageProps<KiruLoader<unknown>>
+      )
+    }
     children.value = buildRoutedSubtree(
       first.layoutModules,
       first.routeModule,
-      await resolveLeafPropsForMatch(match, pathname, router)
+      leafProps
     )
   }
   let epoch = 0
@@ -197,6 +215,21 @@ export async function bootstrapSsrClient(
             router
           )
         : {}
+      if (match) {
+        await syncDocumentHeadForPage(
+          match,
+          buildLoaderContext({
+            params: match.params,
+            pathname: router.pathname.peek(),
+            search:
+              typeof window !== "undefined" ? window.location.search : "",
+            hash: router.hash.peek(),
+            query: router.query.peek(),
+            context: readHydratedRequestContext(),
+          }),
+          leafProps as PageProps<KiruLoader<unknown>>
+        )
+      }
       children.value = buildRoutedSubtree(
         tree.layoutModules,
         tree.routeModule,

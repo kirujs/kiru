@@ -25,6 +25,10 @@ export const routes = defineRouteTree((r) =>
           jsonLd: { "@type": "WebPage", name: "E2E SSR SEO" },
         },
       }),
+      r.get("/head-override", {
+        component: () => import("./pages/head-override"),
+        head: { title: "E2E SSR From route definition" },
+      }),
       r.get("/hello", {
         component: () => import("./pages/hello.tsx"),
         head: { title: "E2E SSR Hello" },

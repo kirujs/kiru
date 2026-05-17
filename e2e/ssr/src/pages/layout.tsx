@@ -14,6 +14,8 @@ export default function Layout({ children }: { children: JSX.Children }) {
         {" | "}
         <Link to="/seo">SEO</Link>
         {" | "}
+        <Link to="/head-override">Head override</Link>
+        {" | "}
         <Link to="/users/99">User 99</Link>
         {" | "}
         <Link to="/guarded">Guarded</Link>

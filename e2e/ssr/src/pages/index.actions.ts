@@ -34,6 +34,7 @@ export const getPost = action.get<StreamingProduct>(async () => {
 })
 
 export const getStreamingProduct = action.get<StreamingProduct>(async () => {
+  console.log("action: get streaming product")
   await new Promise((r) => setTimeout(r, 3000))
   return { id: "p1", name: "Streaming Product" }
 })
@@ -47,6 +48,7 @@ export const getStreamingReviews = action.post<{ productId: string }, StreamingR
       typeof input.productId === "string",
   },
   async (_ctx, input: { productId: string }) => {
+    console.log("action: get streaming reviews")
     await new Promise((r) => setTimeout(r, 3000))
     return [
       { id: "r1", text: `Review for ${input.productId}` },

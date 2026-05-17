@@ -10,7 +10,7 @@ import {
   generateStaticPaths,
   buildSitemapXml,
   defineSiteConfig,
-  Head,
+  defineHeadContent,
   Link,
   matchRoute,
   mergeRouteHead,
@@ -437,24 +437,17 @@ describe("router", () => {
     assert.ok(response?.body.includes("<title>User 99</title>"))
   })
 
-  it("merges <Head content> with route meta (SSR)", async () => {
+  it("merges static defineHeadContent with route meta (SSR)", async () => {
     const r = defineRouteTree((x) =>
       x.scope({
         head: { title: "Base" },
-        layout: async () => ({
-          default: ({ children }: { children: JSX.Children }) => (
-            <main>{children}</main>
-          ),
-        }),
         children: [
-          x.get("/", async () => ({
-            default: () => (
-              <>
-                <Head content={{ title: "Welcome!" }} />
-                <h1>Home</h1>
-              </>
-            ),
-          })),
+          x.get("/", {
+            component: async () => ({
+              head: defineHeadContent({ title: "Welcome!" }),
+              default: () => <h1>Home</h1>,
+            }),
+          }),
         ],
       })
     )
@@ -464,32 +457,21 @@ describe("router", () => {
     assert.ok(response?.body.includes("<title>Welcome!</title>"))
   })
 
-  it("awaits <Head using> resource before streaming (SSR stream)", async () => {
+  it("resolves dynamic defineHeadContent after loader (SSR stream)", async () => {
+    const load = serverLoader(async () => ({ title: "Gizmo" }))
     const r = defineRouteTree((x) =>
       x.scope({
         head: { title: "Base" },
-        layout: async () => ({
-          default: ({ children }: { children: JSX.Children }) => (
-            <main>{children}</main>
-          ),
-        }),
         children: [
-          x.get("/product", async () => ({
-            default: () => {
-              const product = kiru.resource(async () => ({
-                title: "Gizmo",
-              }))
-              return (
-                <>
-                  <Head
-                    using={product}
-                    content={(p) => ({ title: `Product: ${p.title}` })}
-                  />
-                  <h1>{() => product.value?.title}</h1>
-                </>
-              )
-            },
-          })),
+          x.get("/product", {
+            component: async () => ({
+              load,
+              head: defineHeadContent<typeof load>((_ctx, { data }) => ({
+                title: `Product: ${data!.title}`,
+              })),
+              default: () => <h1>Product</h1>,
+            }),
+          }),
         ],
       })
     )
@@ -512,6 +494,57 @@ describe("router", () => {
     reader.releaseLock()
 
     assert.ok(out.includes("<title>Product: Gizmo</title>"))
+  })
+
+  it("streams shell early with static head and serverLoader fallback", async () => {
+    const load = serverLoader({
+      load: async () => {
+        await new Promise((r) => setTimeout(r, 50))
+        return { ok: true }
+      },
+      fallback: () => <p data-testid="load-fallback">Loading...</p>,
+    })
+    const r = defineRouteTree((x) =>
+      x.scope({
+        head: { title: "Route" },
+        children: [
+          x.get("/loader", {
+            component: async () => ({
+              load,
+              head: defineHeadContent({ title: "Static head" }),
+              default: () => <p data-testid="ok">ok</p>,
+            }),
+          }),
+        ],
+      })
+    )
+    const renderer = createRenderer({
+      stream: true,
+      routes: r,
+      htmlTemplate: MINIMAL_TPL,
+    })
+    const response = await renderer.render("/loader")
+    assert.ok(response)
+    const reader = (response.body as ReadableStream<string>).getReader()
+    const first = await reader.read()
+    assert.ok(first.value?.includes("<title>Static head</title>"))
+    let out = first.value ?? ""
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      out += next.value
+    }
+    reader.releaseLock()
+    assert.ok(out.includes('data-testid="load-fallback"'))
+    assert.ok(
+      out.includes("k-page-data"),
+      "loader data should be embedded after load settles"
+    )
+    assert.ok(out.includes('"ok":true'))
+    assert.ok(
+      !out.includes('data-testid="ok"'),
+      "page success markup is hydrated from streamed data, not in the sync shell"
+    )
   })
 
   it("renders Link with resolved href in SSR output", async () => {

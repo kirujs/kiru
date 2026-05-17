@@ -35,6 +35,13 @@ function withStreamRenderMode<T>(fn: () => T): T {
 
 export interface RenderToReadableStreamOptions {
   /**
+   * Runs before the synchronous shell render. Use to flush a precomputed
+   * document prefix (static page head) while the shell is still rendering.
+   */
+  onStreamStart?: (
+    controller: ReadableStreamDefaultController<string>
+  ) => void | Promise<void>
+  /**
    * Invoked once the synchronous shell render is complete, with the full
    * shell HTML buffered into a string. Whatever the callback writes to the
    * supplied controller becomes the first emission(s) of the stream;
@@ -180,6 +187,17 @@ export function renderToReadableStream(
     speculative: true,
     scheduleSpeculativeContinue,
   }
+
+  void (async () => {
+    try {
+      if (options?.onStreamStart) {
+        await options.onStreamStart(controller)
+      }
+    } catch (error) {
+      controller.error(error)
+      return
+    }
+  })()
 
   withStreamRenderMode(() => headlessRender(ctx, rootNode))
 

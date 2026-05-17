@@ -374,4 +374,57 @@ describe("SSR server", () => {
       cy.get('[data-testid="ssr-seo"]').should("exist")
     })
   })
+
+  describe("document head on client navigation", () => {
+    it("updates title and JSON-LD when navigating between routes", () => {
+      cy.title().should("eq", "E2E SSR Home")
+      cy.get('head script[type="application/ld+json"]').should(
+        "contain",
+        "E2E SSR Home"
+      )
+
+      cy.contains("a", "SEO").click()
+      cy.location("pathname").should("eq", "/seo")
+      cy.get('[data-testid="ssr-seo"]').should("exist")
+      cy.title().should("eq", "E2E SSR SEO")
+      cy.get('head script[type="application/ld+json"]').should(
+        "contain",
+        "E2E SSR SEO"
+      )
+
+      cy.contains("a", "Home").click()
+      cy.location("pathname").should("eq", "/")
+      cy.title().should("eq", "E2E SSR Home")
+      cy.get('head script[type="application/ld+json"]').should(
+        "contain",
+        "E2E SSR Home"
+      )
+    })
+
+    it("updates title for static and dynamic routes", () => {
+      cy.title().should("eq", "E2E SSR Home")
+
+      cy.contains("a", "About").click()
+      cy.location("pathname").should("eq", "/about")
+      cy.get('[data-testid="ssr-about"]').should("exist")
+      cy.title().should("eq", "E2E SSR About")
+
+      cy.contains("a", "User 99").click()
+      cy.location("pathname").should("eq", "/users/99")
+      cy.title().should("eq", "E2E SSR User 99")
+    })
+
+    it("applies page defineHeadContent over route head after client navigation", () => {
+      cy.title().should("eq", "E2E SSR Home")
+
+      cy.contains("a", "Head override").click()
+      cy.location("pathname").should("eq", "/head-override")
+      cy.get('[data-testid="ssr-head-override"]').should("exist")
+      cy.title().should("eq", "E2E SSR From page head export")
+
+      cy.contains("a", "Home").click()
+      cy.location("pathname").should("eq", "/")
+      cy.title().should("eq", "E2E SSR Home")
+    })
+  })
 })

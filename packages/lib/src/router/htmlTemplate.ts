@@ -2,6 +2,8 @@ const HEAD_TOKEN = "{{kiru_head}}"
 const BODY_TOKEN = "{{kiru_body}}"
 
 export interface CompiledRouteHtmlTemplate {
+  /** When true, `splitForStream().prefix` includes serialized head HTML. */
+  readonly headBeforeBody: boolean
   render: (body: string, headHtml: string) => string
   splitForStream: (headHtml: string) => { prefix: string; suffix: string }
 }
@@ -34,6 +36,7 @@ export function compileRouteHtmlTemplate(
     const s1 = template.slice(headIndex + HEAD_TOKEN.length, bodyIndex)
     const s2 = template.slice(bodyIndex + BODY_TOKEN.length)
     return {
+      headBeforeBody: true,
       render: (body, headHtml) => `${s0}${headHtml}${s1}${body}${s2}`,
       splitForStream: (headHtml) => ({
         prefix: `${s0}${headHtml}${s1}`,
@@ -46,6 +49,7 @@ export function compileRouteHtmlTemplate(
     const s1 = template.slice(bodyIndex + BODY_TOKEN.length, headIndex)
     const s2 = template.slice(headIndex + HEAD_TOKEN.length)
     return {
+      headBeforeBody: false,
       render: (body, headHtml) => `${s0}${body}${s1}${headHtml}${s2}`,
       splitForStream: (headHtml) => ({
         prefix: s0,

@@ -19,6 +19,13 @@ export type LoaderKind = "server" | "static" | "universal" | "client"
 export type KiruLoader<T = unknown> = {
   __kiruLoader: LoaderKind
   __kiruInvoke: (ctx: LoaderContext) => Promise<T>
+  /** SSR/CSR fallback UI while load is in flight (serverLoader config only). */
+  __kiruFallback?: (() => JSX.Element)
+}
+
+export type ServerLoaderConfig<T> = {
+  load: LoaderFn<T>
+  fallback: (() => JSX.Element)
 }
 
 export type ServerLoader<T> = KiruLoader<T> & { __kiruLoader: "server" }
@@ -41,15 +48,37 @@ export type PageProps<TLoader> =
   | { data: LoaderData<TLoader>; error: null }
   | { data: null; error: Error }
 
-function wrapLoader<T>(kind: LoaderKind, fn: LoaderFn<T>): KiruLoader<T> {
+function wrapLoader<T>(
+  kind: LoaderKind,
+  fn: LoaderFn<T>,
+  fallback?: (() => JSX.Element)
+): KiruLoader<T> {
   return {
     __kiruLoader: kind,
     __kiruInvoke: (ctx) => Promise.resolve(fn(ctx)),
+    ...(fallback !== undefined ? { __kiruFallback: fallback } : {}),
   }
 }
 
-export function serverLoader<T>(fn: LoaderFn<T>): ServerLoader<T> {
-  return wrapLoader("server", fn) as ServerLoader<T>
+export function serverLoader<T>(fn: LoaderFn<T>): ServerLoader<T>
+export function serverLoader<T>(config: ServerLoaderConfig<T>): ServerLoader<T>
+export function serverLoader<T>(
+  fnOrConfig: LoaderFn<T> | ServerLoaderConfig<T>
+): ServerLoader<T> {
+  if (typeof fnOrConfig === "function") {
+    return wrapLoader("server", fnOrConfig) as ServerLoader<T>
+  }
+  return wrapLoader("server", fnOrConfig.load, fnOrConfig.fallback) as ServerLoader<T>
+}
+
+export function readLoaderFallback(
+  load: KiruLoader | undefined
+): (() => JSX.Element) | undefined {
+  return load?.__kiruFallback
+}
+
+export function canStreamPageLoad(load: KiruLoader | undefined): boolean {
+  return load?.__kiruLoader === "server" && load.__kiruFallback !== undefined
 }
 
 export function staticLoader<T>(fn: LoaderFn<T>): StaticLoader<T> {

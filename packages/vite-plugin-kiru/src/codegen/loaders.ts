@@ -58,6 +58,28 @@ function clientFormatLoaders(
     }
 
     if (match.kind === "server") {
+      const init = node.declaration?.declarations?.[0]?.init
+      if (init?.type === "CallExpression") {
+        const arg = init.arguments?.[0]
+        if (arg?.type === "ObjectExpression") {
+          const fbProp = (arg.properties ?? []).find(
+            (p: AstNode) =>
+              p.type === "Property" &&
+              (p.key?.name === "fallback" || p.key?.value === "fallback")
+          )
+          const fbValue = fbProp?.value as AstNode | undefined
+          const fbExpr =
+            fbValue != null
+              ? code.slice(fbValue.start, fbValue.end)
+              : ""
+          code.overwrite(
+            node.start,
+            node.end,
+            `export const ${match.name} = { __kiruLoader: "server", __kiruInvoke: (ctx) => __$loadDispatch()(__$lr__, ctx)${fbExpr ? `, __kiruFallback: ${fbExpr}` : ""} };`
+          )
+          return
+        }
+      }
       code.overwrite(
         node.start,
         node.end,

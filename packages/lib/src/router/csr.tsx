@@ -34,8 +34,17 @@ import {
   loadRouteTree,
   type LeafRouteProps,
 } from "./routeTree.js"
+import {
+  canStreamPageLoad,
+  readLoaderFallback,
+  readPageLoadExport,
+  type KiruLoader,
+  type PageProps,
+} from "./loaders.js"
 import { buildLoaderContext, resolvePagePropsFromModule } from "./runPageLoad.js"
 import { resetHydratedPageData } from "./pageData.js"
+import { isStaticPageHead, readPageHeadExport, syncDocumentHeadForPage } from "./pageHead.js"
+import { wrapRouteModuleWithLoadGate } from "./pageLoadGate.js"
 import type { CustomRequestContext } from "./types.js"
 
 function joinPath(base: string, path: string): string {
@@ -272,6 +281,27 @@ export function createRouter({
   const isNavigating = signal(false)
   const currentNavigation = signal<CurrentNavigation | null>(null)
 
+  if (typeof document !== "undefined") {
+    void (async () => {
+      const initial = match.peek()
+      if (!initial) return
+      const pageHead = readPageHeadExport(await initial.route.component())
+      if (isStaticPageHead(pageHead)) {
+        await syncDocumentHeadForPage(
+          initial,
+          buildLoaderContext({
+            params: initial.params,
+            pathname: initial.pathname,
+            search: typeof window !== "undefined" ? window.location.search : "",
+            hash: hash.peek(),
+            query: query.peek(),
+            context: {} as CustomRequestContext,
+          })
+        )
+      }
+    })()
+  }
+
   const syncWindowNavigationProbe = () => {
     if (typeof window === "undefined") return
     const nav = currentNavigation.peek()
@@ -333,6 +363,27 @@ export function createRouter({
     match.value = nextMatch
     params.value = nextMatch?.params ?? {}
     matches.value = buildMatchSegments(nextMatch)
+    if (typeof document !== "undefined" && nextMatch) {
+      void (async () => {
+        const pageHead = readPageHeadExport(await nextMatch.route.component())
+        if (isStaticPageHead(pageHead)) {
+          await syncDocumentHeadForPage(
+            nextMatch,
+            buildLoaderContext({
+              params: nextMatch.params,
+              pathname: nextMatch.pathname,
+              search: (() => {
+                const qs = buildQueryString(next.query)
+                return qs ? `?${qs}` : ""
+              })(),
+              hash: next.hash,
+              query: next.query,
+              context: {} as CustomRequestContext,
+            })
+          )
+        }
+      })()
+    }
   }
 
   const navigateInternal = async (
@@ -961,36 +1012,62 @@ export function RouterView() {
       if (epoch !== e) return
 
       let leafProps: LeafRouteProps = {}
-      if (match) {
+      let routeModule = tree?.routeModule
+      if (match && tree) {
         const mod = await match.route.component()
-        const qs = buildQueryString(query.peek())
-        leafProps = await resolvePagePropsFromModule(
-          mod,
-          buildLoaderContext({
-            params: match.params,
-            pathname: match.pathname,
-            search: qs ? `?${qs}` : "",
-            hash: hash.peek(),
-            query: query.peek(),
-            context: {} as CustomRequestContext,
-          })
-        )
+        const loaderCtx = buildLoaderContext({
+          params: match.params,
+          pathname: match.pathname,
+          search: (() => {
+            const qs = buildQueryString(query.peek())
+            return qs ? `?${qs}` : ""
+          })(),
+          hash: hash.peek(),
+          query: query.peek(),
+          context: {} as CustomRequestContext,
+        })
+        const load = readPageLoadExport(mod)
+        const pageHead = readPageHeadExport(mod)
+        if (canStreamPageLoad(load) && isStaticPageHead(pageHead)) {
+          const fallback = readLoaderFallback(load)
+          if (fallback) {
+            routeModule = wrapRouteModuleWithLoadGate(
+              tree.routeModule,
+              load!,
+              loaderCtx,
+              fallback
+            )
+            leafProps = {}
+          }
+        } else {
+          leafProps = await resolvePagePropsFromModule(mod, loaderCtx)
+          await syncDocumentHeadForPage(
+            match,
+            loaderCtx,
+            leafProps as PageProps<KiruLoader<unknown>>
+          )
+        }
       }
 
-      return tree
-        ? buildRoutedSubtree(tree.layoutModules, tree.routeModule, leafProps)
+      return tree && routeModule
+        ? buildRoutedSubtree(tree.layoutModules, routeModule, leafProps)
         : null
     }
   )
 
-  onMount(() =>
-    children.isPending.subscribe((pending) => {
-      if (!pending && router.isNavigating.peek()) {
-        router.isNavigating.value = false
-        router.currentNavigation.value = null
+  onMount(() => {
+    const onPendingChange = (pending: boolean) => {
+      if (!pending) {
+        if (router.isNavigating.peek()) {
+          router.isNavigating.value = false
+          router.currentNavigation.value = null
+        }
       }
-    })
-  )
+    }
+    const unsub = children.isPending.subscribe(onPendingChange)
+    onPendingChange(children.isPending.peek())
+    return unsub
+  })
 
   return () => children.value
 }

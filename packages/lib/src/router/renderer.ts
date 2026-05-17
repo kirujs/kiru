@@ -20,7 +20,7 @@ import {
   loadRouteTree,
   type LeafRouteProps,
 } from "./routeTree.js"
-import { resolveMetaTemplates, serializeDocumentHead } from "./meta.js"
+import { serializeDocumentHead } from "./meta.js"
 import {
   formatPathname,
   pathnameForMatch,
@@ -32,7 +32,6 @@ import {
   type CompiledRouteHtmlTemplate,
 } from "./htmlTemplate.js"
 import { RouterProvider, createStaticRouter } from "./csr.js"
-import { createHeadCollector, withHeadCollector } from "./headContext.js"
 import {
   RequestContextProvider,
   serializeRequestContextScript,
@@ -41,10 +40,26 @@ import { createLoaderHandler } from "./loaderRegistry.js"
 import { serializePageDataScript } from "./pageData.js"
 import { buildLoaderContext, resolvePagePropsFromModule } from "./runPageLoad.js"
 import {
+  canStreamPageLoad,
+  readLoaderFallback,
+  readPageLoadExport,
+  type KiruLoader,
+  type PageProps,
+} from "./loaders.js"
+import {
+  isDynamicPageHead,
+  isStaticPageHead,
+  mergeRouteAndPageHead,
+  readPageHeadExport,
+  resolvePageHead,
+} from "./pageHead.js"
+import { wrapRouteModuleWithLoadGate } from "./pageLoadGate.js"
+import {
   type CustomRequestContext,
   type DocumentHead,
   type ErrorPageProps,
   type RenderResult,
+  type RouteHeadMeta,
   type RouteManifest,
   type RouteMatch,
   type RouteModule,
@@ -277,6 +292,9 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
               compiledTemplate,
               decorateDocument,
               pageData: serializedPageData,
+              streamHeadMeta: prepared.streamHeadMeta,
+              pagePropsPromise: prepared.pagePropsPromise,
+              earlyFlushHead: prepared.earlyFlushHead,
             })
           : (() => {
               __setSsrRequestContext(requestContext)
@@ -312,7 +330,8 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
             routeMatch,
             requestContext,
             pathPolicy,
-            serializedPageData
+            serializedPageData,
+            prepared.streamHeadMeta
           )
         : {
             body: renderToString(app),
@@ -522,32 +541,30 @@ async function renderStringWithDocument(
   match: RouteMatch,
   requestContext: CustomRequestContext,
   pathPolicy?: RouterPathPolicy,
-  pageData?: unknown
+  pageData?: unknown,
+  streamHeadMeta?: RouteHeadMeta
 ): Promise<{ body: string; document: DocumentHead }> {
-  const baseMeta = resolveMetaTemplates(match.route.head, match.params)
-  const collector = createHeadCollector(baseMeta)
-
   let body = ""
-  withHeadCollector(collector, () => {
-    const prev = renderMode.current
-    renderMode.current = "stream"
-    __setSsrRequestContext(requestContext as Record<string, unknown>)
-    try {
-      headlessRender(
-        {
-          write(chunk) {
-            body += chunk
-          },
+  const prev = renderMode.current
+  renderMode.current = "stream"
+  __setSsrRequestContext(requestContext as Record<string, unknown>)
+  try {
+    headlessRender(
+      {
+        write(chunk) {
+          body += chunk
         },
-        Fragment({ children: app })
-      )
-    } finally {
-      __setSsrRequestContext({})
-    }
+      },
+      Fragment({ children: app })
+    )
+  } finally {
+    __setSsrRequestContext({})
     renderMode.current = prev
-  })
+  }
 
-  const resolvedMeta = await collector.resolve()
+  const resolvedMeta =
+    streamHeadMeta ??
+    mergeRouteAndPageHead(match.route.head, undefined, match.params)
   const ctxScript = serializeRequestContextScript(requestContext)
   const pageDataScript =
     pageData !== undefined ? serializePageDataScript(pageData) : ""
@@ -607,7 +624,22 @@ export async function renderMatchToStaticHtml(
   match: RouteMatch,
   pathPolicy?: RouterPathPolicy
 ): Promise<{ body: string; document: DocumentHead }> {
-  const pageProps = await resolvePagePropsForMatch(match, {}, match.pathname)
+  const pageMod = await match.route.component()
+  const loaderCtx = buildLoaderContext({
+    params: match.params,
+    pathname: match.pathname,
+    search: "",
+    hash: "",
+    query: {},
+    context: {},
+  })
+  const pageProps = await resolvePagePropsFromModule(pageMod, loaderCtx)
+  const streamHeadMeta = resolveStreamHeadMeta(
+    match,
+    pageMod,
+    loaderCtx,
+    pageProps as PageProps<KiruLoader<unknown>>
+  )
   const { layoutModules, routeModule } = await loadRouteTree(match)
   const app = buildAppElement(
     match.pathname,
@@ -623,7 +655,8 @@ export async function renderMatchToStaticHtml(
     match,
     {},
     pathPolicy,
-    serializedDataFromPageProps(pageProps)
+    serializedDataFromPageProps(pageProps),
+    streamHeadMeta
   )
 }
 
@@ -669,30 +702,12 @@ type PreparedApp = {
   requestContext: CustomRequestContext
   /** Loader data embedded in HTML for hydration (success path only). */
   serializedPageData?: unknown
-}
-
-async function resolvePagePropsForMatch(
-  match: RouteMatch,
-  requestContext: CustomRequestContext,
-  requestUrl: string
-) {
-  const parsed = new URL(requestUrl, "http://localhost")
-  const query: Record<string, string[]> = {}
-  parsed.searchParams.forEach((value, key) => {
-    ;(query[key] ??= []).push(value)
-  })
-  const mod = await match.route.component()
-  return resolvePagePropsFromModule(
-    mod,
-    buildLoaderContext({
-      params: match.params,
-      pathname: match.pathname,
-      search: parsed.search,
-      hash: parsed.hash,
-      query,
-      context: requestContext,
-    })
-  )
+  /** Merged route + page head for document assembly. */
+  streamHeadMeta?: RouteHeadMeta
+  /** In-flight loader when shell streams before load settles. */
+  pagePropsPromise?: Promise<Record<string, unknown>>
+  /** Flush static head prefix before shell render. */
+  earlyFlushHead?: boolean
 }
 
 type PrepareAppResult =
@@ -709,6 +724,20 @@ function isPrepareRedirect(
 }
 
 const MAX_SSR_BEFORE_ENTER_REDIRECTS = 16
+
+function resolveStreamHeadMeta(
+  match: RouteMatch,
+  pageMod: unknown,
+  loaderCtx: ReturnType<typeof buildLoaderContext>,
+  pageProps?: PageProps<KiruLoader<unknown>>
+): RouteHeadMeta {
+  const pageHead = readPageHeadExport(pageMod)
+  let pageHeadMeta: RouteHeadMeta | undefined
+  if (pageHead) {
+    pageHeadMeta = resolvePageHead(pageHead, loaderCtx, pageProps)
+  }
+  return mergeRouteAndPageHead(match.route.head, pageHeadMeta, match.params)
+}
 
 async function prepareAppForUrl(
   url: string,
@@ -770,12 +799,60 @@ async function prepareAppForUrl(
     }
 
     const requestContext = (ctx?.context ?? {}) as CustomRequestContext
-    const pageProps = await resolvePagePropsForMatch(
+    const parsed = new URL(url, "http://localhost")
+    const query: Record<string, string[]> = {}
+    parsed.searchParams.forEach((value, key) => {
+      ;(query[key] ??= []).push(value)
+    })
+    const loaderCtx = buildLoaderContext({
+      params: routeMatch.params,
+      pathname: routeMatch.pathname,
+      search: parsed.search,
+      hash: parsed.hash,
+      query,
+      context: requestContext,
+    })
+    const pageMod = await routeMatch.route.component()
+    const pageHead = readPageHeadExport(pageMod)
+    const load = readPageLoadExport(pageMod)
+    const streamPageLoad =
+      canStreamPageLoad(load) && isStaticPageHead(pageHead)
+    const dynamicHead = isDynamicPageHead(pageHead)
+
+    let pageProps: Record<string, unknown>
+    let pagePropsPromise: Promise<Record<string, unknown>> | undefined
+
+    if (streamPageLoad) {
+      pagePropsPromise = resolvePagePropsFromModule(pageMod, loaderCtx)
+      pageProps = {}
+    } else {
+      pageProps = await resolvePagePropsFromModule(pageMod, loaderCtx)
+    }
+
+    const streamHeadMeta = resolveStreamHeadMeta(
       routeMatch,
-      requestContext,
-      url
+      pageMod,
+      loaderCtx,
+      dynamicHead || !streamPageLoad
+        ? (pageProps as PageProps<KiruLoader<unknown>>)
+        : undefined
     )
-    const { layoutModules, routeModule } = await loadRouteTree(routeMatch)
+
+    const { layoutModules, routeModule: rawRouteModule } =
+      await loadRouteTree(routeMatch)
+    let routeModule = rawRouteModule
+    if (streamPageLoad && load) {
+      const fallback = readLoaderFallback(load)
+      if (fallback) {
+        routeModule = wrapRouteModuleWithLoadGate(
+          rawRouteModule,
+          load,
+          loaderCtx,
+          fallback
+        )
+      }
+    }
+
     const app = buildAppElement(
       routeMatch.pathname,
       routeMatch.params,
@@ -783,27 +860,51 @@ async function prepareAppForUrl(
       routeModule,
       manifest,
       requestContext,
-      pageProps
+      pageProps as LeafRouteProps
     )
     return {
       app,
       routeMatch,
       requestContext,
-      serializedPageData: serializedDataFromPageProps(pageProps),
+      serializedPageData: streamPageLoad
+        ? undefined
+        : serializedDataFromPageProps(pageProps),
+      streamHeadMeta,
+      pagePropsPromise,
+      earlyFlushHead: streamPageLoad,
     }
   }
 
   return null
 }
 
+function buildStreamDocumentHead(
+  meta: RouteHeadMeta,
+  pathname: string,
+  requestContext: CustomRequestContext,
+  opts: {
+    pageData?: unknown
+    decorateDocument: (document: DocumentHead) => void
+  }
+): DocumentHead {
+  const ctxScript = serializeRequestContextScript(requestContext)
+  const pageDataScript =
+    opts.pageData !== undefined ? serializePageDataScript(opts.pageData) : ""
+  const document: DocumentHead = {
+    headHtml:
+      serializeDocumentHead(meta, { pathname }) +
+      (ctxScript ? `\n    ${ctxScript}` : "") +
+      (pageDataScript ? `\n    ${pageDataScript}` : ""),
+    title: meta.title,
+  }
+  opts.decorateDocument(document)
+  return document
+}
+
 /**
- * Streaming counterpart to {@link renderStringWithDocument}: starts the
- * readable stream inside the head collector so meta tags are captured, then
- * defers full document assembly into the stream's `onShellReady` hook —
- * which fires only after the head collector has resolved, so the prefix
- * (containing the serialized head) can be flushed atomically with the
- * shell and the document close tags. Streamed data scripts arrive after
- * `</html>`, keeping `DOMContentLoaded` (and hydration) prompt.
+ * Streaming SSR: defers document assembly into `onShellReady` so `</html>`
+ * precedes streamed data scripts. Static page head + streaming load flushes
+ * the head prefix in `onStreamStart` while the shell renders.
  */
 function renderStreamForRouteMatch(
   app: JSX.Element,
@@ -813,38 +914,68 @@ function renderStreamForRouteMatch(
     compiledTemplate: CompiledRouteHtmlTemplate | null
     decorateDocument: (document: DocumentHead) => void
     pageData?: unknown
+    streamHeadMeta?: RouteHeadMeta
+    pagePropsPromise?: Promise<Record<string, unknown>>
+    earlyFlushHead?: boolean
   }
 ): ReadableStream<string> {
-  const { route, params, pathname } = match
-  const collector = createHeadCollector(
-    resolveMetaTemplates(route.head, params)
-  )
+  const { pathname } = match
+  const mergedMeta =
+    opts.streamHeadMeta ??
+    mergeRouteAndPageHead(match.route.head, undefined, match.params)
+  const mayEarlyFlush =
+    !!opts.earlyFlushHead &&
+    opts.compiledTemplate?.headBeforeBody === true
+  let streamedHeadEarly = false
+
+  const headWithoutPageData = () =>
+    buildStreamDocumentHead(mergedMeta, pathname, requestContext, {
+      decorateDocument: opts.decorateDocument,
+    })
+
   __setSsrRequestContext(requestContext)
-  const stream = withHeadCollector(collector, () =>
-    renderToReadableStream(app, {
-      onShellReady: async (shell, controller) => {
-        const resolvedMeta = await collector.resolve()
-        const ctxScript = serializeRequestContextScript(requestContext)
-        const pageDataScript =
-          opts.pageData !== undefined
-            ? serializePageDataScript(opts.pageData)
-            : ""
-        const document: DocumentHead = {
-          headHtml:
-            serializeDocumentHead(resolvedMeta, { pathname }) +
-            (ctxScript ? `\n    ${ctxScript}` : "") +
-            (pageDataScript ? `\n    ${pageDataScript}` : ""),
-          title: resolvedMeta.title,
+  const stream = renderToReadableStream(app, {
+    onStreamStart: mayEarlyFlush
+      ? (controller) => {
+          const document = headWithoutPageData()
+          controller.enqueue(
+            opts.compiledTemplate!.splitForStream(document.headHtml).prefix
+          )
+          streamedHeadEarly = true
         }
-        opts.decorateDocument(document)
-        enqueueTemplatedShell(controller, {
+      : undefined,
+    onShellReady: async (shell, controller) => {
+      let pageData = opts.pageData
+      if (opts.pagePropsPromise) {
+        const props = await opts.pagePropsPromise
+        pageData = serializedDataFromPageProps(props)
+      }
+      const document = buildStreamDocumentHead(
+        mergedMeta,
+        pathname,
+        requestContext,
+        {
+          pageData,
+          decorateDocument: opts.decorateDocument,
+        }
+      )
+      if (streamedHeadEarly) {
+        if (pageData !== undefined) {
+          controller.enqueue(`\n    ${serializePageDataScript(pageData)}`)
+        }
+        enqueueTemplatedShellBody(controller, {
           compiledTemplate: opts.compiledTemplate,
-          headHtml: document.headHtml,
           shell,
         })
-      },
-    })
-  )
+        return
+      }
+      enqueueTemplatedShell(controller, {
+        compiledTemplate: opts.compiledTemplate,
+        headHtml: document.headHtml,
+        shell,
+      })
+    },
+  })
   __setSsrRequestContext({})
   return stream
 }
@@ -869,6 +1000,21 @@ function enqueueTemplatedShell(
   controller.enqueue(split.prefix)
   controller.enqueue(args.shell)
   controller.enqueue(split.suffix)
+}
+
+function enqueueTemplatedShellBody(
+  controller: ReadableStreamDefaultController<string>,
+  args: {
+    compiledTemplate: CompiledRouteHtmlTemplate | null
+    shell: string
+  }
+): void {
+  if (!args.compiledTemplate) {
+    controller.enqueue(args.shell)
+    return
+  }
+  controller.enqueue(args.shell)
+  controller.enqueue(args.compiledTemplate.splitForStream("").suffix)
 }
 
 function prepareRenderer(options: CreateRendererOptions) {
