@@ -2,7 +2,7 @@ import { Derive, ErrorBoundary, resource, signal } from "kiru"
 import { getTodos, createTodo, updateTodo } from "../index.actions"
 
 export default function HomePage() {
-  const todosData = resource(({ signal }) => getTodos(void 0, { signal }))
+  const todosData = resource(({ signal }) => getTodos({ signal }))
   const count = signal(0)
 
   return () => (

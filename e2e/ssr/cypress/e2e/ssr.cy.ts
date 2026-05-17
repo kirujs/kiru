@@ -98,7 +98,7 @@ describe("SSR server", () => {
     // Without the SSR-injected token, the action handler rejects the POST and the UI never updates.
     cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
     // Wait for the server round-trip explicitly — avoids races under load / parallel CI.
-    cy.intercept("POST", /\?action=/).as("remoteAction")
+    cy.intercept("GET", /\?action=/).as("remoteAction")
     cy.get('[data-testid="ssr-remote-button"]').click()
     cy.wait("@remoteAction").its("response.statusCode").should("eq", 200)
     cy.get('[data-testid="ssr-remote-result"]').should(

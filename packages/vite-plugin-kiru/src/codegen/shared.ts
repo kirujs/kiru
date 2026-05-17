@@ -35,16 +35,22 @@ export function createAliasHandler(
 
   const addAliases = (node: AstNode): boolean => {
     const src = node.source?.value
-    if (typeof src !== "string" || src !== namespace) return false
+    if (
+      typeof src !== "string" ||
+      (src !== namespace && !src.endsWith(`/${namespace}`))
+    ) {
+      return false
+    }
     let didAdd = false
     const specifiers = node.specifiers || []
     for (let i = 0; i < specifiers.length; i++) {
       const specifier = specifiers[i]
-      if (
-        specifier.imported &&
-        specifier.imported.name === name &&
-        !!specifier.local
-      ) {
+      const importedName =
+        specifier.imported?.name ??
+        (typeof specifier.imported?.value === "string"
+          ? specifier.imported.value
+          : undefined)
+      if (importedName === name && !!specifier.local) {
         aliases.add(specifier.local.name)
         didAdd = true
       }

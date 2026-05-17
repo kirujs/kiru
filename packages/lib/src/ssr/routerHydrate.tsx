@@ -26,6 +26,7 @@ import { requestToken } from "../globals.js"
 type ServerActionsClient = {
   dispatch: (
     id: string,
+    method: "GET" | "POST",
     input: unknown,
     opts?: { signal?: AbortSignal }
   ) => Promise<unknown>
@@ -40,17 +41,20 @@ function ensureServerActionsClient() {
   if (g.__kiru_serverActions) return
 
   g.__kiru_serverActions = {
-    dispatch: async (id, input, opts) => {
-      const payload = input === undefined ? null : input
-      const r = await fetch(`/?action=${id}`, {
-        method: "POST",
+    dispatch: async (id, method, input, opts) => {
+      const headers: Record<string, string> = {
+        "x-kiru-token": requestToken.current,
+      }
+      const init: RequestInit = {
+        method,
         signal: opts?.signal,
-        headers: {
-          "Content-Type": "application/json",
-          "x-kiru-token": requestToken.current,
-        },
-        body: JSON.stringify(payload),
-      })
+        headers,
+      }
+      if (method === "POST") {
+        headers["Content-Type"] = "application/json"
+        init.body = JSON.stringify(input === undefined ? null : input)
+      }
+      const r = await fetch(`/?action=${id}`, init)
       if (!r.ok) {
         throw new Error("Action failed")
       }

@@ -3,7 +3,7 @@ import { getStreamingTodos } from "./index.actions"
 
 export default function StreamingTestPage() {
   const todosData = resource(({ signal }) =>
-    getStreamingTodos(void 0, { signal })
+    getStreamingTodos({ signal })
   )
   const count = signal(0)
 

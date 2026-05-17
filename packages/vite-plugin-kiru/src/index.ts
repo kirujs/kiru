@@ -25,7 +25,11 @@ import {
   injectDevCssLinks,
 } from "./dev-server.js"
 import { createSsgPreviewMiddleware } from "./preview-server.js"
-import { createLogger, shouldTransformFile } from "./utils.js"
+import {
+  createLogger,
+  normalizeModulePath,
+  shouldTransformFile,
+} from "./utils.js"
 import { promises as fs } from "node:fs"
 import path from "node:path"
 import { glob } from "tinyglobby"
@@ -604,10 +608,13 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     name: "vite-plugin-kiru:remote",
     enforce: "post" as const,
     transform(src, id, options) {
-      const cleanedId = id.split("?")[0].split("#")[0]
-      const normalizedId = path.resolve(cleanedId).replace(/\\/g, "/")
+      const normalizedId = normalizeModulePath(id, state!.projectRoot)
       const isRemote = state?.router?.remote
-        ? state.remotePaths.includes(normalizedId)
+        ? state.remotePaths.some(
+            (remotePath) =>
+              normalizeModulePath(remotePath, state!.projectRoot) ===
+              normalizedId
+          )
         : false
       if (!isRemote && (!state || !shouldTransformFile(id, state))) return null
 

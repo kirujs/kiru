@@ -9,6 +9,7 @@ interface ActionMatch {
   node: AstNode
   name: string
   kind: "action" | "formAction"
+  method?: "GET" | "POST"
 }
 
 export function prepareRemoteFunctions(
@@ -62,11 +63,17 @@ function clientFormatRemoteFunctions(
         node.end,
         `export const ${match.name} = { __kiruFormAction: true, __kiruFormActionId: \`\${__$r__}:${match.name}\` };`
       )
+    } else if (match.method === "GET") {
+      code.overwrite(
+        node.start,
+        node.end,
+        `export async function ${match.name}(options) { return __$dispatch()(\`\${__$r__}:${match.name}\`, "GET", undefined, options); }`
+      )
     } else {
       code.overwrite(
         node.start,
         node.end,
-        `export async function ${match.name}(input) { return __$dispatch()(\`\${__$r__}:${match.name}\`, input); }`
+        `export async function ${match.name}(input, options) { return __$dispatch()(\`\${__$r__}:${match.name}\`, "POST", input, options); }`
       )
     }
   })
@@ -110,13 +117,39 @@ function findExportedActionCalls(bodyNodes: AstNode[]): ActionMatch[] {
     const init = declaration.init
     if (!init) continue
 
-    if (actionAliasHandler.isMatchingCallExpression(init)) {
-      matches.push({ node, name: declaration.id.name, kind: "action" })
+    const remoteMethod = getActionMemberMethod(init, actionAliasHandler.aliases)
+    if (remoteMethod) {
+      matches.push({
+        node,
+        name: declaration.id.name,
+        kind: "action",
+        method: remoteMethod,
+      })
     } else if (formActionAliasHandler.isMatchingCallExpression(init)) {
       matches.push({ node, name: declaration.id.name, kind: "formAction" })
     }
   }
   return matches
+}
+
+function getActionMemberMethod(
+  node: AstNode,
+  actionAliases: Set<string>
+): "GET" | "POST" | null {
+  if (node.type !== "CallExpression") return null
+  const callee = node.callee
+  if (callee?.type !== "MemberExpression") return null
+  if (
+    callee.object?.type !== "Identifier" ||
+    typeof callee.object.name !== "string" ||
+    !actionAliases.has(callee.object.name)
+  ) {
+    return null
+  }
+  if (callee.property?.type !== "Identifier") return null
+  if (callee.property.name === "get") return "GET"
+  if (callee.property.name === "post") return "POST"
+  return null
 }
 
 function generateRouteId(filePath: string, projectRoot: string): string {

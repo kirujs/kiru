@@ -20,6 +20,23 @@ const TRANSFORMABLE_EXTENSIONS = new Set([
   ".mdx",
 ])
 
+/** Resolve a Vite module id to an absolute project file path. */
+export function normalizeModulePath(id: string, projectRoot: string): string {
+  const cleaned = id.split("?")[0].split("#")[0]
+  const root = path.resolve(projectRoot).replace(/\\/g, "/")
+  let resolved = path.resolve(cleaned).replace(/\\/g, "/")
+  if (resolved === root || resolved.startsWith(`${root}/`)) {
+    return resolved
+  }
+  // Vite often passes root-absolute ids like `/src/pages/foo.ts`; on Windows
+  // `path.resolve` maps those outside the project (e.g. `C:\src\...`).
+  const posix = cleaned.replace(/\\/g, "/")
+  if (posix.startsWith("/")) {
+    return path.join(root, posix.slice(1)).replace(/\\/g, "/")
+  }
+  return resolved
+}
+
 export function shouldTransformFile(id: string, state: PluginState): boolean {
   // Fast exclusions
   if (
@@ -30,7 +47,7 @@ export function shouldTransformFile(id: string, state: PluginState): boolean {
     return false
   }
 
-  const filePath = path.resolve(id).replace(/\\/g, "/")
+  const filePath = normalizeModulePath(id, state.projectRoot)
   const isIncludedByUser = state.includedPaths.some((p) =>
     filePath.startsWith(p)
   )

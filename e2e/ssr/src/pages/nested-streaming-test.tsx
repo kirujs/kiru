@@ -1,37 +1,15 @@
 import { Derive, resource } from "kiru"
-import type { StreamingProduct, StreamingReview } from "./index.actions"
-import { getStreamingProduct, getStreamingReviews } from "./index.actions"
-
-function ProductCard({ product }: { product: StreamingProduct }) {
-  const reviews = resource(({ signal }) =>
-    getStreamingReviews({ productId: product.id }, { signal })
-  )
-
-  return () => (
-    <div>
-      <Derive
-        from={reviews}
-        fallback={<p data-testid="reviews-fallback">Loading reviews...</p>}
-      >
-        {(items: StreamingReview[]) => (
-          <ul data-testid="reviews-list">
-            {items.map((review) => (
-              <li key={review.id} data-testid="review-item">
-                {review.text}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Derive>
-      <p data-testid="product-name">{product.name}</p>
-    </div>
-  )
-}
+import {
+  getStreamingProduct,
+  getStreamingReviews,
+  type StreamingProduct,
+} from "./index.actions"
 
 export default function NestedStreamingTestPage() {
-  const product = resource(({ signal }) =>
-    getStreamingProduct(void 0, { signal })
-  )
+  const product = resource(({ signal }) => {
+    console.log("get product")
+    return getStreamingProduct({ signal })
+  })
 
   return () => (
     <section className="space-y-3" data-testid="nested-streaming-page">
@@ -43,5 +21,32 @@ export default function NestedStreamingTestPage() {
         {(p) => <ProductCard product={p} />}
       </Derive>
     </section>
+  )
+}
+
+function ProductCard({ product }: { product: StreamingProduct }) {
+  const reviews = resource(({ signal }) => {
+    console.log("get reviews")
+    return getStreamingReviews({ productId: product.id }, { signal })
+  })
+
+  return () => (
+    <div>
+      <Derive
+        from={reviews}
+        fallback={<p data-testid="reviews-fallback">Loading reviews...</p>}
+      >
+        {(items) => (
+          <ul data-testid="reviews-list">
+            {items.map((review) => (
+              <li key={review.id} data-testid="review-item">
+                {review.text}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Derive>
+      <p data-testid="product-name">{product.name}</p>
+    </div>
   )
 }

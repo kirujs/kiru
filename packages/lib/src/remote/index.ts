@@ -1,7 +1,4 @@
-import type {
-  RemoteActionFunction,
-  RemoteFormActionFunction,
-} from "./action.js"
+import type { RemoteFormActionFunction } from "./action.js"
 import { isRemoteError } from "./errors.js"
 import { isKiruRedirect, KIRU_FORM_TOKEN_FIELD } from "./action.js"
 import { unwrapKiruToken } from "./token.js"
@@ -22,6 +19,10 @@ export {
   isKiruRedirect,
   KIRU_FORM_TOKEN_FIELD,
   type RemoteActionFunction,
+  type RemoteGetAction,
+  type RemotePostAction,
+  type RemoteActionMethod,
+  type RemoteActionOptions,
   type RemoteActionCallback,
   type RemoteActionSchema,
   type RemoteFormActionFunction,
@@ -34,8 +35,17 @@ export {
   type CreateFormControllerResult,
 } from "./formController.js"
 
+type RegisteredRemoteAction = {
+  __kiruRemoteAction: true
+  __kiruRemoteMethod: import("./action.js").RemoteActionMethod
+  __kiruInvoke: (
+    ctx: import("../router/types.js").CustomRequestContext,
+    input: unknown
+  ) => Promise<unknown>
+}
+
 type AnyRegisteredAction =
-  | RemoteActionFunction<unknown, unknown>
+  | RegisteredRemoteAction
   | RemoteFormActionFunction<unknown>
 
 const registry: Record<string, Record<string, AnyRegisteredAction>> = {}
@@ -84,8 +94,12 @@ function isAllowedOrigin(
 
 function isWrappedRemoteAction(
   value: unknown
-): value is RemoteActionFunction<unknown, unknown> {
-  return !!value && typeof value === "function" && "__kiruRemoteAction" in value
+): value is RegisteredRemoteAction {
+  if (!value || typeof value !== "function" || !("__kiruRemoteAction" in value)) {
+    return false
+  }
+  const method = (value as unknown as RegisteredRemoteAction).__kiruRemoteMethod
+  return method === "GET" || method === "POST"
 }
 
 function isWrappedRemoteFormAction(
@@ -99,14 +113,35 @@ function isWrappedRemoteFormAction(
   )
 }
 
+async function invokeJsonRemoteAction(
+  handler: RegisteredRemoteAction,
+  context: import("../router/types.js").CustomRequestContext,
+  input: unknown,
+  options?: CreateRemoteActionHandlerOptions
+): Promise<Response> {
+  try {
+    const result = await handler.__kiruInvoke(context, input)
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: jsonHeaders,
+    })
+  } catch (e) {
+    if (isRemoteError(e) && options?.exposeErrors) {
+      return new Response(JSON.stringify({ error: e.toJSON() }), {
+        status: e.status,
+        headers: jsonHeaders,
+      })
+    }
+    return new Response(null, { status: 500 })
+  }
+}
+
 export function createRemoteActionHandler(
   secret: string,
   options?: CreateRemoteActionHandlerOptions
 ): (request: Request) => Promise<Response | null> {
   return async (request: Request) => {
     try {
-      if (request.method !== "POST") return null
-
       const url = new URL(request.url)
       const actionId = url.searchParams.get("action")
       const contentType = request.headers.get("content-type") ?? ""
@@ -116,6 +151,7 @@ export function createRemoteActionHandler(
       // -----------------------------------------------------------------------
       if (
         actionId &&
+        request.method === "POST" &&
         (contentType.includes("multipart/form-data") ||
           contentType.includes("application/x-www-form-urlencoded"))
       ) {
@@ -194,12 +230,12 @@ export function createRemoteActionHandler(
       }
 
       // -----------------------------------------------------------------------
-      // JSON remote action
+      // JSON remote action (GET or POST)
       // -----------------------------------------------------------------------
-      if (contentType !== "application/json") return null
+      if (!actionId) return null
 
       const token = request.headers.get("x-kiru-token")
-      if (!actionId || !token) return null
+      if (!token) return null
 
       const split = actionId.indexOf(":")
       if (split < 1) {
@@ -232,34 +268,28 @@ export function createRemoteActionHandler(
       }
 
       const handler = registry[routeId]?.[actionName]
-      let input: unknown
-      try {
-        input = await request.json()
-      } catch {
-        return new Response(null, { status: 500 })
-      }
-      if (typeof handler !== "function") {
-        return new Response(null, { status: 500 })
-      }
       if (!isWrappedRemoteAction(handler)) {
         return new Response(null, { status: 500 })
       }
 
-      try {
-        const result = await handler.__kiruInvoke(context, input)
-        return new Response(JSON.stringify(result), {
-          status: 200,
-          headers: jsonHeaders,
-        })
-      } catch (e) {
-        if (isRemoteError(e) && options?.exposeErrors) {
-          return new Response(JSON.stringify({ error: e.toJSON() }), {
-            status: e.status,
-            headers: jsonHeaders,
-          })
-        }
-        return new Response(null, { status: 500 })
+      if (request.method !== handler.__kiruRemoteMethod) {
+        return null
       }
+
+      if (handler.__kiruRemoteMethod === "POST" && contentType !== "application/json") {
+        return null
+      }
+
+      let input: unknown
+      if (handler.__kiruRemoteMethod === "POST") {
+        try {
+          input = await request.json()
+        } catch {
+          return new Response(null, { status: 500 })
+        }
+      }
+
+      return invokeJsonRemoteAction(handler, context, input, options)
     } catch {
       return new Response(null, { status: 500 })
     }

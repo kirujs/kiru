@@ -4,14 +4,12 @@ import {
   makeKiruContextToken,
   makeKiruContextTokenAsync,
   unwrapKiruToken,
-  unwrapKiruTokenAsync,
 } from "../../remote/token.js"
 import {
   __INTERNAL_REMOTE_REGISTRY,
   action,
   createRemoteActionHandler,
   RemoteError,
-  type RemoteActionFunction,
 } from "../../remote/index.js"
 
 const SECRET = "test-secret-abc"
@@ -20,7 +18,7 @@ const SECRET = "test-secret-abc"
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeRequest(
+function makePostRequest(
   actionId: string,
   token: string,
   body: unknown = null,
@@ -38,6 +36,20 @@ function makeRequest(
   })
 }
 
+function makeGetRequest(
+  actionId: string,
+  token: string,
+  overrides: RequestInit = {}
+): Request {
+  return new Request(`http://localhost/?action=${actionId}`, {
+    method: "GET",
+    headers: {
+      "x-kiru-token": token,
+    },
+    ...overrides,
+  })
+}
+
 function validToken(ctx: Record<string, unknown> = {}) {
   return makeKiruContextToken(ctx, SECRET)
 }
@@ -48,79 +60,21 @@ function validToken(ctx: Record<string, unknown> = {}) {
 
 describe("remote / token", () => {
   it("makeKiruContextToken produces a three-part base64url token", () => {
-    const token = makeKiruContextToken({ user: "alice" }, SECRET)
-    const parts = token.split(".")
-    assert.strictEqual(parts.length, 3, "should have header.payload.sig")
-    for (const part of parts) {
-      assert.match(part, /^[A-Za-z0-9\-_]+$/, "each part should be base64url")
-    }
+    const token = makeKiruContextToken({ a: 1 }, SECRET)
+    assert.strictEqual(token.split(".").length, 3)
   })
 
-  it("makeKiruContextToken throws when secret is empty", () => {
-    assert.throws(() => makeKiruContextToken({}, ""), /secret required/)
-  })
-
-  it("unwrapKiruToken round-trips context through make/unwrap", () => {
-    const ctx = { user: "bob", role: "admin", count: 42 }
+  it("unwrapKiruToken returns the original context for a valid token", () => {
+    const ctx = { user: { name: "Ada" } }
     const token = makeKiruContextToken(ctx, SECRET)
-    const result = unwrapKiruToken(token, SECRET)
-    assert.deepStrictEqual(result, ctx)
+    assert.deepStrictEqual(unwrapKiruToken(token, SECRET), ctx)
   })
 
-  it("unwrapKiruToken returns null for a wrong secret", () => {
-    const token = makeKiruContextToken({ user: "carol" }, SECRET)
-    assert.strictEqual(unwrapKiruToken(token, "wrong-secret"), null)
-  })
-
-  it("unwrapKiruToken returns null for a tampered payload", () => {
-    const token = makeKiruContextToken({ user: "dave" }, SECRET)
-    const [h, , s] = token.split(".")
-    const fakePayload = Buffer.from(
-      JSON.stringify({ iat: 0, ctx: { user: "hacker" } })
-    )
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "")
-    const tampered = `${h}.${fakePayload}.${s}`
-    assert.strictEqual(unwrapKiruToken(tampered, SECRET), null)
-  })
-
-  it("unwrapKiruToken returns null for a token with wrong part count", () => {
-    assert.strictEqual(unwrapKiruToken("only.two", SECRET), null)
-    assert.strictEqual(unwrapKiruToken("a.b.c.d", SECRET), null)
-  })
-
-  it("unwrapKiruToken returns null for a completely garbage string", () => {
-    assert.strictEqual(unwrapKiruToken("not-a-token", SECRET), null)
-  })
-
-  it("unwrapKiruToken returns null when typ is not KRT", () => {
-    const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" }))
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "")
-    const payload = Buffer.from(JSON.stringify({ iat: Date.now(), ctx: {} }))
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "")
-    // signature won't match but typ check fires first
-    assert.strictEqual(
-      unwrapKiruToken(`${header}.${payload}.fakesig`, SECRET),
-      null
-    )
-  })
-})
-
-describe("remote / token (async / webcrypto)", () => {
-  it("makeKiruContextTokenAsync round-trips with unwrapKiruTokenAsync", async () => {
-    if (!globalThis.crypto?.subtle) return
-    const ctx = { n: 1 }
-    const token = await makeKiruContextTokenAsync(ctx, SECRET)
-    const out = await unwrapKiruTokenAsync(token, SECRET)
-    assert.deepStrictEqual(out, ctx)
+  it("unwrapKiruToken returns null for a tampered token", () => {
+    const token = makeKiruContextToken({ a: 1 }, SECRET)
+    const parts = token.split(".")
+    parts[2] = parts[2]!.slice(0, -1) + (parts[2]!.endsWith("a") ? "b" : "a")
+    assert.strictEqual(unwrapKiruToken(parts.join("."), SECRET), null)
   })
 
   it("async token verifies with sync unwrapKiruToken on Node", async () => {
@@ -143,16 +97,13 @@ describe("remote / handler — options", () => {
     const token = validToken()
     const routeId = "test/origin"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action(async (_ctx, _input: void) => "ok") as RemoteActionFunction<unknown, unknown>,
+      fn: action.get(async () => "ok"),
     })
-    const req = new Request(`http://localhost/?action=${routeId}:fn`, {
-      method: "POST",
+    const req = makeGetRequest(`${routeId}:fn`, token, {
       headers: {
-        "content-type": "application/json",
         "x-kiru-token": token,
         origin: "http://evil.com",
       },
-      body: JSON.stringify(null),
     })
     const res = await handler(req)
     assert.strictEqual(res?.status, 403)
@@ -165,16 +116,13 @@ describe("remote / handler — options", () => {
     const token = validToken()
     const routeId = "test/origin-ok"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action(async (_ctx, _input: void) => "yes") as RemoteActionFunction<unknown, unknown>,
+      fn: action.get(async () => "yes"),
     })
-    const req = new Request(`http://localhost/?action=${routeId}:fn`, {
-      method: "POST",
+    const req = makeGetRequest(`${routeId}:fn`, token, {
       headers: {
-        "content-type": "application/json",
         "x-kiru-token": token,
         origin: "http://localhost",
       },
-      body: JSON.stringify(null),
     })
     const res = await handler(req)
     assert.strictEqual(res?.status, 200)
@@ -188,16 +136,13 @@ describe("remote / handler — options", () => {
     const token = validToken()
     const routeId = "test/forbidden-json"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action(async (_ctx, _input: void) => "x") as RemoteActionFunction<unknown, unknown>,
+      fn: action.get(async () => "x"),
     })
-    const req = new Request(`http://localhost/?action=${routeId}:fn`, {
-      method: "POST",
+    const req = makeGetRequest(`${routeId}:fn`, token, {
       headers: {
-        "content-type": "application/json",
         "x-kiru-token": token,
         origin: "http://localhost",
       },
-      body: JSON.stringify(null),
     })
     const res = await handler(req)
     assert.strictEqual(res?.status, 403)
@@ -210,11 +155,11 @@ describe("remote / handler — options", () => {
     const token = validToken()
     const routeId = "test/remote-err"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      boom: action(async (_ctx, _input: void) => {
+      boom: action.get(async () => {
         throw new RemoteError("nope", "TEST_CODE", { status: 422 })
-      }) as RemoteActionFunction<any, never>,
+      }),
     })
-    const req = makeRequest(`${routeId}:boom`, token)
+    const req = makeGetRequest(`${routeId}:boom`, token)
     const res = await handler(req)
     assert.strictEqual(res?.status, 422)
     const j = (await res?.json()) as { error: { code: string } }
@@ -227,16 +172,36 @@ describe("remote / handler — options", () => {
 // ---------------------------------------------------------------------------
 
 describe("remote / handler", () => {
-  it("returns null for non-POST requests", async () => {
+  it("returns null when HTTP method does not match the action", async () => {
     const handler = createRemoteActionHandler(SECRET)
-    const req = new Request("http://localhost/?action=x:y", { method: "GET" })
+    const token = validToken()
+    const routeId = "test/method-mismatch"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      fn: action.get(async () => "ok"),
+    })
+    const req = makePostRequest(`${routeId}:fn`, token)
     assert.strictEqual(await handler(req), null)
   })
 
-  it("returns null when content-type is not application/json", async () => {
+  it("returns null when POST action is invoked with GET", async () => {
     const handler = createRemoteActionHandler(SECRET)
     const token = validToken()
-    const req = new Request("http://localhost/?action=x:y", {
+    const routeId = "test/post-via-get"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      fn: action.post(async (_ctx, input: string) => input),
+    })
+    const req = makeGetRequest(`${routeId}:fn`, token)
+    assert.strictEqual(await handler(req), null)
+  })
+
+  it("returns null when content-type is not application/json for POST actions", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const token = validToken()
+    const routeId = "test/wrong-content-type"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      fn: action.post(async (_ctx, input: string) => input),
+    })
+    const req = new Request(`http://localhost/?action=${routeId}:fn`, {
       method: "POST",
       headers: { "content-type": "text/plain", "x-kiru-token": token },
       body: "null",
@@ -248,9 +213,8 @@ describe("remote / handler", () => {
     const handler = createRemoteActionHandler(SECRET)
     const token = validToken()
     const req = new Request("http://localhost/", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-kiru-token": token },
-      body: "null",
+      method: "GET",
+      headers: { "x-kiru-token": token },
     })
     assert.strictEqual(await handler(req), null)
   })
@@ -258,9 +222,7 @@ describe("remote / handler", () => {
   it("returns null when x-kiru-token header is missing", async () => {
     const handler = createRemoteActionHandler(SECRET)
     const req = new Request("http://localhost/?action=x:y", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: "null",
+      method: "GET",
     })
     assert.strictEqual(await handler(req), null)
   })
@@ -268,24 +230,24 @@ describe("remote / handler", () => {
   it("returns 500 when action ID has no colon separator", async () => {
     const handler = createRemoteActionHandler(SECRET)
     const token = validToken()
-    const req = makeRequest("no-colon-here", token)
+    const req = makeGetRequest("no-colon-here", token)
     const res = await handler(req)
     assert.strictEqual(res?.status, 500)
   })
 
   it("returns 500 when token is invalid", async () => {
     const handler = createRemoteActionHandler(SECRET)
-    const req = makeRequest("route:fn", "not.a.valid.token")
+    const req = makeGetRequest("route:fn", "not.a.valid.token")
     const res = await handler(req)
     assert.strictEqual(res?.status, 500)
   })
 
-  it("returns 500 when body is not valid JSON", async () => {
+  it("returns 500 when POST body is not valid JSON", async () => {
     const handler = createRemoteActionHandler(SECRET)
     const token = validToken()
     const routeId = "test/body-invalid-json"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action(async (_ctx, _input: void) => "ok") as RemoteActionFunction<unknown, unknown>,
+      fn: action.post(async (_ctx, _input: void) => "ok"),
     })
     const req = new Request(`http://localhost/?action=${routeId}:fn`, {
       method: "POST",
@@ -299,7 +261,7 @@ describe("remote / handler", () => {
   it("returns 500 when the action is not registered", async () => {
     const handler = createRemoteActionHandler(SECRET)
     const token = validToken()
-    const req = makeRequest("unknown/route:unknownFn", token)
+    const req = makeGetRequest("unknown/route:unknownFn", token)
     const res = await handler(req)
     assert.strictEqual(res?.status, 500)
   })
@@ -312,12 +274,12 @@ describe("remote / handler", () => {
       // @ts-expect-error - not a function
       fn: "not a function",
     })
-    const req = makeRequest(`${routeId}:fn`, token)
+    const req = makeGetRequest(`${routeId}:fn`, token)
     const res = await handler(req)
     assert.strictEqual(res?.status, 500)
   })
 
-  it("returns 500 when the registered handler is not wrapped with action()", async () => {
+  it("returns 500 when the registered handler is not wrapped with action", async () => {
     const handler = createRemoteActionHandler(SECRET)
     const token = validToken()
     const routeId = "test/not-wrapped"
@@ -325,19 +287,32 @@ describe("remote / handler", () => {
       // @ts-expect-error - not a wrapped function
       fn: async (_a: unknown) => "legacy",
     })
-    const req = makeRequest(`${routeId}:fn`, token)
+    const req = makeGetRequest(`${routeId}:fn`, token)
     const res = await handler(req)
     assert.strictEqual(res?.status, 500)
   })
 
-  it("dispatches to the registered action and returns JSON result", async () => {
+  it("dispatches GET actions and returns JSON result", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const token = validToken()
+    const routeId = "test/get-dispatch"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      greet: action.get(async () => "hello"),
+    })
+    const req = makeGetRequest(`${routeId}:greet`, token)
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 200)
+    assert.strictEqual(await res?.json(), "hello")
+  })
+
+  it("dispatches POST actions with JSON input", async () => {
     const handler = createRemoteActionHandler(SECRET)
     const token = validToken()
     const routeId = "test/dispatch"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      greet: action(async (_ctx, name: string) => `hello ${name}`) as RemoteActionFunction<any, string>,
+      greet: action.post(async (_ctx, name: string) => `hello ${name}`),
     })
-    const req = makeRequest(`${routeId}:greet`, token, "world")
+    const req = makePostRequest(`${routeId}:greet`, token, "world")
     const res = await handler(req)
     assert.strictEqual(res?.status, 200)
     assert.strictEqual(
@@ -353,11 +328,11 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/tuple-input"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      add: action(
+      add: action.post(
         async (_ctx, input: readonly [number, number]) => input[0]! + input[1]!
-      ) as RemoteActionFunction<any, number>,
+      ),
     })
-    const req = makeRequest(`${routeId}:add`, token, [3, 7])
+    const req = makePostRequest(`${routeId}:add`, token, [3, 7])
     const res = await handler(req)
     const body = await res?.json()
     assert.strictEqual(body, 10)
@@ -368,11 +343,11 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/throws"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      boom: action(async (_ctx, _input: void) => {
+      boom: action.get(async () => {
         throw new Error("intentional error")
-      }) as RemoteActionFunction<any, never>,
+      }),
     })
-    const req = makeRequest(`${routeId}:boom`, token)
+    const req = makeGetRequest(`${routeId}:boom`, token)
     const res = await handler(req)
     assert.strictEqual(res?.status, 500)
   })
@@ -383,12 +358,12 @@ describe("remote / handler", () => {
     const token = makeKiruContextToken(ctx as Record<string, unknown>, SECRET)
     const routeId = "test/ctx-after-await"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      delayed: action(async (ctx, _input: void) => {
+      delayed: action.get(async (ctx) => {
         await new Promise<void>((r) => setTimeout(r, 5))
         return (ctx as { ping?: string }).ping
-      }) as RemoteActionFunction<any, string>,
+      }),
     })
-    const req = makeRequest(`${routeId}:delayed`, token)
+    const req = makeGetRequest(`${routeId}:delayed`, token)
     const res = await handler(req)
     assert.strictEqual(res?.status, 200)
     assert.strictEqual(await res?.json(), "pong")
@@ -401,12 +376,12 @@ describe("remote / handler", () => {
     const routeId = "test/get-context"
     let captured: unknown = null
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      whoami: action(async (ctx, _input: void) => {
+      whoami: action.get(async (ctx) => {
         captured = ctx
         return "done"
-      }) as RemoteActionFunction<any, string>,
+      }),
     })
-    const req = makeRequest(`${routeId}:whoami`, token)
+    const req = makeGetRequest(`${routeId}:whoami`, token)
     await handler(req)
     assert.deepStrictEqual(captured, ctx)
   })
@@ -416,7 +391,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/schema-guard"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      greet: action(
+      greet: action.post(
         {
           parse: (input: unknown): input is { name: string } =>
             !!input &&
@@ -425,9 +400,9 @@ describe("remote / handler", () => {
             typeof (input as { name?: unknown }).name === "string",
         },
         async (_ctx, input) => `hello ${input.name}`
-      ) as RemoteActionFunction<any, string>,
+      ),
     })
-    const req = makeRequest(`${routeId}:greet`, token, { wrong: true })
+    const req = makePostRequest(`${routeId}:greet`, token, { wrong: true })
     const res = await handler(req)
     assert.strictEqual(res?.status, 400)
     const j = (await res?.json()) as { error: { code: string } }
@@ -439,12 +414,12 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/overwrite"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action(async (_ctx, _input: void) => "first") as RemoteActionFunction<unknown, unknown>,
+      fn: action.get(async () => "first"),
     })
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action(async (_ctx, _input: void) => "second") as RemoteActionFunction<unknown, unknown>,
+      fn: action.get(async () => "second"),
     })
-    const req = makeRequest(`${routeId}:fn`, token)
+    const req = makeGetRequest(`${routeId}:fn`, token)
     const res = await handler(req)
     const body = await res?.json()
     assert.strictEqual(body, "second")

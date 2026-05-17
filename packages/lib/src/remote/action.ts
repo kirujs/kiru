@@ -20,6 +20,8 @@ export function __setSsrRequestContext(ctx: CustomRequestContext): void {
 // Remote action (JSON)
 // ---------------------------------------------------------------------------
 
+export type RemoteActionMethod = "GET" | "POST"
+
 export type RemoteActionCallback<Input, Output> = (
   ctx: CustomRequestContext,
   input: Input
@@ -29,33 +31,93 @@ export type RemoteActionSchema<Input> = {
   parse: (input: unknown) => input is Input
 }
 
-export type RemoteActionFunction<Input, Output> = ((
-  input?: Input,
-  options?: { signal?: AbortSignal }
+export type RemoteActionOptions = {
+  signal?: AbortSignal
+}
+
+export type RemoteGetAction<Output> = ((
+  options?: RemoteActionOptions
 ) => Promise<Output>) & {
   __kiruRemoteAction: true
+  __kiruRemoteMethod: "GET"
   __kiruInvoke: (ctx: CustomRequestContext, input: unknown) => Promise<Output>
 }
 
-export function action<Input, Output>(
-  callback: RemoteActionCallback<Input, Output>
-): RemoteActionFunction<Input, Output>
-export function action<Input, Output>(
-  schema: RemoteActionSchema<Input>,
-  callback: RemoteActionCallback<Input, Output>
-): RemoteActionFunction<Input, Output>
-export function action<Input, Output>(
+export type RemotePostAction<Input, Output> = ((
+  input: Input,
+  options?: RemoteActionOptions
+) => Promise<Output>) & {
+  __kiruRemoteAction: true
+  __kiruRemoteMethod: "POST"
+  __kiruInvoke: (ctx: CustomRequestContext, input: unknown) => Promise<Output>
+}
+
+export type RemoteActionFunction<Input, Output> =
+  | RemoteGetAction<Output>
+  | RemotePostAction<Input, Output>
+
+type GetCallback<Output> =
+  | ((ctx: CustomRequestContext) => Promise<Output> | Output)
+  | (() => Promise<Output> | Output)
+
+function wrapGetCallback<Output>(
+  callback: GetCallback<Output>
+): (ctx: CustomRequestContext) => Promise<Output> | Output {
+  if (callback.length === 0) {
+    return () => (callback as () => Promise<Output> | Output)()
+  }
+  return callback as (ctx: CustomRequestContext) => Promise<Output> | Output
+}
+
+function createRemoteAction<Input, Output>(
+  method: RemoteActionMethod,
+  runAction: RemoteActionCallback<Input, Output>,
+  validateActionInput: (input: unknown) => void
+): RemoteGetAction<Output> | RemotePostAction<Input, Output> {
+  if (method === "GET") {
+    const wrapped = (async (_options?: RemoteActionOptions): Promise<Output> => {
+      validateActionInput(undefined)
+      return runAction(_currentSsrCtx, undefined as Input)
+    }) as RemoteGetAction<Output>
+
+    wrapped.__kiruRemoteAction = true
+    wrapped.__kiruRemoteMethod = "GET"
+    wrapped.__kiruInvoke = async (ctx, _input) => {
+      validateActionInput(undefined)
+      return runAction(ctx, undefined as Input)
+    }
+    return wrapped
+  }
+
+  const wrapped = (async (
+    input: Input,
+    _options?: RemoteActionOptions
+  ): Promise<Output> => {
+    validateActionInput(input)
+    return runAction(_currentSsrCtx, input)
+  }) as RemotePostAction<Input, Output>
+
+  wrapped.__kiruRemoteAction = true
+  wrapped.__kiruRemoteMethod = "POST"
+  wrapped.__kiruInvoke = async (ctx, input) => {
+    validateActionInput(input)
+    return runAction(ctx, input as Input)
+  }
+  return wrapped
+}
+
+function createPostAction<Input, Output>(
   callbackOrSchema:
     | RemoteActionSchema<Input>
     | RemoteActionCallback<Input, Output>,
   callback?: RemoteActionCallback<Input, Output>
-): RemoteActionFunction<Input, Output> {
+): RemotePostAction<Input, Output> {
   const hasSchema = typeof callback === "function"
   const schema = hasSchema
     ? (callbackOrSchema as RemoteActionSchema<Input>)
     : undefined
   const runAction = hasSchema
-    ? callback
+    ? callback!
     : (callbackOrSchema as RemoteActionCallback<Input, Output>)
   const validateActionInput = (input: unknown) => {
     if (schema && !schema.parse(input)) {
@@ -64,18 +126,37 @@ export function action<Input, Output>(
       })
     }
   }
-  const wrapped = (async (input?: Input): Promise<Output> => {
-    validateActionInput(input)
-    return runAction(_currentSsrCtx, input as Input)
-  }) as RemoteActionFunction<Input, Output>
+  return createRemoteAction(
+    "POST",
+    runAction,
+    validateActionInput
+  ) as RemotePostAction<Input, Output>
+}
 
-  wrapped.__kiruRemoteAction = true
-  wrapped.__kiruInvoke = async (ctx, input) => {
-    validateActionInput(input)
-    return runAction(ctx, input as Input)
-  }
+function post<Input, Output>(
+  callback: RemoteActionCallback<Input, Output>
+): RemotePostAction<Input, Output>
+function post<Input, Output>(
+  schema: RemoteActionSchema<Input>,
+  callback: RemoteActionCallback<Input, Output>
+): RemotePostAction<Input, Output>
+function post<Input, Output>(
+  callbackOrSchema:
+    | RemoteActionSchema<Input>
+    | RemoteActionCallback<Input, Output>,
+  callback?: RemoteActionCallback<Input, Output>
+): RemotePostAction<Input, Output> {
+  return createPostAction(callbackOrSchema, callback)
+}
 
-  return wrapped
+export const action = {
+  get<Output>(callback: GetCallback<Output>): RemoteGetAction<Output> {
+    const run = wrapGetCallback(callback)
+    const runAction: RemoteActionCallback<void, Output> = (ctx, _input) =>
+      Promise.resolve(run(ctx))
+    return createRemoteAction("GET", runAction, () => {}) as RemoteGetAction<Output>
+  },
+  post,
 }
 
 // ---------------------------------------------------------------------------
