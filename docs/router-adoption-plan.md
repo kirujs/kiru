@@ -18,13 +18,13 @@ These are adoption blockers or trust breakers if left open.
 
 | #   | Item                                      | Outcome                                                                                                                                                                                                               | Notes                                                                                            |
 | --- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| M1  | **Fix onboarding truth**                  | `create-kiru` SSR template and README describe Hono + `createRenderer`, not Vike. Templates match e2e/sandbox patterns.                                                                                               | Low effort; high first-impression impact.                                                        |
-| M2  | **Routing docs on kirujs.dev**            | Single “Routing” section: mode matrix (CSR / SSG / SSR / hybrid), `defineRouteTree` API, guards, head/SEO, hydration (`bootstrapSsrClient` vs `RouterView`), remote actions, hybrid `prerenderedHtmlDir` dev vs prod. | Competes on docs, not features alone.                                                            |
-| M3  | **SSR query + hash parity**               | `createRenderer` passes URL `search` and `hash` into `createStaticRouter`; hydrated client matches server HTML for pages that read `router.query` / `router.hash`.                                                    | Today `buildAppElement` hardcodes `query: {}`, `hash: ""`.                                       |
+| M1  | **Fix onboarding truth** — **done**       | `create-kiru` SSR template and README describe Hono + `createRenderer`, not Vike. Templates match e2e/sandbox patterns.                                                                                               | CLI SSR description updated; sandboxes use `kiru/router/{csr,ssr,ssg}`.                            |
+| M2  | **Routing docs on kirujs.dev**            | Single “Routing” section: mode matrix (CSR / SSG / SSR / hybrid), `defineRouteTree` API, guards, head/SEO, hydration (`kiru/router/csr|ssr|ssg` vs `RouterView`), remote actions, hybrid `prerenderedHtmlDir` dev vs prod. | Competes on docs, not features alone.                                                         |
+| M3  | **SSR query + hash parity** — **done**    | `createRenderer` passes URL `search` and `hash` into `createStaticRouter`; hydrated client matches server HTML for pages that read `router.query` / `router.hash`.                                                    | `parseRequestUrl` + `buildAppElement` thread `RequestUrlState`.                                  |
 | M4  | **`pending` routes: implement or remove** | Either show scope/route `pending` UI during navigation (CSR + streaming SSR) or delete from types/manifest until ready.                                                                                               | API surface must not lie.                                                                        |
 | M5  | **One deployment guide per mode**         | Documented, CI-tested paths: static host (SSG), Node server (SSR), hybrid (SSG build + `createRenderer` + static assets).                                                                                             | No code in repo today mentions Vercel/CF/Netlify—pick **one** serverless adapter for SSR in M5b. |
 | M5b | **Reference serverless adapter**          | Example: Cloudflare Workers or Vercel Edge using `createRenderer({ stream: true })` + asset binding.                                                                                                                  | Unblocks “where do I deploy?”                                                                    |
-| M6  | **Unified client bootstrap API**          | `createKiruApp({ mode, routes, container })` wrapping CSR mount vs `bootstrapSsrClient` / `bootstrapSsgClient`; deprecate foot-gun of hydrating with `RouterView` alone.                                              | Reduces support burden; document in M2.                                                          |
+| M6  | **Bootstrap subpaths** — **done**         | `createRouterApp` from `kiru/router/csr`, `kiru/router/ssr`, `kiru/router/ssg` (separate entry points; no unified `mode` switch).                                                                                    | `kiru/ssr/router` keeps `bootstrapSsrClient` / `bootstrapSsgClient`. Document in M2.             |
 
 ---
 
@@ -47,11 +47,11 @@ What evaluators ask for in week one of a spike.
 
 **Why:** Manual `routes.ts` does not scale; file-based routing is the default mental model for Next/SvelteKit/SolidStart.
 
-### 1.2 Route loaders (`load`)
+### 1.2 Route loaders (`load`) — **shipped**
 
 **Goal:** First-class async data tied to a route, with SSR serialization and CSR reuse.
 
-**Proposed API (sketch):**
+**API (implemented via page module exports):**
 
 ```ts
 r.page("/users/[id]", {
@@ -71,7 +71,7 @@ r.page("/users/[id]", {
 
 **Why:** Without loaders, every migrator re-invents data fetching; comparisons to SvelteKit `load` / Remix fail immediately.
 
-### 1.3 Nested `generateStaticParams`
+### 1.3 Nested `generateStaticParams` — **shipped**
 
 **Goal:** Child static routes receive parent param values in `GenerateStaticParamsContext.params`.
 
@@ -131,6 +131,7 @@ Defer until evaluators convert to production pilots.
 - Replacing Vite or Hono—stay BYO server with great recipes.
 - Feature parity with Next App Router (RSC, PPR, etc.) in Phase 1–2.
 - File-based routing as the **only** API—codegen must remain optional.
+- A single `createRouterApp` import that switches on `mode`—use `kiru/router/csr`, `kiru/router/ssr`, or `kiru/router/ssg` instead.
 
 ---
 
@@ -142,7 +143,7 @@ flowchart TD
   M2[M2 Routing docs]
   M3[M3 SSR query + hash]
   M4[M4 pending implement or remove]
-  M6[M6 Unified bootstrap API]
+  M6[M6 Bootstrap subpaths]
   M5[M5 Deploy guides + M5b adapter]
   P1A[1.1 File-based routing codegen]
   P1B[1.2 Route loaders]
@@ -151,10 +152,10 @@ flowchart TD
   P2[Phase 2 production parity]
 
   M1 --> M2
-  M3 --> M6
+  M3 --> M2
+  M6 --> M2
   M4 --> M2
   M2 --> M5
-  M6 --> M5
   M5 --> P1A
   P1A --> P1B
   P1B --> P1C
@@ -168,7 +169,7 @@ flowchart TD
 | Milestone          | Contents       | Audience unlock                               |
 | ------------------ | -------------- | --------------------------------------------- |
 | **v0.1 “Trust”**   | M1, M2, M4, M3 | Honest eval; SSR apps with search params work |
-| **v0.2 “Deploy”**  | M5, M5b, M6    | Ship to staging                               |
+| **v0.2 “Deploy”**  | M5, M5b, M6   | Ship to staging                               |
 | **v0.3 “Migrate”** | 1.1, 1.2, 1.3  | Teams port existing apps                      |
 | **v0.4 “Scale”**   | 1.4, Phase 2   | Production hardening                          |
 

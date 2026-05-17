@@ -54,6 +54,18 @@
       "browser": "./dist/router/client.js",
       "default": "./dist/router/index.js"
     },
+    "./router/csr": {
+      "types": "./dist/router/bootstrap/csr.d.ts",
+      "default": "./dist/router/bootstrap/csr.js"
+    },
+    "./router/ssr": {
+      "types": "./dist/router/bootstrap/ssr.d.ts",
+      "default": "./dist/router/bootstrap/ssr.js"
+    },
+    "./router/ssg": {
+      "types": "./dist/router/bootstrap/ssg.d.ts",
+      "default": "./dist/router/bootstrap/ssg.js"
+    },
     "./remote": {
       "types": "./dist/remote/index.d.ts",
       "browser": "./dist/remote/browser.js",

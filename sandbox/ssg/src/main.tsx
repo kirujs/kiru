@@ -1,8 +1,5 @@
-import { bootstrapSsgClient } from "kiru/ssr/router"
+import { createRouterApp } from "kiru/router/ssg"
 import { routes } from "./routes"
 import "./styles.css"
 
-void bootstrapSsgClient({
-  routes,
-  container: document.getElementById("app")!,
-})
+createRouterApp({ routes, container: document.getElementById("app")! })

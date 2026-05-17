@@ -1,11 +1,13 @@
 import { Fragment } from "../element.js"
 import { renderMode } from "../globals.js"
-import {
-  STREAMED_DATA_DESCENDANTS,
-  STREAMED_DATA_EVENT,
-} from "../constants.js"
+import { STREAMED_DATA_DESCENDANTS, STREAMED_DATA_EVENT } from "../constants.js"
 import { withSpeculativeStreamPromiseCollector } from "../resource.js"
-import { headlessRender, HeadlessRenderContext } from "../headlessRender.js"
+import {
+  headlessRender,
+  speculativeTraverse,
+  HeadlessRenderContext,
+  SpeculativeTraverseContext,
+} from "../headlessRender.js"
 
 const STREAMED_DATA_SETUP = `
 <script type="text/javascript">
@@ -119,7 +121,9 @@ export function renderToReadableStream(
         // resolving promise could race ahead of the shell.
         await shellFlushed
         controller.enqueue(
-          `<script type="text/javascript">__$k_data("${promise.id}",${dataArg}${descendantArgs ? `,${descendantArgs}` : ""})</script>`
+          `<script type="text/javascript">__$k_data("${promise.id}",${dataArg}${
+            descendantArgs ? `,${descendantArgs}` : ""
+          })</script>`
         )
       })
 
@@ -146,17 +150,19 @@ export function renderToReadableStream(
       const specPromise: Promise<string[]> = Promise.all(pending)
         .then(() => {
           withStreamRenderMode(() =>
-            withSpeculativeStreamPromiseCollector((child) => {
-              if (!descendants.includes(child.id)) {
-                descendants.push(child.id)
-              }
-            }, () =>
-              headlessRender(
-                { ...speculativeCtx, onStreamData: trackDescendantStreamData },
-                continueRender(),
-                anchorVNode,
-                0
-              )
+            withSpeculativeStreamPromiseCollector(
+              (child) => {
+                if (!descendants.includes(child.id)) {
+                  descendants.push(child.id)
+                }
+              },
+              () =>
+                speculativeTraverse(
+                  { ...speculativeCtx, onStreamData: trackDescendantStreamData },
+                  continueRender(),
+                  anchorVNode,
+                  0
+                )
             )
           )
           return descendants
@@ -178,10 +184,8 @@ export function renderToReadableStream(
     scheduleSpeculativeContinue,
   }
 
-  const speculativeCtx: HeadlessRenderContext = {
-    write: () => {},
+  const speculativeCtx: SpeculativeTraverseContext = {
     onStreamData,
-    speculative: true,
     scheduleSpeculativeContinue,
   }
 

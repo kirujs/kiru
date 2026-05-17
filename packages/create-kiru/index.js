@@ -29,7 +29,7 @@ const templates = [
   },
   {
     name: "SSR",
-    description: "Server-side rendering with Vike",
+    description: "Server-side rendering with createRenderer",
     value: "https://github.com/kirujs/kiru-ssr-template.git",
   },
   {

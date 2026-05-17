@@ -73,6 +73,7 @@ import {
 } from "../remote/index.js"
 import { __setSsrRequestContext } from "../remote/action.js"
 import { runGuards, toRedirect } from "./runNavigationGuards.js"
+import { parseRequestUrl, type RequestUrlState } from "./requestUrl.js"
 
 export {
   buildRoutedSubtree,
@@ -385,7 +386,11 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
               tree.routeModule,
               manifest,
               requestContext,
-              { error: renderErr } satisfies ErrorPageProps
+              { error: renderErr } satisfies ErrorPageProps,
+              {
+                url: parseRequestUrl(url),
+                pathPolicy,
+              }
             ),
             requestContext,
           }
@@ -590,13 +595,15 @@ function buildAppElement(
   routeModule: RouteModule,
   manifest: RouteManifest,
   requestContext: CustomRequestContext,
-  leafProps?: LeafRouteProps
+  leafProps?: LeafRouteProps,
+  options?: { url?: RequestUrlState; pathPolicy?: RouterPathPolicy }
 ) {
   const staticRouter = createStaticRouter({
     manifest,
     pathname,
-    query: {},
-    hash: "",
+    query: options?.url?.query ?? {},
+    hash: options?.url?.hash ?? "",
+    pathPolicy: options?.pathPolicy,
   })
   staticRouter.params.value = params
   const subtree = buildRoutedSubtree(layoutModules, routeModule, leafProps)
@@ -624,6 +631,7 @@ export async function renderMatchToStaticHtml(
   match: RouteMatch,
   pathPolicy?: RouterPathPolicy
 ): Promise<{ body: string; document: DocumentHead }> {
+  // Prerender paths are pathname-only (no query string at build time).
   const pageMod = await match.route.component()
   const loaderCtx = buildLoaderContext({
     params: match.params,
@@ -648,7 +656,8 @@ export async function renderMatchToStaticHtml(
     routeModule,
     manifest,
     {},
-    pageProps
+    pageProps,
+    { pathPolicy }
   )
   return renderStringWithDocument(
     app,
@@ -745,6 +754,7 @@ async function prepareAppForUrl(
   manifest: RouteManifest,
   pathPolicy: ReturnType<typeof resolvePathPolicy>
 ): Promise<PrepareAppResult> {
+  const requestUrl = parseRequestUrl(url)
   const requestedPathname = formatPathname(
     pathnameForMatch(toPathname(url), pathPolicy),
     pathPolicy
@@ -769,7 +779,9 @@ async function prepareAppForUrl(
           layoutModules,
           routeModule,
           manifest,
-          requestContext
+          requestContext,
+          undefined,
+          { url: requestUrl, pathPolicy }
         )
         return {
           app,
@@ -799,17 +811,12 @@ async function prepareAppForUrl(
     }
 
     const requestContext = (ctx?.context ?? {}) as CustomRequestContext
-    const parsed = new URL(url, "http://localhost")
-    const query: Record<string, string[]> = {}
-    parsed.searchParams.forEach((value, key) => {
-      ;(query[key] ??= []).push(value)
-    })
     const loaderCtx = buildLoaderContext({
       params: routeMatch.params,
       pathname: routeMatch.pathname,
-      search: parsed.search,
-      hash: parsed.hash,
-      query,
+      search: requestUrl.search,
+      hash: requestUrl.hash,
+      query: requestUrl.query,
       context: requestContext,
     })
     const pageMod = await routeMatch.route.component()
@@ -861,7 +868,8 @@ async function prepareAppForUrl(
       routeModule,
       manifest,
       requestContext,
-      pageProps as LeafRouteProps
+      pageProps as LeafRouteProps,
+      { url: requestUrl, pathPolicy }
     )
     return {
       app,

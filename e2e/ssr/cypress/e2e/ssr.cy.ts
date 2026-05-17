@@ -82,6 +82,20 @@ describe("SSR server", () => {
     cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
   })
 
+  it("renders query in SSR HTML and hash after hydration for useRouter", () => {
+    const port = Cypress.env("port")
+    // Fragments are not sent on HTTP requests — the server never sees #section.
+    cy.request(`http://127.0.0.1:${port}/url-state/7?tag=x&tag=y`).then((res) => {
+      expect(res.status).to.eq(200)
+      expect(res.body).to.include(":7::x,y")
+    })
+
+    cy.visit(`http://127.0.0.1:${port}/url-state/7?tag=x&tag=y#section`)
+    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get('[data-testid="url-state"]').should("contain", "#section")
+    cy.get('[data-testid="url-state"]').should("contain", "x,y")
+  })
+
   it("hydrates SSR context and enforces navigation guards", () => {
     cy.title().should("eq", "E2E SSR Home")
     cy.get('[data-testid="ssr-home"]').should("contain", "SSR e2e home")
@@ -135,6 +149,8 @@ describe("SSR server", () => {
   it("executes remote functions through server action endpoint", () => {
     // Without the SSR-injected token, the action handler rejects the POST and the UI never updates.
     cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
+    // Streaming SSR + async entry: `load` fires before hydrate attaches event handlers.
+    cy.window().its("__kiruHydratedAt").should("be.a", "number")
     // Wait for the server round-trip explicitly — avoids races under load / parallel CI.
     cy.intercept("GET", /\?action=/).as("remoteAction")
     cy.get('[data-testid="ssr-remote-button"]').click()

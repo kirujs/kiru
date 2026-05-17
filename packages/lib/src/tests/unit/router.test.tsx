@@ -783,7 +783,22 @@ describe("router", () => {
     )
     const renderer = createRenderer({ routes: r })
     const response = await renderer.render("/users/42?tag=a&tag=b#section")
-    assert.ok(response?.body.includes("<p>"))
+    assert.ok(response?.body.includes(":42:#section:a,b"))
+
+    const streamRenderer = createRenderer({ routes: r, stream: true })
+    const streamResponse = await streamRenderer.render(
+      "/users/42?tag=a&tag=b#section"
+    )
+    assert.ok(streamResponse)
+    const reader = (streamResponse.body as ReadableStream<string>).getReader()
+    let streamBody = ""
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      streamBody += next.value
+    }
+    reader.releaseLock()
+    assert.ok(streamBody.includes(":42:#section:a,b"))
   })
 
   it("supports baseUrl and query/hash mutators in router API", async () => {

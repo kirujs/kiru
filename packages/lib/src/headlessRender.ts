@@ -23,13 +23,17 @@ import { createElement } from "./element.js"
 export interface HeadlessRenderContext {
   write(chunk: string): void
   onStreamData?: (data: Kiru.StatefulPromise<unknown>[]) => void
-  speculative?: boolean
   scheduleSpeculativeContinue?: (
     pending: Kiru.StatefulPromise<unknown>[],
     continueRender: () => JSX.Children,
     anchorVNode: Kiru.VNode
   ) => void
 }
+
+export type SpeculativeTraverseContext = Pick<
+  HeadlessRenderContext,
+  "onStreamData" | "scheduleSpeculativeContinue"
+>
 
 export function headlessRender(
   ctx: HeadlessRenderContext,
@@ -97,7 +101,6 @@ export function headlessRender(
       }
       try {
         headlessRender(boundaryCtx, children, el, idx)
-        // flush successful render
         ctx.write(boundaryBuffer)
         ctx.onStreamData?.([...streamPromises])
       } catch (error) {
@@ -141,9 +144,6 @@ export function headlessRender(
           error[$STREAM_DATA]
         ctx.scheduleSpeculativeContinue?.(data, continueRender, el)
         ctx.onStreamData?.(data)
-        if (ctx.speculative) {
-          return
-        }
         return headlessRender(ctx, fallback, el, 0)
       }
       throw error
@@ -172,4 +172,112 @@ export function headlessRender(
     headlessRender(ctx, children, el, 0)
   }
   ctx.write(`</${type}>`)
+}
+
+/**
+ * Walks the tree after stream promises settle to discover nested stream
+ * resources. Skips HTML serialization entirely (no tags, attrs, or encoding).
+ */
+export function speculativeTraverse(
+  ctx: SpeculativeTraverseContext,
+  el: unknown,
+  parent: Kiru.VNode | null = null,
+  idx: number = 0
+): void {
+  if (el === null || el === undefined || typeof el === "boolean") return
+  if (
+    typeof el === "string" ||
+    typeof el === "number" ||
+    typeof el === "bigint"
+  ) {
+    return
+  }
+  if (el instanceof Array) {
+    return el.forEach((c, i) => speculativeTraverse(ctx, c, parent, i))
+  }
+  if (typeof el === "function") {
+    return speculativeTraverse(
+      ctx,
+      createElement($INLINE_FN, { expr: el }),
+      parent,
+      idx
+    )
+  }
+  if (Signal.isSignal(el)) return
+  if (!isVNode(el)) return
+
+  el.parent = parent
+  el.depth = (parent?.depth ?? -1) + 1
+  el.index = idx
+  const { type, props = {} } = el
+  if (type === "#text") return
+
+  let children = props.children
+  if (isExoticType(type)) {
+    if (type === $ERROR_BOUNDARY) {
+      const streamPromises = new Set<Kiru.StatefulPromise<unknown>>()
+      const boundaryCtx: SpeculativeTraverseContext = {
+        onStreamData(data) {
+          data.forEach((p) => streamPromises.add(p))
+        },
+        scheduleSpeculativeContinue: ctx.scheduleSpeculativeContinue,
+      }
+      try {
+        speculativeTraverse(boundaryCtx, children, el, idx)
+        ctx.onStreamData?.([...streamPromises])
+      } catch (error) {
+        if (isStreamDataThrowValue(error)) {
+          throw error
+        }
+        const e = error instanceof Error ? error : new Error(String(error))
+        const { fallback, onError } = props as ErrorBoundaryNode["props"]
+        onError?.(e)
+        const fallbackContent =
+          typeof fallback === "function" ? fallback(e) : fallback
+        speculativeTraverse(ctx, fallbackContent, el, 0)
+      }
+      return
+    }
+    if (type === $INLINE_FN) {
+      node.current = el
+      const render = (props as InlineFnNode["props"]).expr
+      try {
+        children = render()
+      } finally {
+        node.current = null
+      }
+    }
+    speculativeTraverse(ctx, children, el, idx)
+    return
+  }
+
+  if (typeof type === "function") {
+    try {
+      node.current = el
+      let result = type(props)
+      if (typeof result === "function") {
+        result = result(props)
+      }
+      speculativeTraverse(ctx, result, el, idx)
+      return
+    } catch (error) {
+      if (isStreamDataThrowValue(error)) {
+        const { data, continue: continueRender } = error[$STREAM_DATA]
+        ctx.scheduleSpeculativeContinue?.(data, continueRender, el)
+        ctx.onStreamData?.(data)
+        return
+      }
+      throw error
+    } finally {
+      node.current = null
+    }
+  }
+
+  if ("innerHTML" in props) return
+
+  if (Array.isArray(children)) {
+    children.forEach((c, i) => speculativeTraverse(ctx, c, el, i))
+  } else {
+    speculativeTraverse(ctx, children, el, 0)
+  }
 }

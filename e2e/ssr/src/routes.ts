@@ -54,6 +54,10 @@ export const routes = defineRouteTree((r) =>
         component: () => import("./pages/user"),
         head: { title: "E2E SSR User {id}" },
       }),
+      r.page("/url-state/[id]", {
+        component: () => import("./pages/url-state"),
+        head: { title: "E2E SSR URL state" },
+      }),
       r.page("/streaming-test", {
         component: () => import("./pages/streaming-test"),
         head: { title: "E2E SSR Streaming test" },

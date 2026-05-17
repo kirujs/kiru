@@ -158,7 +158,7 @@ In development, **`router.serverEntry` always wins**: when both `ssg` and `serve
 
 ## SSR client entry
 
-For Node `createRenderer` HTML (non-streaming), hydrate with **`bootstrapSsrClient`** from **`kiru/ssr/router`**, not `RouterView` alone: `RouterView` uses async resources that expect streamed `kiru:deferred` payloads, which plain string SSR does not emit.
+For Node `createRenderer` HTML (non-streaming), hydrate with **`createRouterApp`** from **`kiru/router/ssr`** (or **`bootstrapSsrClient`** from **`kiru/ssr/router`**), not `RouterView` alone: `RouterView` uses async resources that expect streamed `kiru:deferred` payloads, which plain string SSR does not emit.
 
 ## Features
 

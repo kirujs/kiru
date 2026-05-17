@@ -128,6 +128,26 @@ export interface BootstrapSsrClientOptions {
   }
 }
 
+/**
+ * Fragments are not sent on HTTP requests, so SSR HTML matches `hash: ""`.
+ * Clear the client router hash until after hydration to avoid text-node mismatches.
+ */
+function stashClientHashForSsrHydration(
+  router: ReturnType<typeof createRouter>
+): string {
+  if (typeof window === "undefined") return ""
+  const hash = window.location.hash
+  if (hash) router.hash.value = ""
+  return hash
+}
+
+function restoreClientHashAfterHydration(
+  router: ReturnType<typeof createRouter>,
+  hash: string
+): void {
+  if (hash) router.hash.value = hash
+}
+
 function loaderContextForMatch(
   routeMatch: { params: Record<string, string> },
   pathname: string,
@@ -192,6 +212,7 @@ export async function bootstrapSsrClient(
       ? options.routes
       : compileRouteTree(options.routes)
   const router = createRouter({ routes: manifest })
+  const pendingClientHash = stashClientHashForSsrHydration(router)
 
   const { container, hydrateOptions } = options
   const staticHydrate = {
@@ -283,6 +304,8 @@ export async function bootstrapSsrClient(
     container,
     staticHydrate
   )
+
+  restoreClientHashAfterHydration(router, pendingClientHash)
 
   return app
 }

@@ -1,5 +1,6 @@
 export * from "./types.js"
 export * from "./defineRouteTree.js"
+export * from "./requestUrl.js"
 export * from "./routeBuildMeta.js"
 export * from "./loaders.js"
 export * from "./pageData.js"

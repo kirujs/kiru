@@ -11,6 +11,7 @@ import {
   stripBase,
   type RouterPathPolicy,
 } from "./pathPolicy.js"
+import { parseQuery, type RouterQuery } from "./requestUrl.js"
 import { createElement } from "../element.js"
 import type {
   AfterEachHook,
@@ -57,7 +58,7 @@ function joinPath(base: string, path: string): string {
 }
 
 export type RouterNavigationMode = "history" | "static"
-export type RouterQuery = Record<string, string[]>
+export type { RouterQuery } from "./requestUrl.js"
 
 export type RouteTreeMatchSegment = {
   id: string
@@ -163,15 +164,6 @@ type RouteLocationParts = {
   pathname: string
   hash: string
   query: RouterQuery
-}
-
-function parseQuery(search: string): RouterQuery {
-  const out: RouterQuery = {}
-  const params = new URLSearchParams(search)
-  params.forEach((value, key) => {
-    ;(out[key] ??= []).push(value)
-  })
-  return out
 }
 
 function buildQueryString(query: RouterQuery): string {
@@ -991,6 +983,14 @@ export const Link: Kiru.Component<LinkProps> = () => {
     createElement("a", { children, href, onpointerenter, onclick, ...rest })
 }
 
+/**
+ * CSR route outlet: loads the matched route tree on navigation.
+ *
+ * For SSR/SSG documents use `createRouterApp` from `kiru/router/ssr` or
+ * `kiru/router/ssg` (or `bootstrapSsrClient` / `bootstrapSsgClient` from
+ * `kiru/ssr/router`). `RouterView` alone does not preload the server route
+ * subtree or serialized loader data required for hydration.
+ */
 export function RouterView() {
   const router = useRouter()
   const { match, pathname, manifest, hash, query } = router
