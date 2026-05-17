@@ -5,31 +5,32 @@ export const routes = defineRouteTree((r) =>
     layout: () => import("./pages/layout.tsx"),
     notFound: () => import("./pages/not-found/index.tsx"),
     children: [
-      r.get("/", () => import("./pages/index.tsx")),
-      r.get("/about", () => import("./pages/about/index.tsx")),
-      r.get("/users/[id]", () => import("./pages/users/[id]/index.tsx")),
-      r.get("/guarded", {
+      r.page("/", () => import("./pages/index.tsx")),
+      r.page("/about", () => import("./pages/about/index.tsx")),
+      r.page("/users/[id]", () => import("./pages/users/[id]/index.tsx")),
+      r.page("/guarded", {
         component: async () => ({
           default: () => "Guarded should redirect",
         }),
         beforeEnter: () => "/about",
       }),
-      r.get("/counter", () => import("./pages/counter/index.tsx")),
-      r.get("/effects", () => import("./pages/effects/index.tsx")),
-      r.get("/keyed-list", () => import("./pages/keyed-list/index.tsx")),
-      r.get("/signals", () => import("./pages/signals/index.tsx")),
-      r.get("/style", () => import("./pages/style/index.tsx")),
-      r.get("/todos", () => import("./pages/todos/index.tsx")),
-      r.get("/navigation", () => import("./pages/navigation/index.tsx")),
-      r.get("/slow-target", {
+      r.page("/counter", () => import("./pages/counter/index.tsx")),
+      r.page("/effects", () => import("./pages/effects/index.tsx")),
+      r.page("/keyed-list", () => import("./pages/keyed-list/index.tsx")),
+      r.page("/signals", () => import("./pages/signals/index.tsx")),
+      r.page("/style", () => import("./pages/style/index.tsx")),
+      r.page("/todos", () => import("./pages/todos/index.tsx")),
+      r.page("/navigation", () => import("./pages/navigation/index.tsx")),
+      r.page("/slow-target", {
         component: async () => {
           await new Promise((resolve) => setTimeout(resolve, 400))
           return import("./pages/slow-target/index.tsx")
         },
       }),
-      r.get("/loaders/client", () => import("./pages/loaders/client.tsx")),
-      r.get("/loaders/universal", () =>
-        import("./pages/loaders/universal.tsx")
+      r.page("/loaders/client", () => import("./pages/loaders/client.tsx")),
+      r.page(
+        "/loaders/universal",
+        () => import("./pages/loaders/universal.tsx")
       ),
     ],
   })

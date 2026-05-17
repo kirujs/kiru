@@ -16,15 +16,15 @@ Roadmap focused on changes most likely to increase adoption and items that block
 
 These are adoption blockers or trust breakers if left open.
 
-| # | Item | Outcome | Notes |
-|---|------|---------|--------|
-| M1 | **Fix onboarding truth** | `create-kiru` SSR template and README describe Hono + `createRenderer`, not Vike. Templates match e2e/sandbox patterns. | Low effort; high first-impression impact. |
-| M2 | **Routing docs on kirujs.dev** | Single “Routing” section: mode matrix (CSR / SSG / SSR / hybrid), `defineRouteTree` API, guards, head/SEO, hydration (`bootstrapSsrClient` vs `RouterView`), remote actions, hybrid `prerenderedHtmlDir` dev vs prod. | Competes on docs, not features alone. |
-| M3 | **SSR query + hash parity** | `createRenderer` passes URL `search` and `hash` into `createStaticRouter`; hydrated client matches server HTML for pages that read `router.query` / `router.hash`. | Today `buildAppElement` hardcodes `query: {}`, `hash: ""`. |
-| M4 | **`pending` routes: implement or remove** | Either show scope/route `pending` UI during navigation (CSR + streaming SSR) or delete from types/manifest until ready. | API surface must not lie. |
-| M5 | **One deployment guide per mode** | Documented, CI-tested paths: static host (SSG), Node server (SSR), hybrid (SSG build + `createRenderer` + static assets). | No code in repo today mentions Vercel/CF/Netlify—pick **one** serverless adapter for SSR in M5b. |
-| M5b | **Reference serverless adapter** | Example: Cloudflare Workers or Vercel Edge using `createRenderer({ stream: true })` + asset binding. | Unblocks “where do I deploy?” |
-| M6 | **Unified client bootstrap API** | `createKiruApp({ mode, routes, container })` wrapping CSR mount vs `bootstrapSsrClient` / `bootstrapSsgClient`; deprecate foot-gun of hydrating with `RouterView` alone. | Reduces support burden; document in M2. |
+| #   | Item                                      | Outcome                                                                                                                                                                                                               | Notes                                                                                            |
+| --- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| M1  | **Fix onboarding truth**                  | `create-kiru` SSR template and README describe Hono + `createRenderer`, not Vike. Templates match e2e/sandbox patterns.                                                                                               | Low effort; high first-impression impact.                                                        |
+| M2  | **Routing docs on kirujs.dev**            | Single “Routing” section: mode matrix (CSR / SSG / SSR / hybrid), `defineRouteTree` API, guards, head/SEO, hydration (`bootstrapSsrClient` vs `RouterView`), remote actions, hybrid `prerenderedHtmlDir` dev vs prod. | Competes on docs, not features alone.                                                            |
+| M3  | **SSR query + hash parity**               | `createRenderer` passes URL `search` and `hash` into `createStaticRouter`; hydrated client matches server HTML for pages that read `router.query` / `router.hash`.                                                    | Today `buildAppElement` hardcodes `query: {}`, `hash: ""`.                                       |
+| M4  | **`pending` routes: implement or remove** | Either show scope/route `pending` UI during navigation (CSR + streaming SSR) or delete from types/manifest until ready.                                                                                               | API surface must not lie.                                                                        |
+| M5  | **One deployment guide per mode**         | Documented, CI-tested paths: static host (SSG), Node server (SSR), hybrid (SSG build + `createRenderer` + static assets).                                                                                             | No code in repo today mentions Vercel/CF/Netlify—pick **one** serverless adapter for SSR in M5b. |
+| M5b | **Reference serverless adapter**          | Example: Cloudflare Workers or Vercel Edge using `createRenderer({ stream: true })` + asset binding.                                                                                                                  | Unblocks “where do I deploy?”                                                                    |
+| M6  | **Unified client bootstrap API**          | `createKiruApp({ mode, routes, container })` wrapping CSR mount vs `bootstrapSsrClient` / `bootstrapSsgClient`; deprecate foot-gun of hydrating with `RouterView` alone.                                              | Reduces support burden; document in M2.                                                          |
 
 ---
 
@@ -54,9 +54,11 @@ What evaluators ask for in week one of a spike.
 **Proposed API (sketch):**
 
 ```ts
-r.get("/users/[id]", {
+r.page("/users/[id]", {
   component: () => import("./user"),
-  load: async ({ params, context, url }) => ({ user: await fetchUser(params.id, context) }),
+  load: async ({ params, context, url }) => ({
+    user: await fetchUser(params.id, context),
+  }),
 })
 ```
 
@@ -99,15 +101,15 @@ r.get("/users/[id]", {
 
 Not required for first spike, required for teams replacing an existing meta-framework.
 
-| Item | Outcome |
-|------|---------|
-| **Server middleware convention** | Document + types for `createRenderer` wrapper: auth, redirects, `setHeaders`, request ID. Optional `hooks.server.ts` pattern in templates. |
-| **`formAction` progressive enhancement** | Forms work without JS; document + e2e. |
-| **Trailing slash / base path policy** | Config on router + static path generation; hosting docs (e.g. Cloudflare Pages trailing slash). |
-| **Sitemap + robots from static paths** | Vite plugin hook: `generateStaticPaths` → `sitemap.xml` (and optional `robots.txt`). |
-| **JSON-LD / structured data** | Extend `RouteHeadMeta` or `<Head>` helper for `application/ld+json`. |
-| **Security defaults for remote actions** | CSRF/origin docs, env-based `secret`, template `.env.example`. |
-| **`@kiru/testing` router helpers** | `renderRoute(path)`, `navigate`, assert `document.head`—extract patterns from `router.test.tsx`. |
+| Item                                     | Outcome                                                                                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Server middleware convention**         | Document + types for `createRenderer` wrapper: auth, redirects, `setHeaders`, request ID. Optional `hooks.server.ts` pattern in templates. |
+| **`formAction` progressive enhancement** | Forms work without JS; document + e2e.                                                                                                     |
+| **Trailing slash / base path policy**    | Config on router + static path generation; hosting docs (e.g. Cloudflare Pages trailing slash).                                            |
+| **Sitemap + robots from static paths**   | Vite plugin hook: `generateStaticPaths` → `sitemap.xml` (and optional `robots.txt`).                                                       |
+| **JSON-LD / structured data**            | Extend `RouteHeadMeta` or `<Head>` helper for `application/ld+json`.                                                                       |
+| **Security defaults for remote actions** | CSRF/origin docs, env-based `secret`, template `.env.example`.                                                                             |
+| **`@kiru/testing` router helpers**       | `renderRoute(path)`, `navigate`, assert `document.head`—extract patterns from `router.test.tsx`.                                           |
 
 ---
 
@@ -163,12 +165,12 @@ flowchart TD
 
 **Suggested milestones:**
 
-| Milestone | Contents | Audience unlock |
-|-----------|----------|-----------------|
-| **v0.1 “Trust”** | M1, M2, M4, M3 | Honest eval; SSR apps with search params work |
-| **v0.2 “Deploy”** | M5, M5b, M6 | Ship to staging |
-| **v0.3 “Migrate”** | 1.1, 1.2, 1.3 | Teams port existing apps |
-| **v0.4 “Scale”** | 1.4, Phase 2 | Production hardening |
+| Milestone          | Contents       | Audience unlock                               |
+| ------------------ | -------------- | --------------------------------------------- |
+| **v0.1 “Trust”**   | M1, M2, M4, M3 | Honest eval; SSR apps with search params work |
+| **v0.2 “Deploy”**  | M5, M5b, M6    | Ship to staging                               |
+| **v0.3 “Migrate”** | 1.1, 1.2, 1.3  | Teams port existing apps                      |
+| **v0.4 “Scale”**   | 1.4, Phase 2   | Production hardening                          |
 
 ---
 
@@ -185,4 +187,4 @@ flowchart TD
 
 Create GitHub issues/epics per row (M1–M6, 1.1–1.4, Phase 2 items). Link PRs to this doc. Revisit Phase 3 quarterly based on issue demand and competitor moves.
 
-*Derived from router/SSG/CSR/SSR API analysis, May 2026.*
+_Derived from router/SSG/CSR/SSR API analysis, May 2026._

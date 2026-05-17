@@ -6,13 +6,14 @@ export const load = serverLoader(async (ctx) => ({
   greeting: `Hello from serverLoader`,
 }))
 
-export default function LoadersServerPage({ data, error }: PageProps<typeof load>) {
-  return () => (
+export default function LoadersServerPage({
+  data,
+  error,
+}: PageProps<typeof load>) {
+  return (
     <div className="space-y-2">
       <p data-testid="loader-data">
-        {error
-          ? error.message
-          : `${data.greeting} (${data.pathname})`}
+        {error ? error.message : `${data.greeting} (${data.pathname})`}
       </p>
     </div>
   )

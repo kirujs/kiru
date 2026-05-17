@@ -22,6 +22,8 @@ describe("site", () => {
     assert.deepStrictEqual(site.sitemap, {
       domain: "https://example.com",
       overrides: {},
+      include: [],
+      exclude: [],
     })
     assert.deepStrictEqual(site.robots, {})
   })
@@ -159,6 +161,19 @@ describe("site", () => {
       siteConfigModuleCandidates("/project/src/routes.ts"),
       ["/project/src/site.config.ts", "/project/src/site.config.js"]
     )
+  })
+
+  it("defineSite normalizes sitemap include and exclude paths", () => {
+    const site = defineSiteConfig({
+      url: "https://example.com",
+      sitemap: {
+        include: ["users/[id]"],
+        exclude: ["/guarded/"],
+      },
+    })
+    assert.ok(site.sitemap)
+    assert.deepStrictEqual(site.sitemap.include, ["/users/[id]"])
+    assert.deepStrictEqual(site.sitemap.exclude, ["/guarded"])
   })
 
   it("siteConfigModuleCandidates uses configured path when set", () => {

@@ -71,11 +71,16 @@ export function buildPageErrorProps(
 /** Run `load` and shape props for the page component (no loading state). */
 export async function resolvePagePropsFromModule(
   mod: unknown,
-  ctx: LoaderContext
+  ctx: LoaderContext,
+  options?: { useHydratedPageData?: boolean }
 ): Promise<PageProps<KiruLoader<unknown>> | Record<string, never>> {
   const load = readPageLoadExport(mod)
   if (!load) return {}
-  if (load.__kiruLoader === "server" && typeof document !== "undefined") {
+  if (
+    options?.useHydratedPageData !== false &&
+    load.__kiruLoader === "server" &&
+    typeof document !== "undefined"
+  ) {
     const hydrated = readHydratedPageData()
     if (hydrated !== undefined) {
       return buildPageProps(hydrated)

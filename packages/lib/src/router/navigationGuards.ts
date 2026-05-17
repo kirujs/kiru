@@ -24,7 +24,6 @@ export function onBeforeRouteUpdate(guard: NavigationGuard): void {
 
 /**
  * Runs after a navigation commits into the current route.
- * Prefer {@link onAfterRouteEnter} naming; `onBeforeRouteEnter` is kept as an alias.
  */
 export function onAfterRouteEnter(guard: NavigationGuard): void {
   const router = useRouter()
@@ -33,9 +32,3 @@ export function onAfterRouteEnter(guard: NavigationGuard): void {
   const unsub = register("enter", guard)
   onCleanup(unsub)
 }
-
-/** @deprecated Use {@link onAfterRouteEnter} — runs after the URL commits, not before. */
-export function onBeforeRouteEnter(guard: NavigationGuard): void {
-  onAfterRouteEnter(guard)
-}
-

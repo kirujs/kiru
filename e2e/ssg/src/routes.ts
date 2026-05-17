@@ -7,7 +7,7 @@ export const routes = defineRouteTree((r) =>
     layout: () => import("./pages/layout.tsx"),
     notFound: () => import("./pages/not-found"),
     children: [
-      r.get("/", {
+      r.page("/", {
         component: () => import("./pages/index.tsx"),
         head: {
           title: "E2E SSG Home",
@@ -18,7 +18,7 @@ export const routes = defineRouteTree((r) =>
           },
         },
       }),
-      r.get("/seo", {
+      r.page("/seo", {
         component: () => import("./pages/seo"),
         head: {
           title: "E2E SSG SEO",
@@ -29,19 +29,19 @@ export const routes = defineRouteTree((r) =>
           },
         },
       }),
-      r.get("/about", {
+      r.page("/about", {
         component: () => import("./pages/about"),
         head: { title: "E2E SSG About" },
       }),
-      r.get("/loaders/static", {
+      r.page("/loaders/static", {
         component: () => import("./pages/loaders-static"),
         head: { title: "E2E SSG static loader" },
       }),
-      r.get("/posts/[slug]", {
+      r.page("/posts/[slug]", {
         component: () => import("./pages/post"),
         head: { title: "E2E SSG Post {slug}" },
       }),
-      r.get("/posts/[slug]/comments/[id]", {
+      r.page("/posts/[slug]/comments/[id]", {
         component: () => import("./pages/comment"),
         head: { title: "Comment {id} on {slug}" },
       }),

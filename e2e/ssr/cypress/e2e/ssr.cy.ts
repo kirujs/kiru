@@ -5,10 +5,14 @@ describe("SSR server", () => {
   })
 
   it("renders serverLoader data on history back and forward", () => {
-    const port = Cypress.env("port")
     cy.intercept("POST", /\?loader=/).as("serverLoader")
 
-    cy.visit(`http://127.0.0.1:${port}/loaders/server`)
+    // Client navigation only — a full cy.visit() history entry restores SSR HTML on
+    // back without a ?loader= POST. Wait for hydration so Link uses the router.
+    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.contains("a", /^Server loader$/).click()
+    cy.wait("@serverLoader")
+    cy.location("pathname").should("eq", "/loaders/server")
     cy.get('[data-testid="loader-data"]').should(
       "contain",
       "server@/loaders/server"

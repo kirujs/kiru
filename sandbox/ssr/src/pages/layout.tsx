@@ -1,10 +1,10 @@
 import { signal } from "kiru"
-import { Link, onBeforeRouteEnter, onBeforeRouteUpdate } from "kiru/router"
+import { Link, onAfterRouteEnter, onBeforeRouteUpdate } from "kiru/router"
 
 const guardEvents = signal<string[]>([])
 
 export default function Layout() {
-  onBeforeRouteEnter((to) => {
+  onAfterRouteEnter((to) => {
     guardEvents.value = [...guardEvents.peek(), `enter:${to.pathname}`]
   })
   onBeforeRouteUpdate((to, from) => {

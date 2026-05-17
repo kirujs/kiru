@@ -8,7 +8,7 @@ import type {
 } from "./types.js"
 
 const routeBuilder: RouteBuilder = {
-  get(
+  page(
     path: string,
     value: RouteLoader | RouteDefinitionConfig
   ): RouteDefinition {

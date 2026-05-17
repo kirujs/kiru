@@ -8,6 +8,7 @@ import {
   defineRouteTree,
   fillRouteHtmlTemplate,
   generateStaticPaths,
+  generateSitemapPaths,
   buildSitemapXml,
   defineSiteConfig,
   defineHeadContent,
@@ -40,8 +41,8 @@ describe("router", () => {
         ),
       }),
       children: [
-        r.get("/", async () => ({ default: () => <h1>Home</h1> })),
-        r.get("/users/[id]", {
+        r.page("/", async () => ({ default: () => <h1>Home</h1> })),
+        r.page("/users/[id]", {
           static: true,
           component: async () => ({
             default: () => {
@@ -73,23 +74,20 @@ describe("router", () => {
       r.scope({
         static: true,
         children: [
-          r.get("/posts/[slug]", {
+          r.page("/posts/[slug]", {
             component: async () => ({
               default: () => <h1>post</h1>,
               generateStaticParams: () => [{ slug: "a" }, { slug: "b" }],
             }),
           }),
-          r.get("/posts/[slug]/comments/[id]", {
+          r.page("/posts/[slug]/comments/[id]", {
             component: async () => ({
               default: () => <h1>comment</h1>,
               generateStaticParams: ({
                 params,
               }: {
                 params: Record<string, string>
-              }) => [
-                { id: `${params.slug}-1` },
-                { id: `${params.slug}-2` },
-              ],
+              }) => [{ id: `${params.slug}-1` }, { id: `${params.slug}-2` }],
             }),
           }),
         ],
@@ -112,13 +110,13 @@ describe("router", () => {
       r.scope({
         static: true,
         children: [
-          r.get("/posts/[slug]", {
+          r.page("/posts/[slug]", {
             component: async () => ({
               default: () => null,
               generateStaticParams: () => [{ slug: "a" }],
             }),
           }),
-          r.get("/posts/[slug]/comments/[id]", {
+          r.page("/posts/[slug]/comments/[id]", {
             component: async () => ({
               default: () => null,
               generateStaticParams: () => [{ slug: "x", id: "1" }],
@@ -160,10 +158,10 @@ describe("router", () => {
       r.scope({
         static: true,
         children: [
-          r.get("/posts/[slug]", {
+          r.page("/posts/[slug]", {
             component: async () => ({ default: () => null }),
           }),
-          r.get("/posts/[slug]/comments/[id]", {
+          r.page("/posts/[slug]/comments/[id]", {
             component: async () => ({
               default: () => null,
               generateStaticParams: () => [{ id: "1" }],
@@ -185,7 +183,7 @@ describe("router", () => {
       r.scope({
         static: true,
         children: [
-          r.get("/items/[id]", {
+          r.page("/items/[id]", {
             component: async () => ({
               default: () => null,
               generateStaticParams: () => [{ id: "solo" }],
@@ -196,6 +194,86 @@ describe("router", () => {
     )
     const paths = await generateStaticPaths(compileRouteTree(solo))
     assert.deepStrictEqual(paths, ["/items/solo"])
+  })
+
+  it("generateSitemapPaths merges static, default SSR, and included dynamic paths", async () => {
+    const hybrid = defineRouteTree((r) =>
+      r.scope({
+        children: [
+          r.page("/", async () => ({ default: () => <h1>Home</h1> })),
+          r.page("/about", async () => ({ default: () => <h1>About</h1> })),
+          r.page("/docs", {
+            static: true,
+            component: async () => ({ default: () => <h1>Docs</h1> }),
+          }),
+          r.page("/users/[id]", {
+            component: async () => ({
+              default: () => <h1>User</h1>,
+              generateSitemapParams: () => [{ id: "1" }, { id: "2" }],
+            }),
+          }),
+          r.page("/private", async () => ({ default: () => <h1>Private</h1> })),
+        ],
+      })
+    )
+    const manifest = compileRouteTree(hybrid)
+    const site = defineSiteConfig({
+      url: "https://example.com",
+      sitemap: {
+        include: ["/users/[id]"],
+        exclude: ["/private"],
+      },
+    })
+    const paths = await generateSitemapPaths(manifest, site, {
+      defaultSsrPaths: true,
+    })
+    assert.deepStrictEqual(paths, [
+      "/",
+      "/about",
+      "/docs",
+      "/users/1",
+      "/users/2",
+    ])
+  })
+
+  it("generateSitemapPaths rejects unknown sitemap.include route", async () => {
+    const manifest = compileRouteTree(
+      defineRouteTree((r) =>
+        r.scope({
+          children: [r.page("/", async () => ({ default: () => null }))],
+        })
+      )
+    )
+    const site = defineSiteConfig({
+      url: "https://example.com",
+      sitemap: { include: ["/missing"] },
+    })
+    await assert.rejects(
+      () => generateSitemapPaths(manifest, site),
+      /sitemap\.include: no route/
+    )
+  })
+
+  it("generateSitemapPaths requires generateSitemapParams for included dynamic routes", async () => {
+    const manifest = compileRouteTree(
+      defineRouteTree((r) =>
+        r.scope({
+          children: [
+            r.page("/users/[id]", {
+              component: async () => ({ default: () => null }),
+            }),
+          ],
+        })
+      )
+    )
+    const site = defineSiteConfig({
+      url: "https://example.com",
+      sitemap: { include: ["/users/[id]"] },
+    })
+    await assert.rejects(
+      () => generateSitemapPaths(manifest, site),
+      /generateSitemapParams is missing/
+    )
   })
 
   it("generateStaticPaths applies trailingSlash always policy", async () => {
@@ -239,7 +317,7 @@ describe("router", () => {
     const r = defineRouteTree((x) =>
       x.scope({
         children: [
-          x.get("/schema", {
+          x.page("/schema", {
             component: async () => ({ default: () => <h1>Schema</h1> }),
             head: {
               title: "Schema page",
@@ -260,13 +338,13 @@ describe("router", () => {
       r.scope({
         static: true,
         children: [
-          r.get("/posts/[slug]", {
+          r.page("/posts/[slug]", {
             component: async () => ({
               default: () => <p>post</p>,
               generateStaticParams: () => [{ slug: "x" }],
             }),
           }),
-          r.get("/posts/[slug]/comments/[id]", {
+          r.page("/posts/[slug]/comments/[id]", {
             component: async () => ({
               default: () => <p>c</p>,
               generateStaticParams: ({
@@ -306,7 +384,7 @@ describe("router", () => {
           ),
         }),
         children: [
-          x.get("/", async () => ({
+          x.page("/", async () => ({
             default: () => {
               const ctx = useRequestContext() as any
               return <p>{ctx.user?.name}</p>
@@ -321,7 +399,7 @@ describe("router", () => {
     })
     assert.ok(response)
     assert.ok(response.body.includes("<p>John</p>"))
-    assert.ok(response.body.includes('k-request-context'))
+    assert.ok(response.body.includes("k-request-context"))
   })
 
   it("returns null when route is unmatched", async () => {
@@ -360,7 +438,7 @@ describe("router", () => {
           ),
         }),
         children: Array.from({ length: pageCount }, (_, i) =>
-          r.get(`/pages/${i}`, {
+          r.page(`/pages/${i}`, {
             component: async () => ({
               load: trackLoad,
               default: () => <p>{i}</p>,
@@ -397,7 +475,7 @@ describe("router", () => {
           ),
         }),
         children: [
-          r.get("/doc", {
+          r.page("/doc", {
             component: async () => ({ default: () => <p>x</p> }),
             head: { title: "LeafTitle", description: "from-leaf" },
           }),
@@ -422,7 +500,7 @@ describe("router", () => {
           ),
         }),
         children: [
-          x.get("/users/[id]", {
+          x.page("/users/[id]", {
             component: async () => ({
               default: () => {
                 const router = useRouter()
@@ -444,7 +522,7 @@ describe("router", () => {
       x.scope({
         head: { title: "Base" },
         children: [
-          x.get("/", {
+          x.page("/", {
             component: async () => ({
               head: defineHeadContent({ title: "Welcome!" }),
               default: () => <h1>Home</h1>,
@@ -465,7 +543,7 @@ describe("router", () => {
       x.scope({
         head: { title: "Base" },
         children: [
-          x.get("/product", {
+          x.page("/product", {
             component: async () => ({
               load,
               head: defineHeadContent<typeof load>((_ctx, { data }) => ({
@@ -510,7 +588,7 @@ describe("router", () => {
       x.scope({
         head: { title: "Route" },
         children: [
-          x.get("/loader", {
+          x.page("/loader", {
             component: async () => ({
               load,
               head: defineHeadContent({ title: "Static head" }),
@@ -557,7 +635,7 @@ describe("router", () => {
     }
     reader.releaseLock()
     assert.ok(out.includes('data-testid="load-fallback"'))
-    assert.ok(out.includes('__$k_data'))
+    assert.ok(out.includes("__$k_data"))
     assert.ok(out.includes('"ok":true'))
     assert.ok(
       !out.includes('data-testid="ok"'),
@@ -576,7 +654,7 @@ describe("router", () => {
             </main>
           ),
         }),
-        children: [x.get("/", async () => ({ default: () => <p>home</p> }))],
+        children: [x.page("/", async () => ({ default: () => <p>home</p> }))],
       })
     )
     const renderer = createRenderer({ routes: r })
@@ -633,8 +711,8 @@ describe("router", () => {
     const r = defineRouteTree((x) =>
       x.scope({
         children: [
-          x.get("/about", async () => ({ default: () => <p>about</p> })),
-          x.get("/users/[id]", {
+          x.page("/about", async () => ({ default: () => <p>about</p> })),
+          x.page("/users/[id]", {
             component: async () => ({ default: () => <p>user</p> }),
             beforeEnter: (to) => {
               if (to.params.id === "0") return "/about"
@@ -658,8 +736,8 @@ describe("router", () => {
     const guarded = defineRouteTree((x) =>
       x.scope({
         children: [
-          x.get("/", async () => ({ default: () => <p>ok</p> })),
-          x.get("/blocked", {
+          x.page("/", async () => ({ default: () => <p>ok</p> })),
+          x.page("/blocked", {
             component: async () => ({ default: () => <p>no</p> }),
             beforeEnter: () => false,
           }),
@@ -689,7 +767,7 @@ describe("router", () => {
     const r = defineRouteTree((x) =>
       x.scope({
         children: [
-          x.get("/users/[id]", async () => ({
+          x.page("/users/[id]", async () => ({
             default: () => {
               const router = useRouter()
               return (
@@ -734,7 +812,7 @@ describe("router", () => {
       routes: manifest,
       history,
       location,
-      baseUrl: "/app",
+      pathPolicy: { baseUrl: "/app" },
     })
     router.navigate("/users/1")
     await new Promise((r) => setTimeout(r, 0))
@@ -762,7 +840,7 @@ describe("router", () => {
         notFound: async () => ({
           default: () => <p>missing</p>,
         }),
-        children: [x.get("/", async () => ({ default: () => <p>ok</p> }))],
+        children: [x.page("/", async () => ({ default: () => <p>ok</p> }))],
       })
     )
     const renderer = createRenderer({ routes: nfRoutes })
@@ -785,7 +863,7 @@ describe("router", () => {
           ),
         }),
         children: [
-          x.get("/break", async () => ({
+          x.page("/break", async () => ({
             default: () => {
               throw new Error("boom-matched")
             },
@@ -829,7 +907,7 @@ describe("router", () => {
           ),
         }),
         children: [
-          x.get("/", async () => ({
+          x.page("/", async () => ({
             default: () => <p>ok</p>,
           })),
         ],
@@ -857,7 +935,7 @@ describe("router", () => {
           ),
         }),
         children: [
-          x.get("/bad", async () => ({
+          x.page("/bad", async () => ({
             default: () => {
               throw new Error("sink")
             },
@@ -891,7 +969,7 @@ describe("router", () => {
     const plain = defineRouteTree((x) =>
       x.scope({
         children: [
-          x.get("/x", async () => ({
+          x.page("/x", async () => ({
             default: () => {
               throw new Error("silent")
             },
@@ -925,7 +1003,7 @@ describe("router", () => {
           default: () => <p>wrong-scope-error</p>,
         }),
         children: [
-          x.get("/deep", {
+          x.page("/deep", {
             error: async () => ({
               default: ({ error }: { error: Error }) => (
                 <p>caught-leaf-{error.message}</p>
@@ -964,7 +1042,7 @@ describe("router", () => {
               ),
             }),
             children: [
-              x.get("/inner-fail", async () => ({
+              x.page("/inner-fail", async () => ({
                 default: () => {
                   throw new Error("no-leaf-error")
                 },
@@ -994,7 +1072,7 @@ describe("router", () => {
           ),
         }),
         children: [
-          x.get("/se", async () => ({
+          x.page("/se", async () => ({
             default: () => {
               throw new Error("tpl")
             },
@@ -1029,7 +1107,7 @@ describe("router", () => {
           ),
         }),
         children: [
-          x.get("/", async () => ({
+          x.page("/", async () => ({
             default: () => <p>home</p>,
           })),
         ],
@@ -1054,7 +1132,7 @@ describe("router", () => {
     const badLoader = defineRouteTree((x) =>
       x.scope({
         children: [
-          x.get("/z", {
+          x.page("/z", {
             error: async () => {
               throw new Error("loader-broke")
             },
@@ -1079,7 +1157,7 @@ describe("router", () => {
     const routesNoRootErr = defineRouteTree((x) =>
       x.scope({
         children: [
-          x.get("/", async () => ({
+          x.page("/", async () => ({
             default: () => <p>home</p>,
           })),
         ],
@@ -1138,7 +1216,7 @@ describe("router", () => {
     const r = defineRouteTree((x) =>
       x.scope({
         children: [
-          x.get("/loader", {
+          x.page("/loader", {
             component: async () => ({
               load,
               default: () => <p data-testid="ok">ok</p>,
@@ -1162,11 +1240,7 @@ describe("router", () => {
       out += next.value
     }
     reader.releaseLock()
-    assert.ok(
-      out.includes(
-        `<script type="application/json" k-page-data>`
-      )
-    )
+    assert.ok(out.includes(`<script type="application/json" k-page-data>`))
     assert.ok(out.includes('"pathname":"/loader"'))
     assert.ok(out.includes('"note":"from-server"'))
   })

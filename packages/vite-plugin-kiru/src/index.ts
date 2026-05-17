@@ -522,7 +522,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           siteConfigModuleCandidates,
           prerenderStaticRoutes,
           compileRouteTree,
-          generateStaticPaths,
+          discoverRouteBuildMeta,
+          generateSitemapPaths,
           writeSiteArtifacts,
         } = (await vite.ssrLoadModule(
           "kiru/router"
@@ -609,13 +610,23 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
 
         if (site?.sitemap || site?.robots) {
           const manifest = compileRouteTree(routes)
-          const staticPaths = await generateStaticPaths(
-            manifest,
-            site.pathPolicy
-          )
+          const loadPageModule = async (route: {
+            component: () => Promise<unknown>
+          }) => route.component()
+          const buildMeta = site.sitemap
+            ? await discoverRouteBuildMeta(manifest, loadPageModule, {
+                includeRoutePaths: site.sitemap.include,
+              })
+            : undefined
+          const sitemapPaths = site.sitemap
+            ? await generateSitemapPaths(manifest, site, {
+                defaultSsrPaths: Boolean(state.router.serverEntry),
+                buildMeta,
+              })
+            : []
           await writeSiteArtifacts({
             outDir: state.outDir,
-            paths: staticPaths,
+            paths: sitemapPaths,
             site,
             buildDate: new Date().toISOString().slice(0, 10),
           })

@@ -7,7 +7,7 @@ export const routes = defineRouteTree((r) =>
     notFound: () => import("./pages/not-found"),
     error: () => import("./pages/error-page"),
     children: [
-      r.get("/", {
+      r.page("/", {
         component: () => import("./pages/index.tsx"),
         head: {
           title: "E2E SSR Home",
@@ -18,68 +18,68 @@ export const routes = defineRouteTree((r) =>
           },
         },
       }),
-      r.get("/seo", {
+      r.page("/seo", {
         component: () => import("./pages/seo"),
         head: {
           title: "E2E SSR SEO",
           jsonLd: { "@type": "WebPage", name: "E2E SSR SEO" },
         },
       }),
-      r.get("/head-override", {
+      r.page("/head-override", {
         component: () => import("./pages/head-override"),
         head: { title: "E2E SSR From route definition" },
       }),
-      r.get("/hello", {
+      r.page("/hello", {
         component: () => import("./pages/hello.tsx"),
         head: { title: "E2E SSR Hello" },
       }),
-      r.get("/loaders/server", {
+      r.page("/loaders/server", {
         component: () => import("./pages/loaders-server"),
         head: { title: "E2E SSR server loader" },
       }),
-      r.get(
+      r.page(
         "/loaders/server-immediate-shell",
         () => import("./pages/loaders-server-immediate-shell")
       ),
-      r.get("/about", {
+      r.page("/about", {
         component: () => import("./pages/about"),
         head: { title: "E2E SSR About" },
       }),
-      r.get("/docs", {
+      r.page("/docs", {
         static: true,
         component: () => import("./pages/docs"),
         head: { title: "E2E SSR Docs (static)" },
       }),
-      r.get("/users/[id]", {
+      r.page("/users/[id]", {
         component: () => import("./pages/user"),
         head: { title: "E2E SSR User {id}" },
       }),
-      r.get("/streaming-test", {
+      r.page("/streaming-test", {
         component: () => import("./pages/streaming-test"),
         head: { title: "E2E SSR Streaming test" },
       }),
-      r.get("/nested-streaming-test", {
+      r.page("/nested-streaming-test", {
         component: () => import("./pages/nested-streaming-test"),
         head: { title: "E2E SSR Nested streaming test" },
       }),
-      r.get("/guarded", {
+      r.page("/guarded", {
         component: async () => ({
           default: () => "This page should be redirected away.",
         }),
         beforeEnter: () => "/",
         head: { title: "Guarded Route" },
       }),
-      r.get("/blocked", {
+      r.page("/blocked", {
         component: async () => ({
           default: () => "If you see this, leave guard failed.",
         }),
         head: { title: "Blocked Route" },
       }),
-      r.get("/ssr-break", {
+      r.page("/ssr-break", {
         component: () => import("./pages/ssr-break"),
         head: { title: "SSR error (scope)" },
       }),
-      r.get("/ssr-break-leaf", {
+      r.page("/ssr-break-leaf", {
         component: () => import("./pages/ssr-break-leaf"),
         error: () => import("./pages/leaf-error-page"),
         head: { title: "SSR error (leaf)" },

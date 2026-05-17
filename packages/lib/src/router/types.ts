@@ -34,9 +34,16 @@ export interface GenerateStaticParamsContext {
   params: Record<string, string>
 }
 
+/** Used for static routes. */
 export type GenerateStaticParams = (
   ctx: GenerateStaticParamsContext
 ) => Promise<Array<Record<string, string>>> | Array<Record<string, string>>
+
+/** Used for `sitemap.include` routes. */
+export type GenerateSitemapParams = (
+  ctx: GenerateSitemapParamsContext
+) => Promise<Array<Record<string, string>>> | Array<Record<string, string>>
+export type GenerateSitemapParamsContext = GenerateStaticParamsContext
 
 /** Declarative SEO / document metadata (layout + route merge; child overrides). */
 export interface RouteHeadMeta {
@@ -162,7 +169,10 @@ export interface RouteScopeDefinition {
 export type RouteNodeDefinition = RouteDefinition | RouteScopeDefinition
 
 export interface RouteBuilder {
-  get(path: string, value: RouteLoader | RouteDefinitionConfig): RouteDefinition
+  page(
+    path: string,
+    value: RouteLoader | RouteDefinitionConfig
+  ): RouteDefinition
   scope(config: {
     static?: boolean
     layout?: RouteLoader

@@ -29,6 +29,15 @@ if (fs.existsSync(sitemapXml)) {
   if (!xml.includes("/docs")) {
     errors.push("sitemap.xml missing hybrid static /docs path")
   }
+  if (!xml.includes("<loc>https://e2e-ssr.example/</loc>")) {
+    errors.push("sitemap.xml missing default SSR home path")
+  }
+  if (!xml.includes("/users/1")) {
+    errors.push("sitemap.xml missing sitemap.include /users/[id] expansion")
+  }
+  if (xml.includes("/ssr-break")) {
+    errors.push("sitemap.xml should exclude /ssr-break via sitemap.exclude")
+  }
 }
 if (!fs.existsSync(serverEntry)) {
   errors.push(`missing SSR bundle ${path.relative(e2eRoot, serverEntry)}`)

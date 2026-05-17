@@ -18,10 +18,15 @@ export default function SeoSsrPage() {
         For hybrid apps, add{" "}
         <code className="rounded bg-slate-800 px-1">src/site.config.ts</code>{" "}
         with{" "}
-        <code className="rounded bg-slate-800 px-1">defineSiteConfig</code> —
-        the Vite plugin emits sitemap/robots at build time for static paths
-        (see <code className="rounded bg-slate-800 px-1">dist/client</code>{" "}
-        after build).
+        <code className="rounded bg-slate-800 px-1">defineSiteConfig</code>.
+        The Vite plugin writes sitemap/robots at build time: prerendered{" "}
+        <code className="rounded bg-slate-800 px-1">static: true</code> paths,
+        all param-less SSR routes when{" "}
+        <code className="rounded bg-slate-800 px-1">router.serverEntry</code> is
+        set, and dynamic routes listed in{" "}
+        <code className="rounded bg-slate-800 px-1">sitemap.include</code> via{" "}
+        <code className="rounded bg-slate-800 px-1">generateSitemapParams</code>{" "}
+        on the page module.
       </p>
     </div>
   )

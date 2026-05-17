@@ -1,4 +1,8 @@
-import { useRouter } from "kiru/router"
+import { useRouter, type GenerateSitemapParamsContext } from "kiru/router"
+
+export function generateSitemapParams(_ctx: GenerateSitemapParamsContext) {
+  return [{ id: "1" }]
+}
 
 export default function UserPage() {
   const router = useRouter()

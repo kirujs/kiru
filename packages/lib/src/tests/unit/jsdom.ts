@@ -1,5 +1,4 @@
 import { JSDOM } from "jsdom"
-import { createKiruGlobalContext } from "../../globalContext.js"
 
 type GlobalKey =
   | "window"
@@ -18,11 +17,16 @@ type GlobalDescriptorState = {
   descriptor?: PropertyDescriptor
 }
 
+export type WithJSDOMOptions = {
+  url?: string
+}
+
 export async function withJSDOM(
   testBody: (
     container: HTMLElement,
     kiru: typeof import("../../index.js")
-  ) => void | Promise<void>
+  ) => void | Promise<void>,
+  options: WithJSDOMOptions = {}
 ) {
   const previous = new Map<GlobalKey, GlobalDescriptorState>()
   const remember = (key: GlobalKey) => {
@@ -41,7 +45,7 @@ export async function withJSDOM(
   }
 
   const dom = new JSDOM(`<!doctype html><html><body></body></html>`, {
-    url: "http://localhost/",
+    url: options.url ?? "http://localhost/",
     pretendToBeVisual: true,
   })
 
@@ -61,7 +65,9 @@ export async function withJSDOM(
   )
   assignGlobal("cancelAnimationFrame", window.cancelAnimationFrame.bind(window))
 
+  const { createKiruGlobalContext } = await import("../../globalContext.js")
   window.__kiru = createKiruGlobalContext()
+  
   const container = document.createElement("div")
   document.body.appendChild(container)
   const kiru = await import("../../index.js")

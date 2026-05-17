@@ -39,6 +39,13 @@ export interface SitemapOptionsInput {
   priority?: number
   lastmod?: string
   overrides?: Record<string, SitemapUrlOverride>
+  /**
+   * Route path templates to expand via `generateSitemapParams` on the page module
+   * (e.g. `"/users/[id]"`). Parent templates must be listed for nested dynamic routes.
+   */
+  include?: string[]
+  /** Pathname templates to omit after merging static, SSR default, and included paths. */
+  exclude?: string[]
 }
 
 export interface SitemapOptions {
@@ -48,6 +55,8 @@ export interface SitemapOptions {
   priority?: number
   lastmod?: string
   overrides: Record<string, SitemapUrlOverride>
+  include: string[]
+  exclude: string[]
 }
 
 export interface RobotsOptions {
@@ -94,6 +103,11 @@ function normalizeSitemapOverrides(
   return out
 }
 
+function normalizeSitemapPathList(paths?: string[]): string[] {
+  if (!paths?.length) return []
+  return paths.map((p) => normalizePathname(p))
+}
+
 function normalizeSitemapOptions(
   input: SitemapOptionsInput,
   siteUrl: string
@@ -101,6 +115,8 @@ function normalizeSitemapOptions(
   const opts: SitemapOptions = {
     domain: parseHttpOrigin(input.domain ?? siteUrl, "sitemap.domain"),
     overrides: normalizeSitemapOverrides(input.overrides),
+    include: normalizeSitemapPathList(input.include),
+    exclude: normalizeSitemapPathList(input.exclude),
   }
   if (input.changefreq !== undefined) opts.changefreq = input.changefreq
   if (input.priority !== undefined) opts.priority = input.priority
@@ -311,11 +327,4 @@ export function siteConfigModuleCandidates(
   }
   const dir = routesModulePath.replace(/\\/g, "/").replace(/\/[^/]+$/, "")
   return DEFAULT_SITE_CONFIG_BASENAMES.map((name) => `${dir}/${name}`)
-}
-
-/**
- * @deprecated Use {@link siteConfigModuleCandidates} — returns the first default basename only.
- */
-export function resolveSiteModulePath(routesModulePath: string): string {
-  return siteConfigModuleCandidates(routesModulePath)[0]!
 }

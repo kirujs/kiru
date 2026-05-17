@@ -251,23 +251,17 @@ export function createRouter({
   routes,
   history = window.history,
   location = window.location,
-  baseUrl = "/",
   pathPolicy,
   transition = false,
 }: {
   routes: RouteTreeDefinition | RouteManifest
   history?: History
   location?: Location
-  /** @deprecated Prefer `pathPolicy.baseUrl` */
-  baseUrl?: string
   pathPolicy?: RouterPathPolicy
   transition?: boolean
 }): Router {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
-  const resolvedPathPolicy = resolvePathPolicy({
-    ...pathPolicy,
-    baseUrl: pathPolicy?.baseUrl ?? baseUrl,
-  })
+  const resolvedPathPolicy = resolvePathPolicy(pathPolicy)
   const normalizedBaseUrl = resolvedPathPolicy.baseUrl
   const initialPathname = pathFromLocation(location, normalizedBaseUrl)
   const origin =
@@ -850,20 +844,15 @@ export function createStaticRouter({
   pathname,
   hash = "",
   query = {},
-  baseUrl = "/",
   pathPolicy,
 }: {
   manifest: RouteManifest
   pathname: string
   hash?: string
   query?: RouterQuery
-  baseUrl?: string
   pathPolicy?: RouterPathPolicy
 }): Router {
-  const resolvedPathPolicy = resolvePathPolicy({
-    ...pathPolicy,
-    baseUrl: pathPolicy?.baseUrl ?? baseUrl,
-  })
+  const resolvedPathPolicy = resolvePathPolicy(pathPolicy)
   const path = signal(pathname)
   const params = signal<Record<string, string>>({})
   const hashSignal = signal(hash)

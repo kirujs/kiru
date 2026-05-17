@@ -9,19 +9,16 @@ import { headlessRender, HeadlessRenderContext } from "../headlessRender.js"
 
 const STREAMED_DATA_SETUP = `
 <script type="text/javascript">
-const d = document, w = window, m = (w["${STREAMED_DATA_EVENT}"] ??= new Map());
-w.__$k_data = (id, payload, ...descendants) => {
-  m.set(id, payload);
-  if (descendants.length) {
-    const pending = (w["${STREAMED_DATA_DESCENDANTS}"] ??= new Set());
-    for (let i = 0; i < descendants.length; i++) pending.add(descendants[i]);
-  }
-  w.dispatchEvent(new CustomEvent("${STREAMED_DATA_EVENT}", { detail: { id, ...payload } }));
+const e="${STREAMED_DATA_EVENT}",d=document,w=window,m=(w[e]??=new Map);
+w.__$k_data=(id,p,...a)=>{
+  m.set(id,p);
+  if(a.length){const s=(w["${STREAMED_DATA_DESCENDANTS}"]??=new Set);for(const x of a)s.add(x);}
+  w.dispatchEvent(new CustomEvent(e,{detail:{id,...p}}));
   d.currentScript.remove();
 };
-d.currentScript.remove()
+d.currentScript.remove();
 </script>
-`.replace(/\s+/g, " ")
+`.replace(/\r?\n/g, "")
 
 function withStreamRenderMode<T>(fn: () => T): T {
   const prev = renderMode.current

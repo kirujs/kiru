@@ -22,10 +22,8 @@ export function resolveMaxConcurrentRenders(
 }
 
 export const defaultEsBuildOptions: ESBuildOptions = {
-  jsxInject: `import { createElement as _jsx, Fragment as _jsxFragment } from "kiru"`,
-  jsx: "transform",
-  jsxFactory: "_jsx",
-  jsxFragment: "_jsxFragment",
+  jsx: "automatic",
+  jsxImportSource: "kiru",
   loader: "tsx",
   include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
 }

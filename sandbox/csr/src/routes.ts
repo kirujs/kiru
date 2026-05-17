@@ -4,12 +4,13 @@ export const routes = defineRouteTree((r) =>
   r.scope({
     layout: () => import("./pages/layout.tsx"),
     children: [
-      r.get("/", () => import("./pages/home.tsx")),
-      r.get("/about", () => import("./pages/about.tsx")),
-      r.get("/navigation", () => import("./pages/navigation.tsx")),
-      r.get("/loaders/client", () => import("./pages/loaders-client.tsx")),
-      r.get("/loaders/universal", () =>
-        import("./pages/loaders-universal.tsx")
+      r.page("/", () => import("./pages/home.tsx")),
+      r.page("/about", () => import("./pages/about.tsx")),
+      r.page("/navigation", () => import("./pages/navigation.tsx")),
+      r.page("/loaders/client", () => import("./pages/loaders-client.tsx")),
+      r.page(
+        "/loaders/universal",
+        () => import("./pages/loaders-universal.tsx")
       ),
     ],
   })

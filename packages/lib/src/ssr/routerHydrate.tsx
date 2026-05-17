@@ -13,10 +13,8 @@ import {
   readHydratedRequestContext,
   RequestContextProvider,
 } from "../router/requestContext.js"
-import { readHydratedPageData } from "../router/pageData.js"
 import {
   buildLoaderContext,
-  buildPageProps,
   resolvePagePropsFromModule,
 } from "../router/runPageLoad.js"
 import {
@@ -152,7 +150,8 @@ async function prepareClientRouteForMatch(
   },
   pathname: string,
   router: ReturnType<typeof createRouter>,
-  routeModule: RouteModule
+  routeModule: RouteModule,
+  options?: { useHydratedPageData?: boolean }
 ): Promise<{ routeModule: RouteModule; leafProps: LeafRouteProps }> {
   const pageMod = await routeMatch.route.component()
   const load = readPageLoadExport(pageMod)
@@ -175,10 +174,9 @@ async function prepareClientRouteForMatch(
     }
   }
 
-  const hydrated = readHydratedPageData()
-  const leafProps = hydrated !== undefined
-    ? buildPageProps(hydrated)
-    : await resolvePagePropsFromModule(pageMod, loaderCtx)
+  const leafProps = await resolvePagePropsFromModule(pageMod, loaderCtx, {
+    useHydratedPageData: options?.useHydratedPageData ?? true,
+  })
   return { routeModule, leafProps: leafProps as LeafRouteProps }
 }
 
@@ -214,7 +212,8 @@ export async function bootstrapSsrClient(
       match,
       pathname,
       router,
-      first.routeModule
+      first.routeModule,
+      { useHydratedPageData: true }
     )
     if (typeof document !== "undefined") {
       await syncDocumentHeadForPage(
@@ -249,7 +248,8 @@ export async function bootstrapSsrClient(
           match,
           router.pathname.peek(),
           router,
-          tree.routeModule
+          tree.routeModule,
+          { useHydratedPageData: false }
         )
         if (e !== epoch) return
         routeModule = prepared.routeModule

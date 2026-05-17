@@ -6,6 +6,9 @@ import { defineSiteConfig } from "kiru/router"
  */
 export const site = defineSiteConfig({
   url: "https://kiru-ssr-sandbox.example",
-  sitemap: true,
+  sitemap: {
+    include: ["/users/[id]"],
+    exclude: ["/break-ssr", "/break-ssr-leaf"],
+  },
   robots: true,
 })
