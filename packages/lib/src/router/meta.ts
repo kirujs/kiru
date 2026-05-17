@@ -5,6 +5,15 @@ import {
 } from "./pathPolicy.js"
 import type { RouteHeadMeta } from "./types.js"
 
+/** Comment markers bounding Kiru-managed head output (SSR + CSR sync). */
+export const KIRU_HEAD_COMMENT_START = "kiru:head"
+export const KIRU_HEAD_COMMENT_END = "/kiru:head"
+
+export function wrapKiruHeadHtml(inner: string): string {
+  if (!inner.trim()) return ""
+  return `<!-- ${KIRU_HEAD_COMMENT_START} -->${inner}<!-- ${KIRU_HEAD_COMMENT_END} -->`
+}
+
 function mergeExtraMeta(
   base?: Array<Record<string, string>>,
   override?: Array<Record<string, string>>
@@ -135,16 +144,78 @@ function escJsonLdScript(json: string): string {
   return json.replace(/</g, "\\u003c")
 }
 
-/**
- * Returns HTML fragment for inside <head> (no <title> wrapper duplication if title empty).
- */
-export function serializeDocumentHead(
+type HeadContentContext = {
+  pathname?: string
+  origin?: string
+  pathPolicy?: RouterPathPolicy
+}
+
+/** Stable snapshot for CSR head sync (skip DOM work when it matches live head). */
+export function buildHeadContentSnapshot(
   head: RouteHeadMeta,
-  context?: {
-    pathname?: string
-    origin?: string
-    pathPolicy?: RouterPathPolicy
+  context?: HeadContentContext
+): Record<string, unknown> {
+  const pathname = formatPathname(context?.pathname ?? "/", context?.pathPolicy)
+  const origin = context?.origin ?? ""
+  const pathPolicy = context?.pathPolicy
+  const abs = (url: string | undefined) => {
+    if (!url) return undefined
+    if (url.startsWith("http://") || url.startsWith("https://")) return url
+    if (url.startsWith("/") && origin)
+      return absoluteRouteUrl(origin, url, pathPolicy)
+    return url
   }
+
+  const snap: Record<string, unknown> = {}
+  if (head.title) snap.title = head.title
+  if (head.description) snap.description = head.description
+  if (head.robots) snap.robots = head.robots
+  if (head.canonical) snap.canonical = abs(head.canonical) ?? head.canonical
+
+  const og = head.openGraph
+  if (og) {
+    const row: Record<string, string> = {}
+    if (og.title) row.title = og.title
+    if (og.description) row.description = og.description
+    if (og.image) row.image = abs(og.image) ?? og.image
+    const ogUrl = og.url
+      ? (abs(og.url) ?? og.url)
+      : origin
+        ? absoluteRouteUrl(origin, pathname, pathPolicy)
+        : ""
+    if (ogUrl) row.url = ogUrl
+    snap.openGraph = row
+  }
+
+  const tw = head.twitter
+  if (tw) {
+    const row: Record<string, string> = {}
+    if (tw.card) row.card = tw.card
+    if (tw.title) row.title = tw.title
+    if (tw.description) row.description = tw.description
+    if (tw.image) row.image = abs(tw.image) ?? tw.image
+    snap.twitter = row
+  }
+
+  if (head.extraMeta?.length) snap.extraMeta = head.extraMeta
+  if (head.links?.length) snap.links = head.links
+  if (head.jsonLd) snap.jsonLd = head.jsonLd
+  return snap
+}
+
+export function headContentFingerprint(
+  head: RouteHeadMeta,
+  context?: HeadContentContext
+): string {
+  return JSON.stringify(buildHeadContentSnapshot(head, context))
+}
+
+/**
+ * Returns the inner HTML placed between `<!-- kiru:head -->` markers.
+ */
+export function serializeDocumentHeadContent(
+  head: RouteHeadMeta,
+  context?: HeadContentContext
 ): string {
   const parts: string[] = []
   const pathname = formatPathname(context?.pathname ?? "/", context?.pathPolicy)
@@ -158,7 +229,9 @@ export function serializeDocumentHead(
     return url
   }
 
-  if (head.title) parts.push(`<title>${escText(head.title)}</title>`)
+  if (head.title) {
+    parts.push(`<title>${escText(head.title)}</title>`)
+  }
   if (head.description) {
     parts.push(
       `<meta name="description" content="${escAttr(head.description)}" />`
@@ -238,4 +311,18 @@ export function serializeDocumentHead(
   }
 
   return parts.join("\n    ")
+}
+
+/**
+ * Returns HTML fragment for inside <head>, including Kiru comment boundaries.
+ */
+export function serializeDocumentHead(
+  head: RouteHeadMeta,
+  context?: {
+    pathname?: string
+    origin?: string
+    pathPolicy?: RouterPathPolicy
+  }
+): string {
+  return wrapKiruHeadHtml(serializeDocumentHeadContent(head, context))
 }

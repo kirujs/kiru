@@ -56,6 +56,7 @@
     },
     "./remote": {
       "types": "./dist/remote/index.d.ts",
+      "browser": "./dist/remote/browser.js",
       "default": "./dist/remote/index.js"
     },
     "./jsx-dev-runtime": {

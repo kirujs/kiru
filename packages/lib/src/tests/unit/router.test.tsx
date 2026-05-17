@@ -140,6 +140,8 @@ describe("router", () => {
     })
     assert.ok(html.includes('type="application/ld+json"'))
     assert.ok(html.includes("WebPage"))
+    assert.ok(html.includes("<!-- kiru:head -->"))
+    assert.ok(html.includes("<!-- /kiru:head -->"))
   })
 
   it("builds sitemap xml from static paths", () => {
