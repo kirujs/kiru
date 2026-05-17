@@ -1,0 +1,47 @@
+import { Derive, resource } from "kiru"
+import type { StreamingProduct, StreamingReview } from "./index.actions"
+import { getStreamingProduct, getStreamingReviews } from "./index.actions"
+
+function ProductCard({ product }: { product: StreamingProduct }) {
+  const reviews = resource(({ signal }) =>
+    getStreamingReviews({ productId: product.id }, { signal })
+  )
+
+  return () => (
+    <div>
+      <Derive
+        from={reviews}
+        fallback={<p data-testid="reviews-fallback">Loading reviews...</p>}
+      >
+        {(items: StreamingReview[]) => (
+          <ul data-testid="reviews-list">
+            {items.map((review) => (
+              <li key={review.id} data-testid="review-item">
+                {review.text}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Derive>
+      <p data-testid="product-name">{product.name}</p>
+    </div>
+  )
+}
+
+export default function NestedStreamingTestPage() {
+  const product = resource(({ signal }) =>
+    getStreamingProduct(void 0, { signal })
+  )
+
+  return () => (
+    <section className="space-y-3" data-testid="nested-streaming-page">
+      <h2 className="text-xl font-semibold text-slate-100">Nested streaming</h2>
+      <Derive
+        from={product}
+        fallback={<p data-testid="product-fallback">Loading product...</p>}
+      >
+        {(p) => <ProductCard product={p} />}
+      </Derive>
+    </section>
+  )
+}

@@ -303,6 +303,11 @@ export interface SsrDevOptions {
    */
   loadRemoteRegistry?: () => Promise<void>
   /**
+   * Loads dev-only side-effect modules so server-loader POSTs are registered
+   * even when the target route has not been SSR-rendered yet.
+   */
+  loadLoaderRegistry?: () => Promise<void>
+  /**
    * Raw HTML snippets for `<head>` (e.g. Kiru devtools scripts), injected
    * before dev CSS link tags. Same markup as {@link transformIndexHtml} for
    * the devtools plugin hook.
@@ -326,6 +331,7 @@ export async function handleSsrDevRequest(
   opts: SsrDevOptions
 ): Promise<boolean> {
   await opts.loadRemoteRegistry?.()
+  await opts.loadLoaderRegistry?.()
   const appMod = await server.ssrLoadModule(opts.serverEntry)
   const exported = appMod?.default as
     | { fetch?: typeof fetch }

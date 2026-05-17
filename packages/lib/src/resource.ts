@@ -1,4 +1,8 @@
-import { $HMR_ACCEPT, STREAMED_DATA_EVENT } from "./constants.js"
+import {
+  $HMR_ACCEPT,
+  STREAMED_DATA_DESCENDANTS,
+  STREAMED_DATA_EVENT,
+} from "./constants.js"
 import { hydrationMode, node, renderMode } from "./globals.js"
 import { Signal, signal } from "./signals/base.js"
 import { executeWithTracking } from "./signals/tracking.js"
@@ -31,6 +35,79 @@ export interface ResourceLoaderContext {
 
 const resourceMeta = new WeakMap<Kiru.VNode, { id: string; index: number }>()
 
+let speculativeStreamPromiseCollector:
+  | ((promise: Kiru.StatefulPromise<unknown>) => void)
+  | null = null
+
+/** Records stream resource ids discovered during a speculative SSR subtree render. */
+export function withSpeculativeStreamPromiseCollector<T>(
+  collect: (promise: Kiru.StatefulPromise<unknown>) => void,
+  fn: () => T
+): T {
+  const prev = speculativeStreamPromiseCollector
+  speculativeStreamPromiseCollector = collect
+  try {
+    return fn()
+  } finally {
+    speculativeStreamPromiseCollector = prev
+  }
+}
+
+function getStreamedDataCache():
+  | Map<string, { data?: unknown; error?: string }>
+  | undefined {
+  if (typeof window === "undefined") return undefined
+  const map = (window as unknown as Record<string, unknown>)[STREAMED_DATA_EVENT]
+  if (
+    map == null ||
+    typeof map !== "object" ||
+    typeof (map as Map<string, unknown>).get !== "function"
+  ) {
+    return undefined
+  }
+  return map as Map<string, { data?: unknown; error?: string }>
+}
+
+/** True when the SSR stream setup script has primed the deferred-data map. */
+function isStreamedSsrClient(): boolean {
+  return getStreamedDataCache() !== undefined
+}
+
+function getAnnouncedStreamDescendants(): Set<string> | undefined {
+  if (typeof window === "undefined") return undefined
+  const pending = (window as unknown as Record<string, unknown>)[
+    STREAMED_DATA_DESCENDANTS
+  ]
+  if (
+    pending == null ||
+    typeof pending !== "object" ||
+    typeof (pending as Set<string>).has !== "function"
+  ) {
+    return undefined
+  }
+  return pending as Set<string>
+}
+
+function shouldResolveDeferredPromise(promiseId: string): boolean {
+  if (
+    renderMode.current === "hydrate" &&
+    hydrationMode.current === "dynamic"
+  ) {
+    return true
+  }
+  const announced = getAnnouncedStreamDescendants()
+  if (announced?.has(promiseId)) {
+    return true
+  }
+  // Post-hydration updates (e.g. nested Derive after a parent resource streams in)
+  // still need streamed payloads; hydrate mode is already back to "dom".
+  return isStreamedSsrClient() && promiseId.startsWith("k:")
+}
+
+function isRelevantStreamId(localId: string, streamId: string): boolean {
+  return localId === streamId || getAnnouncedStreamDescendants()?.has(streamId) === true
+}
+
 export function resource<T>(
   callback: (ctx: ResourceLoaderContext) => Promise<T>
 ): Resource<T>
@@ -61,7 +138,8 @@ export function resource<T, Source extends ResourceSource>(
     // likely cooked since we can't ensure modules are loaded in the same order,
   } else if (
     renderMode.current === "hydrate" ||
-    renderMode.current === "stream"
+    renderMode.current === "stream" ||
+    isStreamedSsrClient()
   ) {
     // hydrate or stream - create a deterministic id + index offset to use for promise hydration
     const { id, index } = resourceMeta.get(vNode) ?? {
@@ -122,7 +200,7 @@ export function resource<T, Source extends ResourceSource>(
     },
     refetch() {
       data.value = void 0 as T
-      resource.promise = createPromise()
+      resource.promise = createPromise(true)
     },
     dispose,
   })
@@ -148,7 +226,7 @@ export function resource<T, Source extends ResourceSource>(
     }
   }
 
-  function createPromise(): Kiru.StatefulPromise<T> {
+  function createPromise(forceFetch = false): Kiru.StatefulPromise<T> {
     controller.abort()
     const ctrl = (controller = new AbortController())
     isPending.value = true
@@ -159,11 +237,9 @@ export function resource<T, Source extends ResourceSource>(
           // if we're rendering to a string, there's no need to fire the callback
           promise = Promise.resolve() as Promise<T>
         } else if (
-          renderMode.current === "hydrate" &&
-          hydrationMode.current === "dynamic"
+          !forceFetch &&
+          shouldResolveDeferredPromise(promiseId)
         ) {
-          // if we're hydrating and the hydration mode is not static,
-          // we need to resolve the promise from cache/event
           promise = resolveDeferredPromise<T>(promiseId, ctrl.signal)
         } else {
           // stream / dom / (hydrate + static)
@@ -185,6 +261,16 @@ export function resource<T, Source extends ResourceSource>(
       id: promiseId,
       state: "pending",
     } satisfies Kiru.PromiseState<T>)
+
+    if (
+      renderMode.current === "stream" &&
+      promiseId.startsWith("k:") &&
+      speculativeStreamPromiseCollector
+    ) {
+      speculativeStreamPromiseCollector(
+        statefulPromise as Kiru.StatefulPromise<unknown>
+      )
+    }
 
     statefulPromise
       .then((value) => {
@@ -222,37 +308,74 @@ interface DeferredPromiseEventDetail<T> {
   error?: string
 }
 
+function consumeStreamedPayload<T>(
+  streamId: string,
+  deferralCache: Map<string, { data?: unknown; error?: string }>,
+  announced: Set<string> | undefined,
+  resolve: (value: T) => void,
+  reject: (reason: Error) => void
+): boolean {
+  const existing = deferralCache.get(streamId)
+  if (!existing) return false
+
+  deferralCache.delete(streamId)
+  announced?.delete(streamId)
+
+  const { data, error } = existing
+  if (error) {
+    reject(new Error(error))
+    return true
+  }
+  resolve(data as T)
+  return true
+}
+
 function resolveDeferredPromise<T>(
   id: string,
   signal: AbortSignal
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const deferralCache: Map<string, { data?: T; error?: string }> = // @ts-ignore
-      (window[STREAMED_DATA_EVENT] ??= new Map())
+    const deferralCache = getStreamedDataCache()
+    if (!deferralCache) {
+      return reject(new Error("Streamed SSR data cache is not available"))
+    }
 
-    const existing = deferralCache.get(id)
-    if (existing) {
-      const { data, error } = existing
-      deferralCache.delete(id)
-      if (error) return reject(error)
-      return resolve(data!)
+    const announced = getAnnouncedStreamDescendants()
+
+    if (consumeStreamedPayload(id, deferralCache, announced, resolve, reject)) {
+      return
+    }
+
+    if (announced) {
+      for (const streamId of announced) {
+        if (
+          consumeStreamedPayload(streamId, deferralCache, announced, resolve, reject)
+        ) {
+          return
+        }
+      }
     }
 
     const onDataEvent = (event: Event) => {
       const { detail } = event as CustomEvent<DeferredPromiseEventDetail<T>>
-      if (detail.id === id) {
-        deferralCache.delete(id)
-        window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
-        const { data, error } = detail
-        if (error) return reject(error)
-        resolve(data!)
+      if (!isRelevantStreamId(id, detail.id)) return
+      window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
+
+      if (
+        consumeStreamedPayload(detail.id, deferralCache, announced, resolve, reject)
+      ) {
+        return
       }
+
+      announced?.delete(detail.id)
+      if (detail.error) return reject(new Error(detail.error))
+      resolve(detail.data!)
     }
 
     window.addEventListener(STREAMED_DATA_EVENT, onDataEvent)
     signal.addEventListener("abort", () => {
       window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
-      reject()
+      reject(new Error("Aborted"))
     })
   })
 }

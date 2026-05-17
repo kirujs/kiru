@@ -62,6 +62,21 @@ type Derive = {
   ): (props: DeriveProps<T, U>) => JSX.Element
 }
 
+function readDerivableValue(from: Derivable): unknown {
+  if (isResource(from)) {
+    return from.value as unknown
+  }
+  if (Signal.isSignal(from)) {
+    return from.value as unknown
+  }
+  const out: Record<string, unknown> = {}
+  for (const key in from) {
+    const v = from[key]
+    out[key] = (v as Signal<unknown> | Kiru.StatefulPromise<unknown>).value
+  }
+  return out
+}
+
 /**
  * Derives a value from a signal or stateful promise and renders a child component.
  * @see https://kirujs.dev/docs/components/derive
@@ -70,32 +85,39 @@ export const Derive: Derive = () => {
   let prevSuccess: { value: unknown } | null
   return ({ from, children, fallback, mode }) => {
     const promises = new Set<Kiru.StatefulPromise<any>>()
-    let value: unknown
+    const value = readDerivableValue(from)
 
     if (isResource(from)) {
       promises.add(from.promise)
-      value = from.value as unknown
-    } else if (Signal.isSignal(from)) {
-      value = from.value as unknown
-    } else {
-      const out: Record<string, any> = {}
+    } else if (!Signal.isSignal(from)) {
       for (const key in from) {
         const v = from[key]
         if (isResource(v)) promises.add(v.promise)
-        out[key] = (v as Signal<unknown> | Kiru.StatefulPromise<unknown>).value
       }
-      value = out as unknown
     }
 
     if (promises.size === 0) {
       return (children as ChildFn<unknown>)(value)
     }
 
+    for (const p of promises) {
+      if (p.state === "rejected") {
+        throw p.error
+      }
+    }
+
+    const pending = [...promises].filter((p) => p.state === "pending")
+
     if (!sideEffectsEnabled()) {
+      if (pending.length === 0) {
+        return (children as ChildFnWithStale<unknown>)(value, false)
+      }
       throw {
         [$STREAM_DATA]: {
           fallback,
-          data: Array.from(promises),
+          data: pending,
+          continue: () =>
+            (children as ChildFnWithStale<unknown>)(readDerivableValue(from), false),
         },
       } satisfies StreamDataThrowValue
     }

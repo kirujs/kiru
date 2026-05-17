@@ -40,6 +40,7 @@ import type {
 } from "vite"
 
 const REMOTE_REGISTRY_VIRTUAL_ID = "virtual:kiru:remote-registry"
+const LOADER_REGISTRY_VIRTUAL_ID = "virtual:kiru:loader-registry"
 
 function isSsrBundleBuild(userConfig: UserConfig): boolean {
   const ssr = userConfig.build?.ssr
@@ -117,6 +118,28 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           return `${imports}\nexport {};`
         }
       }
+
+      if (state.router.serverEntry) {
+        state.loaderPagePaths = (
+          await glob("src/pages/**/*.{tsx,ts}", {
+            cwd: state.projectRoot,
+            absolute: true,
+            onlyFiles: true,
+          })
+        ).map((filePath) => filePath.replace(/\\/g, "/"))
+
+        virtualModules[LOADER_REGISTRY_VIRTUAL_ID] = () => {
+          const imports = state.loaderPagePaths
+            .map((filePath) => {
+              const viteId =
+                "/" +
+                path.relative(state.projectRoot, filePath).replace(/\\/g, "/")
+              return `import ${JSON.stringify(viteId)};`
+            })
+            .join("\n")
+          return `${imports}\nexport {};`
+        }
+      }
     },
     transformIndexHtml() {
       if (!state.devtoolsEnabled) return
@@ -161,12 +184,14 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         const templatePath = path
           .resolve(state.projectRoot, templateName)
           .replace(/\\/g, "/")
-        const invalidateRemoteRegistry = () => {
-          const mod = server.moduleGraph.getModuleById(
-            "\0" + REMOTE_REGISTRY_VIRTUAL_ID
-          )
+        const invalidateVirtualRegistry = (virtualId: string) => {
+          const mod = server.moduleGraph.getModuleById("\0" + virtualId)
           if (mod) server.moduleGraph.invalidateModule(mod)
         }
+        const invalidateRemoteRegistry = () =>
+          invalidateVirtualRegistry(REMOTE_REGISTRY_VIRTUAL_ID)
+        const invalidateLoaderRegistry = () =>
+          invalidateVirtualRegistry(LOADER_REGISTRY_VIRTUAL_ID)
         let serverEntryVersion = 0
         const getServerEntry = () =>
           serverEntryVersion === 0
@@ -197,6 +222,9 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           if (state.remotePaths.includes(resolvedFile)) {
             invalidateRemoteRegistry()
           }
+          if (state.loaderPagePaths.includes(resolvedFile)) {
+            invalidateLoaderRegistry()
+          }
         })
 
         server.middlewares.use(async (req, res, next) => {
@@ -221,6 +249,11 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
               loadRemoteRegistry: state.router.remote
                 ? async () => {
                     await server.ssrLoadModule(REMOTE_REGISTRY_VIRTUAL_ID)
+                  }
+                : undefined,
+              loadLoaderRegistry: state.router.serverEntry
+                ? async () => {
+                    await server.ssrLoadModule(LOADER_REGISTRY_VIRTUAL_ID)
                   }
                 : undefined,
             })
@@ -592,6 +625,15 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       preparePageLoaders(ctx, state!.projectRoot, !!options?.ssr)
       if (isRemote) {
         prepareRemoteFunctions(ctx, state!.projectRoot, !!options?.ssr)
+      }
+
+      const serverEntryAbs = state!.router.serverEntryAbs?.replace(/\\/g, "/")
+      if (
+        options?.ssr &&
+        serverEntryAbs &&
+        normalizedId === serverEntryAbs
+      ) {
+        code.prepend(`import ${JSON.stringify(LOADER_REGISTRY_VIRTUAL_ID)};\n`)
       }
 
       if (!code.hasChanged()) return null

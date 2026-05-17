@@ -1,19 +1,37 @@
 import { Fragment } from "../element.js"
 import { renderMode } from "../globals.js"
-import { STREAMED_DATA_EVENT } from "../constants.js"
+import {
+  STREAMED_DATA_DESCENDANTS,
+  STREAMED_DATA_EVENT,
+} from "../constants.js"
+import { withSpeculativeStreamPromiseCollector } from "../resource.js"
 import { headlessRender, HeadlessRenderContext } from "../headlessRender.js"
 
 const STREAMED_DATA_SETUP = `
 <script type="text/javascript">
 const d = document, w = window, m = (w["${STREAMED_DATA_EVENT}"] ??= new Map());
-w.__$k_data = (id, data) => {
-  m.set(id, data);
-  w.dispatchEvent(new CustomEvent("${STREAMED_DATA_EVENT}", { detail: { id, ...data } }));
+w.__$k_data = (id, payload, ...descendants) => {
+  m.set(id, payload);
+  if (descendants.length) {
+    const pending = (w["${STREAMED_DATA_DESCENDANTS}"] ??= new Set());
+    for (let i = 0; i < descendants.length; i++) pending.add(descendants[i]);
+  }
+  w.dispatchEvent(new CustomEvent("${STREAMED_DATA_EVENT}", { detail: { id, ...payload } }));
   d.currentScript.remove();
 };
 d.currentScript.remove()
 </script>
 `.replace(/\s+/g, " ")
+
+function withStreamRenderMode<T>(fn: () => T): T {
+  const prev = renderMode.current
+  renderMode.current = "stream"
+  try {
+    return fn()
+  } finally {
+    renderMode.current = prev
+  }
+}
 
 export interface RenderToReadableStreamOptions {
   /**
@@ -65,47 +83,105 @@ export function renderToReadableStream(
     resolveShellFlushed = r
   })
 
+  const speculativeByRoot = new Map<
+    Kiru.StatefulPromise<unknown>,
+    Promise<string[]>
+  >()
+
+  const onStreamData: HeadlessRenderContext["onStreamData"] = (data) => {
+    if (!didQueueStreamedDataSetup) {
+      // The setup script primes `window.__$k_data`. It must execute
+      // before any `__$k_data(...)` callsite, so it belongs in the
+      // shell (which is flushed first), not in the streamed data tail.
+      shellBuffer += STREAMED_DATA_SETUP
+      didQueueStreamedDataSetup = true
+    }
+    for (const promise of data) {
+      if (streamPromises.has(promise)) continue
+      streamPromises.add(promise)
+
+      const writePromise = Promise.all([
+        promise
+          .then(() => ({ data: promise.value }))
+          .catch(() => ({ error: promise.error?.message })),
+        speculativeByRoot.get(promise) ?? Promise.resolve([] as string[]),
+      ]).then(async ([payload, descendants]) => {
+        const dataArg = JSON.stringify(payload)
+        const descendantArgs = descendants
+          .map((id) => JSON.stringify(id))
+          .join(",")
+        // Hold each data-script enqueue until the shell is flushed,
+        // even if `onShellReady` is async. Without this, a fast-
+        // resolving promise could race ahead of the shell.
+        await shellFlushed
+        controller.enqueue(
+          `<script type="text/javascript">__$k_data("${promise.id}",${dataArg}${descendantArgs ? `,${descendantArgs}` : ""})</script>`
+        )
+      })
+
+      pendingWritePromises.push(writePromise)
+    }
+  }
+
+  let speculativeChain: Promise<void> = Promise.resolve()
+
+  const scheduleSpeculativeContinue: HeadlessRenderContext["scheduleSpeculativeContinue"] =
+    (pending, continueRender, anchorVNode) => {
+      const descendants: string[] = []
+      const trackDescendantStreamData: HeadlessRenderContext["onStreamData"] = (
+        data
+      ) => {
+        onStreamData(data)
+        for (const child of data) {
+          if (!descendants.includes(child.id)) {
+            descendants.push(child.id)
+          }
+        }
+      }
+
+      const specPromise: Promise<string[]> = Promise.all(pending)
+        .then(() => {
+          withStreamRenderMode(() =>
+            withSpeculativeStreamPromiseCollector((child) => {
+              if (!descendants.includes(child.id)) {
+                descendants.push(child.id)
+              }
+            }, () =>
+              headlessRender(
+                { ...speculativeCtx, onStreamData: trackDescendantStreamData },
+                continueRender(),
+                anchorVNode,
+                0
+              )
+            )
+          )
+          return descendants
+        })
+        .catch(() => [])
+
+      for (const p of pending) {
+        speculativeByRoot.set(p, specPromise)
+      }
+
+      speculativeChain = speculativeChain.then(() => specPromise).then(() => {})
+    }
+
   const ctx: HeadlessRenderContext = {
     write: (chunk) => {
       shellBuffer += chunk
     },
-    onStreamData(data) {
-      if (!didQueueStreamedDataSetup) {
-        // The setup script primes `window.__$k_data`. It must execute
-        // before any `__$k_data(...)` callsite, so it belongs in the
-        // shell (which is flushed first), not in the streamed data tail.
-        shellBuffer += STREAMED_DATA_SETUP
-        didQueueStreamedDataSetup = true
-      }
-      for (const promise of data) {
-        if (streamPromises.has(promise)) continue
-        streamPromises.add(promise)
-
-        const writePromise = promise
-          .then(() => ({ data: promise.value }))
-          .catch(() => ({ error: promise.error?.message }))
-          .then(async (value) => {
-            // Hold each data-script enqueue until the shell is flushed,
-            // even if `onShellReady` is async. Without this, a fast-
-            // resolving promise could race ahead of the shell.
-            await shellFlushed
-            controller.enqueue(
-              `<script type="text/javascript">__$k_data("${promise.id}",${JSON.stringify(value)})</script>`
-            )
-          })
-
-        pendingWritePromises.push(writePromise)
-      }
-    },
+    onStreamData,
+    scheduleSpeculativeContinue,
   }
 
-  const prev = renderMode.current
-  renderMode.current = "stream"
-  try {
-    headlessRender(ctx, rootNode)
-  } finally {
-    renderMode.current = prev
+  const speculativeCtx: HeadlessRenderContext = {
+    write: () => {},
+    onStreamData,
+    speculative: true,
+    scheduleSpeculativeContinue,
   }
+
+  withStreamRenderMode(() => headlessRender(ctx, rootNode))
 
   void (async () => {
     try {
@@ -121,6 +197,7 @@ export function renderToReadableStream(
       resolveShellFlushed()
     }
     try {
+      await speculativeChain
       await Promise.all(pendingWritePromises)
       controller.close()
     } catch (error) {

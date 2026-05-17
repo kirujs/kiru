@@ -17,3 +17,27 @@ export const getStreamingTodos = action(async () => {
   await new Promise((r) => setTimeout(r, 4000))
   return todos
 })
+
+export interface StreamingProduct {
+  id: string
+  name: string
+}
+
+export interface StreamingReview {
+  id: string
+  text: string
+}
+
+export const getStreamingProduct = action(async () => {
+  await new Promise((r) => setTimeout(r, 1000))
+  return { id: "p1", name: "Streaming Product" } satisfies StreamingProduct
+})
+
+export const getStreamingReviews = action(
+  async (_ctx, input: { productId: string }) => {
+    await new Promise((r) => setTimeout(r, 1000))
+    return [
+      { id: "r1", text: `Review for ${input.productId}` },
+    ] satisfies StreamingReview[]
+  }
+)

@@ -50,6 +50,10 @@ export const routes = defineRouteTree((r) =>
         component: () => import("./pages/streaming-test"),
         head: { title: "E2E SSR Streaming test" },
       }),
+      r.get("/nested-streaming-test", {
+        component: () => import("./pages/nested-streaming-test"),
+        head: { title: "E2E SSR Nested streaming test" },
+      }),
       r.get("/guarded", {
         component: async () => ({
           default: () => "This page should be redirected away.",

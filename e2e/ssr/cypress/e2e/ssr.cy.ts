@@ -302,6 +302,61 @@ describe("SSR server", () => {
     })
   })
 
+  describe("nested streaming SSR", () => {
+    const NESTED_STREAM_MS = 2000
+    const NESTED_TOTAL_MS = NESTED_STREAM_MS * 2
+
+    it("streams parent and nested resource data in one response", () => {
+      const port = Cypress.env("port")
+      cy.request({
+        url: `http://127.0.0.1:${port}/nested-streaming-test`,
+        timeout: NESTED_TOTAL_MS + 5000,
+      }).then((res) => {
+        expect(res.status).to.eq(200)
+        const dataScripts = res.body.match(/__\$k_data\("/g) ?? []
+        expect(dataScripts).to.have.length(2)
+        expect(res.body).to.include('data-testid="product-fallback"')
+        expect(res.body).not.to.include('data-testid="reviews-list"')
+      })
+    })
+
+    it("hydrates nested reviews after both resources resolve", () => {
+      const port = Cypress.env("port")
+      cy.visit(`http://127.0.0.1:${port}/nested-streaming-test`, {
+        timeout: NESTED_TOTAL_MS + 5000,
+      })
+      cy.get('[data-testid="reviews-list"]', {
+        timeout: NESTED_TOTAL_MS + 2000,
+      })
+        .find('[data-testid="review-item"]')
+        .should("have.length", 1)
+        .and("contain", "Review for p1")
+      cy.get('[data-testid="product-fallback"]').should("not.exist")
+      cy.get('[data-testid="reviews-fallback"]').should("not.exist")
+    })
+
+    it("can client-navigate to a server-loader route while streaming is pending", () => {
+      const port = Cypress.env("port")
+      cy.intercept("POST", /\?loader=/).as("serverLoader")
+
+      cy.visit(`http://127.0.0.1:${port}/nested-streaming-test`)
+      cy.get('[data-testid="product-fallback"]').should("be.visible")
+      cy.window()
+        .its("__kiruHydratedAt")
+        .should("be.a", "number")
+      cy.contains("a", "Server loader").click()
+
+      cy.wait("@serverLoader", { timeout: 10000 })
+        .its("response.statusCode")
+        .should("eq", 200)
+      cy.location("pathname").should("eq", "/loaders/server")
+      cy.get('[data-testid="loader-data"]').should(
+        "contain",
+        "server@/loaders/server"
+      )
+    })
+  })
+
   describe("SEO and structured data", () => {
     it("includes JSON-LD in SSR HTML", () => {
       const port = Cypress.env("port")

@@ -23,6 +23,12 @@ import { createElement } from "./element.js"
 export interface HeadlessRenderContext {
   write(chunk: string): void
   onStreamData?: (data: Kiru.StatefulPromise<unknown>[]) => void
+  speculative?: boolean
+  scheduleSpeculativeContinue?: (
+    pending: Kiru.StatefulPromise<unknown>[],
+    continueRender: () => JSX.Children,
+    anchorVNode: Kiru.VNode
+  ) => void
 }
 
 export function headlessRender(
@@ -131,8 +137,13 @@ export function headlessRender(
       return
     } catch (error) {
       if (isStreamDataThrowValue(error)) {
-        const { fallback, data } = error[$STREAM_DATA]
+        const { fallback, data, continue: continueRender } =
+          error[$STREAM_DATA]
+        ctx.scheduleSpeculativeContinue?.(data, continueRender, el)
         ctx.onStreamData?.(data)
+        if (ctx.speculative) {
+          return
+        }
         return headlessRender(ctx, fallback, el, 0)
       }
       throw error

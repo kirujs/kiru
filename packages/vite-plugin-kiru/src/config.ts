@@ -49,6 +49,8 @@ export interface PluginState {
   }
   staticProps: Record<string, Record<string, Record<string, any>>>
   remotePaths: string[]
+  /** Page modules scanned for `serverLoader` registration (SSR virtual registry). */
+  loaderPagePaths: string[]
   router: {
     ssg: null | {
       /** User pattern (may be a glob); also emitted to `kiru-route-manifest.json`. */
@@ -143,6 +145,9 @@ export function createPluginState(
     features: {
       staticHoisting: opts.experimental?.staticHoisting === true,
     },
+    staticProps: {},
+    remotePaths: [],
+    loaderPagePaths: [],
     router: {
       ssg: routesModule
         ? {
@@ -201,6 +206,7 @@ export function updatePluginState(
     },
     staticProps: {},
     remotePaths: [],
+    loaderPagePaths: state.loaderPagePaths ?? [],
     router: {
       ssg: state.router?.ssg ?? null,
       serverEntry: state.router?.serverEntry ?? null,

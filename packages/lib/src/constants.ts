@@ -10,6 +10,7 @@ export {
   $DEV_FILE_LINK,
   CONSECUTIVE_DIRTY_LIMIT,
   STREAMED_DATA_EVENT,
+  STREAMED_DATA_DESCENDANTS,
   EVENT_PREFIX_REGEX,
   FLAG_UPDATE,
   FLAG_PLACEMENT,
@@ -32,6 +33,7 @@ const $DEV_FILE_LINK = Symbol.for("kiru.devFileLink")
 
 const CONSECUTIVE_DIRTY_LIMIT = 50
 const STREAMED_DATA_EVENT = "kiru:deferred"
+const STREAMED_DATA_DESCENDANTS = "kiru:streamDescendants"
 
 const FLAG_UPDATE = 1 << 1
 const FLAG_PLACEMENT = 1 << 2
