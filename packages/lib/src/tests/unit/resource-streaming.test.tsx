@@ -4,6 +4,7 @@ import {
   STREAMED_DATA_DESCENDANTS,
   STREAMED_DATA_EVENT,
 } from "../../constants.js"
+import { clearStreamedSsrClientState } from "../../router/pageData.js"
 import { renderMode } from "../../globals.js"
 import { withJSDOM } from "./jsdom.js"
 
@@ -98,6 +99,47 @@ describe("resource streamed SSR client hydration", () => {
         "Review for p1"
       )
 
+      renderMode.current = prev
+    })
+  })
+
+  it("fetches after streamed SSR state is cleared (client navigation)", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const cache = new window.Map<string, { data?: unknown; error?: string }>()
+      const announced = new window.Set<string>()
+      ;(window as unknown as Record<string, unknown>)[STREAMED_DATA_EVENT] =
+        cache
+      ;(window as unknown as Record<string, unknown>)[
+        STREAMED_DATA_DESCENDANTS
+      ] = announced
+
+      const staleId = "k:0.1.2:resource:0"
+      announced.add(staleId)
+      cache.set(staleId, { data: ["stale"] })
+
+      let loaderCalls = 0
+      let reviews!: ReturnType<typeof kiru.resource<string[]>>
+
+      function ReviewsCard() {
+        reviews = kiru.resource(() => {
+          loaderCalls++
+          return Promise.resolve(["fresh"])
+        })
+        return () => (
+          <span data-testid="reviews">{reviews.value?.[0] ?? ""}</span>
+        )
+      }
+
+      clearStreamedSsrClientState()
+
+      const prev = renderMode.current
+      renderMode.current = "dom"
+      kiru.mount(<ReviewsCard />, container)
+      await reviews.promise
+      for (let i = 0; i < 5; i++) await waitForMicrotask()
+
+      assert.strictEqual(loaderCalls, 1)
+      assert.strictEqual(reviews.value?.[0], "fresh")
       renderMode.current = prev
     })
   })

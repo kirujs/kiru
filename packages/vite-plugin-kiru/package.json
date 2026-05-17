@@ -6,7 +6,7 @@
   "type": "module",
   "types": "dist/index.d.ts",
   "scripts": {
-    "test": "tsx --test src/*.test.ts",
+    "test": "tsx --test src/**/*.test.ts",
     "build": "tsx ./src/build.ts",
     "dev": "tsx ./src/build.dev.ts"
   },

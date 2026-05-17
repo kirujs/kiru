@@ -530,7 +530,26 @@ describe("router", () => {
     const reader = (response.body as ReadableStream<string>).getReader()
     const first = await reader.read()
     assert.ok(first.value?.includes("<title>Static head</title>"))
-    let out = first.value ?? ""
+    assert.ok(
+      !first.value?.includes('data-testid="load-fallback"'),
+      "first chunk is static head only"
+    )
+    const shellDeadline = Date.now() + 25
+    let shellChunk = ""
+    while (Date.now() < shellDeadline) {
+      const next = await reader.read()
+      if (next.done) break
+      shellChunk += next.value ?? ""
+    }
+    assert.ok(
+      shellChunk.includes('data-testid="load-fallback"'),
+      "shell with fallback must flush before the 50ms loader settles"
+    )
+    assert.ok(
+      shellChunk.includes("</html>"),
+      "document close must precede streamed loader data"
+    )
+    let out = (first.value ?? "") + shellChunk
     while (true) {
       const next = await reader.read()
       if (next.done) break
@@ -538,10 +557,7 @@ describe("router", () => {
     }
     reader.releaseLock()
     assert.ok(out.includes('data-testid="load-fallback"'))
-    assert.ok(
-      out.includes("k-page-data"),
-      "loader data should be embedded after load settles"
-    )
+    assert.ok(out.includes('__$k_data'))
     assert.ok(out.includes('"ok":true'))
     assert.ok(
       !out.includes('data-testid="ok"'),

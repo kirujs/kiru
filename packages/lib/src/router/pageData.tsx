@@ -1,3 +1,7 @@
+import {
+  STREAMED_DATA_DESCENDANTS,
+  STREAMED_DATA_EVENT,
+} from "../constants.js"
 
 function escapeScriptJson(json: string): string {
   return json
@@ -36,4 +40,35 @@ export function readHydratedPageData(): unknown {
 export function resetHydratedPageData(): void {
   hydratedPageDataRead = false
   hydratedPageData = undefined
+}
+
+let initialSsrStreamPending: boolean | null = null
+
+function isStreamedSsrClient(): boolean {
+  if (typeof window === "undefined") return false
+  const map = (window as unknown as Record<string, unknown>)[STREAMED_DATA_EVENT]
+  return (
+    map != null &&
+    typeof map === "object" &&
+    typeof (map as Map<string, unknown>).get === "function"
+  )
+}
+
+/** True while the first SSR response may still deliver tail `__$k_data` scripts. */
+export function isInitialSsrStreamPending(): boolean {
+  if (initialSsrStreamPending === null) {
+    initialSsrStreamPending = isStreamedSsrClient()
+  }
+  return initialSsrStreamPending
+}
+
+/** Drop streamed SSR payloads so CSR navigations refetch loaders/resources. */
+export function clearStreamedSsrClientState(): void {
+  if (typeof window === "undefined") return
+  initialSsrStreamPending = false
+  const w = window as unknown as Record<string, unknown>
+  const cache = w[STREAMED_DATA_EVENT]
+  if (cache instanceof Map) cache.clear()
+  const announced = w[STREAMED_DATA_DESCENDANTS]
+  if (announced instanceof Set) announced.clear()
 }

@@ -7,6 +7,15 @@ import {
   type RouterPathPolicy,
 } from "./pathPolicy.js"
 
+export type ChangeFrequency =
+  | "always"
+  | "hourly"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "yearly"
+  | "never"
+
 export interface SitemapVideoEntry {
   title: string
   thumbnail_loc: string
@@ -16,7 +25,7 @@ export interface SitemapVideoEntry {
 }
 
 export interface SitemapUrlOverride {
-  changefreq?: string
+  changefreq?: ChangeFrequency
   priority?: number
   lastmod?: string
   images?: string[]
@@ -26,7 +35,7 @@ export interface SitemapUrlOverride {
 export interface SitemapOptionsInput {
   /** Sitemap base origin; defaults to top-level `url` when omitted. */
   domain?: string
-  changefreq?: string
+  changefreq?: ChangeFrequency
   priority?: number
   lastmod?: string
   overrides?: Record<string, SitemapUrlOverride>
@@ -35,7 +44,7 @@ export interface SitemapOptionsInput {
 export interface SitemapOptions {
   /** Resolved origin used for sitemap `<loc>` and media URLs. */
   domain: string
-  changefreq?: string
+  changefreq?: ChangeFrequency
   priority?: number
   lastmod?: string
   overrides: Record<string, SitemapUrlOverride>
@@ -143,7 +152,7 @@ function absoluteMediaUrl(origin: string, href: string): string {
 interface ResolvedSitemapUrl {
   loc: string
   lastmod?: string
-  changefreq?: string
+  changefreq?: ChangeFrequency
   priority?: number
   images: string[]
   videos: SitemapVideoEntry[]
@@ -213,7 +222,8 @@ function renderVideoTags(origin: string, videos: SitemapVideoEntry[]): string {
 
 function renderUrlEntry(origin: string, entry: ResolvedSitemapUrl): string {
   const parts = [`    <loc>${escXml(entry.loc)}</loc>`]
-  if (entry.lastmod) parts.push(`    <lastmod>${escXml(entry.lastmod)}</lastmod>`)
+  if (entry.lastmod)
+    parts.push(`    <lastmod>${escXml(entry.lastmod)}</lastmod>`)
   if (entry.changefreq)
     parts.push(`    <changefreq>${escXml(entry.changefreq)}</changefreq>`)
   if (entry.priority !== undefined)

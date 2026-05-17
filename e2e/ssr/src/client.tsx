@@ -6,7 +6,7 @@ declare global {
   interface Window {
     /** Set by the SSR e2e bootstrap once `bootstrapSsrClient` resolves; used by Cypress streaming tests to assert hydration timing. */
     __kiruHydratedAt?: number
-    /** Snapshot of `[data-testid="streaming-fallback"]` presence the moment hydration completes — `cy.visit` blocks on `load`, so it's the only honest way to assert "fallback was visible while we hydrated". */
+    /** Snapshot of a streaming/loader fallback presence the moment hydration completes — `cy.visit` blocks on `load`, so it's the only honest way to assert "fallback was visible while we hydrated". */
     __kiruFallbackVisibleAtHydration?: boolean
   }
 }
@@ -17,7 +17,7 @@ void bootstrapSsrClient({
 }).then(() => {
   window.__kiruHydratedAt = performance.now()
   window.__kiruFallbackVisibleAtHydration = !!document.querySelector(
-    '[data-testid="streaming-fallback"]'
+    '[data-testid="streaming-fallback"], [data-testid="loader-fallback"]'
   )
 })
 

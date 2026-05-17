@@ -10,6 +10,7 @@ import { createVNodeId, registerVNodeCleanup } from "./utils/vdom.js"
 import { generateRandomID } from "./utils/generateId.js"
 import { __DEV__, isBrowser } from "./env.js"
 import { GenericHMRAcceptor, performHmrAccept } from "./hmr.js"
+import { isInitialSsrStreamPending } from "./router/pageData.js"
 
 export type ResourceSource = Record<string, Signal<unknown>> | Signal<unknown>
 
@@ -57,7 +58,9 @@ function getStreamedDataCache():
   | Map<string, { data?: unknown; error?: string }>
   | undefined {
   if (typeof window === "undefined") return undefined
-  const map = (window as unknown as Record<string, unknown>)[STREAMED_DATA_EVENT]
+  const map = (window as unknown as Record<string, unknown>)[
+    STREAMED_DATA_EVENT
+  ]
   if (
     map == null ||
     typeof map !== "object" ||
@@ -89,23 +92,26 @@ function getAnnouncedStreamDescendants(): Set<string> | undefined {
 }
 
 function shouldResolveDeferredPromise(promiseId: string): boolean {
-  if (
-    renderMode.current === "hydrate" &&
-    hydrationMode.current === "dynamic"
-  ) {
+  if (renderMode.current === "hydrate" && hydrationMode.current === "dynamic") {
     return true
   }
   const announced = getAnnouncedStreamDescendants()
   if (announced?.has(promiseId)) {
     return true
   }
-  // Post-hydration updates (e.g. nested Derive after a parent resource streams in)
-  // still need streamed payloads; hydrate mode is already back to "dom".
-  return isStreamedSsrClient() && promiseId.startsWith("k:")
+  const cache = getStreamedDataCache()
+  if (cache?.has(promiseId)) {
+    return true
+  }
+  // Initial document only: wait for tail `__$k_data` scripts after `</html>`.
+  return isInitialSsrStreamPending() && promiseId.startsWith("k:")
 }
 
 function isRelevantStreamId(localId: string, streamId: string): boolean {
-  return localId === streamId || getAnnouncedStreamDescendants()?.has(streamId) === true
+  return (
+    localId === streamId ||
+    getAnnouncedStreamDescendants()?.has(streamId) === true
+  )
 }
 
 export function resource<T>(
@@ -236,10 +242,7 @@ export function resource<T, Source extends ResourceSource>(
         if (renderMode.current === "string") {
           // if we're rendering to a string, there's no need to fire the callback
           promise = Promise.resolve() as Promise<T>
-        } else if (
-          !forceFetch &&
-          shouldResolveDeferredPromise(promiseId)
-        ) {
+        } else if (!forceFetch && shouldResolveDeferredPromise(promiseId)) {
           promise = resolveDeferredPromise<T>(promiseId, ctrl.signal)
         } else {
           // stream / dom / (hydrate + static)
@@ -349,7 +352,13 @@ function resolveDeferredPromise<T>(
     if (announced) {
       for (const streamId of announced) {
         if (
-          consumeStreamedPayload(streamId, deferralCache, announced, resolve, reject)
+          consumeStreamedPayload(
+            streamId,
+            deferralCache,
+            announced,
+            resolve,
+            reject
+          )
         ) {
           return
         }
@@ -362,7 +371,13 @@ function resolveDeferredPromise<T>(
       window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
 
       if (
-        consumeStreamedPayload(detail.id, deferralCache, announced, resolve, reject)
+        consumeStreamedPayload(
+          detail.id,
+          deferralCache,
+          announced,
+          resolve,
+          reject
+        )
       ) {
         return
       }

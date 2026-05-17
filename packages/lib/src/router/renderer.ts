@@ -823,7 +823,8 @@ async function prepareAppForUrl(
     let pagePropsPromise: Promise<Record<string, unknown>> | undefined
 
     if (streamPageLoad) {
-      pagePropsPromise = resolvePagePropsFromModule(pageMod, loaderCtx)
+      // Loader data is streamed via `resource()` / `__$k_data` in the load gate;
+      // do not await `resolvePagePropsFromModule` here or the shell blocks on load.
       pageProps = {}
     } else {
       pageProps = await resolvePagePropsFromModule(pageMod, loaderCtx)
@@ -945,6 +946,16 @@ function renderStreamForRouteMatch(
         }
       : undefined,
     onShellReady: async (shell, controller) => {
+      if (streamedHeadEarly) {
+        // Flush layout + fallback + `</html>` immediately so the parser can
+        // close the document and the async entry script can hydrate while load
+        // is still in flight. Loader data follows via streamed `__$k_data`.
+        enqueueTemplatedShellBody(controller, {
+          compiledTemplate: opts.compiledTemplate,
+          shell,
+        })
+        return
+      }
       let pageData = opts.pageData
       if (opts.pagePropsPromise) {
         const props = await opts.pagePropsPromise
@@ -959,16 +970,6 @@ function renderStreamForRouteMatch(
           decorateDocument: opts.decorateDocument,
         }
       )
-      if (streamedHeadEarly) {
-        if (pageData !== undefined) {
-          controller.enqueue(`\n    ${serializePageDataScript(pageData)}`)
-        }
-        enqueueTemplatedShellBody(controller, {
-          compiledTemplate: opts.compiledTemplate,
-          shell,
-        })
-        return
-      }
       enqueueTemplatedShell(controller, {
         compiledTemplate: opts.compiledTemplate,
         headHtml: document.headHtml,

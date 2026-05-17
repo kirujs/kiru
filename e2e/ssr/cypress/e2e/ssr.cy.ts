@@ -4,6 +4,40 @@ describe("SSR server", () => {
     cy.visit(`http://127.0.0.1:${port}/`)
   })
 
+  it("renders serverLoader data on history back and forward", () => {
+    const port = Cypress.env("port")
+    cy.intercept("POST", /\?loader=/).as("serverLoader")
+
+    cy.visit(`http://127.0.0.1:${port}/loaders/server`)
+    cy.get('[data-testid="loader-data"]').should(
+      "contain",
+      "server@/loaders/server"
+    )
+
+    cy.contains("a", "Home").click()
+    cy.location("pathname").should("eq", "/")
+    cy.get('[data-testid="ssr-home"]').should("exist")
+
+    cy.go("back")
+    cy.wait("@serverLoader")
+    cy.location("pathname").should("eq", "/loaders/server")
+    cy.get('[data-testid="loader-data"]').should(
+      "contain",
+      "server@/loaders/server"
+    )
+
+    cy.go("forward")
+    cy.location("pathname").should("eq", "/")
+    cy.get('[data-testid="ssr-home"]').should("exist")
+
+    cy.go("back")
+    cy.wait("@serverLoader")
+    cy.get('[data-testid="loader-data"]').should(
+      "contain",
+      "server@/loaders/server"
+    )
+  })
+
   it("renders serverLoader data on first paint and after client navigation", () => {
     const port = Cypress.env("port")
     cy.request(`http://127.0.0.1:${port}/loaders/server`).then((res) => {
@@ -168,6 +202,109 @@ describe("SSR server", () => {
         "Leaf error: e2e-ssr-leaf-boom"
       )
       cy.get('[data-testid="ssr-error-page"]').should("not.exist")
+    })
+  })
+
+  describe("server loader immediate shell", () => {
+    const LOADER_DELAY_MS = 1000
+    const SHELL_BUDGET_MS = 600
+    const HYDRATION_BUDGET_MS = 800
+
+    type ImmediateShellMarks = {
+      layoutAt?: number
+      fallbackAt?: number
+    }
+    type ImmediateShellWin = Cypress.AUTWindow & {
+      __immediateShellMarks?: ImmediateShellMarks
+      __kiruHydratedAt?: number
+      __kiruFallbackVisibleAtHydration?: boolean
+    }
+
+    function visitImmediateShellPage(port: number) {
+      return cy.visit(
+        `http://127.0.0.1:${port}/loaders/server-immediate-shell`,
+        {
+          onBeforeLoad(win) {
+            const w = win as ImmediateShellWin
+            const marks: ImmediateShellMarks = {}
+            w.__immediateShellMarks = marks
+
+            new MutationObserver(() => {
+              if (
+                !marks.layoutAt &&
+                w.document.querySelector('[data-testid="ssr-layout"]')
+              ) {
+                marks.layoutAt = w.performance.now()
+              }
+              if (
+                !marks.fallbackAt &&
+                w.document.querySelector('[data-testid="loader-fallback"]')
+              ) {
+                marks.fallbackAt = w.performance.now()
+              }
+            }).observe(w.document.documentElement, {
+              childList: true,
+              subtree: true,
+            })
+          },
+        }
+      )
+    }
+
+    it("streams layout and fallback before the slow server loader resolves", () => {
+      visitImmediateShellPage(Cypress.env("port"))
+
+      cy.window().then((win) => {
+        const marks = (win as ImmediateShellWin).__immediateShellMarks
+        expect(marks, "MutationObserver marks were captured").to.exist
+        expect(marks!.layoutAt, "layout streamed before load").to.exist
+        expect(marks!.fallbackAt, "fallback streamed before load").to.exist
+        expect(marks!.layoutAt!).to.be.lessThan(SHELL_BUDGET_MS)
+        expect(marks!.fallbackAt!).to.be.lessThan(SHELL_BUDGET_MS)
+      })
+    })
+
+    it("hydrates while the fallback is still visible, then resolves loader data", () => {
+      visitImmediateShellPage(Cypress.env("port"))
+
+      cy.window()
+        .should((win) => {
+          expect((win as ImmediateShellWin).__kiruHydratedAt).to.be.a("number")
+        })
+        .then((win) => {
+          const w = win as ImmediateShellWin
+          const marks = w.__immediateShellMarks!
+          const tag = `[timings] layoutAt=${marks.layoutAt}ms fallbackAt=${marks.fallbackAt}ms hydratedAt=${w.__kiruHydratedAt}ms fallbackVisible=${w.__kiruFallbackVisibleAtHydration}`
+          expect(
+            w.__kiruHydratedAt!,
+            `hydration finished within budget (AUT clock) — ${tag}`
+          ).to.be.lessThan(HYDRATION_BUDGET_MS)
+          expect(
+            w.__kiruFallbackVisibleAtHydration,
+            "loader fallback was still visible the moment hydration finished"
+          ).to.eq(true)
+        })
+
+      cy.get('[data-testid="loader-data"]', {
+        timeout: LOADER_DELAY_MS + 2000,
+      }).should("contain", "server@/loaders/server-immediate-shell")
+      cy.get('[data-testid="loader-fallback"]').should("not.exist")
+    })
+
+    it("serves streamed loader data in the full HTML response", () => {
+      const port = Cypress.env("port")
+      cy.request({
+        url: `http://127.0.0.1:${port}/loaders/server-immediate-shell`,
+        timeout: LOADER_DELAY_MS + 5000,
+      }).then((res) => {
+        expect(res.status).to.eq(200)
+        expect(res.body).to.include('data-testid="loader-fallback"')
+        expect(res.body).to.include(
+          '"pathname":"/loaders/server-immediate-shell"'
+        )
+        expect(res.body).to.include('"source":"server"')
+        expect(res.body).to.include("__$k_data")
+      })
     })
   })
 

@@ -42,7 +42,10 @@ import {
   type PageProps,
 } from "./loaders.js"
 import { buildLoaderContext, resolvePagePropsFromModule } from "./runPageLoad.js"
-import { resetHydratedPageData } from "./pageData.js"
+import {
+  clearStreamedSsrClientState,
+  resetHydratedPageData,
+} from "./pageData.js"
 import { isStaticPageHead, readPageHeadExport, syncDocumentHeadForPage } from "./pageHead.js"
 import { wrapRouteModuleWithLoadGate } from "./pageLoadGate.js"
 import type { CustomRequestContext } from "./types.js"
@@ -355,6 +358,7 @@ export function createRouter({
   const commitLocation = (next: RouteLocationParts) => {
     if (next.pathname !== pathname.peek()) {
       resetHydratedPageData()
+      clearStreamedSsrClientState()
     }
     pathname.value = next.pathname
     hash.value = next.hash

@@ -6,6 +6,7 @@ import {
   buildRoutedSubtree,
   loadNotFoundRouteTree,
   loadRouteTree,
+  type LeafRouteProps,
 } from "../router/routeTree.js"
 import type { RouteManifest, RouteTreeDefinition } from "../router/types.js"
 import {
@@ -18,7 +19,14 @@ import {
   buildPageProps,
   resolvePagePropsFromModule,
 } from "../router/runPageLoad.js"
-import { readPageLoadExport } from "../router/loaders.js"
+import {
+  canStreamPageLoad,
+  readLoaderFallback,
+  readPageLoadExport,
+} from "../router/loaders.js"
+import { wrapRouteModuleWithLoadGate } from "../router/pageLoadGate.js"
+import { isStaticPageHead, readPageHeadExport } from "../router/pageHead.js"
+import type { RouteModule } from "../router/types.js"
 import { signal } from "../signals/index.js"
 import { createElement } from "../element.js"
 import { requestToken } from "../globals.js"
@@ -122,28 +130,56 @@ export interface BootstrapSsrClientOptions {
   }
 }
 
-async function resolveLeafPropsForMatch(
-  routeMatch: { route: { component: () => Promise<unknown> }; params: Record<string, string> },
+function loaderContextForMatch(
+  routeMatch: { params: Record<string, string> },
   pathname: string,
   router: ReturnType<typeof createRouter>
 ) {
+  return buildLoaderContext({
+    params: routeMatch.params,
+    pathname,
+    search: typeof window !== "undefined" ? window.location.search : "",
+    hash: router.hash.peek(),
+    query: router.query.peek(),
+    context: readHydratedRequestContext(),
+  })
+}
+
+async function prepareClientRouteForMatch(
+  routeMatch: {
+    route: { component: () => Promise<unknown> }
+    params: Record<string, string>
+  },
+  pathname: string,
+  router: ReturnType<typeof createRouter>,
+  routeModule: RouteModule
+): Promise<{ routeModule: RouteModule; leafProps: LeafRouteProps }> {
   const pageMod = await routeMatch.route.component()
-  if (!readPageLoadExport(pageMod)) return {}
-  const hydrated = readHydratedPageData()
-  if (hydrated !== undefined) {
-    return buildPageProps(hydrated)
+  const load = readPageLoadExport(pageMod)
+  if (!load) return { routeModule, leafProps: {} }
+
+  const loaderCtx = loaderContextForMatch(routeMatch, pathname, router)
+  const pageHead = readPageHeadExport(pageMod)
+  if (canStreamPageLoad(load) && isStaticPageHead(pageHead)) {
+    const fallback = readLoaderFallback(load)
+    if (fallback) {
+      return {
+        routeModule: wrapRouteModuleWithLoadGate(
+          routeModule,
+          load,
+          loaderCtx,
+          fallback
+        ),
+        leafProps: {},
+      }
+    }
   }
-  return resolvePagePropsFromModule(
-    pageMod,
-    buildLoaderContext({
-      params: router.params.peek(),
-      pathname,
-      search: typeof window !== "undefined" ? window.location.search : "",
-      hash: router.hash.peek(),
-      query: router.query.peek(),
-      context: readHydratedRequestContext(),
-    })
-  )
+
+  const hydrated = readHydratedPageData()
+  const leafProps = hydrated !== undefined
+    ? buildPageProps(hydrated)
+    : await resolvePagePropsFromModule(pageMod, loaderCtx)
+  return { routeModule, leafProps: leafProps as LeafRouteProps }
 }
 
 /**
@@ -174,24 +210,22 @@ export async function bootstrapSsrClient(
 
   const children = signal<JSX.Element | null>(null)
   if (first && match) {
-    const leafProps = await resolveLeafPropsForMatch(match, pathname, router)
+    const { routeModule, leafProps } = await prepareClientRouteForMatch(
+      match,
+      pathname,
+      router,
+      first.routeModule
+    )
     if (typeof document !== "undefined") {
       await syncDocumentHeadForPage(
         match,
-        buildLoaderContext({
-          params: match.params,
-          pathname,
-          search: typeof window !== "undefined" ? window.location.search : "",
-          hash: router.hash.peek(),
-          query: router.query.peek(),
-          context: requestContext,
-        }),
+        loaderContextForMatch(match, pathname, router),
         leafProps as PageProps<KiruLoader<unknown>>
       )
     }
     children.value = buildRoutedSubtree(
       first.layoutModules,
-      first.routeModule,
+      routeModule,
       leafProps
     )
   }
@@ -208,31 +242,30 @@ export async function bootstrapSsrClient(
         children.value = null
         return
       }
-      const leafProps = match
-        ? await resolveLeafPropsForMatch(
-            match,
-            router.pathname.peek(),
-            router
-          )
-        : {}
+      let routeModule = tree.routeModule
+      let leafProps: LeafRouteProps = {}
       if (match) {
+        const prepared = await prepareClientRouteForMatch(
+          match,
+          router.pathname.peek(),
+          router,
+          tree.routeModule
+        )
+        if (e !== epoch) return
+        routeModule = prepared.routeModule
+        leafProps = prepared.leafProps
         await syncDocumentHeadForPage(
           match,
-          buildLoaderContext({
-            params: match.params,
-            pathname: router.pathname.peek(),
-            search:
-              typeof window !== "undefined" ? window.location.search : "",
-            hash: router.hash.peek(),
-            query: router.query.peek(),
-            context: readHydratedRequestContext(),
-          }),
+          loaderContextForMatch(match, router.pathname.peek(), router),
           leafProps as PageProps<KiruLoader<unknown>>
         )
+        if (e !== epoch) return
       }
+      
+      if (e !== epoch) return
       children.value = buildRoutedSubtree(
         tree.layoutModules,
-        tree.routeModule,
+        routeModule,
         leafProps
       )
     })()

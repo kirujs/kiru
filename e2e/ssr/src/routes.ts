@@ -37,6 +37,10 @@ export const routes = defineRouteTree((r) =>
         component: () => import("./pages/loaders-server"),
         head: { title: "E2E SSR server loader" },
       }),
+      r.get(
+        "/loaders/server-immediate-shell",
+        () => import("./pages/loaders-server-immediate-shell")
+      ),
       r.get("/about", {
         component: () => import("./pages/about"),
         head: { title: "E2E SSR About" },
