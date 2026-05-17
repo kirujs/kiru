@@ -49,8 +49,8 @@ export interface PluginState {
   }
   staticProps: Record<string, Record<string, Record<string, any>>>
   remotePaths: string[]
-  /** Page modules scanned for `serverLoader` registration (SSR virtual registry). */
-  loaderPagePaths: string[]
+  /** `routeId` → Vite module id for pages that export `serverLoader`. */
+  loaderModulesByRouteId: Map<string, string>
   router: {
     ssg: null | {
       /** User pattern (may be a glob); also emitted to `kiru-route-manifest.json`. */
@@ -147,7 +147,7 @@ export function createPluginState(
     },
     staticProps: {},
     remotePaths: [],
-    loaderPagePaths: [],
+    loaderModulesByRouteId: new Map(),
     router: {
       ssg: routesModule
         ? {
@@ -206,7 +206,8 @@ export function updatePluginState(
     },
     staticProps: {},
     remotePaths: [],
-    loaderPagePaths: state.loaderPagePaths ?? [],
+    loaderModulesByRouteId:
+      state.loaderModulesByRouteId ?? new Map<string, string>(),
     router: {
       ssg: state.router?.ssg ?? null,
       serverEntry: state.router?.serverEntry ?? null,

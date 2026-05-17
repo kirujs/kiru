@@ -13,6 +13,13 @@ import {
   updatePluginState,
   type PluginState,
 } from "./config.js"
+import {
+  LOADER_MODULES_MANIFEST,
+  mergeLoaderModules,
+  readLoaderModuleManifest,
+  renderLoaderRegistryVirtual,
+  writeDevLoaderManifest,
+} from "./loaderRegistryVirtual.js"
 import { toViteModuleId } from "./resolveModulePattern.js"
 import {
   createDevtoolsHtmlTransform,
@@ -124,25 +131,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       }
 
       if (state.router.serverEntry) {
-        state.loaderPagePaths = (
-          await glob("src/pages/**/*.{tsx,ts}", {
-            cwd: state.projectRoot,
-            absolute: true,
-            onlyFiles: true,
-          })
-        ).map((filePath) => filePath.replace(/\\/g, "/"))
-
-        virtualModules[LOADER_REGISTRY_VIRTUAL_ID] = () => {
-          const imports = state.loaderPagePaths
-            .map((filePath) => {
-              const viteId =
-                "/" +
-                path.relative(state.projectRoot, filePath).replace(/\\/g, "/")
-              return `import ${JSON.stringify(viteId)};`
-            })
-            .join("\n")
-          return `${imports}\nexport {};`
-        }
+        virtualModules[LOADER_REGISTRY_VIRTUAL_ID] = () =>
+          renderLoaderRegistryVirtual({})
       }
     },
     transformIndexHtml() {
@@ -226,7 +216,12 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           if (state.remotePaths.includes(resolvedFile)) {
             invalidateRemoteRegistry()
           }
-          if (state.loaderPagePaths.includes(resolvedFile)) {
+          if (
+            [...state.loaderModulesByRouteId.values()].some(
+              (viteId) =>
+                normalizeModulePath(viteId, state.projectRoot) === resolvedFile
+            )
+          ) {
             invalidateLoaderRegistry()
           }
         })
@@ -331,9 +326,23 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       }
       return null
     },
-    load(id) {
+    async load(id) {
       if (!id.startsWith("\0")) return null
       const raw = id.slice(1)
+      if (raw === LOADER_REGISTRY_VIRTUAL_ID) {
+        const clientOutDir = state.isSSRBuild
+          ? path.join(path.dirname(path.resolve(state.projectRoot, state.outDir)), "client")
+          : path.resolve(state.projectRoot, state.outDir)
+        const fromDisk = await readLoaderModuleManifest(
+          state.projectRoot,
+          clientOutDir
+        )
+        const modules = mergeLoaderModules(
+          state.loaderModulesByRouteId,
+          fromDisk
+        )
+        return renderLoaderRegistryVirtual(modules)
+      }
       if (!(raw in virtualModules)) return null
       return virtualModules[raw]()
     },
@@ -436,6 +445,22 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       })
     },
     generateBundle() {
+      if (
+        state.isBuild &&
+        !state.isSSRBuild &&
+        state.router.serverEntry &&
+        state.loaderModulesByRouteId.size > 0
+      ) {
+        this.emitFile({
+          type: "asset",
+          fileName: LOADER_MODULES_MANIFEST,
+          source: JSON.stringify(
+            Object.fromEntries(state.loaderModulesByRouteId),
+            null,
+            2
+          ),
+        })
+      }
       if (!state.isBuild || !state.router.ssg?.routesModuleAbs) return
       this.emitFile({
         type: "asset",
@@ -629,9 +654,22 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         log,
       }
 
-      preparePageLoaders(ctx, state!.projectRoot, !!options?.ssr)
+      let loaderRegistryTouched = false
+      preparePageLoaders(ctx, state!.projectRoot, !!options?.ssr, (ref) => {
+        state!.loaderModulesByRouteId.set(ref.routeId, ref.viteModuleId)
+        loaderRegistryTouched = true
+      })
       if (isRemote) {
         prepareRemoteFunctions(ctx, state!.projectRoot, !!options?.ssr)
+      }
+
+      if (loaderRegistryTouched && state!.router.serverEntry) {
+        if (!state!.isBuild) {
+          void writeDevLoaderManifest(
+            state!.projectRoot,
+            Object.fromEntries(state!.loaderModulesByRouteId)
+          )
+        }
       }
 
       const serverEntryAbs = state!.router.serverEntryAbs?.replace(/\\/g, "/")

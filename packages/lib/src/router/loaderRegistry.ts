@@ -3,10 +3,22 @@ import type { LoaderContext } from "./loaders.js"
 import { isKiruLoader, type KiruLoader } from "./loaders.js"
 
 const registry: Record<string, Record<string, KiruLoader>> = {}
+const lazyImports: Record<string, () => Promise<unknown>> = {}
 
 export const __INTERNAL_LOADER_REGISTRY = {
   register(id: string, loaders: Record<string, KiruLoader>): void {
     registry[id] = loaders
+  },
+  registerLazyImport(
+    routeId: string,
+    load: () => Promise<unknown>
+  ): void {
+    lazyImports[routeId] = load
+  },
+  async ensure(routeId: string): Promise<void> {
+    if (registry[routeId]) return
+    const load = lazyImports[routeId]
+    if (load) await load()
   },
 }
 
@@ -64,6 +76,8 @@ export function createLoaderHandler(
 
     const context = unwrapKiruToken(token, secret)
     if (!context) return new Response(null, { status: 400 })
+
+    await __INTERNAL_LOADER_REGISTRY.ensure(routeId)
 
     const handler = registry[routeId]?.[loaderName]
     if (!isKiruLoader(handler) || handler.__kiruLoader !== "server") {

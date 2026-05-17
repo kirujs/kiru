@@ -13,10 +13,16 @@ type LoaderMatch = {
 
 const LOADER_KINDS = ["serverLoader", "staticLoader", "loader", "clientLoader"] as const
 
+export type ServerLoaderModuleRef = {
+  routeId: string
+  viteModuleId: string
+}
+
 export function preparePageLoaders(
   ctx: TransformCTX,
   projectRoot: string,
-  ssr: boolean
+  ssr: boolean,
+  onServerLoaderModule?: (ref: ServerLoaderModuleRef) => void
 ) {
   const { code, ast } = ctx
   const bodyNodes = ast.body as AstNode[]
@@ -24,11 +30,24 @@ export function preparePageLoaders(
   if (matches.length === 0) return
 
   const routeId = generateRouteId(ctx.filePath, projectRoot)
+  const hasServer = matches.some((m) => m.kind === "server")
 
   if (ssr) {
     serverRegisterLoaders(matches, code, routeId)
   } else {
     clientFormatLoaders(bodyNodes, matches, code, routeId)
+  }
+
+  if (hasServer && onServerLoaderModule) {
+    const normalized = ctx.filePath.replace(/\\/g, "/")
+    const root = projectRoot.replace(/\\/g, "/").replace(/\/+$/, "")
+    const relative = normalized.startsWith(root + "/")
+      ? normalized.slice(root.length + 1)
+      : path.basename(normalized)
+    onServerLoaderModule({
+      routeId,
+      viteModuleId: `/${relative}`,
+    })
   }
 }
 

@@ -29,13 +29,13 @@ export interface StreamingReview {
 }
 
 export const getPost = action.get<StreamingProduct>(async () => {
-  await new Promise((r) => setTimeout(r, 3000))
+  await new Promise((r) => setTimeout(r, 1000))
   return { id: "p1", name: "Streaming Product" }
 })
 
 export const getStreamingProduct = action.get<StreamingProduct>(async () => {
   console.log("action: get streaming product")
-  await new Promise((r) => setTimeout(r, 3000))
+  await new Promise((r) => setTimeout(r, 1000))
   return { id: "p1", name: "Streaming Product" }
 })
 
@@ -49,7 +49,7 @@ export const getStreamingReviews = action.post<{ productId: string }, StreamingR
   },
   async (_ctx, input: { productId: string }) => {
     console.log("action: get streaming reviews")
-    await new Promise((r) => setTimeout(r, 3000))
+    await new Promise((r) => setTimeout(r, 1000))
     return [
       { id: "r1", text: `Review for ${input.productId}` },
     ]

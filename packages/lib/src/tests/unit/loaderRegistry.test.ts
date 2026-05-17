@@ -36,6 +36,30 @@ describe("createLoaderHandler", () => {
     assert.strictEqual(res?.status, 500)
   })
 
+  it("loads a lazy module on first request via ensure", async () => {
+    const routeId = "lazy/loaders-server"
+    __INTERNAL_LOADER_REGISTRY.registerLazyImport(routeId, async () => {
+      __INTERNAL_LOADER_REGISTRY.register(routeId, {
+        load: serverLoader(async (ctx) => ({
+          source: "server",
+          pathname: ctx.url.pathname,
+        })),
+      })
+    })
+
+    const handler = createLoaderHandler(SECRET)
+    const token = makeKiruContextToken({}, SECRET)
+    const res = await handler(
+      makeLoaderRequest(`${routeId}:load`, token, {
+        params: {},
+        url: { pathname: "/loaders/server", search: "", hash: "" },
+        query: {},
+        context: {},
+      })
+    )
+    assert.strictEqual(res?.status, 200)
+  })
+
   it("returns loader data when the handler is registered", async () => {
     const routeId = "test/loaders-server"
     __INTERNAL_LOADER_REGISTRY.register(routeId, {
