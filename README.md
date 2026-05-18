@@ -35,6 +35,8 @@ You can then run any app from the `sandbox` folder and it will be live-reloaded 
 
 ## Declarative Router (preview)
 
+Phased roadmap (docs, adapters, parity, optional differentiation): [docs/router-roadmap/README.md](docs/router-roadmap/README.md).
+
 Kiru now exposes `kiru/router` primitives for route trees and rendering strategies:
 
 - `defineRouteTree` for route declarations
