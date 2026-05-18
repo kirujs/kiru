@@ -62,6 +62,14 @@ export const routes = defineRouteTree((r) =>
         component: () => import("./pages/url-state"),
         head: { title: "E2E SSR URL state" },
       }),
+      r.page("/search-schema", {
+        component: () => import("./pages/search-schema"),
+        head: { title: "E2E SSR search schema" },
+      }),
+      r.page("/invalidate-demo", {
+        component: () => import("./pages/invalidate-demo"),
+        head: { title: "E2E SSR invalidate" },
+      }),
       r.page("/streaming-test", {
         component: () => import("./pages/streaming-test"),
         head: { title: "E2E SSR Streaming test" },

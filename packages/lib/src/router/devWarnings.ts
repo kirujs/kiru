@@ -69,3 +69,16 @@ export function warnStaticLoaderOnClientNavigation(): void {
     "`staticLoader` does not run on client navigations. Use SSR/SSG for the first paint, or use `loader` / `clientLoader` for CSR-only apps."
   )
 }
+
+const REMOTE_ACTION_PURE_CLIENT_MSG =
+  "Remote `action` and `formAction` require SSR with `createRenderer` and `actions.secret`. Pure CSR/SSG apps cannot invoke server actions."
+
+/** @throws when remote actions cannot run on this client bootstrap. */
+export function guardRemoteActionOnClient(): void {
+  if (typeof window === "undefined") return
+  const mode = getRouterBootstrapMode()
+  if (mode === "csr" || mode === "ssg") {
+    warnOnce("remote-action-pure-client", REMOTE_ACTION_PURE_CLIENT_MSG)
+    throw new Error(`[kiru] ${REMOTE_ACTION_PURE_CLIENT_MSG}`)
+  }
+}

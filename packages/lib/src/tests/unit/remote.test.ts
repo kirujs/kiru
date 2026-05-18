@@ -386,18 +386,23 @@ describe("remote / handler", () => {
     assert.deepStrictEqual(captured, ctx)
   })
 
-  it("validates action input via schema.parse", async () => {
+  it("validates action input via KiruValidator.safeParse", async () => {
     const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
     const token = validToken()
     const routeId = "test/schema-guard"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       greet: action.post(
         {
-          parse: (input: unknown): input is { name: string } =>
-            !!input &&
-            typeof input === "object" &&
-            "name" in input &&
-            typeof (input as { name?: unknown }).name === "string",
+          safeParse: (input: unknown) => {
+            const ok =
+              !!input &&
+              typeof input === "object" &&
+              "name" in input &&
+              typeof (input as { name?: unknown }).name === "string"
+            return ok
+              ? { success: true as const, data: input as { name: string } }
+              : { success: false as const, error: null }
+          },
         },
         async (_ctx, input) => `hello ${input.name}`
       ),

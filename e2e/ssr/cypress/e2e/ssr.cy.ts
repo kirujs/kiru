@@ -610,6 +610,46 @@ describe("SSR server", () => {
       cy.get('[data-testid="ssr-loader"]').should("exist")
     })
 
+    it("surfaces fieldErrors from validation RemoteError", () => {
+      const port = Cypress.env("port")
+      cy.visit(`http://127.0.0.1:${port}/forms/demo`)
+      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.intercept("POST", /\?action=/).as("formValidation")
+      cy.get('[data-testid="forms-validation-submit"]').click()
+      cy.wait("@formValidation").its("response.statusCode").should("eq", 422)
+      cy.get('[data-testid="forms-validation-error"]').should(
+        "have.text",
+        "Required"
+      )
+    })
+  })
+
+  it("applies query validation on SSR visit", () => {
+    const port = Cypress.env("port")
+    cy.visit(`http://127.0.0.1:${port}/search-schema?q=ok`)
+    cy.get('[data-testid="search-schema"]').should("contain", "q=ok")
+  })
+
+  it("redirects to canonical query when defaults apply", () => {
+    const port = Cypress.env("port")
+    cy.visit(`http://127.0.0.1:${port}/search-schema`, {
+      followRedirect: true,
+    })
+    cy.location("search").should("eq", "?q=default")
+    cy.get('[data-testid="search-schema"]').should("contain", "q=default")
+  })
+
+  it("refetches serverLoader after invalidate on the current route", () => {
+    const port = Cypress.env("port")
+    cy.intercept("POST", /\?action=/).as("formAction")
+    cy.intercept("POST", /\?loader=/).as("serverLoader")
+    cy.visit(`http://127.0.0.1:${port}/invalidate-demo`)
+    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get('[data-testid="invalidate-generation"]').should("have.text", "0")
+    cy.get('[data-testid="invalidate-bump"]').click()
+    cy.wait("@formAction").its("response.statusCode").should("eq", 200)
+    cy.wait("@serverLoader")
+    cy.get('[data-testid="invalidate-generation"]').should("have.text", "1")
   })
 
   it("serves prerendered disk HTML for hybrid /docs without SSR-only home marker", () => {

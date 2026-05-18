@@ -44,22 +44,18 @@ import {
   loadRouteTree,
   type LeafRouteProps,
 } from "./routeTree.js"
-import {
-  canStreamPageLoad,
-  readLoaderFallback,
-  readPageLoadExport,
-  type KiruLoader,
-  type PageProps,
-} from "./loaders.js"
-import { buildLoaderContext, resolvePagePropsFromModule } from "./runPageLoad.js"
+import type { KiruLoader, PageProps } from "./loaders.js"
+import { buildLoaderContext } from "./runPageLoad.js"
+import { prepareRouteForNavigation } from "./prepareRoute.js"
 import {
   clearStreamedSsrClientState,
   resetHydratedPageData,
 } from "./pageData.js"
 import { isStaticPageHead, readPageHeadExport, syncDocumentHeadForPage } from "./pageHead.js"
-import { wrapRouteModuleWithLoadGate } from "./pageLoadGate.js"
 import type { CustomRequestContext } from "./types.js"
 import { warnRouterViewWithoutSsrBootstrap } from "./devWarnings.js"
+import { registerKiruRouter } from "./routerGlobal.js"
+import { validateSearchForMatch } from "./validateSearchForMatch.js"
 
 function joinPath(base: string, path: string): string {
   if (path.startsWith("/")) return path
@@ -121,6 +117,25 @@ export interface Router {
   afterEach: (hook: AfterEachHook) => () => void
   isNavigating: Kiru.Signal<boolean>
   currentNavigation: Kiru.Signal<CurrentNavigation | null>
+  /** Bumps when {@link invalidate} requests a loader refetch. */
+  loaderEpoch: Kiru.Signal<number>
+  /** @internal Skip hydrated page data on next outlet load. */
+  forceLoaderReload: Kiru.Signal<boolean>
+  /** True while the route outlet is reloading loader data. */
+  isLoaderPending: Kiru.Signal<boolean>
+  /** Validated query for the active route (`load.validation.query`). */
+  validatedQuery: Kiru.Signal<unknown | null>
+  /** Route params passed to loaders (validated when `load.validation.params` is set). */
+  validatedRouteParams: Kiru.Signal<Record<string, unknown> | null>
+  /**
+   * Refetch loaders for the active route (bumps `loaderEpoch`, clears hydrated page data).
+   * When `routeIds` is set, no-op unless the active route id is listed.
+   * Remote actions can trigger invalidation via `x-kiru-invalidate` (see {@link applyInvalidateResponseHeader}).
+   */
+  invalidate: (options?: {
+    current?: boolean
+    routeIds?: string[]
+  }) => Promise<void>
   back: () => void
   forward: () => void
   go: (delta: number) => void
@@ -191,6 +206,23 @@ export function createRouter({
   const matches = signal(buildMatchSegments(match.peek()))
   const isNavigating = signal(false)
   const currentNavigation = signal<CurrentNavigation | null>(null)
+  const loaderEpoch = signal(0)
+  const forceLoaderReload = signal(false)
+  const isLoaderPending = signal(false)
+  const validatedQuery = signal<unknown | null>(null)
+  const validatedRouteParams = signal<Record<string, unknown> | null>(null)
+
+  void (async () => {
+    const initialMatch = match.peek()
+    if (!initialMatch) return
+    const check = await validateSearchForMatch(initialMatch, query.peek(), {
+      hash: hash.peek(),
+    })
+    if (check.ok) {
+      validatedQuery.value = check.validatedQuery ?? null
+      validatedRouteParams.value = check.params
+    }
+  })()
 
   if (typeof document !== "undefined") {
     void (async () => {
@@ -329,7 +361,13 @@ export function createRouter({
       historyIndex,
       scrollStack,
       saveScrollAt,
-      commitLocation,
+      commitLocation: (next) => commitLocation(next),
+      setValidatedQuery: (data) => {
+        validatedQuery.value = data
+      },
+      setValidatedRouteParams: (data) => {
+        validatedRouteParams.value = data
+      },
       buildMatchSegments,
       locationFromMatch,
       snapshotFromParts,
@@ -389,6 +427,21 @@ export function createRouter({
     matches,
     isNavigating,
     currentNavigation,
+    loaderEpoch,
+    forceLoaderReload,
+    isLoaderPending,
+    validatedQuery,
+    validatedRouteParams,
+    async invalidate(options) {
+      const ids = options?.routeIds
+      if (ids?.length) {
+        const active = match.peek()?.route.id
+        if (!active || !ids.includes(active)) return
+      }
+      resetHydratedPageData()
+      forceLoaderReload.value = true
+      loaderEpoch.value += 1
+    },
     navigationMode: "history",
     navigate(to, replaceOrOptions = false) {
       const options =
@@ -512,6 +565,7 @@ export function createRouter({
     },
   }
 
+  registerKiruRouter(routerRef)
   return routerRef
 }
 
@@ -554,6 +608,12 @@ export function createStaticRouter({
     matches,
     isNavigating,
     currentNavigation,
+    loaderEpoch: signal(0),
+    forceLoaderReload: signal(false),
+    isLoaderPending: signal(false),
+    validatedQuery: signal(null),
+    validatedRouteParams: signal(null),
+    async invalidate() {},
     navigationMode: "static",
     navigate() {
       return committed()
@@ -610,6 +670,14 @@ export function useRouter(): Router {
 export function useMatches(): () => RouteTreeMatchSegment[] {
   const router = useRouter()
   return () => router.matches.value
+}
+
+/** Validated query when the route `load` defines `validation.query`. */
+export function useSearchParams<T = Record<string, unknown>>(): Kiru.Signal<
+  T | null
+> {
+  const router = useRouter()
+  return router.validatedQuery as Kiru.Signal<T | null>
 }
 
 function prefetchMatchedRoute(
@@ -677,58 +745,65 @@ export const Link: Kiru.Component<LinkProps> = () => {
  */
 export function RouterView() {
   const router = useRouter()
-  const { match, pathname, manifest, hash, query } = router
+  const { match, pathname, manifest, hash, query, loaderEpoch } = router
   let epoch = 0
   const children = resource(
-    { match, pathname },
+    { match, pathname, loaderEpoch },
     async ({ match, pathname }) => {
       const e = ++epoch
-      const tree = match
-        ? await loadRouteTree(match)
-        : await loadNotFoundRouteTree(manifest, pathname)
-      if (epoch !== e) return
+      router.isLoaderPending.value = true
+      try {
+        const tree = match
+          ? await loadRouteTree(match)
+          : await loadNotFoundRouteTree(manifest, pathname)
+        if (epoch !== e) return
 
-      let leafProps: LeafRouteProps = {}
-      let routeModule = tree?.routeModule
-      if (match && tree) {
-        const mod = await match.route.component()
-        const loaderCtx = buildLoaderContext({
-          params: match.params,
-          pathname: match.pathname,
-          search: (() => {
-            const qs = buildQueryString(query.peek())
-            return qs ? `?${qs}` : ""
-          })(),
-          hash: hash.peek(),
-          query: query.peek(),
-          context: {} as CustomRequestContext,
-        })
-        const load = readPageLoadExport(mod)
-        const pageHead = readPageHeadExport(mod)
-        if (canStreamPageLoad(load) && isStaticPageHead(pageHead)) {
-          const fallback = readLoaderFallback(load)
-          if (fallback) {
-            routeModule = wrapRouteModuleWithLoadGate(
-              tree.routeModule,
-              load!,
-              loaderCtx,
-              fallback
-            )
-            leafProps = {}
-          }
-        } else {
-          leafProps = await resolvePagePropsFromModule(mod, loaderCtx)
-          await syncDocumentHeadForPage(
-            match,
+        let leafProps: LeafRouteProps = {}
+        let routeModule = tree?.routeModule
+        if (match && tree) {
+          const mod = await match.route.component()
+          const loaderCtx = buildLoaderContext({
+            params:
+              router.validatedRouteParams.peek() ?? match.params,
+            pathname: match.pathname,
+            search: (() => {
+              const qs = buildQueryString(query.peek())
+              return qs ? `?${qs}` : ""
+            })(),
+            hash: hash.peek(),
+            query: query.peek(),
+            validatedQuery: router.validatedQuery.peek() as
+              | Record<string, unknown>
+              | undefined,
+            context: {} as CustomRequestContext,
+          })
+          const prepared = await prepareRouteForNavigation({
+            pageMod: mod,
+            routeModule: tree.routeModule,
             loaderCtx,
-            leafProps as PageProps<KiruLoader<unknown>>
-          )
+            options: {
+              useHydratedPageData: true,
+              forceReload: router.forceLoaderReload.peek(),
+            },
+          })
+          router.forceLoaderReload.value = false
+          routeModule = prepared.routeModule
+          leafProps = prepared.leafProps
+          if (!prepared.usesLoadGate) {
+            await syncDocumentHeadForPage(
+              match,
+              loaderCtx,
+              leafProps as PageProps<KiruLoader<unknown>>
+            )
+          }
         }
-      }
 
-      return tree && routeModule
-        ? buildRoutedSubtree(tree.layoutModules, routeModule, leafProps)
-        : null
+        return tree && routeModule
+          ? buildRoutedSubtree(tree.layoutModules, routeModule, leafProps)
+          : null
+      } finally {
+        if (epoch === e) router.isLoaderPending.value = false
+      }
     }
   )
 

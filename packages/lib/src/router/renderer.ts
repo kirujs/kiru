@@ -1,4 +1,4 @@
-import { createElement, Fragment } from "../element.js"
+import { Fragment } from "../element.js"
 import { renderToString } from "../renderToString.js"
 import { renderToReadableStream } from "../ssr/server.js"
 import { headlessRender } from "../headlessRender.js"
@@ -28,11 +28,9 @@ import {
   compileRouteHtmlTemplate,
   type CompiledRouteHtmlTemplate,
 } from "./htmlTemplate.js"
-import { RouterProvider, createStaticRouter } from "./csr.js"
-import {
-  RequestContextProvider,
-  serializeRequestContextScript,
-} from "./requestContext.js"
+import { createStaticRouter } from "./csr.js"
+import { serializeRequestContextScript } from "./requestContext.js"
+import { createSsrRouterShell } from "./routerShell.js"
 import { createLoaderHandler } from "./loaderRegistry.js"
 import { serializePageDataScript } from "./pageData.js"
 import { buildLoaderContext, resolvePagePropsFromModule } from "./runPageLoad.js"
@@ -51,6 +49,15 @@ import {
   resolvePageHead,
 } from "./pageHead.js"
 import { wrapRouteModuleWithLoadGate } from "./pageLoadGate.js"
+import { validateSearchForMatch } from "./validateSearchForMatch.js"
+import {
+  cachePolicyToHeaders,
+  mergeResponseHeaders,
+  readRouteCacheExport,
+  readRouteHeadersExport,
+  readRouteStatusExport,
+  resolveRouteStatus,
+} from "./routeResponse.js"
 import {
   type CustomRequestContext,
   type DocumentHead,
@@ -230,7 +237,14 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         }
       }
 
-      const { app, routeMatch, requestContext, serializedPageData } = prepared
+      const {
+        app,
+        routeMatch,
+        requestContext,
+        serializedPageData,
+        responseStatus,
+        responseHeaders,
+      } = prepared
       failureContext = {
         match: routeMatch,
         requestContext,
@@ -279,8 +293,12 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         return {
           kind: "stream" as const,
           result: {
-            status: routeMatch ? 200 : 404,
-            headers: { ...DEFAULT_HEADERS, "transfer-encoding": "chunked" },
+            status: routeMatch ? responseStatus : 404,
+            headers: {
+              ...DEFAULT_HEADERS,
+              ...responseHeaders,
+              "transfer-encoding": "chunked",
+            },
             body: stream,
           },
         }
@@ -313,8 +331,8 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
       return {
         kind: "string" as const,
         result: {
-          status: routeMatch ? 200 : 404,
-          headers: DEFAULT_HEADERS,
+          status: routeMatch ? responseStatus : 404,
+          headers: { ...DEFAULT_HEADERS, ...responseHeaders },
           body:
             compiledTemplate !== null
               ? compiledTemplate.render(fullBody, fullHead)
@@ -568,13 +586,7 @@ function buildAppElement(
   })
   staticRouter.params.value = params
   const subtree = buildRoutedSubtree(layoutModules, routeModule, leafProps)
-  return createElement(RequestContextProvider, {
-    value: requestContext,
-    children: createElement(RouterProvider, {
-      router: staticRouter,
-      children: () => subtree,
-    }),
-  })
+  return createSsrRouterShell(staticRouter, requestContext, () => subtree)
 }
 
 function serializedDataFromPageProps(
@@ -678,6 +690,8 @@ type PreparedApp = {
   pagePropsPromise?: Promise<Record<string, unknown>>
   /** Flush static head prefix before shell render. */
   earlyFlushHead?: boolean
+  responseStatus: number
+  responseHeaders: Record<string, string>
 }
 
 type PrepareAppResult =
@@ -748,6 +762,8 @@ async function prepareAppForUrl(
           app,
           routeMatch: null,
           requestContext,
+          responseStatus: 404,
+          responseHeaders: mergeResponseHeaders(ctx?.headers),
         }
       }
       return null
@@ -771,13 +787,24 @@ async function prepareAppForUrl(
       return { kind: "redirect", location: path }
     }
 
+    const searchCheck = await validateSearchForMatch(routeMatch, requestUrl.query, {
+      hash: requestUrl.hash,
+    })
+    if (!searchCheck.ok) {
+      if (searchCheck.failure.kind === "redirect") {
+        return { kind: "redirect", location: searchCheck.failure.location }
+      }
+      return null
+    }
+
     const requestContext = (ctx?.context ?? {}) as CustomRequestContext
     const loaderCtx = buildLoaderContext({
-      params: routeMatch.params,
+      params: searchCheck.params,
       pathname: routeMatch.pathname,
       search: requestUrl.search,
       hash: requestUrl.hash,
       query: requestUrl.query,
+      validatedQuery: searchCheck.validatedQuery,
       context: requestContext,
     })
     const pageMod = await routeMatch.route.component()
@@ -832,6 +859,26 @@ async function prepareAppForUrl(
       pageProps as LeafRouteProps,
       { url: requestUrl, pathPolicy }
     )
+
+    const pagePropsForMeta = dynamicHead || !streamPageLoad
+      ? (pageProps as PageProps<KiruLoader<unknown>>)
+      : undefined
+    const resolvedStatus = resolveRouteStatus(
+      readRouteStatusExport(pageMod),
+      loaderCtx,
+      pagePropsForMeta
+    )
+    const responseStatus = resolvedStatus ?? 200
+    const routeHeadersExport = readRouteHeadersExport(pageMod)
+    const responseHeaders = mergeResponseHeaders(
+      ctx?.headers,
+      cachePolicyToHeaders(
+        readRouteCacheExport(pageMod),
+        routeMatch.route.static === true
+      ),
+      routeHeadersExport?.resolve(loaderCtx, pagePropsForMeta)
+    )
+
     return {
       app,
       routeMatch,
@@ -842,6 +889,8 @@ async function prepareAppForUrl(
       streamHeadMeta,
       pagePropsPromise,
       earlyFlushHead: streamPageLoad,
+      responseStatus,
+      responseHeaders,
     }
   }
 

@@ -1,0 +1,113 @@
+import type { LoaderContext, PageProps } from "./loaders.js"
+import type { KiruLoader } from "./loaders.js"
+
+export type RouteHeadersFn = (
+  ctx: LoaderContext,
+  pageProps?: PageProps<KiruLoader<unknown>>
+) => HeadersInit
+
+export type KiruRouteHeaders = {
+  __kiruRouteHeaders: true
+  resolve: RouteHeadersFn
+}
+
+export type RouteStatusFn = (
+  ctx: LoaderContext,
+  pageProps?: PageProps<KiruLoader<unknown>>
+) => number
+
+export type RouteCachePolicy = "no-store" | "immutable"
+
+/**
+ * Page export: `export const headers = defineRouteHeaders(…)` merged into SSR responses.
+ * Accepts static `HeadersInit` or a function of loader context (and optional page props).
+ */
+export function defineRouteHeaders(
+  headersOrFn: HeadersInit | RouteHeadersFn
+): KiruRouteHeaders {
+  if (typeof headersOrFn === "function") {
+    return { __kiruRouteHeaders: true, resolve: headersOrFn }
+  }
+  return {
+    __kiruRouteHeaders: true,
+    resolve: () => headersOrFn,
+  }
+}
+
+export function isKiruRouteHeaders(value: unknown): value is KiruRouteHeaders {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "__kiruRouteHeaders" in value &&
+    typeof (value as KiruRouteHeaders).resolve === "function"
+  )
+}
+
+export function readRouteHeadersExport(mod: unknown): KiruRouteHeaders | undefined {
+  if (!mod || typeof mod !== "object") return undefined
+  const h = (mod as Record<string, unknown>).headers
+  return isKiruRouteHeaders(h) ? h : undefined
+}
+
+export function readRouteStatusExport(
+  mod: unknown
+): number | RouteStatusFn | undefined {
+  if (!mod || typeof mod !== "object") return undefined
+  const s = (mod as Record<string, unknown>).status
+  if (typeof s === "number") return s
+  if (typeof s === "function") return s as RouteStatusFn
+  return undefined
+}
+
+export function readRouteCacheExport(mod: unknown): RouteCachePolicy | undefined {
+  if (!mod || typeof mod !== "object") return undefined
+  const c = (mod as Record<string, unknown>).cache
+  if (c === "no-store" || c === "immutable") return c
+  return undefined
+}
+
+export function resolveRouteStatus(
+  statusExport: number | RouteStatusFn | undefined,
+  ctx: LoaderContext,
+  pageProps?: PageProps<KiruLoader<unknown>>
+): number | undefined {
+  if (statusExport === undefined) return undefined
+  if (typeof statusExport === "number") return statusExport
+  return statusExport(ctx, pageProps)
+}
+
+/**
+ * Map `export const cache` (`'no-store' | 'immutable'`) to `Cache-Control`.
+ * Static routes default to immutable when no policy is set.
+ */
+export function cachePolicyToHeaders(
+  policy: RouteCachePolicy | undefined,
+  staticRoute: boolean
+): Record<string, string> {
+  if (policy === "no-store") {
+    return { "cache-control": "no-store" }
+  }
+  if (policy === "immutable" || staticRoute) {
+    return {
+      "cache-control": "public, max-age=31536000, immutable",
+    }
+  }
+  return { "cache-control": "no-store" }
+}
+
+export function mergeResponseHeaders(
+  ...parts: (HeadersInit | Record<string, string> | undefined)[]
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const part of parts) {
+    if (!part) continue
+    const entries =
+      part instanceof Headers
+        ? Array.from(part.entries())
+        : Object.entries(part as Record<string, string>)
+    for (const [key, value] of entries) {
+      out[key.toLowerCase()] = value
+    }
+  }
+  return out
+}

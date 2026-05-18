@@ -41,11 +41,12 @@ export const getStreamingProduct = action.get<StreamingProduct>(async () => {
 
 export const getStreamingReviews = action.post<{ productId: string }, StreamingReview[]>(
   {
-    parse: (input): input is { productId: string } =>
-      typeof input === "object" &&
-      input !== null &&
-      "productId" in input &&
-      typeof input.productId === "string",
+    parse: (input) => {
+      if (typeof input !== "object" || input === null || !("productId" in input)) {
+        throw new Error("Invalid input")
+      }
+      return input as { productId: string }
+    },
   },
   async (_ctx, input: { productId: string }) => {
     console.log("action: get streaming reviews")

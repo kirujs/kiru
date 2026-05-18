@@ -10,7 +10,7 @@ import {
 } from "./devWarnings.js"
 
 export type LoaderFetchContext = {
-  params: Record<string, string>
+  params: Record<string, unknown>
   pathname: string
   search: string
   hash: string
@@ -19,15 +19,17 @@ export type LoaderFetchContext = {
   request?: Request
 }
 
-export function buildLoaderContext(input: LoaderFetchContext): LoaderContext {
+export function buildLoaderContext(
+  input: LoaderFetchContext & { validatedQuery?: Record<string, unknown> }
+): LoaderContext {
   return {
-    params: input.params,
+    params: input.params as LoaderContext["params"],
     url: {
       pathname: input.pathname,
       search: input.search,
       hash: input.hash,
     },
-    query: input.query,
+    query: (input.validatedQuery ?? input.query) as LoaderContext["query"],
     context: input.context,
     request: input.request,
   }
@@ -80,12 +82,14 @@ export function buildPageErrorProps(
 export async function resolvePagePropsFromModule(
   mod: unknown,
   ctx: LoaderContext,
-  options?: { useHydratedPageData?: boolean }
+  options?: { useHydratedPageData?: boolean; forceReload?: boolean }
 ): Promise<PageProps<KiruLoader<unknown>> | Record<string, never>> {
   const load = readPageLoadExport(mod)
   if (!load) return {}
+  const useHydrated =
+    options?.forceReload === true ? false : options?.useHydratedPageData !== false
   if (
-    options?.useHydratedPageData !== false &&
+    useHydrated &&
     load.__kiruLoader === "server" &&
     typeof document !== "undefined"
   ) {

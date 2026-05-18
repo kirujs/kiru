@@ -1294,6 +1294,37 @@ describe("router", () => {
     assert.ok(out.includes("</head>"))
   })
 
+  it("invalidate bumps loaderEpoch and clears force reload after outlet run", async () => {
+    const routes = defineRouteTree((r) =>
+      r.scope({
+        layout: async () => ({
+          default: ({ children }: { children: JSX.Children }) => (
+            <main>{children}</main>
+          ),
+        }),
+        children: [
+          r.page("/", async () => ({ default: () => <h1>Home</h1> })),
+        ],
+      })
+    )
+    const manifest = compileRouteTree(routes)
+    const history = {
+      pushState() {},
+      replaceState() {},
+    } as unknown as History
+    const location = {
+      pathname: "/",
+      hash: "",
+      search: "",
+      origin: "http://localhost",
+    } as unknown as Location
+    const router = createRouter({ routes: manifest, history, location })
+    assert.equal(router.loaderEpoch.peek(), 0)
+    await router.invalidate()
+    assert.equal(router.loaderEpoch.peek(), 1)
+    assert.equal(router.forceLoaderReload.peek(), true)
+  })
+
   it("hydratePrerenderedHtmlForRequest replaces context and token for the request", () => {
     const html = `<!doctype html><html><head><title>t</title><script type="application/json" k-request-context>{"user":{"name":"Stale"}}</script><script type="application/json" k-request-token>stale</script></head><body>x</body></html>`
     const secret = "unit-test-secret-for-hydrate"

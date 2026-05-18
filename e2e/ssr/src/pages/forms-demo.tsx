@@ -1,8 +1,13 @@
 import { createFormController } from "kiru/remote"
-import { submitMessage, submitRedirect } from "./forms-demo.actions"
+import {
+  submitMessage,
+  submitRedirect,
+  submitValidation,
+} from "./forms-demo.actions"
 
 export default function FormsDemo() {
   const messageForm = createFormController(submitMessage)
+  const validationForm = createFormController(submitValidation)
   const redirectForm = createFormController(submitRedirect)
 
   return () => (
@@ -31,6 +36,28 @@ export default function FormsDemo() {
         {messageForm.isPending.value
           ? "pending…"
           : (messageForm.result.value?.message ?? "")}
+      </p>
+      <form
+        data-testid="forms-validation-form"
+        action={validationForm.action}
+        method={validationForm.method}
+        onsubmit={validationForm.onsubmit}
+      >
+        <label>
+          Validate
+          <input
+            data-testid="forms-validation-input"
+            name="message"
+            type="text"
+            autocomplete="off"
+          />
+        </label>
+        <button data-testid="forms-validation-submit" type="submit">
+          Submit validation
+        </button>
+      </form>
+      <p data-testid="forms-validation-error">
+        {validationForm.fieldErrors.value?.message ?? ""}
       </p>
       <form
         data-testid="forms-demo-redirect-form"

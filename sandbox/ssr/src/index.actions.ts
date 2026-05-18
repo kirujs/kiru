@@ -1,14 +1,15 @@
-import { action, type RemoteActionSchema } from "kiru/remote"
+import { action, Schema } from "kiru/remote"
 import { test } from "./test"
 
 console.log(test)
 
-const mySchema: RemoteActionSchema<{ name: string }> = {
-  parse: (input): input is { name: string } =>
-    !!input &&
-    typeof input === "object" &&
-    "name" in input &&
-    typeof input.name === "string",
+const mySchema: Schema<{ name: string }> = {
+  parse: (input) => {
+    if (typeof input !== "object" || input === null || !("name" in input)) {
+      throw new Error("Invalid input")
+    }
+    return input as { name: string }
+  },
 }
 
 export const getSandboxServerEcho = action.get(async (ctx) => {
@@ -31,20 +32,22 @@ export type UpdateTodoInput = Partial<Omit<TodoItem, "id">> & {
   id: string
 }
 
-const createTodoSchema: RemoteActionSchema<CreateTodoInput> = {
-  parse: (input): input is TodoItem =>
-    !!input &&
-    typeof input === "object" &&
-    "text" in input &&
-    typeof input.text === "string",
+const createTodoSchema: Schema<CreateTodoInput> = {
+  parse: (input) => {
+    if (typeof input !== "object" || input === null || !("text" in input)) {
+      throw new Error("Invalid input")
+    }
+    return input as CreateTodoInput
+  },
 }
 
-const updateTodoSchema: RemoteActionSchema<UpdateTodoInput> = {
-  parse: (input): input is TodoItem =>
-    !!input &&
-    typeof input === "object" &&
-    "id" in input &&
-    typeof input.id === "string",
+const updateTodoSchema: Schema<UpdateTodoInput> = {
+  parse: (input) => {
+    if (typeof input !== "object" || input === null || !("id" in input)) {
+      throw new Error("Invalid input")
+    }
+    return input as UpdateTodoInput
+  },
 }
 
 const todos: TodoItem[] = [

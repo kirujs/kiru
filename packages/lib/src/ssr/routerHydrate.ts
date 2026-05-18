@@ -1,6 +1,10 @@
 import type { AppHandle, AppHandleOptions } from "../appHandle.js"
+import { Fragment } from "../element.js"
+import { signal } from "../signals/index.js"
 import { hydrate } from "./client.js"
-import { RouterProvider, createRouter } from "../router/csr.js"
+import { createRouter } from "../router/csr.js"
+import { createSsrRouterShell } from "../router/routerShell.js"
+import { registerKiruRouter } from "../router/routerGlobal.js"
 import { compileRouteTree } from "../router/manifest.js"
 import {
   buildRoutedSubtree,
@@ -9,24 +13,10 @@ import {
   type LeafRouteProps,
 } from "../router/routeTree.js"
 import type { RouteManifest, RouteTreeDefinition } from "../router/types.js"
-import {
-  readHydratedRequestContext,
-  RequestContextProvider,
-} from "../router/requestContext.js"
-import {
-  buildLoaderContext,
-  resolvePagePropsFromModule,
-} from "../router/runPageLoad.js"
-import {
-  canStreamPageLoad,
-  readLoaderFallback,
-  readPageLoadExport,
-} from "../router/loaders.js"
-import { wrapRouteModuleWithLoadGate } from "../router/pageLoadGate.js"
-import { isStaticPageHead, readPageHeadExport } from "../router/pageHead.js"
+import { readHydratedRequestContext } from "../router/requestContext.js"
+import { buildLoaderContext } from "../router/runPageLoad.js"
+import { prepareRouteForNavigation } from "../router/prepareRoute.js"
 import type { RouteModule } from "../router/types.js"
-import { signal } from "../signals/index.js"
-import { createElement } from "../element.js"
 import { requestToken } from "../globals.js"
 import { syncDocumentHeadForPage } from "../router/pageHead.js"
 import type { PageProps } from "../router/loaders.js"
@@ -35,6 +25,8 @@ import {
   markRouterBootstrap,
   type RouterBootstrapMode,
 } from "../router/devWarnings.js"
+import { applyInvalidateResponseHeader } from "../router/routerGlobal.js"
+import { guardRemoteActionOnClient } from "../router/devWarnings.js"
 
 type ServerActionsClient = {
   dispatch: (
@@ -55,6 +47,7 @@ function ensureServerActionsClient() {
 
   g.__kiru_serverActions = {
     dispatch: async (id, method, input, opts) => {
+      guardRemoteActionOnClient()
       const headers: Record<string, string> = {
         "x-kiru-token": requestToken.current,
       }
@@ -71,6 +64,7 @@ function ensureServerActionsClient() {
       if (!r.ok) {
         throw new Error("Action failed")
       }
+      applyInvalidateResponseHeader(r.headers.get("x-kiru-invalidate"))
       return r.json()
     },
   }
@@ -177,33 +171,54 @@ async function prepareClientRouteForMatch(
   pathname: string,
   router: ReturnType<typeof createRouter>,
   routeModule: RouteModule,
-  options?: { useHydratedPageData?: boolean }
+  options?: {
+    useHydratedPageData?: boolean
+    forceReload?: boolean
+  }
 ): Promise<{ routeModule: RouteModule; leafProps: LeafRouteProps }> {
   const pageMod = await routeMatch.route.component()
-  const load = readPageLoadExport(pageMod)
-  if (!load) return { routeModule, leafProps: {} }
-
   const loaderCtx = loaderContextForMatch(routeMatch, pathname, router)
-  const pageHead = readPageHeadExport(pageMod)
-  if (canStreamPageLoad(load) && isStaticPageHead(pageHead)) {
-    const fallback = readLoaderFallback(load)
-    if (fallback) {
-      return {
-        routeModule: wrapRouteModuleWithLoadGate(
-          routeModule,
-          load,
-          loaderCtx,
-          fallback
-        ),
-        leafProps: {},
-      }
-    }
-  }
-
-  const leafProps = await resolvePagePropsFromModule(pageMod, loaderCtx, {
-    useHydratedPageData: options?.useHydratedPageData ?? true,
+  const prepared = await prepareRouteForNavigation({
+    pageMod,
+    routeModule,
+    loaderCtx,
+    options,
   })
-  return { routeModule, leafProps: leafProps as LeafRouteProps }
+  return {
+    routeModule: prepared.routeModule,
+    leafProps: prepared.leafProps,
+  }
+}
+
+type SsrClientRouter = ReturnType<typeof createRouter>
+
+async function buildSsrClientSubtree(
+  match: NonNullable<ReturnType<SsrClientRouter["match"]["peek"]>>,
+  router: SsrClientRouter,
+  options: { useHydratedPageData: boolean; forceReload: boolean }
+): Promise<JSX.Element | null> {
+  const pathname = router.pathname.peek()
+  const tree = await loadRouteTree(match)
+  if (!tree) return null
+
+  const prepared = await prepareClientRouteForMatch(
+    match,
+    pathname,
+    router,
+    tree.routeModule,
+    options
+  )
+  await syncDocumentHeadForPage(
+    match,
+    loaderContextForMatch(match, pathname, router),
+    prepared.leafProps as PageProps<KiruLoader<unknown>>
+  )
+
+  return buildRoutedSubtree(
+    tree.layoutModules,
+    prepared.routeModule,
+    prepared.leafProps
+  )
 }
 
 /**
@@ -219,6 +234,7 @@ export async function bootstrapSsrClient(
       ? options.routes
       : compileRouteTree(options.routes)
   const router = createRouter({ routes: manifest })
+  registerKiruRouter(router)
   const pendingClientHash = stashClientHashForSsrHydration(router)
 
   const { container, hydrateOptions } = options
@@ -228,89 +244,67 @@ export async function bootstrapSsrClient(
   }
 
   const requestContext = readHydratedRequestContext()
-  const pathname = router.pathname.peek()
   const match = router.match.peek()
-  const first = match
-    ? await loadRouteTree(match)
-    : await loadNotFoundRouteTree(manifest, pathname)
 
-  const children = signal<JSX.Element | null>(null)
-  if (first && match) {
-    const { routeModule, leafProps } = await prepareClientRouteForMatch(
-      match,
-      pathname,
-      router,
-      first.routeModule,
-      { useHydratedPageData: true }
-    )
-    if (typeof document !== "undefined") {
-      await syncDocumentHeadForPage(
-        match,
-        loaderContextForMatch(match, pathname, router),
-        leafProps as PageProps<KiruLoader<unknown>>
-      )
-    }
-    children.value = buildRoutedSubtree(
-      first.layoutModules,
-      routeModule,
-      leafProps
-    )
-  }
-  let epoch = 0
-  router.match.subscribe((match) => {
-    const e = ++epoch
-    void (async () => {
-      const tree = match
-        ? await loadRouteTree(match)
-        : await loadNotFoundRouteTree(manifest, router.pathname.peek())
-
-      if (e !== epoch) return
-      if (!tree) {
-        children.value = null
-        return
-      }
-      let routeModule = tree.routeModule
-      let leafProps: LeafRouteProps = {}
-      if (match) {
-        const prepared = await prepareClientRouteForMatch(
-          match,
-          router.pathname.peek(),
-          router,
-          tree.routeModule,
-          { useHydratedPageData: false }
-        )
-        if (e !== epoch) return
-        routeModule = prepared.routeModule
-        leafProps = prepared.leafProps
-        await syncDocumentHeadForPage(
-          match,
-          loaderContextForMatch(match, router.pathname.peek(), router),
-          leafProps as PageProps<KiruLoader<unknown>>
-        )
-        if (e !== epoch) return
-      }
-      
-      if (e !== epoch) return
-      children.value = buildRoutedSubtree(
-        tree.layoutModules,
-        routeModule,
-        leafProps
-      )
-    })()
-  })
+  const outlet = signal<JSX.Element | null>(
+    match
+      ? await buildSsrClientSubtree(match, router, {
+          useHydratedPageData: true,
+          forceReload: false,
+        })
+      : null
+  )
 
   const app = hydrate(
-    createElement(
-      RequestContextProvider,
-      { value: requestContext },
-      createElement(RouterProvider, {
-        router,
-        children: () => children.value,
-      })
-    ),
+    Fragment({
+      children: createSsrRouterShell(router, requestContext, () => outlet.value),
+    }),
     container,
     staticHydrate
   )
+
+  let navEpoch = 0
+  router.match.subscribe((nextMatch) => {
+    const e = ++navEpoch
+    void (async () => {
+      if (e !== navEpoch) return
+      if (!nextMatch) {
+        const tree = await loadNotFoundRouteTree(
+          manifest,
+          router.pathname.peek()
+        )
+        if (e !== navEpoch) return
+        outlet.value = tree
+          ? buildRoutedSubtree(tree.layoutModules, tree.routeModule, {})
+          : null
+        return
+      }
+      const forceReload = router.forceLoaderReload.peek()
+      router.forceLoaderReload.value = false
+      const subtree = await buildSsrClientSubtree(nextMatch, router, {
+        useHydratedPageData: false,
+        forceReload,
+      })
+      if (e !== navEpoch) return
+      outlet.value = subtree
+    })()
+  })
+
+  let invalidateEpoch = 0
+  router.loaderEpoch.subscribe(() => {
+    const e = ++invalidateEpoch
+    void (async () => {
+      const current = router.match.peek()
+      if (!current) return
+      const subtree = await buildSsrClientSubtree(current, router, {
+        useHydratedPageData: false,
+        forceReload: router.forceLoaderReload.peek(),
+      })
+      router.forceLoaderReload.value = false
+      if (e !== invalidateEpoch) return
+      outlet.value = subtree
+    })()
+  })
 
   restoreClientHashAfterHydration(router, pendingClientHash)
 

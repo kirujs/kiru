@@ -35,6 +35,19 @@ export type SpeculativeTraverseContext = Pick<
   "onStreamData" | "scheduleSpeculativeContinue"
 >
 
+function renderHeadlessChildNodes(
+  ctx: HeadlessRenderContext,
+  children: unknown,
+  parent: Kiru.VNode
+): void {
+  if (children == null || children === false) return
+  if (Array.isArray(children)) {
+    children.forEach((c, i) => headlessRender(ctx, c, parent, i))
+    return
+  }
+  headlessRender(ctx, children, parent, 0)
+}
+
 export function headlessRender(
   ctx: HeadlessRenderContext,
   el: unknown,
@@ -100,7 +113,7 @@ export function headlessRender(
         },
       }
       try {
-        headlessRender(boundaryCtx, children, el, idx)
+        renderHeadlessChildNodes(boundaryCtx, children, el)
         ctx.write(boundaryBuffer)
         ctx.onStreamData?.([...streamPromises])
       } catch (error) {
@@ -125,7 +138,7 @@ export function headlessRender(
       }
     }
 
-    headlessRender(ctx, children, el, idx)
+    renderHeadlessChildNodes(ctx, children, el)
     return
   }
 
@@ -136,7 +149,7 @@ export function headlessRender(
       if (typeof children === "function") {
         children = children(props)
       }
-      headlessRender(ctx, children, el, idx)
+      renderHeadlessChildNodes(ctx, children, el)
       return
     } catch (error) {
       if (isStreamDataThrowValue(error)) {
@@ -172,6 +185,19 @@ export function headlessRender(
     headlessRender(ctx, children, el, 0)
   }
   ctx.write(`</${type}>`)
+}
+
+function renderSpeculativeChildNodes(
+  ctx: SpeculativeTraverseContext,
+  children: unknown,
+  parent: Kiru.VNode
+): void {
+  if (children == null || children === false) return
+  if (Array.isArray(children)) {
+    children.forEach((c, i) => speculativeTraverse(ctx, c, parent, i))
+    return
+  }
+  speculativeTraverse(ctx, children, parent, 0)
 }
 
 /**
@@ -247,7 +273,7 @@ export function speculativeTraverse(
         node.current = null
       }
     }
-    speculativeTraverse(ctx, children, el, idx)
+    renderSpeculativeChildNodes(ctx, children, el)
     return
   }
 
@@ -258,7 +284,7 @@ export function speculativeTraverse(
       if (typeof result === "function") {
         result = result(props)
       }
-      speculativeTraverse(ctx, result, el, idx)
+      renderSpeculativeChildNodes(ctx, result, el)
       return
     } catch (error) {
       if (isStreamDataThrowValue(error)) {

@@ -24,25 +24,25 @@ Per-request context is **SSR-only** via `createRenderer({ context })` and hydrat
 
 ## Data loading & invalidation
 
-- [ ] **Design: `router.invalidate()`** — refetch loaders for current route or by route id / path pattern
-- [ ] **Design: invalidate after `action` / `formAction`** — opt-in `action({ invalidate: ['/users'] })` or callback
+- [x] **`router.invalidate()`** — refetch loaders for current route; optional `routeIds` filter; `loaderEpoch` + outlet reload
+- [x] **Invalidate after `action`** — `action({ invalidate: ['route-id'] })` + `x-kiru-invalidate` response header
 - [ ] **Integrate with `resource()`** — document pattern for client-side stale UI (link sandbox `isStale` example)
 - [ ] **Optional: navigation `pending` + stale data flag** on router for global loading UX
-- [ ] **E2E: mutation then list refresh** without full page reload
+- [x] **E2E: mutation then list refresh** without full page reload (`invalidate-demo`)
 
 ## Typed URL state
 
-- [ ] **API design: search param schemas** — `validateSearch` export on page module or route config (Zod/Valibot optional peer)
-- [ ] **Parse on navigation** — coerce types, default values, invalid → redirect or 404
-- [ ] **SSR: same validation in `createRenderer`** before render
-- [ ] **`useRouter().query` typed helpers** or `useSearchParams<T>()` hook
-- [ ] **Unit + e2e tests** for invalid query handling
+- [x] **Search param schemas** — `load.validation.query` on `loader` / `serverLoader` / `clientLoader`; legacy `validateSearch` via `defineSearchParams`; [Standard Schema](https://standardschema.dev) + `parse` / `safeParse` (`@standard-schema/spec` optional peer)
+- [x] **Parse on navigation** — defaults, `onInvalid` → 404 or redirect, `redirectToCanonical`
+- [x] **SSR: same validation in `createRenderer`** before render (`validateRouteInput`)
+- [x] **`useSearchParams<T>()`** — validated query signal on the router
+- [x] **Unit + e2e tests** — `loaderValidation.test.ts`, `search-schema` e2e
 
 ## Route-level HTTP metadata
 
-- [ ] **`export const headers`** or route config `headers(ctx) => HeadersInit` for SSR responses
-- [ ] **`export const status`** or dynamic status from loader (404 when data missing)
-- [ ] **Cache-Control helpers** — `static: true` routes default to immutable; SSR opt-in `cache: 'no-store'`
+- [x] **`export const headers`** — `defineRouteHeaders` static or `(ctx) => HeadersInit`
+- [x] **`export const status`** — number or function from loader context / page props
+- [x] **`export const cache`** — `'no-store' | 'immutable'`; static routes default to immutable
 - [ ] **Document CDN behavior** for hybrid static files vs SSR paths
 
 ## Environment variables
@@ -67,21 +67,22 @@ Per-request context is **SSR-only** via `createRenderer({ context })` and hydrat
 
 ## Forms & actions (SvelteKit-adjacent)
 
-- [ ] **Validation errors from `formAction`** — structured `{ fieldErrors }` JSON; `createFormController` surfaces on `result`
-- [ ] **Doc: progressive enhancement** — no-JS submit still works; enhanced path uses fetch
+- [x] **Validation errors from `formAction`** — structured `{ fieldErrors }` JSON; `createFormController` surfaces on `result`
+- [ ] **Doc: progressive enhancement** — no-JS submit still works; enhanced path uses fetch (e2e covers SSR forms)
 - [ ] **Multiple forms per page** — action id disambiguation (verify current behavior, document)
 
 ## Code quality
 
-- [ ] **Shared `prepareRouteForNavigation()`** — used by `RouterView`, `bootstrapSsrClient`, `bootstrapSsgClient`, renderer prep
-- [ ] **Reduce duplication** between `csr.tsx` and `routerHydrate.ts` (head sync, load gate, leaf props)
+- [x] **Shared `prepareRouteForNavigation()`** — `RouterView`, `bootstrapSsrClient`, renderer prep
+- [x] **`createSsrRouterShell()`** — shared SSR/SSG shell; `routerHydrate` uses inline outlet for targeted updates
+- [ ] **Further dedupe** between `csr.tsx` and `routerHydrate.ts` (head sync, load gate, leaf props)
 - [ ] **Narrow `@internal` router APIs** — hide `__registerComponentGuard` behind stable hooks only
 
 ## Testing
 
 - [ ] **Contract tests for adapters** — minimal app renders `/` and serves static hybrid path
-- [ ] **Search params e2e** in `e2e/csr` or `e2e/ssr`
-- [ ] **Invalidation e2e** after remote action
+- [x] **Search params e2e** — `e2e/ssr` `search-schema`
+- [x] **Invalidation e2e** — `invalidate-demo` after remote action
 
 ---
 

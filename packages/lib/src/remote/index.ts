@@ -25,6 +25,22 @@ export {
   type RemoteActionOptions,
   type RemoteActionCallback,
   type RemoteActionSchema,
+  type ActionSchema,
+  type Schema,
+  type KiruSchemaInput,
+  type KiruValidator,
+  type KiruValidationResult,
+  type StandardJSONSchema,
+  type StandardJSONSchemaV1,
+  type StandardSchema,
+  type StandardSchemaV1,
+  type StandardSchemaWithJson,
+  assertValid,
+  parseInput,
+  isStandardJSONSchemaV1,
+  isStandardSchemaV1,
+  toInputJsonSchema,
+  toOutputJsonSchema,
   type RemoteFormActionFunction,
   type RemoteFormActionCallback,
   type KiruRedirect,
@@ -38,6 +54,7 @@ export {
 type RegisteredRemoteAction = {
   __kiruRemoteAction: true
   __kiruRemoteMethod: import("./action.js").RemoteActionMethod
+  __kiruInvalidateRoutes?: string[]
   __kiruInvoke: (
     ctx: import("../router/types.js").CustomRequestContext,
     input: unknown
@@ -113,6 +130,14 @@ function isWrappedRemoteFormAction(
   )
 }
 
+function invalidateHeadersForAction(
+  handler: RegisteredRemoteAction | RemoteFormActionFunction<unknown>
+): Record<string, string> {
+  const routes = handler.__kiruInvalidateRoutes
+  if (!routes?.length) return {}
+  return { "x-kiru-invalidate": routes.join(",") }
+}
+
 async function invokeJsonRemoteAction(
   handler: RegisteredRemoteAction,
   context: import("../router/types.js").CustomRequestContext,
@@ -123,7 +148,7 @@ async function invokeJsonRemoteAction(
     const result = await handler.__kiruInvoke(context, input)
     return new Response(JSON.stringify(result), {
       status: 200,
-      headers: jsonHeaders,
+      headers: { ...jsonHeaders, ...invalidateHeadersForAction(handler) },
     })
   } catch (e) {
     if (isRemoteError(e) && options?.exposeErrors) {
@@ -209,7 +234,7 @@ export function createRemoteActionHandler(
           if (isEnhanced) {
             return new Response(JSON.stringify(result), {
               status: 200,
-              headers: jsonHeaders,
+              headers: { ...jsonHeaders, ...invalidateHeadersForAction(handler) },
             })
           }
           // Native POST with a non-redirect result: redirect back to referer.

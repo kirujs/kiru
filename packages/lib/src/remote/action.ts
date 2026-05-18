@@ -1,5 +1,28 @@
 import type { CustomRequestContext } from "../router/types.js"
+import type { Schema } from "../validation/index.js"
+import { parseInput } from "../validation/index.js"
 import { RemoteError } from "./errors.js"
+
+export type {
+  ActionSchema,
+  KiruSchemaInput,
+  KiruValidator,
+  KiruValidationResult,
+  Schema,
+  StandardJSONSchema,
+  StandardJSONSchemaV1,
+  StandardSchema,
+  StandardSchemaV1,
+  StandardSchemaWithJson,
+} from "../validation/index.js"
+export {
+  assertValid,
+  isStandardJSONSchemaV1,
+  isStandardSchemaV1,
+  parseInput,
+  toInputJsonSchema,
+  toOutputJsonSchema,
+} from "../validation/index.js"
 
 export { RemoteError, isRemoteError } from "./errors.js"
 
@@ -27,9 +50,8 @@ export type RemoteActionCallback<Input, Output> = (
   input: Input
 ) => Promise<Output> | Output
 
-export type RemoteActionSchema<Input> = {
-  parse: (input: unknown) => input is Input
-}
+/** @deprecated Use {@link Schema} instead. */
+export type RemoteActionSchema<Input> = Schema<Input>
 
 export type RemoteActionOptions = {
   signal?: AbortSignal
@@ -43,6 +65,11 @@ export type RemoteGetAction<Output> = ((
   __kiruInvoke: (ctx: CustomRequestContext, input: unknown) => Promise<Output>
 }
 
+export type RemoteActionMeta = {
+  /** Route ids to refetch loaders for after a successful invocation. */
+  invalidate?: string[]
+}
+
 export type RemotePostAction<Input, Output> = ((
   input: Input,
   options?: RemoteActionOptions
@@ -50,6 +77,7 @@ export type RemotePostAction<Input, Output> = ((
   __kiruRemoteAction: true
   __kiruRemoteMethod: "POST"
   __kiruInvoke: (ctx: CustomRequestContext, input: unknown) => Promise<Output>
+  __kiruInvalidateRoutes?: string[]
 }
 
 export type RemoteActionFunction<Input, Output> =
@@ -72,18 +100,19 @@ function wrapGetCallback<Output>(
 function createRemoteAction<Input, Output>(
   method: RemoteActionMethod,
   runAction: RemoteActionCallback<Input, Output>,
-  validateActionInput: (input: unknown) => void
+  validateActionInput: (input: unknown) => void | Promise<void>,
+  meta?: RemoteActionMeta
 ): RemoteGetAction<Output> | RemotePostAction<Input, Output> {
   if (method === "GET") {
     const wrapped = (async (_options?: RemoteActionOptions): Promise<Output> => {
-      validateActionInput(undefined)
+      await validateActionInput(undefined)
       return runAction(_currentSsrCtx, undefined as Input)
     }) as RemoteGetAction<Output>
 
     wrapped.__kiruRemoteAction = true
     wrapped.__kiruRemoteMethod = "GET"
     wrapped.__kiruInvoke = async (ctx, _input) => {
-      validateActionInput(undefined)
+      await validateActionInput(undefined)
       return runAction(ctx, undefined as Input)
     }
     return wrapped
@@ -93,34 +122,47 @@ function createRemoteAction<Input, Output>(
     input: Input,
     _options?: RemoteActionOptions
   ): Promise<Output> => {
-    validateActionInput(input)
+    await validateActionInput(input)
     return runAction(_currentSsrCtx, input)
   }) as RemotePostAction<Input, Output>
 
   wrapped.__kiruRemoteAction = true
   wrapped.__kiruRemoteMethod = "POST"
+  if (meta?.invalidate?.length) {
+    wrapped.__kiruInvalidateRoutes = meta.invalidate
+  }
   wrapped.__kiruInvoke = async (ctx, input) => {
-    validateActionInput(input)
+    await validateActionInput(input)
     return runAction(ctx, input as Input)
   }
   return wrapped
 }
 
 function createPostAction<Input, Output>(
-  callbackOrSchema:
-    | RemoteActionSchema<Input>
-    | RemoteActionCallback<Input, Output>,
-  callback?: RemoteActionCallback<Input, Output>
+  callbackOrValidator: Schema<Input> | RemoteActionCallback<Input, Output>,
+  callbackOrMeta?:
+    | RemoteActionCallback<Input, Output>
+    | RemoteActionMeta,
+  meta?: RemoteActionMeta
 ): RemotePostAction<Input, Output> {
-  const hasSchema = typeof callback === "function"
-  const schema = hasSchema
-    ? (callbackOrSchema as RemoteActionSchema<Input>)
-    : undefined
-  const runAction = hasSchema
-    ? callback!
-    : (callbackOrSchema as RemoteActionCallback<Input, Output>)
-  const validateActionInput = (input: unknown) => {
-    if (schema && !schema.parse(input)) {
+  let schema: Schema<Input> | undefined
+  let runAction: RemoteActionCallback<Input, Output>
+  let actionMeta: RemoteActionMeta | undefined
+
+  if (typeof callbackOrMeta === "function") {
+    schema = callbackOrValidator as Schema<Input>
+    runAction = callbackOrMeta
+    actionMeta = meta
+  } else {
+    runAction = callbackOrValidator as RemoteActionCallback<Input, Output>
+    actionMeta = callbackOrMeta
+  }
+
+  const validateActionInput = async (input: unknown) => {
+    if (!schema) return
+    try {
+      await parseInput(schema, input)
+    } catch {
       throw new RemoteError("Invalid remote action input", "INVALID_INPUT", {
         status: 400,
       })
@@ -129,7 +171,8 @@ function createPostAction<Input, Output>(
   return createRemoteAction(
     "POST",
     runAction,
-    validateActionInput
+    validateActionInput,
+    actionMeta
   ) as RemotePostAction<Input, Output>
 }
 
@@ -137,16 +180,22 @@ function post<Input, Output>(
   callback: RemoteActionCallback<Input, Output>
 ): RemotePostAction<Input, Output>
 function post<Input, Output>(
-  schema: RemoteActionSchema<Input>,
-  callback: RemoteActionCallback<Input, Output>
+  schema: Schema<Input>,
+  callback: RemoteActionCallback<Input, Output>,
+  meta?: RemoteActionMeta
 ): RemotePostAction<Input, Output>
 function post<Input, Output>(
-  callbackOrSchema:
-    | RemoteActionSchema<Input>
+  callback: RemoteActionCallback<Input, Output>,
+  meta?: RemoteActionMeta
+): RemotePostAction<Input, Output>
+function post<Input, Output>(
+  callbackOrValidator:
+    | Schema<Input>
     | RemoteActionCallback<Input, Output>,
-  callback?: RemoteActionCallback<Input, Output>
+  callbackOrMeta?: RemoteActionCallback<Input, Output> | RemoteActionMeta,
+  meta?: RemoteActionMeta
 ): RemotePostAction<Input, Output> {
-  return createPostAction(callbackOrSchema, callback)
+  return createPostAction(callbackOrValidator, callbackOrMeta, meta)
 }
 
 export const action = {
@@ -203,6 +252,7 @@ export type RemoteFormActionCallback<Output> = (
 export type RemoteFormActionFunction<Output> = {
   readonly __kiruFormAction: true
   __kiruFormActionId: string
+  __kiruInvalidateRoutes?: string[]
   __kiruInvoke: (
     ctx: CustomRequestContext,
     formData: FormData
@@ -210,11 +260,13 @@ export type RemoteFormActionFunction<Output> = {
 }
 
 export function formAction<Output>(
-  callback: RemoteFormActionCallback<Output>
+  callback: RemoteFormActionCallback<Output>,
+  meta?: RemoteActionMeta
 ): RemoteFormActionFunction<Output> {
   return {
     __kiruFormAction: true,
     __kiruFormActionId: "",
+    __kiruInvalidateRoutes: meta?.invalidate,
     __kiruInvoke: (ctx, formData) => Promise.resolve(callback(ctx, formData)),
   }
 }

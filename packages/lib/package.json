@@ -80,13 +80,22 @@
       "default": "./dist/jsx.js"
     }
   },
+  "peerDependencies": {
+    "@standard-schema/spec": "^1.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@standard-schema/spec": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "cross-env": "^10.1.0",
+    "@standard-schema/spec": "^1.1.0",
     "@types/chai": "^5.2.3",
     "@types/jsdom": "^27.0.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^25.6.0",
     "chai": "^6.2.2",
+    "cross-env": "^10.1.0",
     "jsdom": "^27.4.0",
     "ts-mocha": "^11.1.0",
     "typescript": "^5.9.3"

@@ -2,6 +2,7 @@ import {
   FLAG_DELETION,
   $FRAGMENT,
   FLAG_PLACEMENT,
+  FLAG_STATIC_DOM,
   FLAG_UPDATE,
   $ERROR_BOUNDARY,
   $CONTEXT,
@@ -197,7 +198,9 @@ function createVNodeId(vNode: Kiru.VNode): string {
   const accumulator: number[] = []
   let n: Kiru.VNode | null = vNode
   while (n) {
-    accumulator.push(n.index)
+    if (!(n.flags & FLAG_STATIC_DOM)) {
+      accumulator.push(n.index)
+    }
     n = n.parent
   }
   return `k:${BigInt(accumulator.join("")).toString(36)}`

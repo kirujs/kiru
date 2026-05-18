@@ -16,6 +16,7 @@ import type {
   RouteMatch,
 } from "./types.js"
 import { runGuards, toRedirect } from "./runNavigationGuards.js"
+import { validateSearchForMatch } from "./validateSearchForMatch.js"
 
 export type RouteTreeMatchSegment = {
   id: string
@@ -133,6 +134,8 @@ export type NavigationPipelineDeps = {
   scrollStack: { value: ScrollStackState }
   saveScrollAt: (index: number) => void
   commitLocation: (next: RouteLocationParts) => void
+  setValidatedQuery: (data: unknown | null) => void
+  setValidatedRouteParams: (params: Record<string, unknown> | null) => void
   buildMatchSegments: (match: RouteMatch | null) => RouteTreeMatchSegment[]
   locationFromMatch: (match: RouteMatch | null) => RouteLocation | null
   snapshotFromParts: (
@@ -176,6 +179,8 @@ export function createNavigateInternal(
     historyIndex,
     saveScrollAt,
     commitLocation,
+    setValidatedQuery,
+    setValidatedRouteParams,
     locationFromMatch,
     snapshotFromParts,
     currentLocationParts,
@@ -316,6 +321,25 @@ export function createNavigateInternal(
         return { status: "cancelled" }
       }
       if (g3.type === "redirect") return runRedirect(g3.to)
+
+      if (toMatch) {
+        const searchCheck = await validateSearchForMatch(toMatch, resolved.query, {
+          hash: resolved.hash,
+        })
+        if (!searchCheck.ok) {
+          if (searchCheck.failure.kind === "redirect") {
+            return runRedirect(searchCheck.failure.location)
+          }
+          failure = { type: "cancelled" }
+          handlePopstateCancel()
+          return { status: "cancelled" }
+        }
+        setValidatedQuery(searchCheck.validatedQuery ?? null)
+        setValidatedRouteParams(searchCheck.params)
+      } else {
+        setValidatedQuery(null)
+        setValidatedRouteParams(null)
+      }
 
       if (token !== navToken.value) {
         return { status: "cancelled" }
