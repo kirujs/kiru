@@ -171,15 +171,51 @@ describe("Tier 3 wave 1", () => {
   })
 
   describe("Assets", () => {
-    it("renders KiruImage with dimensions in SSR and CSR", () => {
+    it("renders Image with dimensions in SSR and CSR", () => {
       cy.request(`http://127.0.0.1:${port}/image-demo`).then((res) => {
         expect(res.body).to.match(/<img[^>]*width="32"[^>]*height="32"/)
+        expect(res.body).to.match(/srcset="[^"]*1x/i)
+        expect(res.body).to.include('sizes="100vw"')
+        expect(res.body).to.match(/384w|640w/)
       })
       cy.visit(`http://127.0.0.1:${port}/image-demo`)
-      cy.get('[data-testid="image-demo"] img')
+      cy.get('[data-testid="image-fixed"] img')
         .should("have.attr", "width", "32")
         .and("have.attr", "height", "32")
         .and("have.attr", "loading", "eager")
+        .invoke("attr", "srcset")
+        .should("match", /1x/)
+      cy.get('[data-testid="image-responsive"] img')
+        .should("have.attr", "sizes", "100vw")
+        .invoke("attr", "srcset")
+        .should("match", /384w|640w/)
+    })
+
+    it("serves runtime image optimizer (webp)", () => {
+      cy.request(
+        `http://127.0.0.1:${port}/_kiru/image?url=${encodeURIComponent("/hero.jpg")}&w=64&q=75`
+      ).then((res) => {
+        expect(res.status).to.eq(200)
+        expect(res.headers["content-type"]).to.match(/image\/webp/)
+      })
+    })
+
+    it("serves avif when Accept prefers avif", () => {
+      cy.request({
+        url: `http://127.0.0.1:${port}/_kiru/image?url=${encodeURIComponent("/hero.jpg")}&w=64&q=75`,
+        headers: { Accept: "image/avif,image/webp,*/*" },
+      }).then((res) => {
+        expect(res.status).to.eq(200)
+        expect(res.headers["content-type"]).to.eq("image/avif")
+      })
+    })
+
+    it("emits link preload for priority Image in SSR HTML", () => {
+      cy.request(`http://127.0.0.1:${port}/image-demo`).then((res) => {
+        expect(res.body).to.match(
+          /<link[^>]*rel="preload"[^>]*as="image"[^>]*imagesrcset=/i
+        )
+      })
     })
   })
 

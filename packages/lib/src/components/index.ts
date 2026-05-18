@@ -1,5 +1,5 @@
 export { ErrorBoundary, type ErrorBoundaryProps } from "./errorBoundary.js"
-export { KiruImage, type KiruImageProps } from "./KiruImage.js"
+export { Image, type ImageProps } from "./Image.js"
 export * from "./derive.js"
 export * from "./for.js"
 export * from "./lazy.js"

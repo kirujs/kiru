@@ -12,6 +12,9 @@
     "node": ">=22.20.0",
     "pnpm": ">=10.18.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["sharp"]
+  },
   "devDependencies": {
     "@builderman/resolvers-pnpm": "^1.0.0",
     "builderman": "^1.7.0",

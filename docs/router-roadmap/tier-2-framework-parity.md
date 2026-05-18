@@ -95,8 +95,6 @@ Per-request context is **SSR-only** via `createRenderer({ context })` and hydrat
 | File-based routes | Tier 1 route tests; manifest stability |
 | Workers adapter | Streaming renderer audit on Workers |
 
-## Out of scope (Tier 3)
+## Out of scope (Tier 3) — historical
 
-- ISR / on-demand revalidation
-- Image optimization component
-- Partial prerendering (PPR)
+These were Tier 3 targets; wave 1 delivered ISR, `<Image>`, and PPR-lite. See [tier-3-wave-1.md](../router/tier-3-wave-1.md) and [kiru-image.md](../router/kiru-image.md).

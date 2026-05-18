@@ -32,6 +32,7 @@ export const routes = defineRouteTree((r) =>
         "/loaders/universal",
         () => import("./pages/loaders/universal.tsx")
       ),
+      r.page("/image-demo", () => import("./pages/image-demo/index.tsx")),
     ],
   })
 )

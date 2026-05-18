@@ -1,8 +1,14 @@
 import { Hono } from "hono"
 import { serveStatic } from "@hono/node-server/serve-static"
-import { createRenderer, resolveStatic } from "kiru/router"
+import sharp from "sharp"
+import {
+  createRenderer,
+  createImageOptimizerIfRuntime,
+  resolveStatic,
+} from "kiru/router"
 import i18n from "./i18n.js"
 import { routes } from "./routes"
+import { imageConfig } from "./imageConfig.js"
 
 const isProd = process.env.NODE_ENV === "production"
 const { clientDir, htmlTemplate } = resolveStatic(import.meta.url, { dev: !isProd })
@@ -26,10 +32,25 @@ const renderer = createRenderer({
   },
 })
 
+const imageHandler = isProd
+  ? createImageOptimizerIfRuntime({
+      root: clientDir,
+      config: imageConfig,
+      sharp,
+      cacheDir: isProd ? `${clientDir}/.kiru-image-cache` : undefined,
+    })
+  : null
+
 const app = new Hono()
 
 if (isProd) {
-  app.use("/assets/*", serveStatic({ root: clientDir }))
+  if (imageHandler) {
+    app.get(imageConfig.path, async (c) => {
+      const res = await imageHandler(c.req.raw)
+      return res ?? c.text("Not Found", 404)
+    })
+  }
+  app.use("/*", serveStatic({ root: clientDir }))
 }
 
 app.all("*", async (c) => {
@@ -52,6 +73,8 @@ if (isProd) {
   const { serve } = await import("@hono/node-server")
   const port = Number(process.env.PORT) || 5179
   serve({ fetch: app.fetch, port }, () => {
-    console.log(`e2e SSR listening on http://localhost:${port}`)
+    console.log(
+      `e2e SSR listening on http://localhost:${port} (images: ${imageConfig.strategy})`
+    )
   })
 }

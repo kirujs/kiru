@@ -71,6 +71,8 @@ function propToHtmlAttr(key: string): string {
     case "rowSpan":
     case "crossOrigin":
       return key.toLowerCase()
+    case "srcSet":
+      return "srcset"
 
     default:
       if (key.indexOf("-") > -1) return key

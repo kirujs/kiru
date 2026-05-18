@@ -41,6 +41,7 @@ import { promises as fs } from "node:fs"
 import path from "node:path"
 import { glob } from "tinyglobby"
 
+import { kiruImagePlugin } from "./image/plugin.js"
 import type { KiruPluginOptions } from "./types.js"
 import type {
   ConfigEnv,
@@ -536,6 +537,29 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           // @ts-ignore TODO: update peer dep to kiru v2
         )) as typeof import("../../lib/src/router/index.js")
 
+        if (opts.router?.images) {
+          try {
+            const manifestPath = path.join(
+              state.outDir,
+              "kiru-image-manifest.json"
+            )
+            const raw = await fs.readFile(manifestPath, "utf8")
+            const imageMod = (await vite.ssrLoadModule(
+              "kiru/image"
+              // @ts-ignore
+            )) as typeof import("../../lib/src/image/index.js")
+            imageMod.setBuildImageManifest(JSON.parse(raw))
+            const imageOpts =
+              typeof opts.router.images === "object" ? opts.router.images : {}
+            imageMod.defineImageConfig({
+              strategy: "build",
+              ...imageOpts.config,
+            })
+          } catch {
+            /* manifest optional until first image import */
+          }
+        }
+
         let site = routesMod.site
         if (!site) {
           const candidates =
@@ -734,7 +758,13 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
   } satisfies Plugin
 
-  return [mainPlugin, remotePlugin]
+  const plugins: PluginOption[] = [mainPlugin, remotePlugin]
+  if (opts.router?.images) {
+    const imageOpts =
+      typeof opts.router.images === "object" ? opts.router.images : {}
+    plugins.push(kiruImagePlugin(imageOpts))
+  }
+  return plugins
 }
 
 // Export additional utilities

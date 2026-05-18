@@ -24,7 +24,7 @@
 
 ## Asset pipeline
 
-- [x] **`<Image>` or documented Vite plugin pattern** — `KiruImage` (srcset, lazy, dimensions)
+- [x] **`<Image>` + Vite `router.images`** — responsive srcset, build/runtime strategies, optimizer; guide: [kiru-image.md](../router/kiru-image.md)
 - [x] **Font preload from `head.links`** — convention + optional build scan
 - [ ] **Open Graph image route** — optional `opengraph-image` codegen (low priority)
 
@@ -86,7 +86,7 @@ Document these as **intentional** unless strategy changes:
 | Item | Effort | Impact | Suggested |
 |------|--------|--------|-----------|
 | On-demand revalidation (hybrid) | High | High for marketing sites | Yes if hybrid is flagship |
-| `<KiruImage>` | Medium | Medium | Yes for “marketing site” segment |
+| `<Image>` pipeline | Medium | Medium | Shipped (wave 1) |
 | i18n routing | Medium | High for EU adopters | If target market needs it |
 | Parallel routes | Very high | Niche | Defer |
 | API routes in tree | Medium | Medium | Only if “full-stack” brand |

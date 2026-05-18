@@ -8,6 +8,14 @@ export default defineConfig({
     },
   },
   plugins: [
-    kiru(),
+    kiru({
+      router: {
+        images: {
+          optimize: true,
+          formats: ["webp"],
+          config: { strategy: "build" },
+        },
+      },
+    }),
   ],
 })

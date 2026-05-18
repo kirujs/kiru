@@ -90,7 +90,7 @@ export const routes = defineRouteTree((r) =>
       }),
       r.page("/image-demo", {
         component: () => import("./pages/image-demo"),
-        head: { title: "E2E KiruImage" },
+        head: { title: "E2E Image" },
       }),
       r.page("/streaming-test", {
         component: () => import("./pages/streaming-test"),

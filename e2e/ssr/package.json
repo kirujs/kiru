@@ -21,6 +21,7 @@
   "dependencies": {
     "@hono/node-server": "^2.0.1",
     "hono": "^4.12.17",
-    "kiru": "workspace:^"
+    "kiru": "workspace:^",
+    "sharp": "^0.34.5"
   }
 }

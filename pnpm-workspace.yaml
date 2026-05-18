@@ -3,6 +3,4 @@ packages:
   - ./packages/**
   - ./sandbox/**
 
-onlyBuiltDependencies:
-  - cypress
-  - esbuild
+onlyBuiltDependencies: sharp

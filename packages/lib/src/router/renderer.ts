@@ -17,6 +17,10 @@ import {
   loadRouteTree,
   type LeafRouteProps,
 } from "./routeTree.js"
+import {
+  mergeImagePreloadsIntoHead,
+  runWithImagePreloadRegistry,
+} from "../image/preloadRegistry.js"
 import { serializeDocumentHead } from "./meta.js"
 import {
   formatPathname,
@@ -226,7 +230,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
 
   let bypassPrerenderServe = false
 
-  const renderCore = async (
+  const renderCoreInner = async (
     requestOrUrl: Request | string,
     ctx?: RenderRequestContext
   ) => {
@@ -608,6 +612,9 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     }
   }
 
+  const renderCore = (requestOrUrl: Request | string, ctx?: RenderRequestContext) =>
+    runWithImagePreloadRegistry(() => renderCoreInner(requestOrUrl, ctx))
+
   return { manifest, renderCore, handleRemoteAction }
 }
 
@@ -688,9 +695,10 @@ async function renderStringWithDocument(
     renderMode.current = prev
   }
 
-  const resolvedMeta =
+  const resolvedMeta = mergeImagePreloadsIntoHead(
     streamHeadMeta ??
-    mergeRouteAndPageHead(match.route.head, undefined, match.params)
+      mergeRouteAndPageHead(match.route.head, undefined, match.params)
+  )
   const ctxScript = serializeRequestContextScript(requestContext)
   const pageDataScript =
     pageData !== undefined ? serializePageDataScript(pageData) : ""
@@ -766,6 +774,20 @@ function serializedDataFromPageProps(
 
 /** Shared SSG / SSR string render for a matched route. */
 export async function renderMatchToStaticHtml(
+  manifest: RouteManifest,
+  match: RouteMatch,
+  pathPolicy?: RouterPathPolicy,
+  options?: {
+    i18n?: InternationalizationConfig<readonly string[], unknown>
+    locale?: string | null
+  }
+): Promise<{ body: string; document: DocumentHead }> {
+  return runWithImagePreloadRegistry(() =>
+    renderMatchToStaticHtmlInner(manifest, match, pathPolicy, options)
+  )
+}
+
+async function renderMatchToStaticHtmlInner(
   manifest: RouteManifest,
   match: RouteMatch,
   pathPolicy?: RouterPathPolicy,
@@ -1236,9 +1258,10 @@ function renderStreamForRouteMatch(
   }
 ): ReadableStream<string> {
   const { pathname } = match
-  const mergedMeta =
+  const mergedMeta = mergeImagePreloadsIntoHead(
     opts.streamHeadMeta ??
-    mergeRouteAndPageHead(match.route.head, undefined, match.params)
+      mergeRouteAndPageHead(match.route.head, undefined, match.params)
+  )
   const mayEarlyFlush =
     !!opts.earlyFlushHead &&
     opts.compiledTemplate?.headBeforeBody === true

@@ -12,7 +12,7 @@ Wave 1 adds:
 - Hybrid ISR (`revalidate`, disk/memory prerender cache, on-demand revalidation)
 - PPR-lite via `dynamic` export and existing streaming loaders
 - Locale-prefixed routing and hreflang sitemaps
-- `KiruImage` and font preload conventions
+- `Image` component and font preload conventions
 
 ## Loader caching
 
@@ -174,13 +174,34 @@ Low-level helpers (`stripLocale`, `addLocale`, `splitAppPathname`) remain on `pa
 
 ## Assets
 
-### KiruImage
+### Image
 
 ```tsx
-<KiruImage src="/hero.jpg" alt="Hero" width={800} height={400} />
+import { Image } from "kiru"
+
+<Image src="/hero.jpg" alt="Hero" width={800} height={400} />
 ```
 
-Sets `width`/`height` for CLS, `loading="lazy"` by default, and a simple `1x`/`2x` `srcset`.
+Sets `width`/`height` for CLS, `loading="lazy"` by default. Without `sizes`, emits a DPR `srcset` (`1x`, `2x`); with `sizes`, emits width-based `srcset`. Use `priority` for LCP heroes (eager load + SSR preload link).
+
+**Optimization strategy** (pick one per app):
+
+| Strategy | When | Vite | Server |
+|----------|------|------|--------|
+| `build` | CSR, SSG, static SSR assets | `router.images: { optimize: true, config: { strategy: "build" } }` | No optimizer route |
+| `runtime` | Dynamic SSR | Optional | `createImageOptimizerIfRuntime({ root, config, sharp })` on `config.path` |
+
+```ts
+import { defineImageConfig } from "kiru/image"
+import { createImageOptimizerIfRuntime } from "kiru/router"
+import sharp from "sharp"
+
+defineImageConfig({ strategy: "runtime", path: "/_kiru/image" })
+const handler = createImageOptimizerIfRuntime({ root: clientDir, sharp })
+// Mount handler at config.path when non-null.
+```
+
+Full API: [kiru-image.md](./kiru-image.md).
 
 ### Font preload
 
@@ -209,4 +230,4 @@ links: [
 2. Wire `revalidatePath` in post-mutation actions.
 3. Set `staleTime` on list loaders; call `invalidate()` after creates/updates.
 4. Add `createI18nConfig` + `useI18n()`; pass `i18n` to `createRenderer` / `createRouterApp`.
-5. Replace raw `<img>` with `KiruImage` on landing pages.
+5. Replace raw `<img>` with `Image` on landing pages; set `strategy: 'build'` for CDN-only deploys.

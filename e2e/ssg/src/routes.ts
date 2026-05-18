@@ -36,6 +36,10 @@ export const routes = defineRouteTree((r) =>
         component: () => import("./pages/about"),
         head: { title: "E2E SSG About" },
       }),
+      r.page("/image-demo", {
+        component: () => import("./pages/image-demo"),
+        head: { title: "E2E SSG Image" },
+      }),
       r.page("/loaders/static", {
         component: () => import("./pages/loaders-static"),
         head: { title: "E2E SSG static loader" },
