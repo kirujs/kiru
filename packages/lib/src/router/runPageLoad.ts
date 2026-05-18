@@ -4,6 +4,10 @@ import { isKiruLoader, readPageLoadExport } from "./loaders.js"
 import type { CustomRequestContext, RouteMatch } from "./types.js"
 import { toRenderError } from "./types.js"
 import { readHydratedPageData } from "./pageData.js"
+import {
+  guardServerLoaderOnClient,
+  warnStaticLoaderOnClientNavigation,
+} from "./devWarnings.js"
 
 export type LoaderFetchContext = {
   params: Record<string, string>
@@ -36,7 +40,11 @@ export async function runPageLoadFromModule(
   const load = readPageLoadExport(mod)
   if (!load) return undefined
   if (load.__kiruLoader === "static" && typeof window !== "undefined") {
+    warnStaticLoaderOnClientNavigation()
     return undefined
+  }
+  if (load.__kiruLoader === "server" && typeof window !== "undefined") {
+    guardServerLoaderOnClient()
   }
   return load.__kiruInvoke(ctx)
 }
@@ -85,6 +93,7 @@ export async function resolvePagePropsFromModule(
     if (hydrated !== undefined) {
       return buildPageProps(hydrated)
     }
+    guardServerLoaderOnClient()
   }
   try {
     const data = await runPageLoadFromModule(mod, ctx)

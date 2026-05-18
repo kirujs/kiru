@@ -5,6 +5,7 @@ import {
   KIRU_FORM_TOKEN_FIELD,
   __INTERNAL_REMOTE_REGISTRY,
   createRemoteActionHandler,
+  redirect,
 } from "../../remote/index.js"
 import { makeKiruContextToken } from "../../remote/token.js"
 
@@ -527,7 +528,43 @@ describe("formAction / enhanced submission", () => {
 })
 
 describe("formAction / redirect handling", () => {
-  // Tests for redirect() and isKiruRedirect()
+  it("returns JSON redirect for enhanced POST", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const routeId = "test/redirect-enhanced"
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      go: formAction(async () => redirect(303, "/hello")),
+    })
+
+    const req = makeFormRequest(`${routeId}:go`, validToken(), {}, {
+      enhanced: true,
+    })
+    const res = await handler(req)
+
+    assert.ok(res)
+    assert.strictEqual(res.status, 200)
+    const body = JSON.parse(await res.text())
+    assert.strictEqual(body.location, "/hello")
+    assert.strictEqual(body.status, 303)
+  })
+
+  it("returns 303 Location for native POST redirect", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const routeId = "test/redirect-native"
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      go: formAction(async () => redirect(303, "/hello")),
+    })
+
+    const req = makeFormRequest(`${routeId}:go`, validToken(), {}, {
+      contentType: "application/x-www-form-urlencoded",
+    })
+    const res = await handler(req)
+
+    assert.ok(res)
+    assert.strictEqual(res.status, 303)
+    assert.strictEqual(res.headers.get("location"), "/hello")
+  })
 })
 
 describe("formAction / error handling", () => {

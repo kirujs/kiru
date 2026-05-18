@@ -33,6 +33,10 @@ export const routes = defineRouteTree((r) =>
         component: () => import("./pages/hello.tsx"),
         head: { title: "E2E SSR Hello" },
       }),
+      r.page("/forms/demo", {
+        component: () => import("./pages/forms-demo.tsx"),
+        head: { title: "E2E SSR Form action" },
+      }),
       r.page("/loaders/server", {
         component: () => import("./pages/loaders-server"),
         head: { title: "E2E SSR server loader" },

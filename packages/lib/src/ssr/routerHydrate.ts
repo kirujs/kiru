@@ -31,6 +31,10 @@ import { requestToken } from "../globals.js"
 import { syncDocumentHeadForPage } from "../router/pageHead.js"
 import type { PageProps } from "../router/loaders.js"
 import type { KiruLoader } from "../router/loaders.js"
+import {
+  markRouterBootstrap,
+  type RouterBootstrapMode,
+} from "../router/devWarnings.js"
 
 type ServerActionsClient = {
   dispatch: (
@@ -126,6 +130,8 @@ export interface BootstrapSsrClientOptions {
   hydrateOptions?: AppHandleOptions & {
     hydrationMode?: "static" | "dynamic"
   }
+  /** @internal Set by `kiru/router/ssg` vs `kiru/router/ssr` bootstrap. */
+  bootstrapMode?: RouterBootstrapMode
 }
 
 /**
@@ -207,6 +213,7 @@ async function prepareClientRouteForMatch(
 export async function bootstrapSsrClient(
   options: BootstrapSsrClientOptions
 ): Promise<AppHandle> {
+  markRouterBootstrap(options.bootstrapMode ?? "ssr")
   const manifest =
     "routes" in options.routes
       ? options.routes
@@ -320,6 +327,7 @@ export function bootstrapSsgClient(
 ): Promise<AppHandle> {
   return bootstrapSsrClient({
     ...options,
+    bootstrapMode: "ssg",
     hydrateOptions: {
       ...options.hydrateOptions,
       hydrationMode: "static",

@@ -78,6 +78,22 @@ function compilePattern(segments: string[]): {
   const parts: string[] = []
   for (let i = 0; i < segments.length; i++) {
     const segment = segments[i]
+    const optionalCatchAll = segment.match(/^\[\[\.\.\.([^/\]]+)\]\]$/)
+    if (optionalCatchAll) {
+      if (i !== segments.length - 1) {
+        throw new Error(
+          `[[...${optionalCatchAll[1]}]] must be the last segment in route path`
+        )
+      }
+      params.push(optionalCatchAll[1])
+      const optionalCatchAllPart = "(?:/(.*))?"
+      if (parts.length > 0) {
+        parts[parts.length - 1] += optionalCatchAllPart
+      } else {
+        parts.push(optionalCatchAllPart)
+      }
+      continue
+    }
     const catchAll = segment.match(/^\[\.\.\.([^/\]]+)\]$/)
     if (catchAll) {
       if (i !== segments.length - 1) {
@@ -92,7 +108,12 @@ function compilePattern(segments: string[]): {
     const optional = segment.match(/^\[\[([^/\]]+)\]\]$/)
     if (optional) {
       params.push(optional[1])
-      parts.push("(?:/([^/]+))?")
+      const optionalPart = "(?:/([^/]+))?"
+      if (parts.length > 0) {
+        parts[parts.length - 1] += optionalPart
+      } else {
+        parts.push(optionalPart)
+      }
       continue
     }
     const dynamic = segment.match(/^\[([^/\]]+)\]$/)
@@ -263,8 +284,20 @@ function applyParamsToPath(
       )
     }
     const value = params[key]
+    const optionalRestToken = `[[...${key}]]`
     const restToken = `[...${key}]`
-    if (path.includes(restToken)) {
+    if (path.includes(optionalRestToken)) {
+      if (value === "") {
+        path = path.replace(optionalRestToken, "")
+      } else {
+        const encoded = value
+          .split("/")
+          .filter(Boolean)
+          .map((s) => encodeURIComponent(s))
+          .join("/")
+        path = path.replace(optionalRestToken, encoded)
+      }
+    } else if (path.includes(restToken)) {
       const encoded = value
         .split("/")
         .filter(Boolean)

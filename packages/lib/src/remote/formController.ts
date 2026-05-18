@@ -51,6 +51,7 @@ export function createFormController<Output>(
         method: "POST",
         headers: {
           Accept: "application/json",
+          "x-kiru-form": "1",
         },
         body: fd,
       })

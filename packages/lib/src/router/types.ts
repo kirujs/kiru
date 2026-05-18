@@ -15,9 +15,11 @@ export function toRenderError(thrown: unknown): Error {
 }
 
 /**
- * Custom per-request context for SSR/hydration.
+ * Per-request context for loaders, actions, and components.
  *
- * Users can augment this interface:
+ * Defaults to `{}` on pure CSR/SSG. SSR injects per-request values via
+ * `createRenderer({ context })` and hydrates them into `RequestContextProvider`.
+ * There is no client API to push session changes into loader context after hydration.
  *
  * ```ts
  * declare module "kiru/router" {

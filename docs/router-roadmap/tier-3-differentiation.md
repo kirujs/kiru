@@ -2,7 +2,7 @@
 
 **Goal:** Features that help compete with **Next.js** on specific axes, without committing to RSC or full platform lock-in. **Pick items based on positioning** — not all are required for success.
 
-**Prerequisite:** [Tier 2](./tier-2-framework-parity.md) request context, loader invalidation, and at least one deployment adapter.
+**Prerequisite:** [Tier 2](./tier-2-framework-parity.md) loader invalidation and at least one deployment adapter.
 
 ---
 

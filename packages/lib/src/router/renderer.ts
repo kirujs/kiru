@@ -8,10 +8,7 @@ import {
   generateStaticPaths,
   matchRoute,
 } from "./manifest.js"
-import {
-  hydratePrerenderedHtmlForRequest,
-  tryReadPrerenderedHtml,
-} from "./prerenderedHtml.js"
+import { tryServePrerenderedFromDisk } from "./prerenderServe.js"
 import {
   buildRoutedSubtree,
   loadErrorRouteTree,
@@ -168,11 +165,6 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     return prerenderPathSet
   }
 
-  const servePrerenderedFromDisk =
-    !!options.prerenderedHtmlDir &&
-    typeof process !== "undefined" &&
-    process.env.NODE_ENV === "production"
-
   const renderCore = async (
     requestOrUrl: Request | string,
     ctx?: RenderRequestContext
@@ -180,51 +172,20 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     const url =
       typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url
 
-    if (servePrerenderedFromDisk) {
-      const allowPrerenderRead =
-        typeof requestOrUrl === "string" || requestOrUrl.method === "GET"
-      if (allowPrerenderRead) {
-        const pathname = new URL(url, "http://localhost").pathname
-        const html = tryReadPrerenderedHtml(
-          options.prerenderedHtmlDir!,
-          pathname,
-          {
-            staticPaths: await getPrerenderPathSet(),
-            pathPolicy,
-          }
-        )
-        if (html) {
-          const requestContext = (ctx?.context ?? null) as CustomRequestContext
-          const hydrated = hydratePrerenderedHtmlForRequest(
-            html,
-            requestContext,
-            actionsSecret
-          )
-          if (options.stream) {
-            return {
-              kind: "stream" as const,
-              result: {
-                status: 200,
-                headers: { ...DEFAULT_HEADERS },
-                body: new ReadableStream<string>({
-                  start(controller) {
-                    controller.enqueue(hydrated)
-                    controller.close()
-                  },
-                }),
-              },
-            }
-          }
-          return {
-            kind: "string" as const,
-            result: {
-              status: 200,
-              headers: DEFAULT_HEADERS,
-              body: hydrated,
-            },
-          }
-        }
-      }
+    if (options.prerenderedHtmlDir) {
+      const prerendered = await tryServePrerenderedFromDisk(
+        requestOrUrl,
+        url,
+        {
+          prerenderedHtmlDir: options.prerenderedHtmlDir,
+          stream: options.stream,
+          pathPolicy,
+          getStaticPathSet: getPrerenderPathSet,
+          actionsSecret: actionsSecret ?? "",
+        },
+        ctx
+      )
+      if (prerendered) return prerendered
     }
 
     const requestedPathForErrors = toPathname(url)

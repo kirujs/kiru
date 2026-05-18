@@ -10,6 +10,8 @@ export default function Layout({ children }: { children: JSX.Children }) {
         {" | "}
         <Link to="/loaders/server-immediate-shell">Server loader immediate shell</Link>
         {" | "}
+        <Link to="/forms/demo">Form action</Link>
+        {" | "}
         <Link to="/about">About</Link>
         {" | "}
         <Link to="/docs">Docs (static)</Link>

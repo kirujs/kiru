@@ -1,20 +1,19 @@
 # Tier 2 — Framework parity
 
-**Goal:** Match what teams expect from SvelteKit / SolidStart for day-to-day app development: request context everywhere it matters, data invalidation, typed URL state, env, and deployment targets beyond Node.
+**Goal:** Match what teams expect from SvelteKit / SolidStart for day-to-day app development: SSR request context, data invalidation, typed URL state, env, and deployment targets beyond Node.
 
 **Prerequisite:** [Tier 1](./tier-1-release-credibility.md) documentation and routing test baseline.
 
-**Exit criteria:** CSR and SSR apps can implement auth + data mutations without ad-hoc globals; navigations refetch server data intentionally; one non-Node adapter is documented and tested.
+**Exit criteria:** SSR apps can pass per-request context into loaders and actions; navigations refetch server data intentionally; one non-Node adapter is documented and tested.
 
 ---
 
-## Request context (CSR + SSR unified)
+## Request context (documented contract — no client reactive API)
 
-- [ ] **`createRouterApp` accepts initial / reactive context** — e.g. `context` signal or `getContext(): CustomRequestContext` passed to loaders on every navigation
-- [ ] **`RouterView` / bootstrap use `useOptionalRequestContext()`** for loader `context` instead of `{}`
-- [ ] **Update `useRequestContext` docs** — when it throws vs returns `{}`; SSR hydration still strips `k-request-context` script
-- [ ] **E2E: loader reads `ctx.user`** on CSR navigation after login (mock context update)
-- [ ] **Pattern doc: auth** — set context in server `render({ context })`, refresh client context on session change
+Per-request context is **SSR-only** via `createRenderer({ context })` and hydration (`k-request-context`). Pure CSR/SSG use `{}` in loaders and `useRequestContext()`; there is **no** planned `createRouterApp({ context })` or client-side session sync into loaders.
+
+- [ ] **Document `CustomRequestContext`** — module augmentation, SSR `render({ context })`, hydration script, CSR/SSG `{}` default
+- [ ] **Pattern doc: auth** — session in SSR render context; CSR auth UI via `clientLoader` / `action` / client state, not loader context updates on navigations
 
 ## Server loaders on the client
 

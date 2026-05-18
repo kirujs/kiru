@@ -18,14 +18,9 @@ export function useOptionalRequestContext(): CustomRequestContext {
   return useContext(RequestContext)
 }
 
+/** Per-request context; `{}` when not provided (pure CSR/SSG or outside a provider). */
 export function useRequestContext(): CustomRequestContext {
-  const ctx = useContext(RequestContext)
-  if (!ctx) {
-    throw new Error(
-      "[kiru/router] useRequestContext must be used during SSR/initial hydration inside RequestContextProvider"
-    )
-  }
-  return ctx
+  return useOptionalRequestContext() ?? {}
 }
 
 function escapeScriptJson(json: string): string {

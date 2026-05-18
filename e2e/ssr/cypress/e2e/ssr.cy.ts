@@ -584,4 +584,40 @@ describe("SSR server", () => {
       cy.title().should("eq", "E2E SSR Home")
     })
   })
+
+  describe("form actions", () => {
+    it("submits via progressive enhancement and shows JSON result", () => {
+      const port = Cypress.env("port")
+      cy.visit(`http://127.0.0.1:${port}/forms/demo`)
+      cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
+      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.intercept("POST", /\?action=/).as("formAction")
+      cy.get('[data-testid="forms-demo-input"]').type("from-cypress")
+      cy.get('[data-testid="forms-demo-submit"]').click()
+      cy.wait("@formAction").its("response.statusCode").should("eq", 200)
+      cy.get('[data-testid="forms-demo-result"]').should(
+        "have.text",
+        "from-cypress"
+      )
+    })
+
+    it("redirects after enhanced form submit", () => {
+      const port = Cypress.env("port")
+      cy.visit(`http://127.0.0.1:${port}/forms/demo`)
+      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get('[data-testid="forms-demo-redirect"]').click()
+      cy.location("pathname").should("eq", "/hello")
+      cy.get('[data-testid="ssr-loader"]').should("exist")
+    })
+
+  })
+
+  it("serves prerendered disk HTML for hybrid /docs without SSR-only home marker", () => {
+    const port = Cypress.env("port")
+    cy.request(`http://127.0.0.1:${port}/docs`).then((res) => {
+      expect(res.status).to.eq(200)
+      expect(res.body).to.include("Hybrid static docs")
+      expect(res.body).not.to.include('data-testid="ssr-home"')
+    })
+  })
 })
