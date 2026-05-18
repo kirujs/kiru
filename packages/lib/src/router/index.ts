@@ -18,10 +18,25 @@ export * from "./searchParams.js"
 export * from "./loaderValidation.js"
 export * from "./validationInvalid.js"
 export * from "./routeResponse.js"
+export * from "./routeRevalidate.js"
+export * from "./loaderCache.js"
+export * from "./prerenderCache.js"
+export * from "./revalidate.js"
 export * from "./prepareRoute.js"
 export * from "./requestContext.js"
 export * from "./resolveSsrPaths.js"
 export * from "./prerenderedHtml.js"
 export * from "./navigationGuards.js"
 export * from "./pathPolicy.js"
+export * from "./localePolicy.js"
+export * from "./i18n/index.js"
+export {
+  useI18n,
+  useOptionalI18n,
+  I18nProvider,
+  serializeI18nScript,
+  readHydratedI18n,
+  type I18nTranslator,
+} from "./i18nContext.js"
+export { createI18nTranslator, getByPath, type DotPath } from "./i18n/translate.js"
 export * from "./site.js"

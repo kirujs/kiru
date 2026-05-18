@@ -10,6 +10,8 @@ import { createRouter, createStaticRouter } from "../../router/csr.js"
 import { buildRoutedSubtree } from "../../router/routeTree.js"
 import { defineRouteTree } from "../../router/defineRouteTree.js"
 import { compileRouteTree, matchRoute } from "../../router/manifest.js"
+import { createI18nConfig } from "../../router/i18n/index.js"
+import { createI18nRuntime } from "../../router/i18nContext.js"
 import { renderMatchToStaticHtml } from "../../router/renderer.js"
 import { withJSDOM } from "./jsdom.js"
 
@@ -87,6 +89,38 @@ function staticShell() {
 function clientShell() {
   const router = createRouter({ routes })
   return createSsrRouterShell(router, {}, () => buildShellSubtree())
+}
+
+function clientShellWithI18n() {
+  const i18n = createI18nConfig(["en"])({
+    default: "en",
+    load: { en: async () => ({ default: { title: "Home" } }) },
+  })
+  const router = createRouter({ routes, i18n })
+  return createSsrRouterShell(
+    router,
+    {},
+    () => buildShellSubtree(),
+    undefined,
+    router.__i18n!.runtime
+  )
+}
+
+function staticShellWithI18n() {
+  const router = createStaticRouter({ manifest, pathname: "/" })
+  const runtime = createI18nRuntime<unknown>({
+    initialLocale: "en",
+    initialData: { title: "Home" },
+    locales: ["en"],
+    defaultLocale: "en",
+  })
+  return createSsrRouterShell(
+    router,
+    {},
+    () => buildShellSubtree(),
+    undefined,
+    runtime
+  )
 }
 
 /** Same root as {@link renderStringWithDocument} (Fragment + stream headless). */
@@ -171,5 +205,13 @@ describe("SSR router shell ($INLINE_FN outlet)", () => {
       shellIds,
       "renderer vs createSsrRouterShell"
     )
+  })
+
+  it("I18nReactiveRoot shell matches between static SSR and client hydrate", async () => {
+    await withJSDOM(async () => {
+      const staticIds = renderShellProbeIds(staticShellWithI18n())
+      const clientIds = renderShellProbeIds(clientShellWithI18n())
+      assertSameProbeIds(staticIds, clientIds, "i18n static vs client shell")
+    })
   })
 })

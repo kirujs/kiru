@@ -10,9 +10,8 @@ describe("router", () => {
 
   it("reacts to a <Link /> click appropriately", () => {
     cy.get('nav a[href="/about"]').click()
-    cy.get("main #router-outlet h2")
-      .should("exist")
-      .should("have.text", "About")
+    cy.get('[data-testid="csr-about"]').should("exist")
+    cy.get('[data-testid="locale-title"]').should("contain", "About")
   })
 
   it("reacts to a history-api triggered navigation event", () => {
@@ -29,7 +28,7 @@ describe("router", () => {
   it("applies route-level redirect guard", () => {
     cy.get('nav a[href="/guarded"]').click()
     cy.location("pathname").should("eq", "/about")
-    cy.get("main #router-outlet h2").should("have.text", "About")
+    cy.get('[data-testid="locale-title"]').should("contain", "About")
   })
 
   it("renders notFound route for unknown paths", () => {
@@ -44,6 +43,6 @@ describe("router", () => {
     cy.get('[data-testid="nav-programmatic"]').click()
     cy.window().its("__KIRU_NAV_RESULT__").should("eq", "committed")
     cy.location("pathname").should("eq", "/about")
-    cy.get("main #router-outlet h2").should("have.text", "About")
+    cy.get('[data-testid="locale-title"]').should("contain", "About")
   })
 })

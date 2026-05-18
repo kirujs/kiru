@@ -44,6 +44,8 @@ export {
   type RemoteFormActionFunction,
   type RemoteFormActionCallback,
   type KiruRedirect,
+  type RemoteRevalidateMeta,
+  type RemoteActionMeta,
 } from "./action.js"
 
 export {
@@ -55,6 +57,7 @@ type RegisteredRemoteAction = {
   __kiruRemoteAction: true
   __kiruRemoteMethod: import("./action.js").RemoteActionMethod
   __kiruInvalidateRoutes?: string[]
+  __kiruRevalidate?: import("./action.js").RemoteRevalidateMeta
   __kiruInvoke: (
     ctx: import("../router/types.js").CustomRequestContext,
     input: unknown
@@ -146,6 +149,8 @@ async function invokeJsonRemoteAction(
 ): Promise<Response> {
   try {
     const result = await handler.__kiruInvoke(context, input)
+    const { applyServerRevalidate } = await import("../router/revalidate.js")
+    await applyServerRevalidate(handler.__kiruRevalidate)
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: { ...jsonHeaders, ...invalidateHeadersForAction(handler) },
@@ -216,6 +221,8 @@ export function createRemoteActionHandler(
 
         try {
           const result = await handler.__kiruInvoke(context, formData)
+          const { applyServerRevalidate } = await import("../router/revalidate.js")
+          await applyServerRevalidate(handler.__kiruRevalidate)
           const isEnhanced = !!request.headers.get("x-kiru-form")
 
           if (isKiruRedirect(result)) {

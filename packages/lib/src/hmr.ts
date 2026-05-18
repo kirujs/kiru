@@ -1,5 +1,6 @@
 import { $HMR_ACCEPT, $DEV_FILE_LINK } from "./constants.js"
 import { traverseApply } from "./utils/index.js"
+import { latest } from "./utils/runtime.js"
 import { flushSync, requestUpdate } from "./scheduler.js"
 import { Signal } from "./signals/base.js"
 import type { Effect } from "./signals/effect.js"
@@ -49,6 +50,20 @@ type HotVarRegistrationEntry = {
   type: string
   value: HotVar
   link: string
+}
+
+function vNodeMatchesHotComponent(
+  vnodeType: unknown,
+  hotValue: HotVar
+): boolean {
+  if (vnodeType === hotValue) return true
+  if (
+    typeof vnodeType === "function" &&
+    typeof hotValue === "function"
+  ) {
+    return latest(vnodeType) === latest(hotValue)
+  }
+  return false
 }
 
 export function createHmrContext() {
@@ -131,7 +146,7 @@ export function createHmrContext() {
       if (oldEntry.type === "component" && newEntry.type === "component") {
         window.__kiru.apps.forEach((app) => {
           traverseApply(app.rootNode, (vNode) => {
-            if (vNode.type === oldEntry.value) {
+            if (vNodeMatchesHotComponent(vNode.type, oldEntry.value)) {
               vNode.type = newEntry.value as any
               dirtyNodes.add(vNode)
             }

@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url"
 const e2eRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 const clientDir = path.join(e2eRoot, "dist", "client")
 const docsHtml = path.join(clientDir, "docs.html")
+const revalidateHtml = path.join(clientDir, "revalidate-demo.html")
+const revalidateMeta = path.join(
+  clientDir,
+  "revalidate-demo.prerender-meta.json"
+)
 const sitemapXml = path.join(clientDir, "sitemap.xml")
 const robotsTxt = path.join(clientDir, "robots.txt")
 const serverEntry = path.join(e2eRoot, "dist", "server", "index.js")
@@ -12,6 +17,16 @@ const serverEntry = path.join(e2eRoot, "dist", "server", "index.js")
 const errors = []
 if (!fs.existsSync(docsHtml)) {
   errors.push(`missing prerendered ${path.relative(e2eRoot, docsHtml)}`)
+}
+if (!fs.existsSync(revalidateHtml)) {
+  errors.push(
+    `missing prerendered ${path.relative(e2eRoot, revalidateHtml)}`
+  )
+}
+if (!fs.existsSync(revalidateMeta)) {
+  errors.push(
+    `missing ISR meta ${path.relative(e2eRoot, revalidateMeta)}`
+  )
 }
 if (!fs.existsSync(sitemapXml)) {
   errors.push(

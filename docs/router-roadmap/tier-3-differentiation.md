@@ -4,33 +4,40 @@
 
 **Prerequisite:** [Tier 2](./tier-2-framework-parity.md) loader invalidation and at least one deployment adapter.
 
+**Wave 1 guide:** [tier-3-wave-1.md](../router/tier-3-wave-1.md) (implemented APIs and usage).
+
 ---
 
 ## Caching & revalidation (Next ISR–adjacent)
 
-- [ ] **Design: time-based revalidation** — route or site config `revalidate: 60` for hybrid static HTML
-- [ ] **On-demand revalidation API** — `revalidatePath(path)` / `revalidateTag(tag)` callable from actions or admin route
-- [ ] **Storage for revalidated HTML** — disk, KV, or in-memory (dev); document production pattern
-- [ ] **Stale-while-revalidate** — serve stale prerender while regenerating in background
-- [ ] **E2E + load test** — verify thundering herd behavior
+- [x] **Design: time-based revalidation** — route or site config `revalidate: 60` for hybrid static HTML
+- [x] **On-demand revalidation API** — `revalidatePath(path)` / `revalidateTag(tag)` callable from actions or admin route
+- [x] **Storage for revalidated HTML** — disk, KV, or in-memory (dev); document production pattern
+- [x] **Stale-while-revalidate** — serve stale prerender while regenerating in background
+- [x] **E2E + load test** — verify thundering herd behavior (`e2e/ssr/scripts/prerender-regen-single-flight.mjs`)
 
 ## Partial prerendering (PPR-lite)
 
-- [ ] **Spike: static shell + dynamic holes** — defer blocks via existing streaming + `serverLoader` fallback
-- [ ] **Route config `dynamic: 'force-static' | 'force-dynamic'`** per segment or page
-- [ ] **Compare vs full RSC** — document why Kiru stays string/stream component model
+- [x] **Spike: static shell + dynamic holes** — defer blocks via existing streaming + `serverLoader` fallback
+- [x] **Route config `dynamic: 'force-static' | 'force-dynamic'`** per segment or page
+- [x] **Compare vs full RSC** — document why Kiru stays string/stream component model
 
 ## Asset pipeline
 
-- [ ] **`<KiruImage>` or documented Vite plugin pattern** — srcset, lazy, dimensions to reduce CLS
-- [ ] **Font preload from `head.links`** — convention + optional build scan
+- [x] **`<Image>` or documented Vite plugin pattern** — `KiruImage` (srcset, lazy, dimensions)
+- [x] **Font preload from `head.links`** — convention + optional build scan
 - [ ] **Open Graph image route** — optional `opengraph-image` codegen (low priority)
 
 ## Internationalization
 
-- [ ] **Locale prefix routing** — `pathPolicy` + `baseUrl` patterns for `/en/...`, `/fr/...`
-- [ ] **`defineSiteConfig` hreflang** — sitemap alternates
-- [ ] **Doc: loader provides dictionaries** — no built-in i18n lib required
+- [x] **Locale prefix routing** — `pathPolicy` + `baseUrl` patterns for `/en/...`, `/fr/...`; `Link` `locale` prop
+- [x] **`defineSiteConfig` hreflang** — sitemap alternates
+- [x] **Doc: loader provides dictionaries** — no built-in i18n lib required
+- [x] **`localePrefix` policy + invalid locale URLs** — `as-needed` / `always` / `never`; redirect or 404 for unsupported segments
+- [x] **Loader `locale` + `setLocale` / `locale={false}`** — `LoaderContext` i18n fields; `router.setLocale`; `useI18n` metadata
+- [x] **Per-locale static generation** — `expandPathsForLocales` + `generatePublicStaticPaths`
+- [x] **Locale detection + `KIRU_LOCALE` cookie** — `Accept-Language` on `detectPaths`; BCP47 fallback via `resolveLocale`
+- [x] **`<html lang>`** — injected during SSR / stream document assembly
 - [ ] **Optional: integrate with `typesafe-i18n` or similar** — example app in sandbox
 
 ## Advanced routing
@@ -68,7 +75,7 @@
 
 Document these as **intentional** unless strategy changes:
 
-- [ ] **RSC / Server Components** — document “client + SSR strings” model
+- [x] **RSC / Server Components** — document “client + SSR strings” model ([wave-1 guide](../router/tier-3-wave-1.md#ppr-lite))
 - [ ] **Vercel-only features** — no exclusive adapter required
 - [ ] **Turbopack** — stay Vite-first
 

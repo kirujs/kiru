@@ -1,13 +1,10 @@
-import "./style.css"
-import { mount } from "kiru"
-import { createRouter, RouterProvider, RouterView } from "kiru/router"
+import { createRouterApp } from "kiru/router/csr"
+import i18n from "./i18n.js"
 import { routes } from "./routes"
+import "./style.css"
 
-const router = createRouter({ routes })
-
-mount(
-  <RouterProvider router={router}>
-    <RouterView />
-  </RouterProvider>,
-  document.getElementById("app")!
-)
+void createRouterApp({
+  routes,
+  i18n,
+  container: document.getElementById("app")!,
+})

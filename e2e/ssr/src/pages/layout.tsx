@@ -16,6 +16,8 @@ export default function Layout({ children }: { children: JSX.Children }) {
         {" | "}
         <Link to="/docs">Docs (static)</Link>
         {" | "}
+        <Link to="/loader-cache-demo">Loader cache</Link>
+        {" | "}
         <Link to="/seo">SEO</Link>
         {" | "}
         <Link to="/head-override">Head override</Link>

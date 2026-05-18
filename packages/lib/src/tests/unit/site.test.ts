@@ -48,6 +48,24 @@ describe("site", () => {
     assert.ok(xml.includes("<loc>https://example.com/r&amp;d</loc>"))
   })
 
+  it("buildSitemapXml emits hreflang alternates when locales configured", () => {
+    const site = defineSiteConfig({
+      url: "https://example.com",
+      sitemap: true,
+      locales: {
+        default: "en",
+        prefixes: ["en", "fr"],
+        localePrefix: "as-needed",
+      },
+    })
+    const xml = buildSitemapXml(["/about"], site)
+    assert.ok(xml.includes('xmlns:xhtml="http://www.w3.org/1999/xhtml"'))
+    assert.ok(xml.includes('hreflang="fr"'))
+    assert.ok(xml.includes('hreflang="x-default"'))
+    assert.ok(xml.includes("<loc>https://example.com/about</loc>"))
+    assert.ok(xml.includes("https://example.com/fr/about"))
+  })
+
   it("buildSitemapXml uses build date for lastmod when configured", () => {
     const site = defineSiteConfig({
       url: "https://example.com",

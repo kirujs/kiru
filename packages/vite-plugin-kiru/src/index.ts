@@ -525,6 +525,12 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           discoverRouteBuildMeta,
           generateSitemapPaths,
           writeSiteArtifacts,
+          matchRoute,
+          getRouteBuildMetaEntry,
+          getRouteBuildMetaFromModule,
+          persistPrerenderBuildOutput,
+          normalizeSiteLocales,
+          splitAppPathname,
         } = (await vite.ssrLoadModule(
           "kiru/router"
           // @ts-ignore TODO: update peer dep to kiru v2
@@ -553,6 +559,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         }
 
         const pathPolicy = site?.pathPolicy
+        const siteLocales = site?.locales
+          ? normalizeSiteLocales(site.locales)
+          : undefined
+
         const outputs: {
           path: string
           body: string
@@ -562,6 +572,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           routes,
           pathPolicy,
           maxConcurrentRenders: state.router.ssg.maxConcurrentRenders,
+          siteLocales,
+          i18n: routesMod.i18n ?? routesMod.default?.i18n,
           ...(opts.router?.htmlShell
             ? {}
             : {
@@ -576,6 +588,12 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           [...outputPaths].some(
             (p) => p !== routePath && p.startsWith(routePath + "/")
           )
+
+        const manifest = compileRouteTree(routes)
+        const loadPageModule = async (route: {
+          component: () => Promise<unknown>
+        }) => route.component()
+        const buildMeta = await discoverRouteBuildMeta(manifest, loadPageModule)
 
         const clientManifest = await readViteClientManifest(state.outDir)
 
@@ -606,22 +624,35 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           const target = path.resolve(state.outDir, relativePath)
           await fs.mkdir(path.dirname(target), { recursive: true })
           await fs.writeFile(target, html, "utf8")
+
+          const logicalPath = siteLocales
+            ? splitAppPathname(output.path, siteLocales).pathname
+            : output.path
+          const routeMatch = matchRoute(manifest, logicalPath, pathPolicy)
+          if (routeMatch) {
+            const metaEntry = getRouteBuildMetaEntry(routeMatch.route, buildMeta)
+            const pageMod = await routeMatch.route.component()
+            const fromMod = getRouteBuildMetaFromModule(pageMod)
+            persistPrerenderBuildOutput({
+              clientDir: state.outDir,
+              pathname: output.path,
+              htmlAbsolutePath: target,
+              revalidate: metaEntry?.revalidate ?? fromMod?.revalidate,
+              tags: metaEntry?.tags ?? fromMod?.tags,
+            })
+          }
         }
 
         if (site?.sitemap || site?.robots) {
-          const manifest = compileRouteTree(routes)
-          const loadPageModule = async (route: {
-            component: () => Promise<unknown>
-          }) => route.component()
-          const buildMeta = site.sitemap
+          const buildMetaForSitemap = site.sitemap
             ? await discoverRouteBuildMeta(manifest, loadPageModule, {
                 includeRoutePaths: site.sitemap.include,
               })
-            : undefined
+            : buildMeta
           const sitemapPaths = site.sitemap
             ? await generateSitemapPaths(manifest, site, {
                 defaultSsrPaths: Boolean(state.router.serverEntry),
-                buildMeta,
+                buildMeta: buildMetaForSitemap,
               })
             : []
           await writeSiteArtifacts({

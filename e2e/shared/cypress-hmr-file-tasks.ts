@@ -36,7 +36,9 @@ export function registerHmrFileTasks(on: Cypress.PluginEvents) {
         })
       }
 
-      await fs.writeFile(resolvedPath, content)
+      await fs.writeFile(resolvedPath, content, "utf8")
+      // Let Vite's file watcher pick up the change before Cypress asserts.
+      await new Promise((resolve) => setTimeout(resolve, 50))
       return null
     },
     async hmrRestoreFile(filePath: string) {

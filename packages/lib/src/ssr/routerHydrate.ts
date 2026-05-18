@@ -14,6 +14,7 @@ import {
 } from "../router/routeTree.js"
 import type { RouteManifest, RouteTreeDefinition } from "../router/types.js"
 import { readHydratedRequestContext } from "../router/requestContext.js"
+import { loaderI18nFields } from "../router/i18n/index.js"
 import { buildLoaderContext } from "../router/runPageLoad.js"
 import { prepareRouteForNavigation } from "../router/prepareRoute.js"
 import type { RouteModule } from "../router/types.js"
@@ -124,6 +125,11 @@ export interface BootstrapSsrClientOptions {
   hydrateOptions?: AppHandleOptions & {
     hydrationMode?: "static" | "dynamic"
   }
+  /** Same config as {@link createRenderer} / page `i18n` module. */
+  i18n?: import("../router/i18n/index.js").InternationalizationConfig<
+    readonly string[],
+    unknown
+  >
   /** @internal Set by `kiru/router/ssg` vs `kiru/router/ssr` bootstrap. */
   bootstrapMode?: RouterBootstrapMode
 }
@@ -160,6 +166,9 @@ function loaderContextForMatch(
     hash: router.hash.peek(),
     query: router.query.peek(),
     context: readHydratedRequestContext(),
+    ...(router.__i18n && router.locale
+      ? loaderI18nFields(router.__i18n.config, router.locale.peek())
+      : {}),
   })
 }
 
@@ -233,7 +242,7 @@ export async function bootstrapSsrClient(
     "routes" in options.routes
       ? options.routes
       : compileRouteTree(options.routes)
-  const router = createRouter({ routes: manifest })
+  const router = createRouter({ routes: manifest, i18n: options.i18n })
   registerKiruRouter(router)
   const pendingClientHash = stashClientHashForSsrHydration(router)
 
@@ -257,7 +266,13 @@ export async function bootstrapSsrClient(
 
   const app = hydrate(
     Fragment({
-      children: createSsrRouterShell(router, requestContext, () => outlet.value),
+      children: createSsrRouterShell(
+        router,
+        requestContext,
+        () => outlet.value,
+        undefined,
+        router.__i18n?.runtime
+      ),
     }),
     container,
     staticHydrate

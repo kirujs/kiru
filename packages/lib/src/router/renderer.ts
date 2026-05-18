@@ -5,7 +5,7 @@ import { headlessRender } from "../headlessRender.js"
 import { renderMode } from "../globals.js"
 import {
   compileRouteTree,
-  generateStaticPaths,
+  generatePublicStaticPaths,
   matchRoute,
 } from "./manifest.js"
 import { tryServePrerenderedFromDisk } from "./prerenderServe.js"
@@ -26,10 +26,29 @@ import {
 } from "./pathPolicy.js"
 import {
   compileRouteHtmlTemplate,
+  renderCompiledTemplate,
+  validateRouteHtmlTemplate,
   type CompiledRouteHtmlTemplate,
 } from "./htmlTemplate.js"
 import { createStaticRouter } from "./csr.js"
 import { serializeRequestContextScript } from "./requestContext.js"
+import {
+  detectLocaleFromRequest,
+  formatPublicPathname,
+  i18nToSiteLocales,
+  loaderI18nFields,
+  loadI18nMessages,
+  resolveInvalidLocaleRedirect,
+  shouldRejectInvalidLocale,
+  shouldRunLocaleDetection,
+  splitAppPathnameDetailed,
+  type InternationalizationConfig,
+} from "./i18n/index.js"
+import {
+  createI18nRuntime,
+  serializeI18nScript,
+  type HydratedI18nPayload,
+} from "./i18nContext.js"
 import { createSsrRouterShell } from "./routerShell.js"
 import { createLoaderHandler } from "./loaderRegistry.js"
 import { serializePageDataScript } from "./pageData.js"
@@ -58,6 +77,16 @@ import {
   readRouteStatusExport,
   resolveRouteStatus,
 } from "./routeResponse.js"
+import {
+  getISRRevalidate,
+  getISRTags,
+  readRouteISRExport,
+} from "./routeRevalidate.js"
+import {
+  diskPrerenderCache,
+  setGlobalPrerenderCache,
+  type PrerenderCacheEntry,
+} from "./prerenderCache.js"
 import {
   type CustomRequestContext,
   type DocumentHead,
@@ -147,6 +176,12 @@ export type CreateRendererOptions = {
    */
   prerenderedHtmlDir?: string
   /**
+   * Prerender cache for ISR / on-demand revalidation. Defaults to
+   * {@link diskPrerenderCache} when `prerenderedHtmlDir` is set.
+   * @see docs/router/tier-3-wave-1.md#hybrid-isr
+   */
+  prerenderCache?: import("./prerenderCache.js").PrerenderCacheStore
+  /**
    * When set, HTML responses include the signed context token and
    * {@link Renderer.render} handles remote `action` POSTs for the same `Request`.
    */
@@ -155,22 +190,41 @@ export type CreateRendererOptions = {
   stream?: boolean
   /** Base path and trailing-slash rules for URLs, prerender lookup, and head metadata. */
   pathPolicy?: RouterPathPolicy
+  /** Locale-aware routing + SSR hydration of translation payloads. */
+  i18n?: InternationalizationConfig<readonly string[], unknown>
 }
 
 function engine(options: CreateRendererOptions & { stream: boolean }) {
   const { manifest, compiledTemplate, actionsSecret, handleRemoteAction } =
     prepareRenderer(options)
   const pathPolicy = resolvePathPolicy(options.pathPolicy)
+  const i18nConfig = options.i18n
 
   let prerenderPathSet: Promise<ReadonlySet<string>> | undefined
   const getPrerenderPathSet = (): Promise<ReadonlySet<string>> => {
     if (!prerenderPathSet) {
-      prerenderPathSet = generateStaticPaths(manifest, pathPolicy).then(
-        (paths) => new Set(paths)
-      )
+      prerenderPathSet = generatePublicStaticPaths(
+        manifest,
+        pathPolicy,
+        undefined,
+        i18nConfig ? i18nToSiteLocales(i18nConfig) : undefined
+      ).then((paths) => new Set(paths))
     }
     return prerenderPathSet
   }
+
+  let prerenderCacheInstance = options.prerenderCache
+  if (!prerenderCacheInstance && options.prerenderedHtmlDir) {
+    prerenderCacheInstance = diskPrerenderCache({
+      clientDir: options.prerenderedHtmlDir,
+      pathPolicy,
+    })
+  }
+  if (prerenderCacheInstance) {
+    setGlobalPrerenderCache(prerenderCacheInstance)
+  }
+
+  let bypassPrerenderServe = false
 
   const renderCore = async (
     requestOrUrl: Request | string,
@@ -179,20 +233,91 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     const url =
       typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url
 
-    if (options.prerenderedHtmlDir) {
-      const prerendered = await tryServePrerenderedFromDisk(
+    if (i18nConfig && typeof requestOrUrl === "object") {
+      const rawPath = pathnameForMatch(toPathname(url), pathPolicy)
+      const localeRedirect = tryLocaleDetectionRedirect(
+        rawPath,
         requestOrUrl,
-        url,
-        {
-          prerenderedHtmlDir: options.prerenderedHtmlDir,
-          stream: options.stream,
-          pathPolicy,
-          getStaticPathSet: getPrerenderPathSet,
-          actionsSecret: actionsSecret ?? "",
-        },
-        ctx
+        i18nConfig,
+        pathPolicy
       )
-      if (prerendered) return prerendered
+      if (localeRedirect) {
+        return localeDetectionRedirectRenderHit(
+          localeRedirect.location,
+          localeRedirect.headers,
+          options.stream
+        )
+      }
+    }
+
+    if (
+      !bypassPrerenderServe &&
+      (prerenderCacheInstance || options.prerenderedHtmlDir)
+    ) {
+      const pathnameForPrerender = toPathname(url)
+      const prerenderMatch = matchRoute(
+        manifest,
+        pathnameForPrerender,
+        pathPolicy
+      )
+      let isrConfig: ReturnType<typeof readRouteISRExport>
+      if (prerenderMatch) {
+        const pageMod = await prerenderMatch.route.component()
+        isrConfig = readRouteISRExport(pageMod)
+        const dynamicMode = isrConfig?.dynamic
+        if (dynamicMode === "force-dynamic") {
+          // skip prerender disk serve
+        } else {
+          const prerendered = await tryServePrerenderedFromDisk(
+            requestOrUrl,
+            url,
+            {
+              prerenderedHtmlDir: options.prerenderedHtmlDir,
+              prerenderCache: prerenderCacheInstance,
+              stream: options.stream,
+              pathPolicy,
+              getStaticPathSet: getPrerenderPathSet,
+              actionsSecret: actionsSecret ?? "",
+              onRegenerate: async (pathname) => {
+                if (!prerenderCacheInstance) return
+                bypassPrerenderServe = true
+                try {
+                  const regenHit = await renderCore(pathname, ctx)
+                  const body =
+                    regenHit?.kind === "string"
+                      ? regenHit.result.body
+                      : undefined
+                  if (typeof body !== "string" || !body) return
+                  const regenMod = await prerenderMatch.route.component()
+                  const regenIsr = readRouteISRExport(regenMod)
+                  const entry: PrerenderCacheEntry = {
+                    html: body,
+                    pathname,
+                    generatedAt: Date.now(),
+                    revalidate: getISRRevalidate(regenIsr) ?? false,
+                    tags: getISRTags(regenIsr) ?? [],
+                  }
+                  await prerenderCacheInstance.set(pathname, entry)
+                } finally {
+                  bypassPrerenderServe = false
+                }
+              },
+            },
+            ctx
+          )
+          if (prerendered) return prerendered
+          if (dynamicMode === "force-static") {
+            return {
+              kind: "string" as const,
+              result: {
+                status: 404,
+                headers: { "content-type": "text/html; charset=utf-8" },
+                body: "Not Found",
+              },
+            }
+          }
+        }
+      }
     }
 
     const requestedPathForErrors = toPathname(url)
@@ -205,13 +330,21 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
       | undefined
 
     try {
-      const prepared = await prepareAppForUrl(url, ctx, manifest, pathPolicy)
+      const prepared = await prepareAppForUrl(
+        url,
+        ctx,
+        manifest,
+        pathPolicy,
+        i18nConfig,
+        typeof requestOrUrl === "object" ? requestOrUrl : undefined
+      )
       if (!prepared) return null
 
       if (isPrepareRedirect(prepared)) {
         const redirectHeaders = {
           ...DEFAULT_HEADERS,
           location: prepared.location,
+          ...prepared.headers,
         }
         if (options.stream) {
           return {
@@ -271,6 +404,8 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
               streamHeadMeta: prepared.streamHeadMeta,
               pagePropsPromise: prepared.pagePropsPromise,
               earlyFlushHead: prepared.earlyFlushHead,
+              i18nPayload: prepared.i18nPayload,
+              documentLang: prepared.i18nPayload?.locale,
             })
           : (() => {
               __setSsrRequestContext(requestContext)
@@ -311,7 +446,8 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
             requestContext,
             pathPolicy,
             serializedPageData,
-            prepared.streamHeadMeta
+            prepared.streamHeadMeta,
+            prepared.i18nPayload
           )
         : {
             body: renderToString(app),
@@ -335,7 +471,12 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
           headers: { ...DEFAULT_HEADERS, ...responseHeaders },
           body:
             compiledTemplate !== null
-              ? compiledTemplate.render(fullBody, fullHead)
+              ? renderCompiledTemplate(
+                  compiledTemplate,
+                  fullBody,
+                  fullHead,
+                  prepared.i18nPayload?.locale
+                )
               : fullBody,
         },
       }
@@ -526,7 +667,8 @@ async function renderStringWithDocument(
   requestContext: CustomRequestContext,
   pathPolicy?: RouterPathPolicy,
   pageData?: unknown,
-  streamHeadMeta?: RouteHeadMeta
+  streamHeadMeta?: RouteHeadMeta,
+  i18nPayload?: HydratedI18nPayload
 ): Promise<{ body: string; document: DocumentHead }> {
   let body = ""
   const prev = renderMode.current
@@ -552,6 +694,8 @@ async function renderStringWithDocument(
   const ctxScript = serializeRequestContextScript(requestContext)
   const pageDataScript =
     pageData !== undefined ? serializePageDataScript(pageData) : ""
+  const i18nScript =
+    i18nPayload !== undefined ? serializeI18nScript(i18nPayload) : ""
   return {
     body,
     document: {
@@ -561,6 +705,7 @@ async function renderStringWithDocument(
           pathPolicy,
         }) +
         (ctxScript ? `\n    ${ctxScript}` : "") +
+        (i18nScript ? `\n    ${i18nScript}` : "") +
         (pageDataScript ? `\n    ${pageDataScript}` : ""),
       title: resolvedMeta.title,
     },
@@ -575,7 +720,12 @@ function buildAppElement(
   manifest: RouteManifest,
   requestContext: CustomRequestContext,
   leafProps?: LeafRouteProps,
-  options?: { url?: RequestUrlState; pathPolicy?: RouterPathPolicy }
+  options?: {
+    url?: RequestUrlState
+    pathPolicy?: RouterPathPolicy
+    i18n?: HydratedI18nPayload
+    siteLocales?: import("./localePolicy.js").SiteLocales
+  }
 ) {
   const staticRouter = createStaticRouter({
     manifest,
@@ -583,10 +733,26 @@ function buildAppElement(
     query: options?.url?.query ?? {},
     hash: options?.url?.hash ?? "",
     pathPolicy: options?.pathPolicy,
+    siteLocales: options?.siteLocales,
+    locale: options?.i18n?.locale,
   })
   staticRouter.params.value = params
   const subtree = buildRoutedSubtree(layoutModules, routeModule, leafProps)
-  return createSsrRouterShell(staticRouter, requestContext, () => subtree)
+  const i18nRuntime = options?.i18n
+    ? createI18nRuntime({
+        initialLocale: options.i18n.locale,
+        initialData: options.i18n.data,
+        locales: options.i18n.locales ?? [options.i18n.locale],
+        defaultLocale: options.i18n.defaultLocale ?? options.i18n.locale,
+      })
+    : undefined
+  return createSsrRouterShell(
+    staticRouter,
+    requestContext,
+    () => subtree,
+    undefined,
+    i18nRuntime
+  )
 }
 
 function serializedDataFromPageProps(
@@ -602,10 +768,15 @@ function serializedDataFromPageProps(
 export async function renderMatchToStaticHtml(
   manifest: RouteManifest,
   match: RouteMatch,
-  pathPolicy?: RouterPathPolicy
+  pathPolicy?: RouterPathPolicy,
+  options?: {
+    i18n?: InternationalizationConfig<readonly string[], unknown>
+    locale?: string | null
+  }
 ): Promise<{ body: string; document: DocumentHead }> {
   // Prerender paths are pathname-only (no query string at build time).
   const pageMod = await match.route.component()
+  const locale = options?.locale ?? null
   const loaderCtx = buildLoaderContext({
     params: match.params,
     pathname: match.pathname,
@@ -613,14 +784,28 @@ export async function renderMatchToStaticHtml(
     hash: "",
     query: {},
     context: {},
+    ...(options?.i18n && locale
+      ? loaderI18nFields(options.i18n, locale)
+      : {}),
   })
-  const pageProps = await resolvePagePropsFromModule(pageMod, loaderCtx)
+  const { props: pageProps } = await resolvePagePropsFromModule(pageMod, loaderCtx)
   const streamHeadMeta = resolveStreamHeadMeta(
     match,
     pageMod,
     loaderCtx,
     pageProps as PageProps<KiruLoader<unknown>>
   )
+  const i18nPayload =
+    options?.i18n && locale
+      ? {
+          locale,
+          data: await loadI18nMessages(options.i18n, locale),
+          locales: options.i18n.locales,
+          defaultLocale: options.i18n.default,
+        }
+      : undefined
+  const siteLocales =
+    options?.i18n && locale ? i18nToSiteLocales(options.i18n) : undefined
   const { layoutModules, routeModule } = await loadRouteTree(match)
   const app = buildAppElement(
     match.pathname,
@@ -630,7 +815,7 @@ export async function renderMatchToStaticHtml(
     manifest,
     {},
     pageProps,
-    { pathPolicy }
+    { pathPolicy, i18n: i18nPayload, siteLocales }
   )
   return renderStringWithDocument(
     app,
@@ -638,7 +823,8 @@ export async function renderMatchToStaticHtml(
     {},
     pathPolicy,
     serializedDataFromPageProps(pageProps),
-    streamHeadMeta
+    streamHeadMeta,
+    i18nPayload
   )
 }
 
@@ -690,16 +876,18 @@ type PreparedApp = {
   pagePropsPromise?: Promise<Record<string, unknown>>
   /** Flush static head prefix before shell render. */
   earlyFlushHead?: boolean
+  i18nPayload?: HydratedI18nPayload
   responseStatus: number
   responseHeaders: Record<string, string>
 }
 
-type PrepareAppResult =
-  | PreparedApp
-  | { kind: "redirect"; location: string }
-  | null
+type PrepareRedirect = {
+  kind: "redirect"
+  location: string
+  headers?: Record<string, string>
+}
 
-type PrepareRedirect = { kind: "redirect"; location: string }
+type PrepareAppResult = PreparedApp | PrepareRedirect | null
 
 function isPrepareRedirect(
   p: Exclude<PrepareAppResult, null>
@@ -723,17 +911,105 @@ function resolveStreamHeadMeta(
   return mergeRouteAndPageHead(match.route.head, pageHeadMeta, match.params)
 }
 
+function localePreferenceCookie(
+  config: InternationalizationConfig<readonly string[], unknown>,
+  locale: string
+): string {
+  return `${config.localeCookie}=${encodeURIComponent(locale)}; Path=/; Max-Age=31536000; SameSite=Lax`
+}
+
+function tryLocaleDetectionRedirect(
+  rawPath: string,
+  request: Request | undefined,
+  i18n: InternationalizationConfig<readonly string[], unknown>,
+  pathPolicy: ReturnType<typeof resolvePathPolicy>
+): { location: string; headers: Record<string, string> } | null {
+  if (!request || !shouldRunLocaleDetection(rawPath, i18n)) return null
+  const siteLocales = i18nToSiteLocales(i18n)
+  const detected = detectLocaleFromRequest(request, i18n)
+  const target = formatPublicPathname("/", detected, siteLocales, pathPolicy)
+  const current = formatPathname(rawPath, pathPolicy)
+  if (target === current) return null
+  return {
+    location: target,
+    headers: { "set-cookie": localePreferenceCookie(i18n, detected) },
+  }
+}
+
+function localeDetectionRedirectRenderHit(
+  location: string,
+  extraHeaders: Record<string, string>,
+  stream: boolean
+) {
+  const redirectHeaders = {
+    ...DEFAULT_HEADERS,
+    location,
+    ...extraHeaders,
+  }
+  if (stream) {
+    return {
+      kind: "stream" as const,
+      result: {
+        status: 302,
+        headers: redirectHeaders,
+        body: new ReadableStream<string>({
+          start(controller) {
+            controller.close()
+          },
+        }),
+      },
+    }
+  }
+  return {
+    kind: "string" as const,
+    result: {
+      status: 302,
+      headers: redirectHeaders,
+      body: "",
+    },
+  }
+}
+
 async function prepareAppForUrl(
   url: string,
   ctx: RenderRequestContext | undefined,
   manifest: RouteManifest,
-  pathPolicy: ReturnType<typeof resolvePathPolicy>
+  pathPolicy: ReturnType<typeof resolvePathPolicy>,
+  i18n?: InternationalizationConfig<readonly string[], unknown>,
+  request?: Request
 ): Promise<PrepareAppResult> {
   const requestUrl = parseRequestUrl(url)
-  const requestedPathname = formatPathname(
-    pathnameForMatch(toPathname(url), pathPolicy),
-    pathPolicy
-  )
+  const rawPath = pathnameForMatch(toPathname(url), pathPolicy)
+
+  const localeRedirect =
+    i18n && tryLocaleDetectionRedirect(rawPath, request, i18n, pathPolicy)
+  if (localeRedirect) {
+    return {
+      kind: "redirect",
+      location: localeRedirect.location,
+      headers: localeRedirect.headers,
+    }
+  }
+
+  let locale: string | null = null
+  let logicalPath = rawPath
+  if (i18n) {
+    const siteLocales = i18nToSiteLocales(i18n)
+    const split = splitAppPathnameDetailed(rawPath, siteLocales)
+    if (split.kind === "invalid-locale") {
+      if (shouldRejectInvalidLocale(siteLocales)) {
+        logicalPath = split.pathname
+        locale = split.locale
+      } else {
+        const location = resolveInvalidLocaleRedirect(split, siteLocales, pathPolicy)
+        return { kind: "redirect", location }
+      }
+    } else {
+      logicalPath = split.pathname
+      locale = split.locale
+    }
+  }
+  const requestedPathname = formatPathname(logicalPath, pathPolicy)
   let path = requestedPathname
 
   for (let depth = 0; depth < MAX_SSR_BEFORE_ENTER_REDIRECTS; depth++) {
@@ -806,6 +1082,7 @@ async function prepareAppForUrl(
       query: requestUrl.query,
       validatedQuery: searchCheck.validatedQuery,
       context: requestContext,
+      ...loaderI18nFields(i18n, locale),
     })
     const pageMod = await routeMatch.route.component()
     const pageHead = readPageHeadExport(pageMod)
@@ -822,7 +1099,7 @@ async function prepareAppForUrl(
       // do not await `resolvePagePropsFromModule` here or the shell blocks on load.
       pageProps = {}
     } else {
-      pageProps = await resolvePagePropsFromModule(pageMod, loaderCtx)
+      pageProps = (await resolvePagePropsFromModule(pageMod, loaderCtx)).props
     }
 
     const streamHeadMeta = resolveStreamHeadMeta(
@@ -849,6 +1126,18 @@ async function prepareAppForUrl(
       }
     }
 
+    const i18nPayload =
+      i18n && locale
+        ? {
+            locale,
+            data: await loadI18nMessages(i18n, locale),
+            locales: i18n.locales,
+            defaultLocale: i18n.default,
+          }
+        : undefined
+    const siteLocales =
+      i18n && locale ? i18nToSiteLocales(i18n) : undefined
+
     const app = buildAppElement(
       routeMatch.pathname,
       routeMatch.params,
@@ -857,7 +1146,7 @@ async function prepareAppForUrl(
       manifest,
       requestContext,
       pageProps as LeafRouteProps,
-      { url: requestUrl, pathPolicy }
+      { url: requestUrl, pathPolicy, i18n: i18nPayload, siteLocales }
     )
 
     const pagePropsForMeta = dynamicHead || !streamPageLoad
@@ -874,7 +1163,8 @@ async function prepareAppForUrl(
       ctx?.headers,
       cachePolicyToHeaders(
         readRouteCacheExport(pageMod),
-        routeMatch.route.static === true
+        routeMatch.route.static === true,
+        getISRRevalidate(readRouteISRExport(pageMod))
       ),
       routeHeadersExport?.resolve(loaderCtx, pagePropsForMeta)
     )
@@ -889,6 +1179,7 @@ async function prepareAppForUrl(
       streamHeadMeta,
       pagePropsPromise,
       earlyFlushHead: streamPageLoad,
+      i18nPayload,
       responseStatus,
       responseHeaders,
     }
@@ -903,16 +1194,20 @@ function buildStreamDocumentHead(
   requestContext: CustomRequestContext,
   opts: {
     pageData?: unknown
+    i18nPayload?: HydratedI18nPayload
     decorateDocument: (document: DocumentHead) => void
   }
 ): DocumentHead {
   const ctxScript = serializeRequestContextScript(requestContext)
   const pageDataScript =
     opts.pageData !== undefined ? serializePageDataScript(opts.pageData) : ""
+  const i18nScript =
+    opts.i18nPayload !== undefined ? serializeI18nScript(opts.i18nPayload) : ""
   const document: DocumentHead = {
     headHtml:
       serializeDocumentHead(meta, { pathname }) +
       (ctxScript ? `\n    ${ctxScript}` : "") +
+      (i18nScript ? `\n    ${i18nScript}` : "") +
       (pageDataScript ? `\n    ${pageDataScript}` : ""),
     title: meta.title,
   }
@@ -936,6 +1231,8 @@ function renderStreamForRouteMatch(
     streamHeadMeta?: RouteHeadMeta
     pagePropsPromise?: Promise<Record<string, unknown>>
     earlyFlushHead?: boolean
+    i18nPayload?: HydratedI18nPayload
+    documentLang?: string
   }
 ): ReadableStream<string> {
   const { pathname } = match
@@ -957,9 +1254,11 @@ function renderStreamForRouteMatch(
     onStreamStart: mayEarlyFlush
       ? (controller) => {
           const document = headWithoutPageData()
-          controller.enqueue(
-            opts.compiledTemplate!.splitForStream(document.headHtml).prefix
+          const split = opts.compiledTemplate!.splitForStream(
+            document.headHtml,
+            opts.documentLang
           )
+          controller.enqueue(split.prefix)
           streamedHeadEarly = true
         }
       : undefined,
@@ -985,6 +1284,7 @@ function renderStreamForRouteMatch(
         requestContext,
         {
           pageData,
+          i18nPayload: opts.i18nPayload,
           decorateDocument: opts.decorateDocument,
         }
       )
@@ -992,6 +1292,7 @@ function renderStreamForRouteMatch(
         compiledTemplate: opts.compiledTemplate,
         headHtml: document.headHtml,
         shell,
+        documentLang: opts.documentLang,
       })
     },
   })
@@ -1009,13 +1310,17 @@ function enqueueTemplatedShell(
     compiledTemplate: CompiledRouteHtmlTemplate | null
     headHtml: string
     shell: string
+    documentLang?: string
   }
 ): void {
   if (!args.compiledTemplate) {
     controller.enqueue(args.shell)
     return
   }
-  const split = args.compiledTemplate.splitForStream(args.headHtml)
+  const split = args.compiledTemplate.splitForStream(
+    args.headHtml,
+    args.documentLang
+  )
   controller.enqueue(split.prefix)
   controller.enqueue(args.shell)
   controller.enqueue(split.suffix)
@@ -1041,6 +1346,9 @@ function prepareRenderer(options: CreateRendererOptions) {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
   const compiledTemplate =
     htmlTemplate !== undefined ? compileRouteHtmlTemplate(htmlTemplate) : null
+  if (htmlTemplate !== undefined) {
+    validateRouteHtmlTemplate(htmlTemplate, { i18n: !!options.i18n })
+  }
   if (options.stream && htmlTemplate !== undefined) {
     warnIfStreamingTemplateLacksAsyncEntry(htmlTemplate)
   }

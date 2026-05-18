@@ -22,6 +22,11 @@ describe("routeResponse", () => {
     assert.match(h["cache-control"], /immutable/)
   })
 
+  it("cachePolicyToHeaders immutable when revalidate is false", () => {
+    const h = cachePolicyToHeaders(undefined, false, false)
+    assert.match(h["cache-control"], /immutable/)
+  })
+
   it("resolveRouteStatus from number export", () => {
     const ctx = buildLoaderContext({
       params: {},

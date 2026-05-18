@@ -1,5 +1,6 @@
 import type { LoaderContext, PageProps } from "./loaders.js"
 import type { KiruLoader } from "./loaders.js"
+import type { RouteRevalidate } from "./routeRevalidate.js"
 
 export type RouteHeadersFn = (
   ctx: LoaderContext,
@@ -77,17 +78,31 @@ export function resolveRouteStatus(
 }
 
 /**
- * Map `export const cache` (`'no-store' | 'immutable'`) to `Cache-Control`.
+ * Map `export const cache` and optional `revalidate` to `Cache-Control`.
  * Static routes default to immutable when no policy is set.
+ *
+ * @see docs/router/tier-3-wave-1.md#hybrid-isr
  */
 export function cachePolicyToHeaders(
   policy: RouteCachePolicy | undefined,
-  staticRoute: boolean
+  staticRoute: boolean,
+  revalidate?: RouteRevalidate
 ): Record<string, string> {
   if (policy === "no-store") {
     return { "cache-control": "no-store" }
   }
-  if (policy === "immutable" || staticRoute) {
+  if (typeof revalidate === "number" && revalidate > 0) {
+    const swr = Math.max(1, Math.floor(revalidate))
+    return {
+      "cache-control": `public, s-maxage=${revalidate}, stale-while-revalidate=${swr}`,
+    }
+  }
+  if (policy === "immutable" || (staticRoute && revalidate !== false)) {
+    return {
+      "cache-control": "public, max-age=31536000, immutable",
+    }
+  }
+  if (revalidate === false) {
     return {
       "cache-control": "public, max-age=31536000, immutable",
     }

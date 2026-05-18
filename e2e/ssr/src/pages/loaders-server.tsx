@@ -4,6 +4,7 @@ export const load = serverLoader({
   load: async (ctx) => ({
     source: "server",
     pathname: ctx.url.pathname,
+    locale: ctx.locale ?? "",
   }),
   fallback: () => <p data-testid="loader-fallback">Loading...</p>,
 })
@@ -17,7 +18,9 @@ export const head = defineHeadContent<typeof load>((_ctx, { data, error }) => ({
 export default function LoadersServerPage({ data, error }: PageProps<typeof load>) {
   return (
     <p data-testid="loader-data">
-      {error ? error.message : `${data.source}@${data.pathname}`}
+      {error
+        ? error.message
+        : `${data.source}@${data.pathname}#${data.locale}`}
     </p>
   )
 }

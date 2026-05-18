@@ -8,6 +8,13 @@ import {
   guardServerLoaderOnClient,
   warnStaticLoaderOnClientNavigation,
 } from "./devWarnings.js"
+import {
+  buildLoaderCacheKey,
+  getLoaderCacheEntry,
+  isLoaderCacheStale,
+  setLoaderCacheEntry,
+} from "./loaderCache.js"
+import { readLoaderCacheOptions } from "./loaders.js"
 
 export type LoaderFetchContext = {
   params: Record<string, unknown>
@@ -17,6 +24,9 @@ export type LoaderFetchContext = {
   query: RouterQuery
   context: CustomRequestContext
   request?: Request
+  locale?: string
+  locales?: readonly string[]
+  defaultLocale?: string
 }
 
 export function buildLoaderContext(
@@ -32,6 +42,11 @@ export function buildLoaderContext(
     query: (input.validatedQuery ?? input.query) as LoaderContext["query"],
     context: input.context,
     request: input.request,
+    ...(input.locale !== undefined ? { locale: input.locale } : {}),
+    ...(input.locales !== undefined ? { locales: input.locales } : {}),
+    ...(input.defaultLocale !== undefined
+      ? { defaultLocale: input.defaultLocale }
+      : {}),
   }
 }
 
@@ -78,14 +93,26 @@ export function buildPageErrorProps(
   return { data: null, error: toRenderError(err) }
 }
 
+export type ResolvePagePropsResult = {
+  props: PageProps<KiruLoader<unknown>> | Record<string, never>
+  /** True when serving cached loader data past `staleTime`. */
+  isStale?: boolean
+}
+
 /** Run `load` and shape props for the page component (no loading state). */
 export async function resolvePagePropsFromModule(
   mod: unknown,
   ctx: LoaderContext,
-  options?: { useHydratedPageData?: boolean; forceReload?: boolean }
-): Promise<PageProps<KiruLoader<unknown>> | Record<string, never>> {
+  options?: {
+    useHydratedPageData?: boolean
+    forceReload?: boolean
+    routeId?: string
+    /** Called after a background refetch updates the loader cache (stale entry). */
+    onCacheRefreshed?: () => void
+  }
+): Promise<ResolvePagePropsResult> {
   const load = readPageLoadExport(mod)
-  if (!load) return {}
+  if (!load) return { props: {} }
   const useHydrated =
     options?.forceReload === true ? false : options?.useHydratedPageData !== false
   if (
@@ -95,14 +122,56 @@ export async function resolvePagePropsFromModule(
   ) {
     const hydrated = readHydratedPageData()
     if (hydrated !== undefined) {
-      return buildPageProps(hydrated)
+      return { props: buildPageProps(hydrated) }
     }
     guardServerLoaderOnClient()
   }
+
+  const cacheOpts = readLoaderCacheOptions(load)
+  const routeId = options?.routeId
+  if (
+    typeof document !== "undefined" &&
+    routeId &&
+    !options?.forceReload &&
+    (load.__kiruLoader === "client" || load.__kiruLoader === "universal")
+  ) {
+    const key = buildLoaderCacheKey(routeId, ctx.url.pathname, ctx.url.search)
+    const cached = getLoaderCacheEntry(key)
+    if (cached && !isLoaderCacheStale(cached)) {
+      return { props: buildPageProps(cached.data), isStale: false }
+    }
+    if (cached && isLoaderCacheStale(cached)) {
+      void (async () => {
+        try {
+          const data = await runPageLoadFromModule(mod, ctx)
+          setLoaderCacheEntry(key, {
+            data,
+            fetchedAt: Date.now(),
+            staleTime: cacheOpts.staleTime,
+            gcTime: cacheOpts.gcTime,
+          })
+          options?.onCacheRefreshed?.()
+        } catch {
+          // keep showing stale data until invalidate or next navigation
+        }
+      })()
+      return { props: buildPageProps(cached.data), isStale: true }
+    }
+  }
+
   try {
     const data = await runPageLoadFromModule(mod, ctx)
-    return buildPageProps(data)
+    if (typeof document !== "undefined" && routeId) {
+      const key = buildLoaderCacheKey(routeId, ctx.url.pathname, ctx.url.search)
+      setLoaderCacheEntry(key, {
+        data,
+        fetchedAt: Date.now(),
+        staleTime: cacheOpts.staleTime,
+        gcTime: cacheOpts.gcTime,
+      })
+    }
+    return { props: buildPageProps(data), isStale: false }
   } catch (err) {
-    return buildPageErrorProps(err)
+    return { props: buildPageErrorProps(err), isStale: false }
   }
 }

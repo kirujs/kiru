@@ -46,7 +46,7 @@ export const routes = defineRouteTree((r) =>
         () => import("./pages/loaders-server-immediate-shell")
       ),
       r.page("/about", {
-        component: () => import("./pages/about"),
+        component: () => import("./pages/about.tsx"),
         head: { title: "E2E SSR About" },
       }),
       r.page("/docs", {
@@ -69,6 +69,28 @@ export const routes = defineRouteTree((r) =>
       r.page("/invalidate-demo", {
         component: () => import("./pages/invalidate-demo"),
         head: { title: "E2E SSR invalidate" },
+      }),
+      r.page("/loader-cache-demo", {
+        component: () => import("./pages/loader-cache-demo"),
+        head: { title: "E2E SSR loader cache" },
+      }),
+      r.page("/revalidate-demo", {
+        static: true,
+        component: () => import("./pages/revalidate-demo"),
+        head: { title: "E2E SSR revalidate" },
+      }),
+      r.page("/ppr/force-dynamic", {
+        static: true,
+        component: () => import("./pages/ppr-force-dynamic-demo"),
+        head: { title: "E2E PPR force-dynamic" },
+      }),
+      r.page("/ppr/force-static", {
+        component: () => import("./pages/ppr-force-static-demo"),
+        head: { title: "E2E PPR force-static" },
+      }),
+      r.page("/image-demo", {
+        component: () => import("./pages/image-demo"),
+        head: { title: "E2E KiruImage" },
       }),
       r.page("/streaming-test", {
         component: () => import("./pages/streaming-test"),

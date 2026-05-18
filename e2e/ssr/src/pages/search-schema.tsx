@@ -22,10 +22,6 @@ export const load = loader({
   load: async ({ query }) => query,
 })
 
-export default function SearchSchemaPage({
-  data,
-}: PageProps<typeof load>) {
-  return () => (
-    <p data-testid="search-schema">q={data?.q ?? "missing"}</p>
-  )
+export default function SearchSchemaPage({ data }: PageProps<typeof load>) {
+  return <p data-testid="search-schema">q={data?.q ?? "missing"}</p>
 }

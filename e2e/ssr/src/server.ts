@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import { serveStatic } from "@hono/node-server/serve-static"
 import { createRenderer, resolveStatic } from "kiru/router"
+import i18n from "./i18n.js"
 import { routes } from "./routes"
 
 const isProd = process.env.NODE_ENV === "production"
@@ -17,6 +18,7 @@ const renderer = createRenderer({
   routes,
   htmlTemplate,
   prerenderedHtmlDir: clientDir,
+  i18n,
   actions: {
     secret: "kiru-e2e-remote-secret",
     allowedOrigins: ["*"],

@@ -6,6 +6,11 @@ import {
   resolvePathPolicy,
   type RouterPathPolicy,
 } from "./pathPolicy.js"
+import {
+  addLocale,
+  normalizeSiteLocales,
+  type SiteLocales,
+} from "./localePolicy.js"
 
 export type ChangeFrequency =
   | "always"
@@ -68,6 +73,11 @@ export interface SiteConfigInput {
   pathPolicy?: RouterPathPolicy
   sitemap?: boolean | SitemapOptionsInput
   robots?: boolean | RobotsOptions
+  /**
+   * Locale prefixes for hreflang sitemap alternates and routing helpers.
+   * @see docs/router/tier-3-wave-1.md#i18n
+   */
+  locales?: SiteLocales
 }
 
 export interface SiteConfig {
@@ -75,6 +85,7 @@ export interface SiteConfig {
   pathPolicy: Required<RouterPathPolicy>
   sitemap: false | SitemapOptions
   robots: false | RobotsOptions
+  locales?: SiteLocales
 }
 
 function parseHttpOrigin(value: string, label: string): string {
@@ -142,7 +153,11 @@ export function defineSiteConfig(input: SiteConfigInput): SiteConfig {
     robots = input.robots
   }
 
-  return { url: origin, pathPolicy, sitemap, robots }
+  const locales = input.locales
+    ? normalizeSiteLocales(input.locales)
+    : undefined
+
+  return { url: origin, pathPolicy, sitemap, robots, locales }
 }
 
 function escXml(s: string): string {
@@ -165,6 +180,11 @@ function absoluteMediaUrl(origin: string, href: string): string {
   return `${base}${path}`
 }
 
+interface SitemapHreflangAlternate {
+  hreflang: string
+  href: string
+}
+
 interface ResolvedSitemapUrl {
   loc: string
   lastmod?: string
@@ -172,6 +192,7 @@ interface ResolvedSitemapUrl {
   priority?: number
   images: string[]
   videos: SitemapVideoEntry[]
+  alternates: SitemapHreflangAlternate[]
 }
 
 function resolveSitemapUrl(
@@ -188,13 +209,37 @@ function resolveSitemapUrl(
       ? (buildDate ?? new Date().toISOString().slice(0, 10))
       : lastmodSource
 
+  const alternates: SitemapHreflangAlternate[] = []
+  if (site.locales) {
+    for (const prefix of site.locales.prefixes) {
+      const localizedPath = addLocale(routePath, prefix, site.locales)
+      alternates.push({
+        hreflang: prefix,
+        href: absoluteRouteUrl(opts.domain, localizedPath, site.pathPolicy),
+      })
+    }
+    alternates.push({
+      hreflang: "x-default",
+      href: absoluteRouteUrl(
+        opts.domain,
+        addLocale(routePath, site.locales.default, site.locales),
+        site.pathPolicy
+      ),
+    })
+  }
+
+  const canonicalPath = site.locales
+    ? addLocale(routePath, site.locales.default, site.locales)
+    : routePath
+
   return {
-    loc: absoluteRouteUrl(opts.domain, routePath, site.pathPolicy),
+    loc: absoluteRouteUrl(opts.domain, canonicalPath, site.pathPolicy),
     lastmod,
     changefreq: override?.changefreq ?? opts.changefreq,
     priority: override?.priority ?? opts.priority,
     images: override?.images ?? [],
     videos: override?.videos ?? [],
+    alternates,
   }
 }
 
@@ -236,8 +281,20 @@ function renderVideoTags(origin: string, videos: SitemapVideoEntry[]): string {
     .join("\n")
 }
 
+function renderHreflangTags(alternates: SitemapHreflangAlternate[]): string {
+  return alternates
+    .map(
+      (alt) =>
+        `    <xhtml:link rel="alternate" hreflang="${escXml(alt.hreflang)}" href="${escXml(alt.href)}"/>`
+    )
+    .join("\n")
+}
+
 function renderUrlEntry(origin: string, entry: ResolvedSitemapUrl): string {
   const parts = [`    <loc>${escXml(entry.loc)}</loc>`]
+  if (entry.alternates.length) {
+    parts.push(renderHreflangTags(entry.alternates))
+  }
   if (entry.lastmod)
     parts.push(`    <lastmod>${escXml(entry.lastmod)}</lastmod>`)
   if (entry.changefreq)
@@ -264,7 +321,11 @@ export function buildSitemapXml(
   )
   const hasImages = entries.some((e) => e.images.length > 0)
   const hasVideos = entries.some((e) => e.videos.length > 0)
+  const hasHreflang = entries.some((e) => e.alternates.length > 0)
   const xmlns = ['xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"']
+  if (hasHreflang) {
+    xmlns.push('xmlns:xhtml="http://www.w3.org/1999/xhtml"')
+  }
   if (hasImages) {
     xmlns.push('xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"')
   }

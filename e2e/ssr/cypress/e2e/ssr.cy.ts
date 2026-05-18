@@ -632,9 +632,7 @@ describe("SSR server", () => {
 
   it("redirects to canonical query when defaults apply", () => {
     const port = Cypress.env("port")
-    cy.visit(`http://127.0.0.1:${port}/search-schema`, {
-      followRedirect: true,
-    })
+    cy.visit(`http://127.0.0.1:${port}/search-schema`)
     cy.location("search").should("eq", "?q=default")
     cy.get('[data-testid="search-schema"]').should("contain", "q=default")
   })
@@ -660,4 +658,5 @@ describe("SSR server", () => {
       expect(res.body).not.to.include('data-testid="ssr-home"')
     })
   })
+
 })

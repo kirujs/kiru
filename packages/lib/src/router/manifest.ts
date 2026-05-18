@@ -211,6 +211,11 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
   }
 }
 
+/** Re-instantiate in the current realm (Cypress/Electron can break `.match` on foreign RegExps). */
+function execRoutePattern(pattern: RegExp, pathname: string): RegExpExecArray | null {
+  return new RegExp(pattern.source, pattern.flags).exec(pathname)
+}
+
 export function matchRoute(
   manifest: RouteManifest,
   pathname: string,
@@ -221,7 +226,7 @@ export function matchRoute(
   )
 
   for (const route of manifest.routes) {
-    const match = normalizedPath.match(route.pattern)
+    const match = execRoutePattern(route.pattern, normalizedPath)
     if (!match) continue
     const params: Record<string, string> = {}
     for (let i = 0; i < route.params.length; i++) {
@@ -596,6 +601,19 @@ export async function generateStaticPaths(
   }
 
   return Array.from(out).sort()
+}
+
+/** Static paths expanded per locale for prerender / disk cache lookup. */
+export async function generatePublicStaticPaths(
+  manifest: RouteManifest,
+  pathPolicy?: RouterPathPolicy,
+  buildMeta?: RouteBuildMeta,
+  siteLocales?: import("./localePolicy.js").SiteLocales
+): Promise<string[]> {
+  const logical = await generateStaticPaths(manifest, pathPolicy, buildMeta)
+  if (!siteLocales) return logical
+  const { expandPathsForLocales } = await import("./i18n/expandPaths.js")
+  return expandPathsForLocales(logical, siteLocales, pathPolicy)
 }
 
 export async function generateSitemapPaths(

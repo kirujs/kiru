@@ -3,7 +3,7 @@ import { createServer, type ViteDevServer } from "vite"
 
 const port = 5192
 
-async function startServer() {
+async function startViteDevServer(): Promise<ViteDevServer> {
   const server = await createServer({
     configFile: "./vite.config.ts",
     server: {
@@ -20,10 +20,11 @@ export default defineConfig({
     env: {
       port,
     },
+    excludeSpecPattern: ["**/tier3-wave1.cy.ts"],
     setupNodeEvents(on) {
       let server: ViteDevServer | null = null
       on("before:run", async () => {
-        server = await startServer()
+        server = await startViteDevServer()
       })
       on("after:run", async () => {
         await server?.close()

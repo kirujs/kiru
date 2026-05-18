@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Router
 
+- **Tier 3 wave 1:** Hybrid ISR via `export const isr = defineISR({ revalidate, tags, dynamic })` (legacy separate exports still read); `PrerenderCacheStore` (disk + memory) with SSG sidecar metadata; `revalidatePath` / `revalidateTag` and `action({ revalidate })` meta; stale-while-revalidate single-flight; loader `staleTime` / `gcTime` with background refetch and `router.isLoaderStale`; `Link` `locale` prop; `defineSiteConfig` `locales` + hreflang sitemaps; `KiruImage`; guide at [`docs/router/tier-3-wave-1.md`](docs/router/tier-3-wave-1.md).
+- **Components:** `KiruImage` with width/height, lazy loading, and simple `srcset`.
 - **Tier 2 parity:** [Standard Schema](https://standardschema.dev) validation via `Schema` and async `parseInput` (Zod 3/4+, Valibot, `{ parse }` / `{ safeParse }`); `router.invalidate()` and action-driven invalidation (`invalidate` route ids, `x-kiru-invalidate` header); route `headers` / `status` / `cache` SSR exports; shared `prepareRouteForNavigation` and `createSsrRouterShell` (targeted outlet updates on loader refetch); CSR/SSG dev guards for remote `action` / `formAction` dispatch.
 - **Loaders:** `validation: { query, params, onInvalid, queryDefaults, redirectToCanonical }` on `loader` / `serverLoader` / `clientLoader` — typed `query` / `params` in loader context, `queryDefaults` checked against the query schema, optional canonical URL redirect when defaults apply; legacy `export const validateSearch` still supported.
 - **Hooks:** `useSearchParams<T>()` returns validated query when `load.validation.query` is configured.

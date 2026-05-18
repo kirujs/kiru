@@ -32,6 +32,20 @@ export function toRenderError(thrown: unknown): Error {
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface CustomRequestContext {}
 
+/**
+ * Augment for type-safe `useI18n()`:
+ *
+ * ```ts
+ * declare module "kiru/router" {
+ *   interface Internationalization {
+ *     config: typeof i18n
+ *   }
+ * }
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface Internationalization {}
+
 export interface GenerateStaticParamsContext {
   params: Record<string, string>
 }
@@ -71,7 +85,9 @@ export interface RouteHeadMeta {
   /** Raw &lt;meta&gt; attributes per row, e.g. `{ name: "theme-color", content: "#000" }` */
   extraMeta?: Array<Record<string, string>>
   /**
-   * &lt;link&gt; rows, e.g. `{ rel: "icon", href: "/favicon.ico" }` or `{ rel: "preload", href: "/font.woff2", as: "font" }`.
+   * &lt;link&gt; rows, e.g. `{ rel: "icon", href: "/favicon.ico" }`.
+   * Font preload: `{ rel: "preload", as: "font", href, type: "font/woff2", crossOrigin: "anonymous" }`.
+   * @see docs/router/tier-3-wave-1.md#assets
    */
   links?: Array<Record<string, string>>
   /** Structured data objects serialized as `application/ld+json` script tags. */

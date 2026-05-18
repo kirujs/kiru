@@ -15,6 +15,10 @@ export type PrepareRouteForNavigationOptions = {
   useHydratedPageData?: boolean
   /** When true, always refetch loaders (invalidation). */
   forceReload?: boolean
+  /** Active route id for client loader cache keys. */
+  routeId?: string
+  /** Bumps outlet when stale loader cache finishes background refetch. */
+  onCacheRefreshed?: () => void
 }
 
 export type PreparedRouteNavigation = {
@@ -23,6 +27,7 @@ export type PreparedRouteNavigation = {
   pageMod: unknown
   loaderCtx: LoaderContext
   usesLoadGate: boolean
+  isLoaderStale?: boolean
 }
 
 /**
@@ -70,16 +75,20 @@ export async function prepareRouteForNavigation(input: {
     }
   }
 
-  const leafProps = await resolvePagePropsFromModule(pageMod, loaderCtx, {
+  const resolved = await resolvePagePropsFromModule(pageMod, loaderCtx, {
     useHydratedPageData: useHydrated,
+    forceReload: options?.forceReload,
+    routeId: options?.routeId,
+    onCacheRefreshed: options?.onCacheRefreshed,
   })
 
   return {
     routeModule,
-    leafProps: leafProps as LeafRouteProps,
+    leafProps: resolved.props as LeafRouteProps,
     pageMod,
     loaderCtx,
     usesLoadGate: false,
+    isLoaderStale: resolved.isStale,
   }
 }
 

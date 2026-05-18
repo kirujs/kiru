@@ -18,6 +18,12 @@ Actionable backlog for making `kiru/router` competitive with Next.js, SvelteKit,
 - Tier 2 assumes Tier 1 “blockers” are done or explicitly deferred with a note.
 - Tier 3 items are **optional** — not required for a strong v1.
 
+## Guides (docs-site source)
+
+| Guide | Path |
+|-------|------|
+| Tier 3 wave 1 (ISR, loader cache, i18n, assets) | [tier-3-wave-1.md](../router/tier-3-wave-1.md) |
+
 ## Related code areas
 
 | Area | Path |

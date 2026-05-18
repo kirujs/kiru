@@ -1,4 +1,5 @@
 import type { AppHandle, AppHandleOptions } from "../../appHandle.js"
+import type { InternationalizationConfig } from "../i18n/index.js"
 import { bootstrapSsrClient } from "../../ssr/routerHydrate.js"
 import type { CreateRouterAppBaseOptions } from "./types.js"
 
@@ -6,6 +7,7 @@ export type { CreateRouterAppBaseOptions }
 
 export type CreateRouterAppOptions = CreateRouterAppBaseOptions & {
   hydrateOptions?: AppHandleOptions
+  i18n?: InternationalizationConfig<readonly string[], unknown>
 }
 
 /**
@@ -20,6 +22,7 @@ export function createRouterApp(
   return bootstrapSsrClient({
     routes: options.routes,
     container: options.container,
+    i18n: options.i18n,
     hydrateOptions: {
       ...options.hydrateOptions,
       hydrationMode: "dynamic",

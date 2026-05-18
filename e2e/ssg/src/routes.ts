@@ -1,4 +1,7 @@
 import { defineRouteTree } from "kiru/router"
+import i18n from "./i18n.js"
+
+export { i18n }
 
 export const routes = defineRouteTree((r) =>
   r.scope({

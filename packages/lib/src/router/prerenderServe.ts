@@ -1,6 +1,5 @@
 import {
   hydratePrerenderedHtmlForRequest,
-  tryReadPrerenderedHtml,
 } from "./prerenderedHtml.js"
 import { resolvePathPolicy, type RouterPathPolicy } from "./pathPolicy.js"
 import type {
@@ -8,29 +7,69 @@ import type {
   RenderResult,
   StreamRenderResult,
 } from "./types.js"
+import {
+  diskPrerenderCache,
+  type PrerenderCacheStore,
+  isPrerenderEntryFresh,
+  isPrerenderEntryStale,
+  runPrerenderRegenSingleFlight,
+} from "./prerenderCache.js"
+import { cachePolicyToHeaders } from "./routeResponse.js"
+import { mergeResponseHeaders } from "./routeResponse.js"
 
 export type PrerenderRenderContext = {
   context?: CustomRequestContext
-}
-
-const PRERENDER_HEADERS: Record<string, string> = {
-  "content-type": "text/html; charset=utf-8",
 }
 
 export type PrerenderServeHit =
   | { kind: "stream"; result: StreamRenderResult }
   | { kind: "string"; result: RenderResult }
 
+export type TryServePrerenderedOptions = {
+  prerenderedHtmlDir?: string
+  prerenderCache?: PrerenderCacheStore
+  stream: boolean
+  pathPolicy?: RouterPathPolicy
+  getStaticPathSet: () => Promise<ReadonlySet<string>>
+  actionsSecret: string
+  /** When entry is stale, regenerate HTML in the background (SWR). */
+  onRegenerate?: (pathname: string) => Promise<void>
+}
+
+function buildPrerenderResponse(
+  hydrated: string,
+  stream: boolean,
+  headers: Record<string, string>
+): PrerenderServeHit {
+  if (stream) {
+    return {
+      kind: "stream",
+      result: {
+        status: 200,
+        headers,
+        body: new ReadableStream<string>({
+          start(controller) {
+            controller.enqueue(hydrated)
+            controller.close()
+          },
+        }),
+      },
+    }
+  }
+  return {
+    kind: "string",
+    result: {
+      status: 200,
+      headers,
+      body: hydrated,
+    },
+  }
+}
+
 export async function tryServePrerenderedFromDisk(
   requestOrUrl: Request | string,
   url: string,
-  options: {
-    prerenderedHtmlDir: string
-    stream: boolean
-    pathPolicy?: RouterPathPolicy
-    getStaticPathSet: () => Promise<ReadonlySet<string>>
-    actionsSecret: string
-  },
+  options: TryServePrerenderedOptions,
   ctx?: PrerenderRenderContext
 ): Promise<PrerenderServeHit | null> {
   if (
@@ -46,41 +85,49 @@ export async function tryServePrerenderedFromDisk(
 
   const pathPolicy = resolvePathPolicy(options.pathPolicy)
   const pathname = new URL(url, "http://localhost").pathname
-  const html = tryReadPrerenderedHtml(options.prerenderedHtmlDir, pathname, {
-    staticPaths: await options.getStaticPathSet(),
-    pathPolicy,
-  })
-  if (!html) return null
+  const staticPaths = await options.getStaticPathSet()
+  const store =
+    options.prerenderCache ??
+    (options.prerenderedHtmlDir
+      ? diskPrerenderCache({
+          clientDir: options.prerenderedHtmlDir,
+          pathPolicy,
+          staticPaths,
+        })
+      : null)
+
+  if (!store) return null
+
+  const entry = store.get(pathname)
+  if (!entry) return null
+
+  if (!isPrerenderEntryFresh(entry) && isPrerenderEntryStale(entry)) {
+    if (options.onRegenerate) {
+      void runPrerenderRegenSingleFlight(pathname, () =>
+        options.onRegenerate!(pathname)
+      )
+    }
+    if (!entry.html) return null
+  } else if (!isPrerenderEntryFresh(entry) && !isPrerenderEntryStale(entry)) {
+    return null
+  }
 
   const requestContext = (ctx?.context ?? null) as CustomRequestContext
   const hydrated = hydratePrerenderedHtmlForRequest(
-    html,
+    entry.html,
     requestContext,
     options.actionsSecret
   )
 
-  if (options.stream) {
-    return {
-      kind: "stream",
-      result: {
-        status: 200,
-        headers: { ...PRERENDER_HEADERS },
-        body: new ReadableStream<string>({
-          start(controller) {
-            controller.enqueue(hydrated)
-            controller.close()
-          },
-        }),
-      },
-    }
-  }
+  const cacheHeaders = cachePolicyToHeaders(
+    undefined,
+    entry.revalidate === false,
+    typeof entry.revalidate === "number" ? entry.revalidate : undefined
+  )
+  const headers = mergeResponseHeaders(
+    { "content-type": "text/html; charset=utf-8" },
+    cacheHeaders
+  )
 
-  return {
-    kind: "string",
-    result: {
-      status: 200,
-      headers: PRERENDER_HEADERS,
-      body: hydrated,
-    },
-  }
+  return buildPrerenderResponse(hydrated, options.stream, headers)
 }

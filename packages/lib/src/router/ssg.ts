@@ -1,8 +1,11 @@
 import {
   compileRouteTree,
-  generateStaticPaths,
+  generatePublicStaticPaths,
   matchRoute,
 } from "./manifest.js"
+import type { SiteLocales } from "./localePolicy.js"
+import { splitAppPathname } from "./i18n/routing.js"
+import type { InternationalizationConfig } from "./i18n/createI18nConfig.js"
 import type { RouterPathPolicy } from "./pathPolicy.js"
 import { createRenderer, renderMatchToStaticHtml } from "./renderer.js"
 import type {
@@ -54,48 +57,75 @@ export async function prerenderStaticRoutes({
   htmlTemplate,
   pathPolicy,
   maxConcurrentRenders = DEFAULT_MAX_CONCURRENT_RENDERS,
+  siteLocales,
+  i18n,
 }: {
   routes: RouteTreeDefinition | RouteManifest
   htmlTemplate?: string
   pathPolicy?: RouterPathPolicy
   /** @default 10 */
   maxConcurrentRenders?: number
+  /** When set, prerender each locale's public URL. */
+  siteLocales?: SiteLocales
+  /** Enables locale-aware SSR during prerender (messages + URL split). */
+  i18n?: InternationalizationConfig<readonly string[], unknown>
 }): Promise<StaticRouteOutput[]> {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
-  const paths = await generateStaticPaths(manifest, pathPolicy)
+  const paths = await generatePublicStaticPaths(
+    manifest,
+    pathPolicy,
+    undefined,
+    siteLocales
+  )
   const renderer =
     htmlTemplate !== undefined
       ? createRenderer({
           routes: manifest,
           htmlTemplate,
           pathPolicy,
+          i18n,
         })
-      : null
+      : i18n
+        ? createRenderer({ routes: manifest, pathPolicy, i18n })
+        : null
 
   const renderedPaths = await mapWithConcurrency(
     paths,
     maxConcurrentRenders,
-    async (path) => {
-      const routeMatch = matchRoute(manifest, path, pathPolicy)
+    async (publicPath) => {
+      const logicalPath = siteLocales
+        ? splitAppPathname(publicPath, siteLocales).pathname
+        : publicPath
+      const routeMatch = matchRoute(manifest, logicalPath, pathPolicy)
       if (!routeMatch) return null
 
+      const locale = siteLocales
+        ? splitAppPathname(publicPath, siteLocales).locale
+        : null
+      const staticRenderOpts =
+        i18n && locale
+          ? { i18n, locale }
+          : undefined
+
       if (renderer) {
-        const rendered = await renderer.render(path)
+        const rendered = await renderer.render(publicPath)
         if (!rendered || typeof rendered.body !== "string") return null
         const { body, document } = await renderMatchToStaticHtml(
           manifest,
           routeMatch,
-          pathPolicy
+          pathPolicy,
+          staticRenderOpts
         )
-        return { path, body, document, html: rendered.body }
+        return { path: publicPath, body, document, html: rendered.body }
       }
 
       const { body, document } = await renderMatchToStaticHtml(
         manifest,
         routeMatch,
-        pathPolicy
+        pathPolicy,
+        staticRenderOpts
       )
-      return { path, body, document }
+      return { path: publicPath, body, document }
     }
   )
 
@@ -105,7 +135,7 @@ export async function prerenderStaticRoutes({
 
   if (manifest.rootHasNotFound) {
     const nfPath = "/__kiru_ssg_not_found__"
-    const inner = createRenderer({ routes: manifest })
+    const inner = createRenderer({ routes: manifest, i18n })
     const frag = await inner.render(nfPath)
     if (frag && typeof frag.body === "string") {
       const doc: DocumentHead = { headHtml: "", title: "Not Found" }

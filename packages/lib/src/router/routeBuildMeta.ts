@@ -4,10 +4,21 @@ import type {
   GenerateStaticParams,
   RouteManifest,
 } from "./types.js"
+import {
+  getISRRevalidate,
+  getISRTags,
+  getRouteBuildMetaFromModule,
+  type RouteDynamicMode,
+  type RouteRevalidate,
+} from "./routeRevalidate.js"
 
 export type RouteBuildMetaEntry = {
   generateStaticParams?: GenerateStaticParams
   generateSitemapParams?: GenerateSitemapParams
+  /** From `export const isr` on the page module. */
+  revalidate?: RouteRevalidate
+  dynamic?: RouteDynamicMode
+  tags?: string[]
 }
 
 /** Build-time metadata keyed by {@link CompiledRoute.id} (from page module exports). */
@@ -58,10 +69,18 @@ export async function discoverRouteBuildMeta(
     const needsStatic = route.static && route.params.length > 0
     const needsSitemap =
       includeSet.has(route.path) && route.params.length > 0 && !route.static
-    if (!needsStatic && !needsSitemap) continue
+    const needsIsrMeta = route.static || needsStatic || needsSitemap
+
+    if (!needsIsrMeta) continue
 
     const mod = await loadPageModule(route)
     const entry: RouteBuildMetaEntry = {}
+    const isr = getRouteBuildMetaFromModule(mod)
+    const revalidate = getISRRevalidate(isr)
+    const tags = getISRTags(isr)
+    if (revalidate !== undefined) entry.revalidate = revalidate
+    if (isr?.dynamic !== undefined) entry.dynamic = isr.dynamic
+    if (tags !== undefined) entry.tags = tags
 
     if (needsStatic) {
       const generateStaticParams = readGenerateStaticParams(mod)
@@ -77,7 +96,13 @@ export async function discoverRouteBuildMeta(
       }
     }
 
-    if (entry.generateStaticParams || entry.generateSitemapParams) {
+    if (
+      entry.generateStaticParams ||
+      entry.generateSitemapParams ||
+      entry.revalidate !== undefined ||
+      entry.dynamic !== undefined ||
+      entry.tags !== undefined
+    ) {
       byRouteId[route.id] = entry
     }
   }
@@ -97,4 +122,11 @@ export function getRouteGenerateSitemapParams(
   meta: RouteBuildMeta | undefined
 ): GenerateSitemapParams | undefined {
   return meta?.byRouteId[route.id]?.generateSitemapParams
+}
+
+export function getRouteBuildMetaEntry(
+  route: CompiledRoute,
+  meta: RouteBuildMeta | undefined
+): RouteBuildMetaEntry | undefined {
+  return meta?.byRouteId[route.id]
 }

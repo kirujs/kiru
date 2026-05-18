@@ -7,6 +7,10 @@ import type {
   LoaderValidationConfig,
 } from "./loaderValidation.js"
 import { normalizeLoaderValidation } from "./loaderValidation.js"
+import {
+  DEFAULT_LOADER_GC_TIME_MS,
+  DEFAULT_LOADER_STALE_TIME_MS,
+} from "./loaderCache.js"
 
 export type {
   EnforceLoaderValidation,
@@ -26,6 +30,10 @@ export interface LoaderContext {
   query: RouterQuery
   context: CustomRequestContext
   request?: Request
+  /** Active locale when i18n is enabled. */
+  locale?: string
+  locales?: readonly string[]
+  defaultLocale?: string
 }
 
 export type LoaderContextFromValidation<V> = Omit<
@@ -55,18 +63,32 @@ export type KiruLoader<T = unknown> = {
   /** SSR/CSR fallback UI while load is in flight (serverLoader config only). */
   __kiruFallback?: (() => JSX.Element)
   __kiruValidation?: KiruLoaderValidation
+  /**
+   * Client cache: ms before data is stale (default 0).
+   * @see docs/router/tier-3-wave-1.md#loader-caching
+   */
+  __kiruStaleTime?: number
+  /** Client cache: ms to retain unused entries (default 5 minutes). */
+  __kiruGcTime?: number
 }
 
 /** `loader` / `clientLoader` config with {@link LoaderValidationConfig}. */
 export type LoaderConfigWithValidation<
   T,
   V extends LoaderValidationConfig,
-> = {
+> = LoaderCacheOptions & {
   validation: EnforceLoaderValidation<V>
   load: (ctx: LoaderContextFromValidation<V>) => Promise<T> | T
 }
 
-export type ServerLoaderConfig<T> = {
+export type LoaderCacheOptions = {
+  /** @default 0 — refetch on every client navigation */
+  staleTime?: number
+  /** @default 300_000 (5 minutes) */
+  gcTime?: number
+}
+
+export type ServerLoaderConfig<T> = LoaderCacheOptions & {
   load: LoaderFn<T>
   fallback: (() => JSX.Element)
 }
@@ -104,6 +126,8 @@ function wrapLoader<T>(
   options?: {
     fallback?: (() => JSX.Element)
     validation?: KiruLoaderValidation
+    staleTime?: number
+    gcTime?: number
   }
 ): KiruLoader<T> {
   return {
@@ -113,6 +137,8 @@ function wrapLoader<T>(
     ...(options?.validation !== undefined
       ? { __kiruValidation: options.validation }
       : {}),
+    __kiruStaleTime: options?.staleTime ?? DEFAULT_LOADER_STALE_TIME_MS,
+    __kiruGcTime: options?.gcTime ?? DEFAULT_LOADER_GC_TIME_MS,
   }
 }
 
@@ -140,12 +166,16 @@ export function serverLoader<T, V extends LoaderValidationConfig>(
       {
         fallback: config.fallback,
         validation: normalizeLoaderValidation(config.validation),
+        staleTime: config.staleTime,
+        gcTime: config.gcTime,
       }
     ) as ServerLoader<T>
   }
   const config = fnOrConfig as ServerLoaderConfig<T>
   return wrapLoader("server", config.load, {
     fallback: config.fallback,
+    staleTime: config.staleTime,
+    gcTime: config.gcTime,
   }) as ServerLoader<T>
 }
 
@@ -163,48 +193,86 @@ export function staticLoader<T>(fn: LoaderFn<T>): StaticLoader<T> {
   return wrapLoader("static", fn) as StaticLoader<T>
 }
 
+export type LoaderConfig<T> = LoaderCacheOptions & {
+  load: LoaderFn<T>
+}
+
 /**
- * Universal loader (SSR + client). Pass a function, or `{ validation, load }`
- * for typed `query` / `params` (see {@link LoaderValidationConfig}).
+ * Universal loader (SSR + client). Pass a function, `{ load, staleTime?, gcTime? }`,
+ * or `{ validation, load }` for typed `query` / `params`.
  */
 export function loader<
   T,
   const V extends LoaderValidationConfig,
 >(config: LoaderConfigWithValidation<T, V>): UniversalLoader<T>
+export function loader<T>(config: LoaderConfig<T>): UniversalLoader<T>
 export function loader<T>(fn: LoaderFn<T>): UniversalLoader<T>
 export function loader<T, const V extends LoaderValidationConfig>(
-  fnOrConfig: LoaderFn<T> | LoaderConfigWithValidation<T, V>
+  fnOrConfig: LoaderFn<T> | LoaderConfig<T> | LoaderConfigWithValidation<T, V>
 ): UniversalLoader<T> {
   if (typeof fnOrConfig === "function") {
     return wrapLoader("universal", fnOrConfig) as UniversalLoader<T>
   }
-  const validation = normalizeLoaderValidation(fnOrConfig.validation)
-  return wrapLoader(
-    "universal",
-    (ctx) =>
-      fnOrConfig.load(ctx as unknown as LoaderContextFromValidation<V>),
-    { validation }
-  ) as UniversalLoader<T>
+  if ("validation" in fnOrConfig && fnOrConfig.validation) {
+    const validation = normalizeLoaderValidation(fnOrConfig.validation)
+    return wrapLoader(
+      "universal",
+      (ctx) =>
+        fnOrConfig.load(ctx as unknown as LoaderContextFromValidation<V>),
+      {
+        validation,
+        staleTime: fnOrConfig.staleTime,
+        gcTime: fnOrConfig.gcTime,
+      }
+    ) as UniversalLoader<T>
+  }
+  const config = fnOrConfig as LoaderConfig<T>
+  return wrapLoader("universal", config.load, {
+    staleTime: config.staleTime,
+    gcTime: config.gcTime,
+  }) as UniversalLoader<T>
 }
 
 export function clientLoader<
   T,
   const V extends LoaderValidationConfig,
 >(config: LoaderConfigWithValidation<T, V>): ClientLoader<T>
+export function clientLoader<T>(config: LoaderConfig<T>): ClientLoader<T>
 export function clientLoader<T>(fn: LoaderFn<T>): ClientLoader<T>
 export function clientLoader<T, const V extends LoaderValidationConfig>(
-  fnOrConfig: LoaderFn<T> | LoaderConfigWithValidation<T, V>
+  fnOrConfig: LoaderFn<T> | LoaderConfig<T> | LoaderConfigWithValidation<T, V>
 ): ClientLoader<T> {
   if (typeof fnOrConfig === "function") {
     return wrapLoader("client", fnOrConfig) as ClientLoader<T>
   }
-  const validation = normalizeLoaderValidation(fnOrConfig.validation)
-  return wrapLoader(
-    "client",
-    (ctx) =>
-      fnOrConfig.load(ctx as unknown as LoaderContextFromValidation<V>),
-    { validation }
-  ) as ClientLoader<T>
+  if ("validation" in fnOrConfig && fnOrConfig.validation) {
+    const validation = normalizeLoaderValidation(fnOrConfig.validation)
+    return wrapLoader(
+      "client",
+      (ctx) =>
+        fnOrConfig.load(ctx as unknown as LoaderContextFromValidation<V>),
+      {
+        validation,
+        staleTime: fnOrConfig.staleTime,
+        gcTime: fnOrConfig.gcTime,
+      }
+    ) as ClientLoader<T>
+  }
+  const config = fnOrConfig as LoaderConfig<T>
+  return wrapLoader("client", config.load, {
+    staleTime: config.staleTime,
+    gcTime: config.gcTime,
+  }) as ClientLoader<T>
+}
+
+export function readLoaderCacheOptions(load: KiruLoader | undefined): {
+  staleTime: number
+  gcTime: number
+} {
+  return {
+    staleTime: load?.__kiruStaleTime ?? DEFAULT_LOADER_STALE_TIME_MS,
+    gcTime: load?.__kiruGcTime ?? DEFAULT_LOADER_GC_TIME_MS,
+  }
 }
 
 export function isKiruLoader(value: unknown): value is KiruLoader {

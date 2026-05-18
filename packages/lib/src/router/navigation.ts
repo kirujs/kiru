@@ -1,6 +1,13 @@
 import { nextIdle } from "../scheduler.js"
 import { ViewTransitions } from "../viewTransitions.js"
 import { matchRoute } from "./manifest.js"
+import {
+  parseAppLocation,
+  resolveInvalidLocaleRedirect,
+  shouldRejectInvalidLocale,
+  type AppPathSplitResult,
+} from "./i18n/routing.js"
+import type { SiteLocales } from "./localePolicy.js"
 import { addBase, stripBase, type RouterPathPolicy } from "./pathPolicy.js"
 import { parseQuery, type RouterQuery } from "./requestUrl.js"
 import type { Signal } from "../signals/base.js"
@@ -28,6 +35,8 @@ export type RouteLocationParts = {
   pathname: string
   hash: string
   query: RouterQuery
+  /** Set when locale prefixes are stripped from the URL for route matching. */
+  locale?: string | null
 }
 
 export function buildQueryString(query: RouterQuery): string {
@@ -148,6 +157,9 @@ export type NavigationPipelineDeps = {
     from: RouteLocation | null
     failure?: NavigationFailure
   }) => void
+  siteLocales?: SiteLocales
+  locale?: Signal<string>
+  onLocaleChange?: (locale: string) => void
 }
 
 export type NavigateInternalOptions = {
@@ -185,6 +197,9 @@ export function createNavigateInternal(
     snapshotFromParts,
     currentLocationParts,
     setLastNavigation,
+    siteLocales,
+    locale,
+    onLocaleChange,
   } = deps
 
   const navigateInternal = async (
@@ -197,7 +212,43 @@ export function createNavigateInternal(
   ): Promise<NavigationResult> => {
     const token = ++navToken.value
     isNavigating.value = true
-    const resolved = parseResolvedLocation(targetUrl, normalizedBaseUrl)
+    const resolved = siteLocales
+      ? parseAppLocation(
+          targetUrl,
+          normalizedBaseUrl,
+          siteLocales,
+          resolvedPathPolicy
+        )
+      : parseResolvedLocation(targetUrl, normalizedBaseUrl)
+    const invalidLocale = siteLocales
+      ? (
+          resolved as {
+            invalidLocale?: Extract<
+              AppPathSplitResult,
+              { kind: "invalid-locale" }
+            >
+          }
+        ).invalidLocale
+      : undefined
+    if (siteLocales && invalidLocale) {
+      if (!shouldRejectInvalidLocale(siteLocales)) {
+        const location = resolveInvalidLocaleRedirect(
+          invalidLocale,
+          siteLocales,
+          resolvedPathPolicy
+        )
+        return navigateInternal(
+          new URL(addBase(location, normalizedBaseUrl) + targetUrl.search + targetUrl.hash, origin),
+          { replace: true, fromPopstate: false }
+        )
+      }
+    }
+    if (siteLocales && locale && resolved.locale) {
+      if (locale.peek() !== resolved.locale) {
+        locale.value = resolved.locale
+        onLocaleChange?.(resolved.locale)
+      }
+    }
     const targetPath = resolved.pathname
     const fromMatch = match.peek()
     const fromParts = currentLocationParts()

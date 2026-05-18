@@ -15,5 +15,14 @@ export * from "./requestContext.js"
 export * from "./navigationGuards.js"
 export * from "./searchParams.js"
 export * from "./routeResponse.js"
+export { defineISR, isKiruISRConfig, type ISRConfig, type KiruISRConfig, type RouteRevalidate } from "./isr.js"
+export {
+  createI18nConfig,
+  createI18nTranslator,
+  type InternationalizationConfig,
+  type I18nOptions,
+  type DotPath,
+} from "./i18n/index.js"
+export { useI18n, useOptionalI18n, I18nProvider } from "./i18nContext.js"
 export * from "./prepareRoute.js"
 export * from "../validation/index.js"

@@ -65,9 +65,19 @@ export type RemoteGetAction<Output> = ((
   __kiruInvoke: (ctx: CustomRequestContext, input: unknown) => Promise<Output>
 }
 
+export type RemoteRevalidateMeta = {
+  paths?: string[]
+  tags?: string[]
+}
+
 export type RemoteActionMeta = {
   /** Route ids to refetch loaders for after a successful invocation. */
   invalidate?: string[]
+  /**
+   * Prerender paths/tags to invalidate after success (server-only).
+   * @see docs/router/tier-3-wave-1.md#on-demand-revalidation
+   */
+  revalidate?: RemoteRevalidateMeta
 }
 
 export type RemotePostAction<Input, Output> = ((
@@ -78,6 +88,7 @@ export type RemotePostAction<Input, Output> = ((
   __kiruRemoteMethod: "POST"
   __kiruInvoke: (ctx: CustomRequestContext, input: unknown) => Promise<Output>
   __kiruInvalidateRoutes?: string[]
+  __kiruRevalidate?: RemoteRevalidateMeta
 }
 
 export type RemoteActionFunction<Input, Output> =
@@ -130,6 +141,9 @@ function createRemoteAction<Input, Output>(
   wrapped.__kiruRemoteMethod = "POST"
   if (meta?.invalidate?.length) {
     wrapped.__kiruInvalidateRoutes = meta.invalidate
+  }
+  if (meta?.revalidate) {
+    wrapped.__kiruRevalidate = meta.revalidate
   }
   wrapped.__kiruInvoke = async (ctx, input) => {
     await validateActionInput(input)
@@ -253,6 +267,7 @@ export type RemoteFormActionFunction<Output> = {
   readonly __kiruFormAction: true
   __kiruFormActionId: string
   __kiruInvalidateRoutes?: string[]
+  __kiruRevalidate?: RemoteRevalidateMeta
   __kiruInvoke: (
     ctx: CustomRequestContext,
     formData: FormData
@@ -267,6 +282,7 @@ export function formAction<Output>(
     __kiruFormAction: true,
     __kiruFormActionId: "",
     __kiruInvalidateRoutes: meta?.invalidate,
+    __kiruRevalidate: meta?.revalidate,
     __kiruInvoke: (ctx, formData) => Promise.resolve(callback(ctx, formData)),
   }
 }

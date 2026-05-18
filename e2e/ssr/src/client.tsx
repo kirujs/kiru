@@ -1,4 +1,5 @@
 import { createRouterApp } from "kiru/router/ssr"
+import i18n from "./i18n.js"
 import { routes } from "./routes"
 import "./style.css"
 
@@ -11,7 +12,11 @@ declare global {
   }
 }
 
-createRouterApp({ routes, container: document.getElementById("app")! }).then(
+createRouterApp({
+  routes,
+  i18n,
+  container: document.getElementById("app")!,
+}).then(
   () => {
     window.__kiruHydratedAt = performance.now()
     window.__kiruFallbackVisibleAtHydration = !!document.querySelector(
