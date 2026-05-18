@@ -1,22 +1,15 @@
-import type {
-  CustomRequestContext,
-  Renderer,
-  StreamRenderer,
-} from "kiru/router"
+import type { CustomRequestContext } from "kiru/router"
 
-export type KiruFetch = (request: Request) => Promise<Response>
-
-export type KiruMiddleware = (
-  request: Request,
-  next: () => Promise<Response>
-) => Promise<Response>
-
-export type KiruHandler = {
-  fetch: KiruFetch
-  renderer: Renderer | StreamRenderer
-  clientDir: string
-  htmlTemplate: string
-}
+export type {
+  KiruFetch,
+  KiruHandle,
+  KiruHandler,
+  KiruMiddleware,
+  KiruRespondMiddleware,
+  KiruResponder,
+  KiruResponse,
+  ToFetchHandlerOptions,
+} from "@kirujs/adapter-contract"
 
 export type GetRequestContext = (
   request: Request

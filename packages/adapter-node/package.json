@@ -9,14 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./hono": {
-      "types": "./dist/hono.d.ts",
-      "default": "./dist/hono.js"
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "test": "node --test dist/**/*.test.js"
   },
   "license": "ISC",
@@ -27,19 +23,17 @@
   },
   "peerDependencies": {
     "kiru": ">=1.5.0",
-    "sharp": ">=0.33.0",
-    "hono": "^4.0.0"
+    "sharp": ">=0.33.0"
   },
   "peerDependenciesMeta": {
-    "sharp": { "optional": true },
-    "hono": { "optional": true }
+    "sharp": { "optional": true }
   },
   "dependencies": {
+    "@kirujs/adapter-contract": "workspace:^",
     "@kirujs/runtime": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
-    "hono": "^4.12.17",
     "kiru": "workspace:^",
     "sharp": "^0.34.5",
     "typescript": "^5.9.3"

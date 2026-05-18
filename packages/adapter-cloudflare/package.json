@@ -24,6 +24,7 @@
     "kiru": ">=1.5.0"
   },
   "dependencies": {
+    "@kirujs/adapter-contract": "workspace:^",
     "@kirujs/runtime": "workspace:^"
   },
   "devDependencies": {

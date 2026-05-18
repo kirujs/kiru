@@ -7,15 +7,18 @@ import {
 } from "kiru/router"
 import type { ImageConfig } from "kiru/image"
 import type { KiruDeployTarget } from "@kirujs/runtime"
+import {
+  composeRespond,
+  toFetchHandler,
+  webResponseToKiru,
+  type KiruHandle,
+  type KiruRespondMiddleware,
+  type KiruResponder,
+  type KiruResponse,
+} from "@kirujs/adapter-contract"
 import { resolveStatic } from "./resolveStatic.js"
-import { composeFetch } from "./middleware.js"
 import { serveStaticFile } from "./serveStaticFile.js"
-import type {
-  GetRequestContext,
-  KiruFetch,
-  KiruHandler,
-  KiruMiddleware,
-} from "./types.js"
+import type { GetRequestContext } from "./types.js"
 
 export type CreateKiruHandlerOptions = Omit<
   CreateRendererOptions,
@@ -39,23 +42,34 @@ export type CreateKiruHandlerOptions = Omit<
   /** Per-request context passed to `renderer.render`. */
   getRequestContext?: GetRequestContext
   /** Extra middleware (outermost first) around the built-in static + SSR stack. */
-  middleware?: KiruMiddleware[]
+  middleware?: KiruRespondMiddleware[]
+  /** Web `fetch` when `handle` returns `null`. Default: 404. */
+  notFound?: import("@kirujs/adapter-contract").ToFetchHandlerOptions["notFound"]
 }
 
-function createSsrFetch(
+function renderResultToKiru(
+  rendered: { status: number; headers: Record<string, string>; body: string | ReadableStream }
+): KiruResponse {
+  return {
+    status: rendered.status,
+    headers: rendered.headers,
+    body: rendered.body,
+  }
+}
+
+function createSsrHandle(
   renderer: Renderer | StreamRenderer,
   getRequestContext?: GetRequestContext
-): KiruFetch {
+): KiruHandle {
   return async (request) => {
     const context = getRequestContext
       ? await getRequestContext(request)
       : undefined
     const rendered = await renderer.render(request, { context })
     if (!rendered) {
-      return new Response("Not found", { status: 404 })
+      return null
     }
-    const { status, headers, body } = rendered
-    return new Response(body, { status, headers })
+    return renderResultToKiru(rendered)
   }
 }
 
@@ -63,31 +77,35 @@ function createStaticAssetsMiddleware(options: {
   clientDir: string
   imageHandler: ((request: Request) => Promise<Response | null>) | null
   imagePath?: string
-}): KiruMiddleware {
+}): KiruRespondMiddleware {
   const { clientDir, imageHandler, imagePath } = options
   return async (request, next) => {
     const pathname = new URL(request.url).pathname
 
     if (imageHandler && imagePath && pathname === imagePath) {
       const imageRes = await imageHandler(request)
-      if (imageRes) return imageRes
-      return new Response("Not Found", { status: 404 })
+      if (imageRes) {
+        return webResponseToKiru(imageRes)
+      }
+      return { status: 404, headers: {}, body: "Not Found" }
     }
 
     const staticRes = await serveStaticFile(clientDir, pathname)
-    if (staticRes) return staticRes
+    if (staticRes) {
+      return webResponseToKiru(staticRes)
+    }
 
     return next()
   }
 }
 
 /**
- * Web-standard `fetch` handler for Kiru SSR (+ optional static assets and ISR).
- * Use with Node `serveKiruNode`, `Bun.serve`, or any framework that accepts `Request` → `Response`.
+ * Kiru SSR (+ optional static assets and ISR).
+ * {@link KiruResponder.handle} returns {@link KiruResponse} or `null`; wire HTTP in your framework.
  */
-export function createKiruHandler(
+export function createKiruResponder(
   options: CreateKiruHandlerOptions
-): KiruHandler {
+): KiruResponder {
   const isProd =
     typeof options.dev === "boolean"
       ? !options.dev
@@ -109,6 +127,7 @@ export function createKiruHandler(
     stream,
     deployTarget = "node",
     middleware = [],
+    notFound,
     ...rendererOpts
   } = options
 
@@ -133,7 +152,7 @@ export function createKiruHandler(
         })
       : null
 
-  const layers: KiruMiddleware[] = [...middleware]
+  const layers: KiruRespondMiddleware[] = [...middleware]
   if (serveStaticAssets && isProd) {
     layers.push(
       createStaticAssetsMiddleware({
@@ -144,12 +163,25 @@ export function createKiruHandler(
     )
   }
 
-  const fetch = composeFetch(createSsrFetch(renderer, getRequestContext), ...layers)
+  const handle = composeRespond(
+    createSsrHandle(renderer, getRequestContext),
+    ...layers
+  )
 
   return {
-    fetch,
+    handle,
+    fetch: toFetchHandler(handle, { notFound }),
     renderer,
     clientDir: paths.clientDir,
     htmlTemplate: paths.htmlTemplate,
   }
+}
+
+/**
+ * Same as {@link createKiruResponder} — convenience when you only need Web `fetch`.
+ */
+export function createKiruHandler(
+  options: CreateKiruHandlerOptions
+): KiruResponder {
+  return createKiruResponder(options)
 }

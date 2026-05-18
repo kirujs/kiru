@@ -62,6 +62,21 @@ const devtoolsHost = task({
   },
 })
 
+const adapterContract = task({
+  name: "adapter-contract",
+  cwd: "packages/adapter-contract",
+  commands: {
+    build: {
+      run: "pnpm build",
+      cache: pkgCache("packages/adapter-contract"),
+    },
+    test: {
+      run: "pnpm test",
+      cache: pkgCache("packages/adapter-contract"),
+    },
+  },
+})
+
 const adapterNode = task({
   name: "adapter-node",
   cwd: "packages/adapter-node",
@@ -69,7 +84,12 @@ const adapterNode = task({
     build: {
       run: "pnpm build",
       cache: pkgCache("packages/adapter-node"),
-      dependencies: [lib, runtime],
+      dependencies: [adapterContract, lib, runtime],
+    },
+    test: {
+      run: "pnpm test",
+      cache: pkgCache("packages/adapter-node"),
+      dependencies: [adapterContract, lib, runtime],
     },
   },
 })
@@ -81,7 +101,7 @@ const adapterBun = task({
     build: {
       run: "pnpm build",
       cache: pkgCache("packages/adapter-bun"),
-      dependencies: [adapterNode, lib, runtime],
+      dependencies: [adapterContract, adapterNode, lib, runtime],
     },
   },
 })
@@ -93,7 +113,7 @@ const adapterCloudflare = task({
     build: {
       run: "pnpm build",
       cache: pkgCache("packages/adapter-cloudflare"),
-      dependencies: [lib, runtime],
+      dependencies: [adapterContract, lib, runtime],
     },
   },
 })
@@ -130,7 +150,15 @@ const vitePlugin = task({
   },
 })
 
-const adapterDeps = [lib, vitePlugin, runtime, adapterNode, adapterBun, adapterCloudflare]
+const adapterDeps = [
+  lib,
+  vitePlugin,
+  runtime,
+  adapterContract,
+  adapterNode,
+  adapterBun,
+  adapterCloudflare,
+]
 
 const E2ECachConfig = {
   inputs: [
@@ -200,6 +228,7 @@ if (!["build", "dev", "test"].includes(command)) {
 const result = await pipeline([
   runtime,
   lib,
+  adapterContract,
   adapterNode,
   adapterBun,
   adapterCloudflare,

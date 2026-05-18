@@ -2,6 +2,12 @@ import { createRenderer, type CreateRendererOptions } from "kiru/router"
 import type { CustomRequestContext } from "kiru/router"
 import { matchRoute, generatePublicStaticPaths } from "kiru/router"
 import { resolvePathPolicy } from "kiru/router"
+import {
+  toFetchHandler,
+  webResponseToKiru,
+  type KiruHandle,
+  type KiruResponse,
+} from "@kirujs/adapter-contract"
 import { tryServeImmutablePrerender } from "./serveImmutablePrerender.js"
 import { isStaticAssetPathname } from "@kirujs/runtime"
 
@@ -28,6 +34,8 @@ export type CreateKiruWorkerHandlerOptions = Omit<
    * Required when `run_worker_first = true` in wrangler.toml.
    */
   assetFetch?: (request: Request) => Promise<Response>
+  /** Web `fetch` when {@link KiruHandle} returns `null`. Default: 404. */
+  notFound?: import("@kirujs/adapter-contract").ToFetchHandlerOptions["notFound"]
 }
 
 export type KiruWorkerHandler = (
@@ -36,12 +44,25 @@ export type KiruWorkerHandler = (
   ctx?: ExecutionContext
 ) => Promise<Response>
 
+function renderResultToKiru(rendered: {
+  status: number
+  headers: Record<string, string>
+  body: string | ReadableStream
+}): KiruResponse {
+  return {
+    status: rendered.status,
+    headers: rendered.headers,
+    body: rendered.body,
+  }
+}
+
 /**
- * Cloudflare Worker `fetch` handler — SSR + immutable static HTML only (no ISR).
+ * Worker {@link KiruHandle} — SSR + immutable static HTML only (no ISR).
+ * `null` when no route match; use your framework layer for 404 / fallthrough.
  */
-export function createKiruWorkerHandler(
+export function createKiruWorkerHandle(
   options: CreateKiruWorkerHandlerOptions
-): KiruWorkerHandler {
+): KiruHandle {
   const {
     getAsset,
     getRequestContext,
@@ -78,7 +99,7 @@ export function createKiruWorkerHandler(
   return async (request: Request) => {
     const url = new URL(request.url)
     if (assetFetch && isStaticAssetPathname(url.pathname)) {
-      return assetFetch(request)
+      return webResponseToKiru(await assetFetch(request))
     }
 
     const context = getRequestContext
@@ -110,17 +131,26 @@ export function createKiruWorkerHandler(
     )
 
     if (prerendered) {
-      const { status, headers, body } = prerendered.result
-      return new Response(body as unknown as BodyInit, { status, headers })
+      return renderResultToKiru(prerendered.result)
     }
 
     const rendered = await renderer.render(request, { context })
     if (!rendered) {
-      return new Response("Not Found", { status: 404 })
+      return null
     }
-    const { status, headers, body } = rendered
-    return new Response(body as unknown as BodyInit, { status, headers })
+    return renderResultToKiru(rendered)
   }
+}
+
+/**
+ * Cloudflare Worker `fetch` handler (`null` → 404 by default).
+ */
+export function createKiruWorkerHandler(
+  options: CreateKiruWorkerHandlerOptions
+): KiruWorkerHandler {
+  const handle = createKiruWorkerHandle(options)
+  const fetch = toFetchHandler(handle, { notFound: options.notFound })
+  return (request) => fetch(request)
 }
 
 /**

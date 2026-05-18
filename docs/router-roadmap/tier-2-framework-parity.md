@@ -53,7 +53,9 @@ Per-request context is **SSR-only** via `createRenderer({ context })` and hydrat
 
 ## Deployment adapters
 
-- [x] **`@kirujs/adapter-node`** — `createKiruHandler`, `resolveStatic`, hybrid ISR + static assets (`@kirujs/adapter-node/hono` optional)
+- [x] **`@kirujs/adapter-contract`** — `KiruResponse`, `KiruHandle`, `toWebResponse`, `composeRespond`
+- [x] **`@kirujs/adapter-node`** — `createKiruResponder`, `resolveStatic`, hybrid ISR; Node bridge (`nodeRequestToFetch`, `sendKiruResponse`)
+- [x] **HTTP frameworks** — mix-and-match via `kiru.handle` + userland catch-all ([`deploy-runtimes.md`](../router/deploy-runtimes.md))
 - [x] **`@kirujs/adapter-bun`** — `createKiruBunServer`, `Bun.serve`
 - [x] **`@kirujs/adapter-cloudflare` (thin)** — Worker handler, immutable Assets prerender, no ISR
 - [x] **`@kirujs/runtime` + adapter contract** — [`deploy-runtimes.md`](../router/deploy-runtimes.md)
@@ -81,7 +83,7 @@ Per-request context is **SSR-only** via `createRenderer({ context })` and hydrat
 
 ## Testing
 
-- [ ] **Contract tests for adapters** — minimal app renders `/` and serves static hybrid path
+- [x] **Contract tests for adapters** — `adapter-contract`, Node bridge (`adapter-node`); full SSR e2e remains `e2e/ssr`
 - [x] **Search params e2e** — `e2e/ssr` `search-schema`
 - [x] **Invalidation e2e** — `invalidate-demo` after remote action
 

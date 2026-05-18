@@ -1,4 +1,4 @@
-import { Readable } from "node:stream"
+import { nodeRequestToFetch } from "@kirujs/adapter-node"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import type { ViteDevServer, ModuleNode } from "vite"
 
@@ -122,39 +122,6 @@ async function resolveDevCssLinkTagsForEntries(
     new Set()
   )
   return formatCssLinkTags(cssUrls)
-}
-
-// ─── SSR request bridge ──────────────────────────────────────────────────────
-
-/**
- * Convert a Node.js IncomingMessage into a Fetch API Request so we can call
- * a Hono app's `fetch` handler directly — giving us the Response object
- * before anything hits the socket.
- */
-function nodeToFetchRequest(req: IncomingMessage): Request {
-  const host = req.headers["host"] ?? "localhost"
-  const url = `http://${host}${req.url ?? "/"}`
-
-  const headers = new Headers()
-  for (const [key, value] of Object.entries(req.headers)) {
-    if (value === undefined) continue
-    if (Array.isArray(value)) value.forEach((v) => headers.append(key, v))
-    else headers.set(key, value)
-  }
-
-  const method = (req.method ?? "GET").toUpperCase()
-  const hasBody = method !== "GET" && method !== "HEAD" && method !== "OPTIONS"
-
-  if (hasBody) {
-    return new Request(url, {
-      method,
-      headers,
-      // @ts-expect-error — `duplex` not yet in all Request typedefs
-      body: Readable.toWeb(req),
-      duplex: "half",
-    })
-  }
-  return new Request(url, { method, headers })
 }
 
 // ─── Response writers ────────────────────────────────────────────────────────
@@ -338,7 +305,7 @@ export async function handleSsrDevRequest(
     | typeof fetch
     | undefined
 
-  const fetchReq = nodeToFetchRequest(req)
+  const fetchReq = nodeRequestToFetch(req)
   let response: Response
 
   if (

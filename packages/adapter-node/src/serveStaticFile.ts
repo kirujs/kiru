@@ -60,7 +60,7 @@ export async function serveStaticFile(
   }
   if (!fileStat.isFile()) return null
 
-  const body = Readable.toWeb(createReadStream(filePath)) as ReadableStream
+  const body = Readable.toWeb(createReadStream(filePath)) as unknown as ReadableStream
   return new Response(body, {
     status: 200,
     headers: {

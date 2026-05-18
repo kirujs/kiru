@@ -1,8 +1,8 @@
 import {
-  createKiruHandler,
+  createKiruResponder,
   type CreateKiruHandlerOptions,
   type KiruFetch,
-  type KiruHandler,
+  type KiruResponder,
 } from "@kirujs/adapter-node"
 
 declare const Bun: {
@@ -13,18 +13,28 @@ declare const Bun: {
 }
 
 export {
-  composeFetch,
+  composeRespond,
   createKiruHandler,
+  createKiruResponder,
   diskPrerenderCache,
+  nodeRequestToFetch,
   resolveStatic,
+  sendFetchToNodeResponse,
+  sendKiruResponse,
   serveStaticFile,
+  toFetchHandler,
+  toWebResponse,
   type CreateKiruHandlerOptions,
   type GetRequestContext,
   type KiruFetch,
+  type KiruHandle,
   type KiruHandler,
-  type KiruMiddleware,
+  type KiruRespondMiddleware,
+  type KiruResponder,
+  type KiruResponse,
   type ResolveSsrPathsOptions,
   type SsrPaths,
+  type ToFetchHandlerOptions,
 } from "@kirujs/adapter-node"
 
 export type CreateKiruBunServerOptions = Omit<
@@ -32,17 +42,15 @@ export type CreateKiruBunServerOptions = Omit<
   "deployTarget"
 >
 
-/**
- * Bun SSR server — same handler as Node; use with `Bun.serve` or {@link serveKiruBun}.
- */
+/** Bun SSR — same {@link KiruResponder} as Node with `deployTarget: "bun"`. */
 export function createKiruBunServer(
   options: CreateKiruBunServerOptions
-): KiruHandler {
-  return createKiruHandler({ ...options, deployTarget: "bun" })
+): KiruResponder {
+  return createKiruResponder({ ...options, deployTarget: "bun" })
 }
 
 export function serveKiruBun(
-  handler: KiruHandler | KiruFetch,
+  handler: KiruResponder | KiruFetch,
   port = Number(process.env.PORT) || 3000
 ): ReturnType<typeof Bun.serve> {
   const fetch =
