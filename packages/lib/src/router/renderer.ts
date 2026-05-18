@@ -90,6 +90,7 @@ import {
   diskPrerenderCache,
   setGlobalPrerenderCache,
   type PrerenderCacheEntry,
+  type PrerenderCacheStore,
 } from "./prerenderCache.js"
 import {
   type CustomRequestContext,
@@ -104,8 +105,11 @@ import {
   type StreamRenderResult,
   toRenderError,
 } from "./types.js"
+import type { KiruDeployTarget } from "@kirujs/runtime"
+import { isEdgeDeployTarget } from "@kirujs/runtime"
 import {
   makeKiruContextToken,
+  makeKiruContextTokenAsync,
   createRemoteActionHandler,
 } from "../remote/index.js"
 import { __setSsrRequestContext } from "../remote/action.js"
@@ -123,10 +127,29 @@ export {
 /** Serialized `k-request-token` script for remote actions (SSR / prerender hydration). */
 export function serializeKiruRequestTokenScript(
   ctx: CustomRequestContext | null | undefined,
-  secret: string
+  secret: string,
+  deployTarget: KiruDeployTarget = "node"
 ): string {
   if (!ctx) return ""
+  if (isEdgeDeployTarget(deployTarget)) {
+    throw new Error(
+      "[kiru] serializeKiruRequestTokenScript is synchronous and unsupported on cloudflare; use serializeKiruRequestTokenScriptAsync"
+    )
+  }
   const token = makeKiruContextToken(ctx, secret)
+  return `<script type="application/json" k-request-token>${token}</script>`
+}
+
+/** Web Crypto token script for edge runtimes (Workers). */
+export async function serializeKiruRequestTokenScriptAsync(
+  ctx: CustomRequestContext | null | undefined,
+  secret: string
+): Promise<string> {
+  if (!ctx) return ""
+  const token = await makeKiruContextTokenAsync(
+    ctx as Record<string, unknown>,
+    secret
+  )
   return `<script type="application/json" k-request-token>${token}</script>`
 }
 
@@ -196,6 +219,12 @@ export type CreateRendererOptions = {
   pathPolicy?: RouterPathPolicy
   /** Locale-aware routing + SSR hydration of translation payloads. */
   i18n?: InternationalizationConfig<readonly string[], unknown>
+  /**
+   * Deploy target — controls ISR, disk prerender, and action token signing.
+   * @default "node"
+   * @see docs/router/deploy-runtimes.md
+   */
+  deployTarget?: KiruDeployTarget
 }
 
 function engine(options: CreateRendererOptions & { stream: boolean }) {
@@ -217,15 +246,33 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     return prerenderPathSet
   }
 
-  let prerenderCacheInstance = options.prerenderCache
-  if (!prerenderCacheInstance && options.prerenderedHtmlDir) {
-    prerenderCacheInstance = diskPrerenderCache({
-      clientDir: options.prerenderedHtmlDir,
-      pathPolicy,
-    })
-  }
-  if (prerenderCacheInstance) {
-    setGlobalPrerenderCache(prerenderCacheInstance)
+  const deployTarget = options.deployTarget ?? "node"
+  const edgeTarget = isEdgeDeployTarget(deployTarget)
+  const prerenderedHtmlDir = edgeTarget
+    ? undefined
+    : options.prerenderedHtmlDir
+
+  let prerenderCacheInstance = edgeTarget ? undefined : options.prerenderCache
+  let ensurePrerenderCache: Promise<PrerenderCacheStore | undefined> | undefined
+
+  const getPrerenderCache = async (): Promise<
+    PrerenderCacheStore | undefined
+  > => {
+    if (edgeTarget) return undefined
+    if (prerenderCacheInstance) return prerenderCacheInstance
+    if (!prerenderedHtmlDir) return undefined
+    if (!ensurePrerenderCache) {
+      ensurePrerenderCache = getPrerenderPathSet().then((staticPaths) => {
+        prerenderCacheInstance = diskPrerenderCache({
+          clientDir: prerenderedHtmlDir,
+          pathPolicy,
+          staticPaths,
+        })
+        setGlobalPrerenderCache(prerenderCacheInstance)
+        return prerenderCacheInstance
+      })
+    }
+    return ensurePrerenderCache
   }
 
   let bypassPrerenderServe = false
@@ -256,7 +303,8 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
 
     if (
       !bypassPrerenderServe &&
-      (prerenderCacheInstance || options.prerenderedHtmlDir)
+      !edgeTarget &&
+      (options.prerenderCache || prerenderedHtmlDir)
     ) {
       const pathnameForPrerender = toPathname(url)
       const prerenderMatch = matchRoute(
@@ -272,18 +320,21 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         if (dynamicMode === "force-dynamic") {
           // skip prerender disk serve
         } else {
+          const prerenderCache = await getPrerenderCache()
           const prerendered = await tryServePrerenderedFromDisk(
             requestOrUrl,
             url,
             {
-              prerenderedHtmlDir: options.prerenderedHtmlDir,
-              prerenderCache: prerenderCacheInstance,
+              prerenderedHtmlDir: prerenderCache ? undefined : prerenderedHtmlDir,
+              deployTarget,
+              prerenderCache,
               stream: options.stream,
               pathPolicy,
               getStaticPathSet: getPrerenderPathSet,
               actionsSecret: actionsSecret ?? "",
               onRegenerate: async (pathname) => {
-                if (!prerenderCacheInstance) return
+                const cache = await getPrerenderCache()
+                if (!cache) return
                 bypassPrerenderServe = true
                 try {
                   const regenHit = await renderCore(pathname, ctx)
@@ -301,7 +352,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
                     revalidate: getISRRevalidate(regenIsr) ?? false,
                     tags: getISRTags(regenIsr) ?? [],
                   }
-                  await prerenderCacheInstance.set(pathname, entry)
+                  await cache.set(pathname, entry)
                 } finally {
                   bypassPrerenderServe = false
                 }
@@ -388,6 +439,15 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         pathname: routeMatch?.pathname ?? requestedPathForErrors,
       }
 
+      const actionTokenInsertion =
+        actionsSecret && requestContext
+          ? await buildActionTokenInsertion(
+              requestContext,
+              actionsSecret,
+              deployTarget
+            )
+          : ""
+
       if (options.stream) {
         // Assemble the full static document (prefix + shell + suffix) in a
         // single `onShellReady` flush so the browser sees `</html>` before
@@ -396,8 +456,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         // implicitly-deferred `<script type="module">` entry tag hydrates
         // immediately instead of waiting on the slowest in-flight resource.
         const decorateDocument = (document: DocumentHead) => {
-          if (actionsSecret)
-            appendTokenToDocument(document, requestContext, actionsSecret)
+          if (actionTokenInsertion) document.headHtml += actionTokenInsertion
         }
 
         const stream = routeMatch
@@ -460,8 +519,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
             },
           }
 
-      if (actionsSecret)
-        appendTokenToDocument(document, requestContext, actionsSecret)
+      if (actionTokenInsertion) document.headHtml += actionTokenInsertion
 
       const fullHead =
         document.headHtml +
@@ -525,14 +583,21 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
 
       if (recovery) {
         const { app: recoveryApp, requestContext: recoveryCtx } = recovery
+        const recoveryTokenInsertion =
+          actionsSecret && recoveryCtx
+            ? await buildActionTokenInsertion(
+                recoveryCtx,
+                actionsSecret,
+                deployTarget
+              )
+            : ""
 
         if (options.stream) {
           __setSsrRequestContext(recoveryCtx)
           const document: DocumentHead = {
             headHtml: serializeRequestContextScript(recoveryCtx),
           }
-          if (actionsSecret)
-            appendTokenToDocument(document, recoveryCtx, actionsSecret)
+          if (recoveryTokenInsertion) document.headHtml += recoveryTokenInsertion
           const stream = renderToReadableStream(recoveryApp, {
             onShellReady: (shell, controller) =>
               enqueueTemplatedShell(controller, {
@@ -564,8 +629,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         const documentHead: DocumentHead = {
           headHtml: serializeRequestContextScript(recoveryCtx),
         }
-        if (actionsSecret)
-          appendTokenToDocument(documentHead, recoveryCtx, actionsSecret)
+        if (recoveryTokenInsertion) documentHead.headHtml += recoveryTokenInsertion
         const fullHead =
           documentHead.headHtml +
           (documentHead.headEndHtml ? `\n    ${documentHead.headEndHtml}` : "")
@@ -1444,14 +1508,15 @@ function warnIfStreamingTemplateLacksAsyncEntry(template: string): void {
   )
 }
 
-function appendTokenToDocument(
-  document: DocumentHead,
+async function buildActionTokenInsertion(
   requestContext: CustomRequestContext,
-  secret: string
-): void {
-  const tag = serializeKiruRequestTokenScript(requestContext, secret)
-  if (!tag) return
-  document.headHtml += `\n    ${tag}`
+  secret: string,
+  deployTarget: KiruDeployTarget
+): Promise<string> {
+  const tag = isEdgeDeployTarget(deployTarget)
+    ? await serializeKiruRequestTokenScriptAsync(requestContext, secret)
+    : serializeKiruRequestTokenScript(requestContext, secret, deployTarget)
+  return tag ? `\n    ${tag}` : ""
 }
 
 function toPathname(url: string): string {

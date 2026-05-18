@@ -32,6 +32,7 @@ export type TryServePrerenderedOptions = {
   pathPolicy?: RouterPathPolicy
   getStaticPathSet: () => Promise<ReadonlySet<string>>
   actionsSecret: string
+  deployTarget?: import("@kirujs/runtime").KiruDeployTarget
   /** When entry is stale, regenerate HTML in the background (SWR). */
   onRegenerate?: (pathname: string) => Promise<void>
 }
@@ -113,10 +114,11 @@ export async function tryServePrerenderedFromDisk(
   }
 
   const requestContext = (ctx?.context ?? null) as CustomRequestContext
-  const hydrated = hydratePrerenderedHtmlForRequest(
+  const hydrated = await hydratePrerenderedHtmlForRequest(
     entry.html,
     requestContext,
-    options.actionsSecret
+    options.actionsSecret,
+    options.deployTarget ?? "node"
   )
 
   const cacheHeaders = cachePolicyToHeaders(

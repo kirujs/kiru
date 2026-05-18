@@ -26,6 +26,7 @@
     "kiru-devtools-host": "workspace:^"
   },
   "dependencies": {
+    "@kirujs/runtime": "workspace:^",
     "tinyglobby": "0.2.15",
     "magic-string": "0.30.21",
     "mime": "4.1.0"

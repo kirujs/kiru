@@ -5,7 +5,6 @@ import {
   getISRRevalidate,
   getISRTags,
   readRouteISRExport,
-  readRouteRevalidateExport,
 } from "../../router/routeRevalidate.js"
 import { cachePolicyToHeaders } from "../../router/routeResponse.js"
 
@@ -34,21 +33,6 @@ describe("routeRevalidate", () => {
       dynamic: "force-dynamic",
     })
     assert.deepEqual(isr, { dynamic: "force-dynamic" })
-  })
-
-  it("readRouteRevalidateExport delegates to isr", () => {
-    assert.equal(
-      readRouteRevalidateExport({
-        isr: defineISR({ revalidate: false }),
-      }),
-      false
-    )
-    assert.equal(
-      readRouteRevalidateExport({
-        isr: defineISR({ dynamic: "force-dynamic" }),
-      }),
-      undefined
-    )
   })
 
   it("cachePolicyToHeaders with revalidate seconds", () => {

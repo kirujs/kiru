@@ -184,7 +184,7 @@ Client/build: virtual module `virtual:kiru:image-config` (injected via `#kiru-im
 | | Build-time (`strategy: 'build'`) | Runtime (`strategy: 'runtime'`) |
 |--|----------------------------------|--------------------------------|
 | **When** | `vite build` | Each `GET /_kiru/image` |
-| **Best for** | Pure CSR, pure SSG on CDN | SSR, hybrid with Node/edge |
+| **Best for** | Pure CSR, pure SSG on CDN, **Cloudflare Workers** | SSR, hybrid on **Node/Bun** |
 | **Output** | Files in `dist/assets/` + `kiru-image-manifest.json` | Cached bytes (memory/disk) |
 | **srcset** | Static `/assets/hero-640w.webp` URLs | Optimizer query URLs |
 | **sharp** | vite-plugin-kiru (build) | `createImageOptimizer` (optional peer on server) |
@@ -192,7 +192,9 @@ Client/build: virtual module `virtual:kiru:image-config` (injected via `#kiru-im
 
 SSR apps can use **`strategy: 'build'`** for static assets (enable `router.images` in Vite, do not mount the optimizer) and **`runtime`** for user uploads via `remotePatterns` — typically two configs or one strategy per deployment; wave 1 uses one `defineImageConfig` per app.
 
-**SSR e2e toggle:** `KIRU_IMAGE_STRATEGY=build` sets `defineImageConfig({ strategy: 'build' })` and enables `router.images` in [`e2e/ssr/vite.config.ts`](../../e2e/ssr/vite.config.ts); default is `runtime` with optimizer in [`e2e/ssr/src/server.ts`](../../e2e/ssr/src/server.ts).
+**SSR e2e toggle:** `KIRU_IMAGE_STRATEGY=build` sets `defineImageConfig({ strategy: 'build' })` and enables `router.images` in [`e2e/ssr/vite.config.ts`](../../e2e/ssr/vite.config.ts); default is `runtime` with optimizer via [`@kirujs/adapter-node`](../../packages/adapter-node) in [`e2e/ssr/src/server.ts`](../../e2e/ssr/src/server.ts).
+
+**Edge:** use `strategy: 'build'` only — runtime `sharp` optimizer is not supported on Workers. See [deploy-runtimes.md](./deploy-runtimes.md).
 
 ---
 

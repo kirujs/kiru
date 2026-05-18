@@ -27,6 +27,23 @@ describe("prerenderedHtml", () => {
     assert.ok(candidates[0]?.includes("about"))
   })
 
+  it("tryReadPrerenderedHtml ignores Vite index.html shell when staticPaths is empty", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kiru-prerender-"))
+    try {
+      await writeFile(
+        join(dir, "index.html"),
+        "<html>{{kiru_body}}</html>",
+        "utf8"
+      )
+      assert.strictEqual(
+        tryReadPrerenderedHtml(dir, "/", { staticPaths: new Set() }),
+        null
+      )
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it("tryReadPrerenderedHtml respects staticPaths gate", async () => {
     const dir = await mkdtemp(join(tmpdir(), "kiru-prerender-"))
     try {

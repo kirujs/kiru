@@ -53,10 +53,11 @@ Per-request context is **SSR-only** via `createRenderer({ context })` and hydrat
 
 ## Deployment adapters
 
-- [ ] **`@kiru/adapter-node` or documented Hono preset** — build `dist/server`, static assets, start script
-- [ ] **Cloudflare Workers adapter (spike)** — streaming SSR constraints, `prerenderedHtmlDir` → KV/R2 or Assets
+- [x] **`@kirujs/adapter-node`** — `createKiruHandler`, `resolveStatic`, hybrid ISR + static assets (`@kirujs/adapter-node/hono` optional)
+- [x] **`@kirujs/adapter-bun`** — `createKiruBunServer`, `Bun.serve`
+- [x] **`@kirujs/adapter-cloudflare` (thin)** — Worker handler, immutable Assets prerender, no ISR
+- [x] **`@kirujs/runtime` + adapter contract** — [`deploy-runtimes.md`](../router/deploy-runtimes.md)
 - [ ] **Netlify / static adapter** — map SSG output + redirects file generation from route list
-- [ ] **Adapter contract doc** — inputs: `RouteManifest`, `clientDir`, `serverEntry`, env
 
 ## File-based routing (optional generator)
 

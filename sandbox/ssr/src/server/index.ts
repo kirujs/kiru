@@ -1,10 +1,7 @@
-import { Hono } from "hono"
-import { serveStatic } from "@hono/node-server/serve-static"
-import { createRenderer, resolveStatic } from "kiru/router"
+import { createKiruHandler, serveKiruNode } from "@kirujs/adapter-node"
 import { routes } from "../routes"
 
 const isProd = process.env.NODE_ENV === "production"
-const { clientDir, htmlTemplate } = resolveStatic(import.meta.url, { dev: !isProd })
 
 interface User {
   name: string
@@ -17,48 +14,28 @@ declare module "kiru/router" {
   }
 }
 
-const renderer = createRenderer({
+const kiru = createKiruHandler({
+  importMetaUrl: import.meta.url,
+  dev: !isProd,
   stream: true,
   routes,
-  htmlTemplate,
-  prerenderedHtmlDir: clientDir,
   actions: {
     secret: "sandbox-ssr-remote-secret",
     /** Wildcard keeps `pnpm dev` working regardless of host/port; tighten in production. */
     allowedOrigins: ["*"],
     exposeErrors: true,
   },
-})
-
-const app = new Hono()
-
-if (isProd) {
-  app.use("/assets/*", serveStatic({ root: clientDir }))
-}
-
-app.all("*", async (c, next) => {
-  const rendered = await renderer.render(c.req.raw, {
-    context: {
-      user: {
-        name: "John Doe",
-        age: 30,
-      },
+  getRequestContext: () => ({
+    user: {
+      name: "John Doe",
+      age: 30,
     },
-  })
-  if (!rendered) {
-    return await next()
-  }
-
-  const { status, headers, body } = rendered
-  return new Response(body, { status, headers })
+  }),
 })
 
-export default app
+export default { fetch: kiru.fetch }
 
 if (isProd) {
-  const { serve } = await import("@hono/node-server")
   const port = Number(process.env.PORT) || 5179
-  serve({ fetch: app.fetch, port }, () => {
-    console.log(`SSR sandbox listening on http://localhost:${port}`)
-  })
+  serveKiruNode(kiru, port)
 }

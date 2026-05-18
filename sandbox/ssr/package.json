@@ -17,8 +17,7 @@
     "vite-plugin-kiru": "workspace:^"
   },
   "dependencies": {
-    "@hono/node-server": "^2.0.1",
-    "hono": "^4.12.17",
+    "@kirujs/adapter-node": "workspace:^",
     "kiru": "workspace:^"
   }
 }

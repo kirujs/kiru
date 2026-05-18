@@ -12,7 +12,11 @@ export function devLoaderManifestPath(projectRoot: string): string {
 export function renderLoaderRegistryVirtual(
   modules: Record<string, string>
 ): string {
-  const lines = Object.entries(modules).map(
+  const entries = Object.entries(modules)
+  if (entries.length === 0) {
+    return "export {};\n"
+  }
+  const lines = entries.map(
     ([routeId, viteId]) =>
       `__INTERNAL_LOADER_REGISTRY.registerLazyImport(${JSON.stringify(routeId)}, () => import(${JSON.stringify(viteId)}));`
   )

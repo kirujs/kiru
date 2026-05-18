@@ -42,6 +42,8 @@ import path from "node:path"
 import { glob } from "tinyglobby"
 
 import { kiruImagePlugin } from "./image/plugin.js"
+import { warnCloudflareISRInPages } from "./isrWarnings.js"
+import { generateWranglerSnippet } from "./wranglerSnippet.js"
 import type { KiruPluginOptions } from "./types.js"
 import type {
   ConfigEnv,
@@ -417,8 +419,11 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       const serverEntryRelative =
         path.relative(root, serverEntryAbs).replace(/\\/g, "/") || "."
 
+      const adapter = state.router.adapter
+      const isWorker = adapter === "cloudflare"
+      const serverBundleLabel = isWorker ? "Worker" : "Node"
       log(
-        `${ANSI.green("✓")} SSR server bundle → ${path.relative(root, path.join(serverOutAbs, "server.js"))}`
+        `${ANSI.green("✓")} SSR ${serverBundleLabel} bundle → ${path.relative(root, path.join(serverOutAbs, "index.js"))}`
       )
 
       const configFile =
@@ -433,6 +438,15 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         root,
         mode: resolvedViteConfig.mode,
         logLevel: resolvedViteConfig.logLevel,
+        ssr: isWorker
+          ? {
+              target: "webworker",
+              resolve: {
+                conditions: ["node", "import", "default"],
+                externalConditions: ["node", "import", "default"],
+              },
+            }
+          : undefined,
         build: {
           ssr: serverEntryRelative,
           outDir: serverOutAbs,
@@ -444,6 +458,28 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           },
         },
       })
+
+      if (isWorker) {
+        const clientRel = path.relative(root, clientOutAbs).replace(/\\/g, "/")
+        const snippet = generateWranglerSnippet({
+          name: path.basename(root),
+          main: path
+            .relative(root, path.join(serverOutAbs, "index.js"))
+            .replace(/\\/g, "/"),
+          assetsDirectory: clientRel,
+        })
+        const wranglerPath = path.join(root, "wrangler.toml.generated")
+        await fs.writeFile(wranglerPath, snippet, "utf8")
+        log(
+          `${ANSI.green("✓")} wrangler.toml.generated (review and rename to wrangler.toml)`
+        )
+
+        const pages = await glob(["src/pages/**/*.{tsx,ts}"], {
+          cwd: root,
+          absolute: true,
+        })
+        await warnCloudflareISRInPages(pages, (msg) => log(msg))
+      }
     },
     generateBundle() {
       if (

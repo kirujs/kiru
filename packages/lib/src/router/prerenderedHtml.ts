@@ -10,7 +10,12 @@ import type { CustomRequestContext } from "./types.js"
 import {
   serializeRequestContextScript,
 } from "./requestContext.js"
-import { serializeKiruRequestTokenScript } from "./renderer.js"
+import type { KiruDeployTarget } from "@kirujs/runtime"
+import { isEdgeDeployTarget } from "@kirujs/runtime"
+import {
+  serializeKiruRequestTokenScript,
+  serializeKiruRequestTokenScriptAsync,
+} from "./renderer.js"
 
 /** Same shape as paths from {@link generateStaticPaths} / the route manifest. */
 export function normalizeRoutePathname(urlOrPath: string): string {
@@ -120,20 +125,27 @@ export function stripPrerenderedRequestInjections(html: string): string {
  * Replaces build-time request context / action token in prerendered HTML with
  * values for the current request (production hybrid: disk HTML + per-request ctx).
  */
-export function hydratePrerenderedHtmlForRequest(
+export async function hydratePrerenderedHtmlForRequest(
   html: string,
   requestContext: CustomRequestContext | null,
-  actionsSecret: string | undefined
-): string {
+  actionsSecret: string | undefined,
+  deployTarget: KiruDeployTarget = "node"
+): Promise<string> {
   const stripped = stripPrerenderedRequestInjections(html)
   const parts: string[] = []
   const ctxScript = serializeRequestContextScript(requestContext)
   if (ctxScript) parts.push(ctxScript)
-  if (actionsSecret) {
-    const tokenScript = serializeKiruRequestTokenScript(
-      requestContext,
-      actionsSecret
-    )
+  if (actionsSecret && requestContext) {
+    const tokenScript = isEdgeDeployTarget(deployTarget)
+      ? await serializeKiruRequestTokenScriptAsync(
+          requestContext as Record<string, unknown>,
+          actionsSecret
+        )
+      : serializeKiruRequestTokenScript(
+          requestContext,
+          actionsSecret,
+          deployTarget
+        )
     if (tokenScript) parts.push(tokenScript)
   }
   if (parts.length === 0) return stripped

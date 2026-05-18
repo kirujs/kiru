@@ -66,6 +66,7 @@ export interface PluginState {
     /** Resolved absolute path to the SSR server entry. */
     serverEntryAbs: string | null
     remote: string | null
+    adapter: "node" | "bun" | "cloudflare"
   }
 }
 
@@ -159,6 +160,7 @@ export function createPluginState(
       serverEntry: opts.router?.serverEntry ?? null,
       serverEntryAbs: null,
       remote: opts.router?.remote ?? null,
+      adapter: opts.router?.adapter ?? "node",
     },
   }
 }
@@ -211,6 +213,7 @@ export function updatePluginState(
       serverEntry: state.router?.serverEntry ?? null,
       serverEntryAbs: state.router?.serverEntryAbs ?? null,
       remote: state.router?.remote ?? null,
+      adapter: state.router?.adapter ?? "node",
     },
   } satisfies PluginState
 }

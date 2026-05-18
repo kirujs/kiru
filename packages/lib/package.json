@@ -56,6 +56,8 @@
     "./router": {
       "types": "./dist/router/index.d.ts",
       "browser": "./dist/router/client.js",
+      "workerd": "./dist/router/index.js",
+      "worker": "./dist/router/index.js",
       "default": "./dist/router/index.js"
     },
     "./router/csr": {
@@ -83,6 +85,9 @@
       "types": "./dist/jsx.d.ts",
       "default": "./dist/jsx.js"
     }
+  },
+  "dependencies": {
+    "@kirujs/runtime": "workspace:^"
   },
   "peerDependencies": {
     "@standard-schema/spec": "^1.1.0",

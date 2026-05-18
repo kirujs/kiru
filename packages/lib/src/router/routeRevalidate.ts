@@ -1,5 +1,5 @@
 /**
- * Server / build-time ISR metadata readers (`readRouteISRExport`, legacy exports).
+ * Server / build-time ISR metadata readers (`readRouteISRExport`).
  *
  * @see docs/router/tier-3-wave-1.md
  */
@@ -139,25 +139,6 @@ export function readRouteISRExport(mod: unknown): ResolvedISRConfig | undefined 
     ...(revalidate !== undefined ? { revalidate } : {}),
     ...(tags !== undefined ? { tags } : {}),
   }
-}
-
-/** @deprecated Prefer {@link readRouteISRExport}. */
-export function readRouteRevalidateExport(
-  mod: unknown
-): RouteRevalidate | undefined {
-  const isr = readRouteISRExport(mod)
-  return isr && "revalidate" in isr ? isr.revalidate : undefined
-}
-
-/** @deprecated Prefer {@link readRouteISRExport}. */
-export function readRouteDynamicExport(mod: unknown): RouteDynamicMode | undefined {
-  return readRouteISRExport(mod)?.dynamic
-}
-
-/** @deprecated Prefer {@link readRouteISRExport}. */
-export function readRouteTagsExport(mod: unknown): string[] | undefined {
-  const isr = readRouteISRExport(mod)
-  return isr && "tags" in isr ? isr.tags : undefined
 }
 
 export function getRouteBuildMetaFromModule(

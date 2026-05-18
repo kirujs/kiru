@@ -2,6 +2,21 @@
 import { task, pipeline } from "builderman"
 import { pnpm } from "@builderman/resolvers-pnpm"
 
+const pkgCache = (pkgDir) => ({
+  inputs: ["src", pnpm.package()],
+  outputs: ["dist"],
+  cwd: pkgDir,
+})
+
+const runtime = task({
+  name: "runtime",
+  cwd: "packages/runtime",
+  commands: {
+    build: { run: "pnpm build", cache: pkgCache("packages/runtime") },
+    test: { run: "pnpm test", cache: pkgCache("packages/runtime") },
+  },
+})
+
 const libCacheConfig = {
   inputs: ["src", pnpm.package()],
   outputs: ["dist"],
@@ -13,6 +28,7 @@ const lib = task({
     build: {
       run: "pnpm build",
       cache: libCacheConfig,
+      dependencies: [runtime],
     },
     dev: {
       run: "pnpm dev",
@@ -46,11 +62,49 @@ const devtoolsHost = task({
   },
 })
 
+const adapterNode = task({
+  name: "adapter-node",
+  cwd: "packages/adapter-node",
+  commands: {
+    build: {
+      run: "pnpm build",
+      cache: pkgCache("packages/adapter-node"),
+      dependencies: [lib, runtime],
+    },
+  },
+})
+
+const adapterBun = task({
+  name: "adapter-bun",
+  cwd: "packages/adapter-bun",
+  commands: {
+    build: {
+      run: "pnpm build",
+      cache: pkgCache("packages/adapter-bun"),
+      dependencies: [adapterNode, lib, runtime],
+    },
+  },
+})
+
+const adapterCloudflare = task({
+  name: "adapter-cloudflare",
+  cwd: "packages/adapter-cloudflare",
+  commands: {
+    build: {
+      run: "pnpm build",
+      cache: pkgCache("packages/adapter-cloudflare"),
+      dependencies: [lib, runtime],
+    },
+  },
+})
+
 const vitePluginCacheConfig = {
   inputs: [
     "src",
     lib.artifact("build"),
     devtoolsHost.artifact("build"),
+    runtime.artifact("build"),
+    adapterCloudflare.artifact("build"),
     pnpm.package(),
   ],
   outputs: ["dist"],
@@ -63,6 +117,7 @@ const vitePlugin = task({
     build: {
       run: "pnpm build",
       cache: vitePluginCacheConfig,
+      dependencies: [lib, devtoolsHost, runtime, adapterCloudflare],
     },
     test: {
       run: "pnpm test",
@@ -75,11 +130,17 @@ const vitePlugin = task({
   },
 })
 
+const adapterDeps = [lib, vitePlugin, runtime, adapterNode, adapterBun, adapterCloudflare]
+
 const E2ECachConfig = {
   inputs: [
     "src",
     lib.artifact("build"),
     vitePlugin.artifact("build"),
+    runtime.artifact("build"),
+    adapterNode.artifact("build"),
+    adapterBun.artifact("build"),
+    adapterCloudflare.artifact("build"),
     pnpm.package(),
   ],
   outputs: ["dist"],
@@ -90,7 +151,7 @@ const sharedE2EConfig = {
     build: { run: "pnpm build", cache: E2ECachConfig },
     test: { run: "pnpm test", cache: E2ECachConfig },
   },
-  dependencies: [lib, vitePlugin],
+  dependencies: adapterDeps,
   env: { NODE_ENV: "development" },
 }
 
@@ -112,10 +173,22 @@ const ssrTest = task({
   cwd: "e2e/ssr",
 })
 
-const e2e = pipeline([csrTest, ssgTest, ssrTest]).toTask({
+const ssrBunTest = task({
+  ...sharedE2EConfig,
+  name: "e2e:ssr-bun",
+  cwd: "e2e/ssr-bun",
+})
+
+const ssrWorkerTest = task({
+  ...sharedE2EConfig,
+  name: "e2e:ssr-worker",
+  cwd: "e2e/ssr-worker",
+})
+
+const e2e = pipeline([csrTest, ssgTest, ssrTest, ssrBunTest, ssrWorkerTest]).toTask({
   name: "e2e",
   maxConcurrency: 1,
-  dependencies: [lib, vitePlugin],
+  dependencies: adapterDeps,
 })
 
 const [, , command, ...args] = process.argv
@@ -125,7 +198,11 @@ if (!["build", "dev", "test"].includes(command)) {
 }
 
 const result = await pipeline([
+  runtime,
   lib,
+  adapterNode,
+  adapterBun,
+  adapterCloudflare,
   devtoolsHost,
   vitePlugin,
   ...(args.includes("--skip-e2e") ? [] : [e2e]),

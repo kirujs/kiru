@@ -111,6 +111,11 @@ export interface KiruPluginOptions {
           }
         }
     /**
+     * Deploy adapter target — affects SSR bundle platform and ISR build checks.
+     * @default "node"
+     */
+    adapter?: "node" | "bun" | "cloudflare"
+    /**
      * SSR server entry path or glob (must match exactly one file).
      * When set, the kiru plugin handles dev-mode SSR requests directly —
      * loading your app via `ssrLoadModule`, calling `app.fetch`, and injecting

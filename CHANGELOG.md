@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Deploy adapters
+
+- **`@kirujs/runtime`:** `KiruDeployTarget`, `getRuntimeCapabilities`, `assertISRAllowed` — shared contract for adapters and `vite-plugin-kiru`.
+- **`@kirujs/adapter-node`:** `createKiruHandler` (Web `fetch`), `composeFetch`, `serveKiruNode` (Node HTTP, no Hono), `resolveStatic`, hybrid ISR, optional runtime image optimizer. Optional Hono: `@kirujs/adapter-node/hono` (`createKiruHono`).
+- **`@kirujs/adapter-bun`:** `createKiruBunServer`, `serveKiruBun` — same `fetch` handler as Node via `Bun.serve` (no Hono dependency).
+- **`@kirujs/adapter-cloudflare`:** `createKiruWorkerHandler` — SSR + **immutable** prerender from Assets; **no ISR** on edge (Next.js-style).
+- **`createRenderer({ deployTarget })`:** edge target ignores disk ISR; Web Crypto action tokens on Cloudflare.
+- **`vite-plugin-kiru` `router.adapter`:** `node` | `bun` | `cloudflare` — worker SSR bundle, `wrangler.toml.generated`, ISR warnings for edge.
+- **Guide:** [`docs/router/deploy-runtimes.md`](docs/router/deploy-runtimes.md). E2E: `e2e/ssr-bun`, `e2e/ssr-worker`.
+
 ### Router
 
 - **Tier 3 wave 1:** Hybrid ISR via `export const isr = defineISR({ revalidate, tags, dynamic })` (legacy separate exports still read); `PrerenderCacheStore` (disk + memory) with SSG sidecar metadata; `revalidatePath` / `revalidateTag` and `action({ revalidate })` meta; stale-while-revalidate single-flight; loader `staleTime` / `gcTime` with background refetch and `router.isLoaderStale`; `Link` `locale` prop; `defineSiteConfig` `locales` + hreflang sitemaps; guide at [`docs/router/tier-3-wave-1.md`](docs/router/tier-3-wave-1.md).

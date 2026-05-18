@@ -1325,10 +1325,10 @@ describe("router", () => {
     assert.equal(router.forceLoaderReload.peek(), true)
   })
 
-  it("hydratePrerenderedHtmlForRequest replaces context and token for the request", () => {
+  it("hydratePrerenderedHtmlForRequest replaces context and token for the request", async () => {
     const html = `<!doctype html><html><head><title>t</title><script type="application/json" k-request-context>{"user":{"name":"Stale"}}</script><script type="application/json" k-request-token>stale</script></head><body>x</body></html>`
     const secret = "unit-test-secret-for-hydrate"
-    const out = hydratePrerenderedHtmlForRequest(
+    const out = await hydratePrerenderedHtmlForRequest(
       html,
       { user: { name: "Fresh" } } as CustomRequestContext,
       secret

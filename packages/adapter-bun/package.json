@@ -1,0 +1,36 @@
+{
+  "name": "@kirujs/adapter-bun",
+  "version": "1.0.0",
+  "description": "Bun deploy adapter for Kiru SSR",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kirujs/kiru",
+    "directory": "packages/adapter-bun"
+  },
+  "peerDependencies": {
+    "kiru": ">=1.5.0"
+  },
+  "dependencies": {
+    "@kirujs/adapter-node": "workspace:^",
+    "@kirujs/runtime": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.5",
+    "@types/node": "^25.6.0",
+    "kiru": "workspace:^",
+    "typescript": "^5.9.3"
+  }
+}

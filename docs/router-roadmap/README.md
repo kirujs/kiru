@@ -24,6 +24,7 @@ Actionable backlog for making `kiru/router` competitive with Next.js, SvelteKit,
 |-------|------|
 | Tier 3 wave 1 (ISR, loader cache, i18n, assets) | [tier-3-wave-1.md](../router/tier-3-wave-1.md) |
 | Image pipeline (`<Image>`, `kiru/image`, Vite `router.images`) | [kiru-image.md](../router/kiru-image.md) |
+| Deploy runtimes (Node, Bun, Workers) | [deploy-runtimes.md](../router/deploy-runtimes.md) |
 
 ## Related code areas
 
