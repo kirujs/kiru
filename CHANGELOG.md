@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
 - **`@kirujs/adapter-cloudflare`:** `createKiruWorkerHandler` — SSR + **immutable** prerender from Assets; **no ISR** on edge (Next.js-style).
 - **`createRenderer({ deployTarget })`:** edge target ignores disk ISR; Web Crypto action tokens on Cloudflare.
 - **`vite-plugin-kiru` `router.adapter`:** `node` | `bun` | `cloudflare` — worker SSR bundle, `wrangler.toml.generated`, ISR warnings for edge.
-- **Guide:** [`docs/router/deploy-runtimes.md`](docs/router/deploy-runtimes.md). E2E: `e2e/ssr-bun`, `e2e/ssr-worker`.
+- **Guide:** [`docs/router/deploy-runtimes.md`](docs/router/deploy-runtimes.md). E2E: `e2e/ssr-matrix` (13 adapter smoke cells); removed legacy `e2e/ssr-bun` / `e2e/ssr-worker` (covered by `bun-*` / `worker-*` matrix cells).
 
 ### Router
 

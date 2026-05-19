@@ -20,10 +20,11 @@
   "devDependencies": {
     "@types/node": "^25.4.0",
     "esbuild": "^0.27.2",
+    "kiru": "workspace:^",
+    "kiru-devtools-host": "workspace:^",
     "rollup": "^4.57.1",
     "sharp": "^0.34.5",
-    "tsx": "^4.21.0",
-    "kiru-devtools-host": "workspace:^"
+    "tsx": "^4.21.0"
   },
   "dependencies": {
     "@kirujs/adapter-node": "workspace:^",

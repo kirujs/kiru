@@ -226,6 +226,10 @@ Set `defineImageConfig({ strategy: "build" })` for edge deploys.
 
 **Wrangler Assets:** enable `run_worker_first = true` so `/` is SSR-rendered instead of serving the raw `index.html` shell. Pass `assetFetch: (req) => env.ASSETS.fetch(req)` so `/assets/*` still resolves.
 
+## E2E coverage
+
+CI can exercise the same SSR fixture across runtimes and HTTP framework wiring. See [E2E SSR matrix](./e2e-ssr-matrix.md) for the planned `e2e/ssr-matrix` package, smoke tiers, and valid matrix cells.
+
 ## Capability matrix
 
 See `@kirujs/runtime` — `getRuntimeCapabilities(target)` is the single source of truth used by adapters and the Vite plugin.

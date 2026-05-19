@@ -201,19 +201,27 @@ const ssrTest = task({
   cwd: "e2e/ssr",
 })
 
-const ssrBunTest = task({
-  ...sharedE2EConfig,
-  name: "e2e:ssr-bun",
-  cwd: "e2e/ssr-bun",
+const ssrMatrixTest = task({
+  name: "e2e:ssr-matrix",
+  cwd: "e2e/ssr-matrix",
+  commands: {
+    build: {
+      run: 'node -e "process.exit(0)"',
+      cache: {
+        inputs: ["scripts", "src", "vite.config.ts", "wrangler.toml", pnpm.package()],
+        outputs: [],
+      },
+    },
+    test: {
+      run: "pnpm test",
+      cache: E2ECachConfig,
+    },
+  },
+  dependencies: adapterDeps,
+  env: { NODE_ENV: "development" },
 })
 
-const ssrWorkerTest = task({
-  ...sharedE2EConfig,
-  name: "e2e:ssr-worker",
-  cwd: "e2e/ssr-worker",
-})
-
-const e2e = pipeline([csrTest, ssgTest, ssrTest, ssrBunTest, ssrWorkerTest]).toTask({
+const e2e = pipeline([csrTest, ssgTest, ssrTest, ssrMatrixTest]).toTask({
   name: "e2e",
   maxConcurrency: 1,
   dependencies: adapterDeps,
