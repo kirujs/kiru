@@ -1,4 +1,4 @@
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default function Layout({ children }: { children: JSX.Children }) {
   return (
     <main>
       <nav>
