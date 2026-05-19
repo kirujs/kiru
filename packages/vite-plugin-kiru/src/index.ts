@@ -20,6 +20,7 @@ import {
   renderLoaderRegistryVirtual,
   writeDevLoaderManifest,
 } from "./loaderRegistryVirtual.js"
+import { runSsgPrerender } from "./ssgPrerender.js"
 import { toViteModuleId } from "./resolveModulePattern.js"
 import {
   createDevtoolsHtmlTransform,
@@ -527,120 +528,35 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         )
       }
 
-      const templateName = opts.router?.htmlTemplate ?? "index.html"
-      const templatePath = path.resolve(state.outDir, templateName)
-      const templateHtml = await fs.readFile(templatePath, "utf8")
+      const cache = state.ssgPrerenderCache
+      if (!cache) {
+        throw new Error(
+          "[vite-plugin-kiru]: SSG prerender cache missing — buildStart should run before writeBundle."
+        )
+      }
 
-      const routesAbs = state.router.ssg.routesModuleAbs
-      const routesViteId = toViteModuleId(routesAbs, state.projectRoot)
+      const {
+        outputs,
+        site,
+        pathPolicy,
+        siteLocales,
+        routes,
+        buildMeta,
+        manifest,
+      } = cache
 
-      const { createServer } = await import("vite")
-      const configFile =
-        typeof resolvedViteConfig.configFile === "string" &&
-        resolvedViteConfig.configFile
-          ? resolvedViteConfig.configFile
-          : path.resolve(state.projectRoot, "vite.config.ts")
-      const vite = await createServer({
-        configFile,
-        server: { middlewareMode: true },
-        appType: "custom",
-      })
+      const {
+        generateSitemapPaths,
+        writeSiteArtifacts,
+        matchRoute,
+        getRouteBuildMetaEntry,
+        persistPrerenderBuildOutput,
+        splitAppPathname,
+      } = (await import(
+        "../../lib/src/router/index.js"
+      )) as typeof import("../../lib/src/router/index.js")
 
       try {
-        const routesMod = await vite.ssrLoadModule(routesViteId)
-        const routes = routesMod.routes
-        if (!routes) {
-          throw new Error(
-            `[vite-plugin-kiru]: router.ssg.routes "${state.router.ssg.routesModule}" does not export 'routes'`
-          )
-        }
-
-        const {
-          siteConfigModuleCandidates,
-          prerenderStaticRoutes,
-          compileRouteTree,
-          discoverRouteBuildMeta,
-          generateSitemapPaths,
-          writeSiteArtifacts,
-          matchRoute,
-          getRouteBuildMetaEntry,
-          getRouteBuildMetaFromModule,
-          persistPrerenderBuildOutput,
-          normalizeSiteLocales,
-          splitAppPathname,
-        } = (await vite.ssrLoadModule(
-          "kiru/router"
-          // @ts-ignore TODO: update peer dep to kiru v2
-        )) as typeof import("../../lib/src/router/index.js")
-
-        if (opts.router?.images) {
-          try {
-            const manifestPath = path.join(
-              state.outDir,
-              "kiru-image-manifest.json"
-            )
-            const raw = await fs.readFile(manifestPath, "utf8")
-            const imageMod = (await vite.ssrLoadModule(
-              "kiru/image"
-              // @ts-ignore
-            )) as typeof import("../../lib/src/image/index.js")
-            imageMod.setBuildImageManifest(JSON.parse(raw))
-            const imageOpts =
-              typeof opts.router.images === "object" ? opts.router.images : {}
-            imageMod.defineImageConfig({
-              strategy: "build",
-              ...imageOpts.config,
-            })
-          } catch {
-            /* manifest optional until first image import */
-          }
-        }
-
-        let site = routesMod.site
-        if (!site) {
-          const candidates =
-            state.router.ssg.siteModuleAbsPaths ??
-            siteConfigModuleCandidates(routesAbs, null).map((candidate) =>
-              path.isAbsolute(candidate)
-                ? candidate
-                : path.resolve(state.projectRoot, candidate)
-            )
-          for (const siteAbs of candidates) {
-            try {
-              await fs.access(siteAbs)
-              const siteViteId = toViteModuleId(siteAbs, state.projectRoot)
-              const siteMod = await vite.ssrLoadModule(siteViteId)
-              site = siteMod.site ?? siteMod.default
-              break
-            } catch {
-              // try next candidate
-            }
-          }
-        }
-
-        const pathPolicy = site?.pathPolicy
-        const siteLocales = site?.locales
-          ? normalizeSiteLocales(site.locales)
-          : undefined
-
-        const outputs: {
-          path: string
-          body: string
-          document: { headHtml: string; title?: string }
-          html?: string
-        }[] = await prerenderStaticRoutes({
-          routes,
-          pathPolicy,
-          maxConcurrentRenders: state.router.ssg.maxConcurrentRenders,
-          siteLocales,
-          i18n: routesMod.i18n ?? routesMod.default?.i18n,
-          ...(opts.router?.htmlShell
-            ? {}
-            : {
-                htmlTemplate: templateHtml,
-              }),
-        })
-
         const outputPaths = new Set<string>(
           outputs.map((o: { path: string }) => o.path)
         )
@@ -648,12 +564,6 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           [...outputPaths].some(
             (p) => p !== routePath && p.startsWith(routePath + "/")
           )
-
-        const manifest = compileRouteTree(routes)
-        const loadPageModule = async (route: {
-          component: () => Promise<unknown>
-        }) => route.component()
-        const buildMeta = await discoverRouteBuildMeta(manifest, loadPageModule)
 
         const clientManifest = await readViteClientManifest(state.outDir)
 
@@ -691,28 +601,21 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           const routeMatch = matchRoute(manifest, logicalPath, pathPolicy)
           if (routeMatch) {
             const metaEntry = getRouteBuildMetaEntry(routeMatch.route, buildMeta)
-            const pageMod = await routeMatch.route.component()
-            const fromMod = getRouteBuildMetaFromModule(pageMod)
             persistPrerenderBuildOutput({
               clientDir: state.outDir,
               pathname: output.path,
               htmlAbsolutePath: target,
-              revalidate: metaEntry?.revalidate ?? fromMod?.revalidate,
-              tags: metaEntry?.tags ?? fromMod?.tags,
+              revalidate: metaEntry?.revalidate,
+              tags: metaEntry?.tags,
             })
           }
         }
 
         if (site?.sitemap || site?.robots) {
-          const buildMetaForSitemap = site.sitemap
-            ? await discoverRouteBuildMeta(manifest, loadPageModule, {
-                includeRoutePaths: site.sitemap.include,
-              })
-            : buildMeta
           const sitemapPaths = site.sitemap
             ? await generateSitemapPaths(manifest, site, {
                 defaultSsrPaths: Boolean(state.router.serverEntry),
-                buildMeta: buildMetaForSitemap,
+                buildMeta,
               })
             : []
           await writeSiteArtifacts({
@@ -722,8 +625,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             buildDate: new Date().toISOString().slice(0, 10),
           })
         }
-      } finally {
-        await vite.close()
+      } catch (err) {
+        throw err
       }
     },
   } satisfies Plugin
@@ -757,10 +660,26 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       }
 
       let loaderRegistryTouched = false
-      preparePageLoaders(ctx, state!.projectRoot, !!options?.ssr, (ref) => {
+      const staticLoaderClient =
+        !!state!.router.ssg && state!.isBuild && !options?.ssr
+      const normalized = id.replace(/\\/g, "/")
+      const root = state!.projectRoot.replace(/\\/g, "/").replace(/\/+$/, "")
+      const relative = normalized.startsWith(root + "/")
+        ? normalized.slice(root.length + 1)
+        : path.basename(normalized)
+      const pageModuleKey = `/${relative}`
+      const staticLoaderPayload =
+        state!.ssgPrerenderCache?.staticLoaderPayloadByModule[pageModuleKey]
+      preparePageLoaders(
+        ctx,
+        state!.projectRoot,
+        !!options?.ssr,
+        (ref) => {
         state!.loaderModulesByRouteId.set(ref.routeId, ref.viteModuleId)
         loaderRegistryTouched = true
-      })
+      },
+        { staticLoaderClient, staticLoaderPayload }
+      )
       if (isRemote) {
         prepareRemoteFunctions(ctx, state!.projectRoot, !!options?.ssr)
       }
@@ -794,7 +713,32 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
   } satisfies Plugin
 
-  const plugins: PluginOption[] = [mainPlugin, remotePlugin]
+  const ssgPrerenderPlugin: Plugin = {
+    name: "vite-plugin-kiru:ssg-prerender",
+    apply: "build",
+    enforce: "pre",
+    async buildStart() {
+      if (
+        !state.isBuild ||
+        state.isSSRBuild ||
+        !state.router.ssg?.routesModuleAbs ||
+        !resolvedViteConfig
+      ) {
+        return
+      }
+      const templateName = opts.router?.htmlTemplate ?? "index.html"
+      const templatePath = path.resolve(state.projectRoot, templateName)
+      const templateHtml = await fs.readFile(templatePath, "utf8")
+      state.ssgPrerenderCache = await runSsgPrerender({
+        state,
+        opts,
+        resolvedViteConfig,
+        templateHtml,
+      })
+    },
+  }
+
+  const plugins: PluginOption[] = [ssgPrerenderPlugin, mainPlugin, remotePlugin]
   if (opts.router?.images) {
     const imageOpts =
       typeof opts.router.images === "object" ? opts.router.images : {}

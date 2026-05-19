@@ -193,6 +193,11 @@ export function staticLoader<T>(fn: LoaderFn<T>): StaticLoader<T> {
   return wrapLoader("static", fn) as StaticLoader<T>
 }
 
+export {
+  resolveStaticLoaderDataFromModule,
+  STATIC_LOADER_PAYLOAD_EXPORT,
+} from "./staticLoaderData.js"
+
 export type LoaderConfig<T> = LoaderCacheOptions & {
   load: LoaderFn<T>
 }

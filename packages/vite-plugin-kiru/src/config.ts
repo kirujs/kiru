@@ -1,6 +1,7 @@
 import path from "node:path"
 import type { ESBuildOptions, ResolvedConfig } from "vite"
 import type { KiruPluginOptions, FileLinkFormatter } from "./types.js"
+import type { SsgPrerenderCache } from "./ssgPrerender.js"
 import {
   resolveModulePattern,
   resolveSingleModulePattern,
@@ -49,6 +50,8 @@ export interface PluginState {
   remotePaths: string[]
   /** `routeId` → Vite module id for pages that export `serverLoader`. */
   loaderModulesByRouteId: Map<string, string>
+  /** Populated in `buildStart` before the client bundle when `router.ssg` is enabled. */
+  ssgPrerenderCache: SsgPrerenderCache | null
   router: {
     ssg: null | {
       /** User pattern (may be a glob); also emitted to `kiru-route-manifest.json`. */
@@ -147,6 +150,7 @@ export function createPluginState(
     staticProps: {},
     remotePaths: [],
     loaderModulesByRouteId: new Map(),
+    ssgPrerenderCache: null,
     router: {
       ssg: routesModule
         ? {
@@ -208,6 +212,7 @@ export function updatePluginState(
     remotePaths: [],
     loaderModulesByRouteId:
       state.loaderModulesByRouteId ?? new Map<string, string>(),
+    ssgPrerenderCache: state.ssgPrerenderCache ?? null,
     router: {
       ssg: state.router?.ssg ?? null,
       serverEntry: state.router?.serverEntry ?? null,

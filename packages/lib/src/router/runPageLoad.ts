@@ -4,10 +4,7 @@ import { isKiruLoader, readPageLoadExport } from "./loaders.js"
 import type { CustomRequestContext, RouteMatch } from "./types.js"
 import { toRenderError } from "./types.js"
 import { readHydratedPageData } from "./pageData.js"
-import {
-  guardServerLoaderOnClient,
-  warnStaticLoaderOnClientNavigation,
-} from "./devWarnings.js"
+import { guardServerLoaderOnClient } from "./devWarnings.js"
 import {
   buildLoaderCacheKey,
   getLoaderCacheEntry,
@@ -56,10 +53,6 @@ export async function runPageLoadFromModule(
 ): Promise<unknown> {
   const load = readPageLoadExport(mod)
   if (!load) return undefined
-  if (load.__kiruLoader === "static" && typeof window !== "undefined") {
-    warnStaticLoaderOnClientNavigation()
-    return undefined
-  }
   if (load.__kiruLoader === "server" && typeof window !== "undefined") {
     guardServerLoaderOnClient()
   }
@@ -115,16 +108,20 @@ export async function resolvePagePropsFromModule(
   if (!load) return { props: {} }
   const useHydrated =
     options?.forceReload === true ? false : options?.useHydratedPageData !== false
-  if (
-    useHydrated &&
-    load.__kiruLoader === "server" &&
-    typeof document !== "undefined"
-  ) {
-    const hydrated = readHydratedPageData()
-    if (hydrated !== undefined) {
-      return { props: buildPageProps(hydrated) }
+  if (useHydrated && typeof document !== "undefined") {
+    if (load.__kiruLoader === "server") {
+      const hydrated = readHydratedPageData()
+      if (hydrated !== undefined) {
+        return { props: buildPageProps(hydrated) }
+      }
+      guardServerLoaderOnClient()
     }
-    guardServerLoaderOnClient()
+    if (load.__kiruLoader === "static") {
+      const hydrated = readHydratedPageData()
+      if (hydrated !== undefined) {
+        return { props: buildPageProps(hydrated) }
+      }
+    }
   }
 
   const cacheOpts = readLoaderCacheOptions(load)

@@ -21,6 +21,10 @@ export interface StaticRouteOutput {
   /** Full HTML document when `htmlTemplate` is provided. */
   html?: string
   document: DocumentHead
+  /** Compiled route id (`route:N`) for static loader data indexing. */
+  routeId: string
+  /** Serialized `staticLoader` / loader props when present. */
+  pageData?: unknown
 }
 
 const DEFAULT_MAX_CONCURRENT_RENDERS = 10
@@ -110,22 +114,35 @@ export async function prerenderStaticRoutes({
       if (renderer) {
         const rendered = await renderer.render(publicPath)
         if (!rendered || typeof rendered.body !== "string") return null
-        const { body, document } = await renderMatchToStaticHtml(
+        const { body, document, pageData } = await renderMatchToStaticHtml(
           manifest,
           routeMatch,
           pathPolicy,
-          staticRenderOpts
+          { ...staticRenderOpts, publicPath }
         )
-        return { path: publicPath, body, document, html: rendered.body }
+        return {
+          path: publicPath,
+          body,
+          document,
+          html: rendered.body,
+          routeId: routeMatch.route.id,
+          ...(pageData !== undefined ? { pageData } : {}),
+        }
       }
 
-      const { body, document } = await renderMatchToStaticHtml(
-        manifest,
-        routeMatch,
-        pathPolicy,
-        staticRenderOpts
-      )
-      return { path: publicPath, body, document }
+      const { body, document, pageData } = await renderMatchToStaticHtml(
+          manifest,
+          routeMatch,
+          pathPolicy,
+          { ...staticRenderOpts, publicPath }
+        )
+        return {
+          path: publicPath,
+          body,
+          document,
+          routeId: routeMatch.route.id,
+          ...(pageData !== undefined ? { pageData } : {}),
+        }
     }
   )
 
@@ -147,10 +164,16 @@ export async function prerenderStaticRoutes({
             body: frag.body,
             document: doc,
             html: full.body,
+            routeId: "",
           })
         }
       } else {
-        outputs.push({ path: "/404", body: frag.body, document: doc })
+        outputs.push({
+          path: "/404",
+          body: frag.body,
+          document: doc,
+          routeId: "",
+        })
       }
     }
   }

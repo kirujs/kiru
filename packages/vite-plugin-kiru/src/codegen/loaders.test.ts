@@ -34,6 +34,42 @@ export default function Page() { return null }
     assert.doesNotMatch(out, /async \(ctx\)/)
   })
 
+  it("stubs staticLoader for SSG client builds", () => {
+    const ast = parseAst(
+      `
+import { staticLoader } from "kiru/router"
+export const load = staticLoader(async () => ({ ok: true }))
+export default function Page() { return null }
+`,
+      { allowReturnOutsideFunction: true }
+    )
+    const code = new MagicString(
+      `import { staticLoader } from "kiru/router"\nexport const load = staticLoader(async () => ({ ok: true }))\nexport default function Page() { return null }\n`
+    )
+    preparePageLoaders(
+      {
+        code,
+        ast,
+        isBuild: true,
+        fileLinkFormatter: (id) => id,
+        filePath: "/project/src/pages/static.tsx",
+        log: () => {},
+      },
+      "/project",
+      false,
+      undefined,
+      {
+        staticLoaderClient: true,
+        staticLoaderPayload: { "/loaders/static": { ok: true } },
+      }
+    )
+    const out = code.toString()
+    assert.match(out, /__kiruStaticLoaderPayload/)
+    assert.match(out, /__kiruLoader: "static"/)
+    assert.match(out, /ctx\.url\.pathname \+ ctx\.url\.search/)
+    assert.doesNotMatch(out, /async \(\) =>/)
+  })
+
   it("stubs object-form serverLoader and preserves fallback", () => {
     const out = transformClientLoaderExport(`
 import { serverLoader } from "kiru/router"

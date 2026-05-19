@@ -37,11 +37,17 @@ export type ServerLoaderModuleRef = {
   viteModuleId: string
 }
 
+const STATIC_LOADER_PAYLOAD_EXPORT = "__kiruStaticLoaderPayload"
+
 export function preparePageLoaders(
   ctx: TransformCTX,
   projectRoot: string,
   ssr: boolean,
-  onServerLoaderModule?: (ref: ServerLoaderModuleRef) => void
+  onServerLoaderModule?: (ref: ServerLoaderModuleRef) => void,
+  options?: {
+    staticLoaderClient?: boolean
+    staticLoaderPayload?: Record<string, unknown>
+  }
 ) {
   const { code, ast } = ctx
   const bodyNodes = ast.body as AstNode[]
@@ -54,7 +60,16 @@ export function preparePageLoaders(
   if (ssr) {
     serverRegisterLoaders(matches, code, routeId)
   } else {
-    clientFormatLoaders(bodyNodes, matches, code, routeId)
+    clientFormatLoaders(bodyNodes, matches, code, routeId, options)
+    if (
+      options?.staticLoaderClient &&
+      options.staticLoaderPayload &&
+      matches.some((m) => m.kind === "static")
+    ) {
+      code.append(
+        `\nexport const ${STATIC_LOADER_PAYLOAD_EXPORT} = ${JSON.stringify(options.staticLoaderPayload)};\n`
+      )
+    }
   }
 
   if (hasServer && onServerLoaderModule) {
@@ -74,16 +89,25 @@ function clientFormatLoaders(
   bodyNodes: AstNode[],
   matches: LoaderMatch[],
   code: MagicString,
-  routeId: string
+  routeId: string,
+  options?: {
+    staticLoaderClient?: boolean
+    staticLoaderPayload?: Record<string, unknown>
+  }
 ) {
   const hasServer = matches.some((m) => m.kind === "server")
+  const hasStatic =
+    options?.staticLoaderClient && matches.some((m) => m.kind === "static")
 
-  if (hasServer) {
-    code.prepend(
-      `import { __kiruEnsureLoaderDispatch } from "kiru/ssr/router";\nconst __$lr__ = ${JSON.stringify(
-        routeId
-      )};\nconst __$loadDispatch = () => __kiruEnsureLoaderDispatch();\n`
-    )
+  if (hasServer || hasStatic) {
+    const lines = [`const __$lr__ = ${JSON.stringify(routeId)};`]
+    if (hasServer) {
+      lines.unshift(
+        `import { __kiruEnsureLoaderDispatch } from "kiru/ssr/router";`,
+        `const __$loadDispatch = () => __kiruEnsureLoaderDispatch();`
+      )
+    }
+    code.prepend(`${lines.join("\n")}\n`)
   }
 
   bodyNodes.forEach((node) => {
@@ -91,7 +115,15 @@ function clientFormatLoaders(
     if (!match) return
 
     if (match.kind === "static") {
-      code.overwrite(node.start, node.end, "")
+      if (options?.staticLoaderClient) {
+        code.overwrite(
+          node.start,
+          node.end,
+          `export const ${match.name} = { __kiruLoader: "static", __kiruInvoke: (ctx) => Promise.resolve(${STATIC_LOADER_PAYLOAD_EXPORT}[ctx.url.pathname + ctx.url.search]) };`
+        )
+      } else {
+        code.overwrite(node.start, node.end, "")
+      }
       return
     }
 

@@ -27,6 +27,17 @@ describe("SSG build", () => {
     )
   })
 
+  it("serves staticLoader data on client navigation", () => {
+    cy.visit(base())
+    cy.get('[data-testid="ssg-home"]').should("exist")
+    cy.contains("a", "Static loader").click()
+    cy.location("pathname").should("eq", "/loaders/static")
+    cy.get('[data-testid="loader-data"]').should(
+      "contain",
+      "static:prerendered loader data"
+    )
+  })
+
   it("prerenders nested static params from parent generateStaticParams", () => {
     cy.visit(`${base()}/posts/one/comments/one-c1`)
     cy.get('[data-testid="comment"]').should("contain", "one:one-c1")

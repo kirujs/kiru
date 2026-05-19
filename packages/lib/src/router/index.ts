@@ -4,6 +4,17 @@ export * from "./defineRouteTree.js"
 export * from "./requestUrl.js"
 export * from "./routeBuildMeta.js"
 export * from "./loaders.js"
+export {
+  onStaticLoaderPrerenderCapture,
+  emitStaticLoaderPrerenderCapture,
+  resolveStaticLoaderDataFromModule,
+  readPageStaticLoaderPayload,
+  pageModuleUsesStaticLoader,
+  buildStaticLoaderLookupKey,
+  STATIC_LOADER_PAYLOAD_EXPORT,
+  type StaticLoaderPrerenderCapture,
+  type StaticLoaderPayloadByPath,
+} from "./staticLoaderData.js"
 export * from "./pageData.js"
 export * from "./runPageLoad.js"
 export { __INTERNAL_LOADER_REGISTRY } from "./loaderRegistry.js"

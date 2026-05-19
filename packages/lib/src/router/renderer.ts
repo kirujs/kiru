@@ -58,6 +58,10 @@ import { createLoaderHandler } from "./loaderRegistry.js"
 import { serializePageDataScript } from "./pageData.js"
 import { buildLoaderContext, resolvePagePropsFromModule } from "./runPageLoad.js"
 import {
+  emitStaticLoaderPrerenderCapture,
+  pageModuleUsesStaticLoader,
+} from "./staticLoaderData.js"
+import {
   canStreamPageLoad,
   readLoaderFallback,
   readPageLoadExport,
@@ -844,8 +848,10 @@ export async function renderMatchToStaticHtml(
   options?: {
     i18n?: InternationalizationConfig<readonly string[], unknown>
     locale?: string | null
+    /** Public URL path for static loader capture (locale prefix included). */
+    publicPath?: string
   }
-): Promise<{ body: string; document: DocumentHead }> {
+): Promise<{ body: string; document: DocumentHead; pageData?: unknown }> {
   return runWithImagePreloadRegistry(() =>
     renderMatchToStaticHtmlInner(manifest, match, pathPolicy, options)
   )
@@ -858,8 +864,9 @@ async function renderMatchToStaticHtmlInner(
   options?: {
     i18n?: InternationalizationConfig<readonly string[], unknown>
     locale?: string | null
+    publicPath?: string
   }
-): Promise<{ body: string; document: DocumentHead }> {
+): Promise<{ body: string; document: DocumentHead; pageData?: unknown }> {
   // Prerender paths are pathname-only (no query string at build time).
   const pageMod = await match.route.component()
   const locale = options?.locale ?? null
@@ -903,15 +910,28 @@ async function renderMatchToStaticHtmlInner(
     pageProps,
     { pathPolicy, i18n: i18nPayload, siteLocales }
   )
-  return renderStringWithDocument(
+  const pageData = serializedDataFromPageProps(pageProps)
+  if (
+    options?.publicPath &&
+    pageData !== undefined &&
+    pageModuleUsesStaticLoader(pageMod)
+  ) {
+    emitStaticLoaderPrerenderCapture({
+      routeId: match.route.id,
+      pathname: options.publicPath,
+      pageData,
+    })
+  }
+  const rendered = await renderStringWithDocument(
     app,
     match,
     {},
     pathPolicy,
-    serializedDataFromPageProps(pageProps),
+    pageData,
     streamHeadMeta,
     i18nPayload
   )
+  return { ...rendered, pageData }
 }
 
 const DEFAULT_HEADERS: Record<string, string> = {
