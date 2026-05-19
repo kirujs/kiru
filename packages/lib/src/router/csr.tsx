@@ -9,7 +9,11 @@ import {
   stripBase,
   type RouterPathPolicy,
 } from "./pathPolicy.js"
-import { parseQuery, type RouterQuery } from "./requestUrl.js"
+import {
+  parseQuery,
+  splitRouterTo,
+  type RouterQuery,
+} from "./requestUrl.js"
 import { createElement } from "../element.js"
 import type {
   AfterEachHook,
@@ -90,6 +94,9 @@ export {
 export { useI18n, useOptionalI18n, I18nProvider } from "./i18nContext.js"
 
 function joinPath(base: string, path: string): string {
+  if (path.startsWith("#") || path.startsWith("?")) {
+    return `${formatPathname(base, undefined)}${path}`
+  }
   if (path.startsWith("/")) return path
   if (base.endsWith("/")) return `${base}${path}`
   return `${base}/${path}`
@@ -104,18 +111,26 @@ function resolveRouterHref(
   policy: RouterPathPolicy,
   baseUrl: string
 ): string {
-  const relative = formatPathname(joinPath(logicalPathname, to), policy)
+  const { pathname: pathPart, search, hash } = splitRouterTo(to)
+  const relative =
+    pathPart === ""
+      ? formatPathname(logicalPathname, policy)
+      : formatPathname(joinPath(logicalPathname, pathPart), policy)
+  let href: string
   if (hrefOpts?.locale === false && siteLocales) {
-    return addBase(relative, baseUrl)
+    href = addBase(relative, baseUrl)
+  } else {
+    const targetLocale =
+      hrefOpts?.locale === false
+        ? undefined
+        : (hrefOpts?.locale ?? activeLocale)
+    if (targetLocale && siteLocales) {
+      href = addBase(addLocale(relative, targetLocale, siteLocales), baseUrl)
+    } else {
+      href = addBase(stripBase(relative, baseUrl), baseUrl)
+    }
   }
-  const targetLocale =
-    hrefOpts?.locale === false
-      ? undefined
-      : (hrefOpts?.locale ?? activeLocale)
-  if (targetLocale && siteLocales) {
-    return addBase(addLocale(relative, targetLocale, siteLocales), baseUrl)
-  }
-  return addBase(stripBase(relative, baseUrl), baseUrl)
+  return `${href}${search}${hash}`
 }
 
 export type RouterNavigationMode = "history" | "static"
@@ -600,7 +615,11 @@ export function createRouter({
           ? { replace: replaceOrOptions }
           : (replaceOrOptions ?? {})
       const prevHash = hash.peek()
-      const logical = joinPath(pathname.peek(), to)
+      const { pathname: pathPart, search, hash: targetHash } = splitRouterTo(to)
+      const logical =
+        pathPart === ""
+          ? pathname.peek()
+          : joinPath(pathname.peek(), pathPart)
       const href =
         options.locale !== undefined && siteLocales && locale
           ? options.locale === false
@@ -616,7 +635,10 @@ export function createRouter({
         toBrowserPath(pathname.peek()),
         normalizedBaseUrl
       )}`
-      const url = new URL(addBase(href, normalizedBaseUrl), currentHref)
+      const url = new URL(
+        addBase(href, normalizedBaseUrl) + search + targetHash,
+        currentHref
+      )
       return navigateInternal(url, {
         replace: !!options.replace,
         fromPopstate: false,

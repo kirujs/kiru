@@ -662,6 +662,77 @@ describe("router", () => {
     assert.ok(response?.body.includes('<a href="/users/1">'))
   })
 
+  it("Link resolveHref appends hash suffixes with # prefix", async () => {
+    const manifest = compileRouteTree(routes)
+    const history = {
+      pushState() {},
+      replaceState() {},
+    } as any as History
+    const location = {
+      pathname: "/users/1",
+      search: "?tab=overview",
+      hash: "#summary",
+      origin: "http://localhost",
+    } as any as Location
+    const router = createRouter({ routes: manifest, history, location })
+
+    assert.strictEqual(router.resolveHref("#notes"), "/users/1#notes")
+    assert.strictEqual(router.resolveHref("/about#top"), "/about#top")
+    assert.strictEqual(
+      router.resolveHref("settings#prefs"),
+      "/users/1/settings#prefs"
+    )
+    assert.strictEqual(
+      router.resolveHref("/users/2?sort=name#profile"),
+      "/users/2?sort=name#profile"
+    )
+  })
+
+  it("Link renders hash suffixes on href in SSR output", async () => {
+    const r = defineRouteTree((x) =>
+      x.scope({
+        layout: async () => ({
+          default: () => (
+            <nav>
+              <Link to="#intro">Intro</Link>
+              <Link to="/about#team">Team</Link>
+            </nav>
+          ),
+        }),
+        children: [
+          x.page("/docs", async () => ({ default: () => <p>docs</p> })),
+          x.page("/about", async () => ({ default: () => <p>about</p> })),
+        ],
+      })
+    )
+    const renderer = createRenderer({ routes: r })
+    const response = await renderer.render("/docs")
+    assert.ok(response?.body.includes('<a href="/docs#intro">'))
+    assert.ok(response?.body.includes('<a href="/about#team">'))
+  })
+
+  it("Link resolveHref preserves hash with baseUrl", async () => {
+    const manifest = compileRouteTree(routes)
+    const history = {
+      pushState() {},
+      replaceState() {},
+    } as any as History
+    const location = {
+      pathname: "/app/users/1",
+      search: "",
+      hash: "",
+      origin: "http://localhost",
+    } as any as Location
+    const router = createRouter({
+      routes: manifest,
+      history,
+      location,
+      pathPolicy: { baseUrl: "/app" },
+    })
+    assert.strictEqual(router.resolveHref("/about#section"), "/app/about#section")
+    assert.strictEqual(router.resolveHref("#top"), "/app/users/1#top")
+  })
+
   it("runs global beforeEach guards and can cancel navigation", async () => {
     const manifest = compileRouteTree(routes)
     const historyEvents: Array<{ kind: "push" | "replace"; to: string }> = []
