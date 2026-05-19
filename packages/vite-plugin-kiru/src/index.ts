@@ -21,6 +21,7 @@ import {
   writeDevLoaderManifest,
 } from "./loaderRegistryVirtual.js"
 import { runSsgPrerender } from "./ssgPrerender.js"
+import type { SsgWriteBundleRouter } from "./ssgCacheTypes.js"
 import { toViteModuleId } from "./resolveModulePattern.js"
 import {
   createDevtoolsHtmlTransform,
@@ -32,7 +33,18 @@ import {
   handleSsrDevRequest,
   injectDevCssLinks,
 } from "./dev-server.js"
-import { createSsgPreviewMiddleware } from "./preview-server.js"
+import {
+  capturePreviewRequestUrl,
+  createSsgPreviewMiddleware,
+  isPreviewAssetPath,
+  toPreviewPathname,
+} from "./preview-server.js"
+import { createPreviewSsrProxy } from "./previewSsrProxy.js"
+import {
+  previewServerBundleExists,
+  resolvePreviewClientDir,
+  resolvePreviewServerEntry,
+} from "./previewPaths.js"
 import {
   createLogger,
   normalizeModulePath,
@@ -45,6 +57,7 @@ import { glob } from "tinyglobby"
 import { kiruImagePlugin } from "./image/plugin.js"
 import { warnCloudflareISRInPages } from "./isrWarnings.js"
 import { generateWranglerSnippet } from "./wranglerSnippet.js"
+import { injectClientEntryScripts } from "./injectClientScripts.js"
 import type { KiruPluginOptions } from "./types.js"
 import type {
   ConfigEnv,
@@ -94,13 +107,46 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       }
       if (
         opts.router?.serverEntry &&
-        env.command === "build" &&
+        (env.command === "build" || env.isPreview) &&
         !isSsrBundleBuild(config)
       ) {
+        const clientOutDir = config.build?.outDir ?? "dist/client"
         partial.build = {
           ...config.build,
-          outDir: config.build?.outDir ?? "dist/client",
-          emptyOutDir: config.build?.emptyOutDir ?? true,
+          outDir: clientOutDir,
+          emptyOutDir:
+            env.command === "build"
+              ? (config.build?.emptyOutDir ?? true)
+              : config.build?.emptyOutDir,
+        }
+        if (config.environments?.client) {
+          partial.environments = {
+            ...config.environments,
+            client: {
+              ...config.environments.client,
+              build: {
+                ...config.environments.client.build,
+                outDir: clientOutDir,
+              },
+            },
+          }
+        }
+        // Avoid rewriting unknown paths to `/index.html` before Kiru preview middleware runs.
+        partial.appType = "mpa"
+      }
+      if (
+        opts.router?.ssg &&
+        env.isPreview &&
+        !opts.router?.serverEntry &&
+        !isSsrBundleBuild(config)
+      ) {
+        partial.appType = "mpa"
+      }
+      if (opts.router?.ssg && env.command === "build" && !isSsrBundleBuild(config)) {
+        partial.build = {
+          ...config.build,
+          ...partial.build,
+          manifest: true,
         }
       }
       return partial
@@ -147,8 +193,39 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       )
     },
     configurePreviewServer(server) {
-      if (!state.router.ssg) return
-      server.middlewares.use(createSsgPreviewMiddleware(state.outDir))
+      server.middlewares.use(capturePreviewRequestUrl())
+      return () => {
+        if (!resolvedViteConfig) return
+        const clientDir = resolvePreviewClientDir(resolvedViteConfig, state)
+        let serverEntry: string | null = null
+        if (state.router.serverEntry) {
+          serverEntry = resolvePreviewServerEntry(clientDir)
+          if (!previewServerBundleExists(clientDir)) {
+            log(
+              `${ANSI.yellow("!")} vite preview: no SSR bundle at ${path.relative(resolvedViteConfig.root, serverEntry)} — run \`vite build\` first`
+            )
+            serverEntry = null
+          }
+        }
+        if (state.router.ssg) {
+          server.middlewares.use(
+            createSsgPreviewMiddleware(clientDir, {
+              requireFilledHtml: Boolean(state.router.serverEntry),
+            })
+          )
+        }
+        if (serverEntry) {
+          const proxyReady = createPreviewSsrProxy(serverEntry)
+          server.middlewares.use((req, res, next) => {
+            void proxyReady
+              .then(({ middleware }) => middleware(req, res, next))
+              .catch(next)
+          })
+          server.httpServer?.on("close", () => {
+            void proxyReady.then((handle) => handle.dispose())
+          })
+        }
+      }
     },
     configureServer(server) {
       if (state.isProduction || state.isBuild) return
@@ -231,12 +308,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         })
 
         server.middlewares.use(async (req, res, next) => {
-          const pathname = (req.originalUrl ?? "/").split("?")[0]
-          if (
-            pathname.startsWith("/@") ||
-            pathname.startsWith("/__") ||
-            (/\.\w+$/.test(pathname) && !pathname.endsWith(".html"))
-          ) {
+          const pathname = toPreviewPathname(req.originalUrl ?? "/")
+          if (isPreviewAssetPath(pathname)) {
             return next()
           }
           try {
@@ -277,13 +350,9 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       // resulting HTML before writing the response.
       server.middlewares.use(async (req, res, next) => {
         const rawUrl = req.originalUrl ?? "/"
-        const pathname = rawUrl.split("?")[0]
+        const pathname = toPreviewPathname(rawUrl)
 
-        if (
-          pathname.startsWith("/@") ||
-          pathname.startsWith("/__") ||
-          (/\.\w+$/.test(pathname) && !pathname.endsWith(".html"))
-        ) {
+        if (isPreviewAssetPath(pathname)) {
           return next()
         }
 
@@ -404,15 +473,123 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
     async closeBundle() {
       if (!state.isBuild || state.isSSRBuild) return
-      const serverEntryAbs = state.router.serverEntryAbs
-      // `router.ssg` prerenders HTML in `writeBundle`; it is not mutually
-      // exclusive with `serverEntry` — hybrid apps still need the SSR bundle.
-      if (!serverEntryAbs) return
       if (!resolvedViteConfig) {
         throw new Error(
-          "[vite-plugin-kiru]: internal error — missing resolved Vite config for SSR server build"
+          "[vite-plugin-kiru]: internal error — missing resolved Vite config for post-client build"
         )
       }
+
+      if (state.router.ssg?.routesModuleAbs) {
+        if (!state.ssgPrerenderCache) {
+          const templateName = opts.router?.htmlTemplate ?? "index.html"
+          const templatePath = path.resolve(state.projectRoot, templateName)
+          const templateHtml = await fs.readFile(templatePath, "utf8")
+          state.ssgPrerenderCache = await runSsgPrerender({
+            state,
+            opts,
+            resolvedViteConfig,
+            templateHtml,
+          })
+        }
+
+        const cache = state.ssgPrerenderCache
+        const {
+          outputs,
+          site,
+          pathPolicy,
+          siteLocales,
+          buildMeta,
+          manifest,
+        } = cache
+
+        const {
+          generateSitemapPaths,
+          writeSiteArtifacts,
+          matchRoute,
+          getRouteBuildMetaEntry,
+          persistPrerenderBuildOutput,
+          splitAppPathname,
+        } = (await import("kiru/router")) as unknown as SsgWriteBundleRouter
+
+        const outputPaths = new Set<string>(
+          outputs.map((o: { path: string }) => o.path)
+        )
+        const hasChildren = (routePath: string) =>
+          [...outputPaths].some(
+            (p) => p !== routePath && p.startsWith(routePath + "/")
+          )
+
+        const clientManifest = await readViteClientManifest(state.outDir)
+
+        for (const output of outputs) {
+          let html: string
+          if (opts.router?.htmlShell) {
+            const shellResult = opts.router.htmlShell(
+              output.body,
+              output.path,
+              output.document,
+              { manifest: clientManifest }
+            )
+            html = await Promise.resolve(shellResult)
+          } else {
+            if (!output.html) {
+              throw new Error(
+                `[vite-plugin-kiru]: prerenderStaticRoutes() did not return full HTML for "${output.path}".`
+              )
+            }
+            html = output.html
+          }
+          html = injectClientEntryScripts(
+            html,
+            clientManifest as Record<
+              string,
+              { file?: string; css?: string[] }
+            >
+          )
+          const seg = output.path.replace(/^\//, "")
+          const relativePath =
+            output.path === "/" || hasChildren(output.path)
+              ? `${seg ? seg + "/" : ""}index.html`
+              : `${seg}.html`
+
+          const target = path.resolve(state.outDir, relativePath)
+          await fs.mkdir(path.dirname(target), { recursive: true })
+          await fs.writeFile(target, html, "utf8")
+
+          const logicalPath = siteLocales
+            ? splitAppPathname(output.path, siteLocales).pathname
+            : output.path
+          const routeMatch = matchRoute(manifest, logicalPath, pathPolicy)
+          if (routeMatch) {
+            const metaEntry = getRouteBuildMetaEntry(routeMatch.route, buildMeta)
+            persistPrerenderBuildOutput({
+              clientDir: state.outDir,
+              pathname: output.path,
+              htmlAbsolutePath: target,
+              revalidate: metaEntry?.revalidate,
+              tags: metaEntry?.tags,
+            })
+          }
+        }
+
+        if (site?.sitemap || site?.robots) {
+          const sitemapPaths = site.sitemap
+            ? await generateSitemapPaths(manifest, site, {
+                defaultSsrPaths: Boolean(state.router.serverEntry),
+                buildMeta,
+              })
+            : []
+          await writeSiteArtifacts({
+            outDir: state.outDir,
+            paths: sitemapPaths,
+            site,
+            buildDate: new Date().toISOString().slice(0, 10),
+          })
+        }
+      }
+
+      const serverEntryAbs = state.router.serverEntryAbs
+      if (!serverEntryAbs) return
 
       const root = resolvedViteConfig.root
       const clientOutAbs = path.resolve(root, state.outDir)
@@ -513,122 +690,6 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         ),
       })
     },
-    async writeBundle() {
-      if (
-        !state.isBuild ||
-        !state.router.ssg?.routesModuleAbs ||
-        state.isSSRBuild
-      ) {
-        return
-      }
-
-      if (!resolvedViteConfig) {
-        throw new Error(
-          "[vite-plugin-kiru]: internal error — missing resolved Vite config for SSG"
-        )
-      }
-
-      const cache = state.ssgPrerenderCache
-      if (!cache) {
-        throw new Error(
-          "[vite-plugin-kiru]: SSG prerender cache missing — buildStart should run before writeBundle."
-        )
-      }
-
-      const {
-        outputs,
-        site,
-        pathPolicy,
-        siteLocales,
-        routes,
-        buildMeta,
-        manifest,
-      } = cache
-
-      const {
-        generateSitemapPaths,
-        writeSiteArtifacts,
-        matchRoute,
-        getRouteBuildMetaEntry,
-        persistPrerenderBuildOutput,
-        splitAppPathname,
-      } = (await import(
-        "../../lib/src/router/index.js"
-      )) as typeof import("../../lib/src/router/index.js")
-
-      try {
-        const outputPaths = new Set<string>(
-          outputs.map((o: { path: string }) => o.path)
-        )
-        const hasChildren = (routePath: string) =>
-          [...outputPaths].some(
-            (p) => p !== routePath && p.startsWith(routePath + "/")
-          )
-
-        const clientManifest = await readViteClientManifest(state.outDir)
-
-        for (const output of outputs) {
-          let html: string
-          if (opts.router?.htmlShell) {
-            const shellResult = opts.router.htmlShell(
-              output.body,
-              output.path,
-              output.document,
-              { manifest: clientManifest }
-            )
-            html = await Promise.resolve(shellResult)
-          } else {
-            if (!output.html) {
-              throw new Error(
-                `[vite-plugin-kiru]: prerenderStaticRoutes() did not return full HTML for "${output.path}".`
-              )
-            }
-            html = output.html
-          }
-          const seg = output.path.replace(/^\//, "")
-          const relativePath =
-            output.path === "/" || hasChildren(output.path)
-              ? `${seg ? seg + "/" : ""}index.html`
-              : `${seg}.html`
-
-          const target = path.resolve(state.outDir, relativePath)
-          await fs.mkdir(path.dirname(target), { recursive: true })
-          await fs.writeFile(target, html, "utf8")
-
-          const logicalPath = siteLocales
-            ? splitAppPathname(output.path, siteLocales).pathname
-            : output.path
-          const routeMatch = matchRoute(manifest, logicalPath, pathPolicy)
-          if (routeMatch) {
-            const metaEntry = getRouteBuildMetaEntry(routeMatch.route, buildMeta)
-            persistPrerenderBuildOutput({
-              clientDir: state.outDir,
-              pathname: output.path,
-              htmlAbsolutePath: target,
-              revalidate: metaEntry?.revalidate,
-              tags: metaEntry?.tags,
-            })
-          }
-        }
-
-        if (site?.sitemap || site?.robots) {
-          const sitemapPaths = site.sitemap
-            ? await generateSitemapPaths(manifest, site, {
-                defaultSsrPaths: Boolean(state.router.serverEntry),
-                buildMeta,
-              })
-            : []
-          await writeSiteArtifacts({
-            outDir: state.outDir,
-            paths: sitemapPaths,
-            site,
-            buildDate: new Date().toISOString().slice(0, 10),
-          })
-        }
-      } catch (err) {
-        throw err
-      }
-    },
   } satisfies Plugin
 
   // Runs after vite:esbuild so `this.parse` always receives compiled JS,
@@ -713,32 +774,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
   } satisfies Plugin
 
-  const ssgPrerenderPlugin: Plugin = {
-    name: "vite-plugin-kiru:ssg-prerender",
-    apply: "build",
-    enforce: "pre",
-    async buildStart() {
-      if (
-        !state.isBuild ||
-        state.isSSRBuild ||
-        !state.router.ssg?.routesModuleAbs ||
-        !resolvedViteConfig
-      ) {
-        return
-      }
-      const templateName = opts.router?.htmlTemplate ?? "index.html"
-      const templatePath = path.resolve(state.projectRoot, templateName)
-      const templateHtml = await fs.readFile(templatePath, "utf8")
-      state.ssgPrerenderCache = await runSsgPrerender({
-        state,
-        opts,
-        resolvedViteConfig,
-        templateHtml,
-      })
-    },
-  }
-
-  const plugins: PluginOption[] = [ssgPrerenderPlugin, mainPlugin, remotePlugin]
+  const plugins: PluginOption[] = [mainPlugin, remotePlugin]
   if (opts.router?.images) {
     const imageOpts =
       typeof opts.router.images === "object" ? opts.router.images : {}

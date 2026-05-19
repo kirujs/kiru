@@ -1,6 +1,8 @@
 import { nodeRequestToFetch } from "@kirujs/adapter-node"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import type { ViteDevServer, ModuleNode } from "vite"
+import { resolveDefaultFetch } from "./fetchResponse.js"
+import { isPreviewAssetPath, toPreviewPathname } from "./preview-server.js"
 
 // ─── CSS helpers ────────────────────────────────────────────────────────────
 
@@ -300,27 +302,11 @@ export async function handleSsrDevRequest(
   await opts.loadRemoteRegistry?.()
   await opts.loadLoaderRegistry?.()
   const appMod = await server.ssrLoadModule(opts.serverEntry)
-  const exported = appMod?.default as
-    | { fetch?: typeof fetch }
-    | typeof fetch
-    | undefined
+  const fetch = resolveDefaultFetch(appMod?.default)
+  if (!fetch) return false
 
   const fetchReq = nodeRequestToFetch(req)
-  let response: Response
-
-  if (
-    exported &&
-    typeof exported === "object" &&
-    typeof exported.fetch === "function"
-  ) {
-    response = await exported.fetch(fetchReq)
-  } else if (typeof exported === "function") {
-    response = await (exported as (r: Request) => Response | Promise<Response>)(
-      fetchReq
-    )
-  } else {
-    return false
-  }
+  const response = await fetch(fetchReq)
 
   // If the Hono app couldn't match a route it returns a plain-text 404.
   // Pass those through so Vite's own error overlay can handle them.

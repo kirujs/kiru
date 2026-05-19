@@ -1,26 +1,24 @@
 describe("SSG build", () => {
-  const base = () => `http://127.0.0.1:${Cypress.env("port")}`
-
   it("serves prerendered HTML with route meta and hydrates", () => {
-    cy.visit(base())
+    cy.visit("/")
     cy.title().should("eq", "E2E SSG Home")
     cy.get('[data-testid="ssg-home"]').should("contain", "SSG e2e home")
     cy.get('[data-testid="ssg-layout"]').should("exist")
   })
 
   it("serves prerendered static routes", () => {
-    cy.visit(`${base()}/about`)
+    cy.visit("/about")
     cy.get('[data-testid="ssg-about"]').should("exist")
   })
 
   it("includes dynamic route params in prerendered post pages", () => {
-    cy.visit(`${base()}/posts/one`)
+    cy.visit("/posts/one")
     cy.get('[data-testid="ssg-post"]').should("contain", "one")
     cy.get('[data-testid="ssg-loader"]').should("contain", "post:one")
   })
 
   it("embeds staticLoader data in prerendered HTML", () => {
-    cy.visit(`${base()}/loaders/static`)
+    cy.visit("/loaders/static")
     cy.get('[data-testid="loader-data"]').should(
       "contain",
       "static:prerendered loader data"
@@ -28,7 +26,7 @@ describe("SSG build", () => {
   })
 
   it("serves staticLoader data on client navigation", () => {
-    cy.visit(base())
+    cy.visit("/")
     cy.get('[data-testid="ssg-home"]').should("exist")
     cy.contains("a", "Static loader").click()
     cy.location("pathname").should("eq", "/loaders/static")
@@ -39,13 +37,13 @@ describe("SSG build", () => {
   })
 
   it("prerenders nested static params from parent generateStaticParams", () => {
-    cy.visit(`${base()}/posts/one/comments/one-c1`)
+    cy.visit("/posts/one/comments/one-c1")
     cy.get('[data-testid="comment"]').should("contain", "one:one-c1")
   })
 
   it("serves static 404.html for unknown paths", () => {
     cy.request({
-      url: `${base()}/does-not-exist`,
+      url: "/does-not-exist",
       failOnStatusCode: false,
     }).then((res) => {
       expect(res.status).to.eq(404)
@@ -54,7 +52,7 @@ describe("SSG build", () => {
   })
 
   it("serves sitemap.xml generated from static paths", () => {
-    cy.request(`${base()}/sitemap.xml`).then((res) => {
+    cy.request("/sitemap.xml").then((res) => {
       expect(res.status).to.eq(200)
       expect(res.headers["content-type"]).to.match(/xml/i)
       expect(res.body).to.include("https://e2e-ssg.example/")
@@ -64,7 +62,7 @@ describe("SSG build", () => {
   })
 
   it("serves robots.txt referencing the sitemap", () => {
-    cy.request(`${base()}/robots.txt`).then((res) => {
+    cy.request("/robots.txt").then((res) => {
       expect(res.status).to.eq(200)
       expect(res.body).to.include(
         "Sitemap: https://e2e-ssg.example/sitemap.xml"
@@ -73,7 +71,7 @@ describe("SSG build", () => {
   })
 
   it("includes JSON-LD in prerendered document head", () => {
-    cy.visit(base())
+    cy.visit("/")
     cy.get('script[type="application/ld+json"]')
       .should("have.length.at.least", 1)
       .first()
@@ -86,15 +84,15 @@ describe("SSG build", () => {
   })
 
   it("serves the SEO demo page with structured data", () => {
-    cy.visit(`${base()}/seo`)
+    cy.visit("/seo")
     cy.title().should("eq", "E2E SSG SEO")
     cy.get('[data-testid="ssg-seo"]').should("exist")
     cy.get('script[type="application/ld+json"]').should("exist")
   })
 
   it("supports browser history between prerendered routes", () => {
-    cy.visit(base())
-    cy.visit(`${base()}/about`)
+    cy.visit("/")
+    cy.visit("/about")
     cy.location("pathname").should("eq", "/about")
     cy.go("back")
     cy.location("pathname").should("eq", "/")

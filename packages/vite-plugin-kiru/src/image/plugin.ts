@@ -75,6 +75,25 @@ export function kiruImagePlugin(opts: ImagePluginOptions = {}): Plugin {
   let projectRoot = process.cwd()
   let outDir = "dist"
   let resolvedManifestSnapshot: Record<string, Record<number, string>> = {}
+  let canEmitAssets = false
+
+  const lookupDiskMeta = (
+    raw: Record<string, StoredAssetDiskMeta>,
+    filePath: string
+  ): StoredAssetDiskMeta | undefined => {
+    const key = relKey(projectRoot, filePath)
+    const normalized = filePath.replace(/\\/g, "/")
+    if (raw[key]) return raw[key]
+    if (raw[normalized]) return raw[normalized]
+    if (raw[filePath]) return raw[filePath]
+    const base = path.basename(filePath)
+    return Object.values(raw).find(
+      (entry) =>
+        relKey(projectRoot, entry.filePath) === key ||
+        entry.filePath.replace(/\\/g, "/") === normalized ||
+        path.basename(entry.filePath) === base
+    )
+  }
 
   const loadDiskAsset = async (filePath: string): Promise<string | null> => {
     const metaPath = path.join(projectRoot, outDir, ASSETS_META_FILE)
@@ -83,8 +102,7 @@ export function kiruImagePlugin(opts: ImagePluginOptions = {}): Plugin {
         string,
         StoredAssetDiskMeta
       >
-      const key = relKey(projectRoot, filePath)
-      const entry = raw[key] ?? raw[filePath]
+      const entry = lookupDiskMeta(raw, filePath)
       if (!entry) return null
       manifest[entry.asset.src] = entry.variants
       const moduleSource = `export default ${JSON.stringify(entry.asset)}`
@@ -106,9 +124,10 @@ export function kiruImagePlugin(opts: ImagePluginOptions = {}): Plugin {
     configResolved(config: ResolvedConfig) {
       projectRoot = config.root
       outDir = config.build.outDir ?? "dist"
+      canEmitAssets = config.command === "build"
     },
     async buildStart() {
-      if (!enabled) return
+      if (!enabled || !canEmitAssets) return
       await fs
         .unlink(path.join(projectRoot, outDir, ASSETS_META_FILE))
         .catch(() => {})
@@ -141,6 +160,13 @@ export function kiruImagePlugin(opts: ImagePluginOptions = {}): Plugin {
 
       const fromDisk = await loadDiskAsset(filePath)
       if (fromDisk) return fromDisk
+
+      if (!canEmitAssets) {
+        throw new Error(
+          `[vite-plugin-kiru:image] No build output for "${path.relative(projectRoot, filePath)}". ` +
+            `With strategy "build", run \`vite build\` first (or use strategy "runtime" in dev).`
+        )
+      }
 
       const sharp = loadSharp(projectRoot)
       if (!sharp) {
@@ -218,7 +244,7 @@ export function kiruImagePlugin(opts: ImagePluginOptions = {}): Plugin {
       return { code: next, map: null }
     },
     generateBundle() {
-      if (!enabled || assetByFile.size === 0) return
+      if (!enabled || !canEmitAssets || assetByFile.size === 0) return
 
       for (const entry of assetByFile.values()) {
         if (Object.keys(entry.variants).length > 0) continue

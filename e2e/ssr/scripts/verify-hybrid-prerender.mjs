@@ -1,6 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { assertServerBundleConsistent } from "./assert-server-bundle.mjs"
 
 const e2eRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 const clientDir = path.join(e2eRoot, "dist", "client")
@@ -56,6 +57,12 @@ if (fs.existsSync(sitemapXml)) {
 }
 if (!fs.existsSync(serverEntry)) {
   errors.push(`missing SSR bundle ${path.relative(e2eRoot, serverEntry)}`)
+} else {
+  try {
+    assertServerBundleConsistent(serverEntry)
+  } catch (e) {
+    errors.push(e instanceof Error ? e.message : String(e))
+  }
 }
 if (errors.length) {
   console.error(errors.join("\n"))

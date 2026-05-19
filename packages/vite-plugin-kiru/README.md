@@ -150,7 +150,11 @@ You can set **`router.ssg`** and **`router.serverEntry`** together. The client b
 
 At runtime, **do not** serve `index.html` from disk for every path: the built shell still contains `{{kiru_head}}` / `{{kiru_body}}` placeholders until `createRenderer` fills them. Pass **`prerenderedHtmlDir: clientDir`** (from `resolveStatic`) into `createRenderer` — in **`NODE_ENV=production`** it serves `dist/client/*.html` for static routes (`generateStaticPaths`); **in development** disk is never read under that path, so static routes stay live SSR and are not overridden by stale builds.
 
-`vite preview` with `router.ssg` serves static HTML like a static host; it does not run your SSR server. Use `pnpm start` / `node dist/server` to exercise hybrid behavior.
+`vite preview` behavior by mode:
+
+- **CSR** — standard Vite static hosting from `dist` (SPA fallback to `index.html`).
+- **SSG only** — serves prerendered HTML from `dist` (flat `*.html`, nested `*/index.html`, and `404.html` for unknown paths).
+- **SSR / hybrid** — serves `dist/client` assets and filled prerender pages only; unknown paths are proxied to a child `node dist/server/index.js` (not the prerendered `404.html`). For full production parity with no preview glue, run `node dist/server` directly.
 
 In development, **`router.serverEntry` always wins**: when both `ssg` and `serverEntry` are set, the plugin keeps the SSR dev middleware (so streaming, request context, and remote actions behave like a pure SSR app). Prerendered HTML is produced at `vite build` time only.
 

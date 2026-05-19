@@ -1,22 +1,25 @@
 import { defineConfig } from "cypress"
 import { preview, type PreviewServer } from "vite"
 
-const port = 5191
-
 export default defineConfig({
   e2e: {
-    env: { port },
-    setupNodeEvents(on) {
-      let server: PreviewServer | null = null
-      on("before:run", async () => {
-        server = await preview({
-          configFile: "./vite.config.ts",
-          preview: { port, strictPort: true, host: "127.0.0.1" },
-        })
+    async setupNodeEvents(on, config) {
+      const server: PreviewServer = await preview({
+        configFile: "./vite.config.ts",
+        preview: { port: 0, strictPort: false, host: "127.0.0.1" },
       })
+      const local = server.resolvedUrls?.local?.[0]?.replace(/\/$/, "")
+      if (!local) {
+        await server.close()
+        throw new Error("[e2e-ssg] vite preview did not resolve a local URL")
+      }
+      config.baseUrl = local
+
       on("after:run", async () => {
-        await server?.close()
+        await server.close()
       })
+
+      return config
     },
   },
   video: false,

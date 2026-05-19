@@ -6,12 +6,15 @@ async function startServer() {
   const server = await createServer({
     configFile: "./vite.config.ts",
     server: {
+      host: "127.0.0.1",
+      port: 5173,
+      strictPort: true,
       hmr: {
         port: 8003,
       },
     },
   })
-  return await server.listen(5173)
+  return await server.listen()
 }
 
 export default defineConfig({
@@ -19,6 +22,8 @@ export default defineConfig({
     env: {
       port: 5173,
     },
+    // Needs `vite build` output; run via `pnpm test:image`.
+    excludeSpecPattern: ["**/image.cy.ts"],
     setupNodeEvents(on) {
       let server: ViteDevServer | null = null
       const restoreAllHmrFiles = registerHmrFileTasks(on)

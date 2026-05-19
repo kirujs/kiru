@@ -5,29 +5,18 @@ import type { ResolvedConfig } from "vite"
 import type { KiruPluginOptions } from "./types.js"
 import type { PluginState } from "./config.js"
 import { toViteModuleId } from "./resolveModulePattern.js"
+import type {
+  SsgPrerenderCache,
+  SsgPrerenderRouter,
+  SsgSiteConfig,
+} from "./ssgCacheTypes.js"
+
+export type { SsgPrerenderCache } from "./ssgCacheTypes.js"
 
 export type StaticLoaderPayloadByModule = Record<
   string,
   Record<string, unknown>
 >
-
-export type SsgPrerenderCache = {
-  outputs: Array<{
-    path: string
-    body: string
-    document: { headHtml: string; title?: string }
-    html?: string
-    routeId: string
-    pageData?: unknown
-  }>
-  staticLoaderPayloadByModule: StaticLoaderPayloadByModule
-  site: unknown
-  pathPolicy: unknown
-  siteLocales: unknown
-  routes: unknown
-  buildMeta: unknown
-  manifest: unknown
-}
 
 function resolveSsrModuleFile(
   vite: ViteDevServer,
@@ -89,6 +78,7 @@ export async function runSsgPrerender(input: {
     configFile,
     server: { middlewareMode: true },
     appType: "custom",
+    build: { outDir: state.outDir },
   })
 
   try {
@@ -108,19 +98,16 @@ export async function runSsgPrerender(input: {
       normalizeSiteLocales,
       onStaticLoaderPrerenderCapture,
       pageModuleUsesStaticLoader,
-    } = (await vite.ssrLoadModule(
-      "kiru/router"
-      // @ts-ignore workspace kiru
-    )) as typeof import("../../lib/src/router/index.js")
+    } = (await vite.ssrLoadModule("kiru/router")) as SsgPrerenderRouter
 
     if (opts.router?.images) {
       try {
         const manifestPath = path.join(state.outDir, "kiru-image-manifest.json")
         const raw = await fs.readFile(manifestPath, "utf8")
-        const imageMod = (await vite.ssrLoadModule(
-          "kiru/image"
-          // @ts-ignore
-        )) as typeof import("../../lib/src/image/index.js")
+        const imageMod = (await vite.ssrLoadModule("kiru/image")) as {
+          setBuildImageManifest: (manifest: unknown) => void
+          defineImageConfig: (config: Record<string, unknown>) => void
+        }
         imageMod.setBuildImageManifest(JSON.parse(raw))
         const imageOpts =
           typeof opts.router.images === "object" ? opts.router.images : {}
@@ -214,8 +201,8 @@ export async function runSsgPrerender(input: {
     return {
       outputs,
       staticLoaderPayloadByModule,
-      site,
-      pathPolicy,
+      site: site as SsgSiteConfig | null | undefined,
+      pathPolicy: pathPolicy as SsgSiteConfig["pathPolicy"] | undefined,
       siteLocales,
       routes,
       buildMeta,

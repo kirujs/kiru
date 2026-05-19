@@ -1,24 +1,36 @@
-import { spawn } from "node:child_process"
+import { spawn, type ChildProcess } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { defineConfig } from "cypress"
+import { assertServerBundleConsistent } from "./scripts/assert-server-bundle.mjs"
+import { freeListeningPort } from "./scripts/free-listening-port.mjs"
 
 const port = 5193
 const root = path.dirname(fileURLToPath(import.meta.url))
 const prodServerEntry = path.join(root, "dist", "server", "index.js")
 const serverOrigin = `http://127.0.0.1:${port}`
 
-type SpawnedServer = ReturnType<typeof spawn>
+type SpawnedServer = ChildProcess
 
-async function waitForServerReady(timeoutMs = 15_000): Promise<void> {
+const HELLO_READY_MARKER = 'data-testid="ssr-loader"'
+
+async function waitForServerReady(
+  isAborted: () => Error | undefined,
+  timeoutMs = 15_000
+): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
+    const abort = isAborted()
+    if (abort) throw abort
     try {
       const res = await fetch(`${serverOrigin}/hello`, {
         signal: AbortSignal.timeout(2_000),
       })
-      if (res.status < 500) return
+      if (res.status === 200) {
+        const body = await res.text()
+        if (body.includes(HELLO_READY_MARKER)) return
+      }
     } catch {
       // not listening yet
     }
@@ -31,6 +43,17 @@ async function waitForServerReady(timeoutMs = 15_000): Promise<void> {
 
 function childHasExited(child: SpawnedServer): boolean {
   return child.exitCode !== null || child.signalCode !== null
+}
+
+function childStartupFailure(child: SpawnedServer): Error | undefined {
+  if (!childHasExited(child)) return undefined
+  const code = child.exitCode
+  if (code !== null && code !== 0) {
+    return new Error(
+      `production e2e server exited with code ${code} before becoming ready`
+    )
+  }
+  return new Error("production e2e server exited before becoming ready")
 }
 
 function forceKillChild(child: SpawnedServer): void {
@@ -69,43 +92,54 @@ function waitForChildExit(
   })
 }
 
+async function stopChild(child: SpawnedServer): Promise<void> {
+  if (childHasExited(child)) return
+  child.kill()
+  try {
+    await waitForChildExit(child, 3_000)
+  } catch {
+    forceKillChild(child)
+    await waitForChildExit(child)
+  }
+}
+
 async function startProductionServer(): Promise<{
   close: () => Promise<void>
 }> {
-  const child = spawn(process.execPath, [prodServerEntry], {
+  freeListeningPort(port)
+  assertServerBundleConsistent(prodServerEntry)
+
+  let startupError: Error | undefined
+  const isAborted = (): Error | undefined =>
+    startupError ?? childStartupFailure(child)
+
+  const child: ChildProcess = spawn(process.execPath, [prodServerEntry], {
     cwd: root,
     env: { ...process.env, NODE_ENV: "production", PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"],
   })
 
   child.stderr?.on("data", (chunk: Buffer) => {
+    const text = chunk.toString()
     process.stderr.write(chunk)
+    if (text.includes("EADDRINUSE")) {
+      startupError = new Error(
+        `port ${port} is already in use — could not start production e2e server`
+      )
+    }
   })
 
   try {
-    await waitForServerReady()
+    await waitForServerReady(isAborted)
     return {
       close: async () => {
-        if (childHasExited(child)) return
-        child.kill()
-        try {
-          await waitForChildExit(child, 3_000)
-        } catch {
-          forceKillChild(child)
-          await waitForChildExit(child)
-        }
+        await stopChild(child)
+        freeListeningPort(port)
       },
     }
   } catch (err) {
-    if (!childHasExited(child)) {
-      child.kill()
-      try {
-        await waitForChildExit(child, 3_000)
-      } catch {
-        forceKillChild(child)
-        await waitForChildExit(child).catch(() => undefined)
-      }
-    }
+    await stopChild(child)
+    freeListeningPort(port)
     throw err
   }
 }
@@ -130,6 +164,7 @@ export default defineConfig({
 
       on("after:run", async () => {
         await prod?.close()
+        prod = null
       })
     },
   },

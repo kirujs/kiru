@@ -73,7 +73,12 @@ describe("remote / token", () => {
   it("unwrapKiruToken returns null for a tampered token", () => {
     const token = makeKiruContextToken({ a: 1 }, SECRET)
     const parts = token.split(".")
-    parts[2] = parts[2]!.slice(0, -1) + (parts[2]!.endsWith("a") ? "b" : "a")
+    // Flip a middle signature char — the last char is often padding-equivalent
+    // and does not change the decoded HMAC bytes.
+    const sig = parts[2]!
+    const i = Math.floor(sig.length / 2)
+    parts[2] =
+      sig.slice(0, i) + (sig[i] === "a" ? "b" : "a") + sig.slice(i + 1)
     assert.strictEqual(unwrapKiruToken(parts.join("."), SECRET), null)
   })
 

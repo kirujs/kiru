@@ -185,7 +185,9 @@ export function updatePluginState(
     path.resolve(projectRoot, p).replace(/\\/g, "/")
   )
 
-  const outDir = (config.build.outDir ?? "dist") as string
+  const outDir = (config.build.outDir ??
+    config.environments?.client?.build?.outDir ??
+    "dist") as string
   const normalizedOut = outDir.replace(/\\/g, "/")
   const baseOutDir = normalizedOut.replace(/\/(server|client)$/i, "") || "dist"
 

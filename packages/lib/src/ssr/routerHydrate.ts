@@ -323,6 +323,12 @@ export async function bootstrapSsrClient(
 
   restoreClientHashAfterHydration(router, pendingClientHash)
 
+  if (typeof window !== "undefined") {
+    ;(
+      window as typeof window & { __kiruHydratedAt?: number }
+    ).__kiruHydratedAt = performance.now()
+  }
+
   return app
 }
 

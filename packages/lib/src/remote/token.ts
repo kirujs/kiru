@@ -103,7 +103,7 @@ function verifySignedTokenHmac(
     if (parts.length !== 3) return null
     const [headerB64, payloadB64, sigB64] = parts
     const header = JSON.parse(
-      Buffer.from(headerB64, "base64").toString("utf8")
+      Buffer.from(base64UrlDecode(headerB64)).toString("utf8")
     ) as TokenHeader
     if (header.typ !== "KRT") return null
     if (header.alg !== "HS256") return null
@@ -119,7 +119,7 @@ function verifySignedTokenHmac(
     if (!crypto.timingSafeEqual(expectedSig, sig)) return null
 
     const payload = JSON.parse(
-      Buffer.from(payloadB64, "base64").toString("utf8")
+      Buffer.from(base64UrlDecode(payloadB64)).toString("utf8")
     ) as TokenPayload
 
     return payload

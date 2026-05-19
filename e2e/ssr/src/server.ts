@@ -34,5 +34,5 @@ export default { fetch: kiru.fetch }
 
 if (isProd) {
   const port = Number(process.env.PORT) || 5179
-  createServer(toNodeListener(kiru)).listen(port)
+  createServer(toNodeListener(kiru)).listen(port, "127.0.0.1")
 }

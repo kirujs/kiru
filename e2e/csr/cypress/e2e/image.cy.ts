@@ -1,5 +1,5 @@
 describe("Image (CSR build strategy)", () => {
-  const base = () => `http://127.0.0.1:${Cypress.env("port")}`
+  const base = () => `http://localhost:${Cypress.env("port")}`
 
   beforeEach(() => {
     cy.visit(`${base()}/image-demo`)

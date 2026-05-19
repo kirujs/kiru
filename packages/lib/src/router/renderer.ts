@@ -1342,17 +1342,17 @@ function renderStreamForRouteMatch(
   }
 ): ReadableStream<string> {
   const { pathname } = match
-  const mergedMeta = mergeImagePreloadsIntoHead(
+  const baseHeadMeta =
     opts.streamHeadMeta ??
-      mergeRouteAndPageHead(match.route.head, undefined, match.params)
-  )
+    mergeRouteAndPageHead(match.route.head, undefined, match.params)
+  const resolveHeadMeta = () => mergeImagePreloadsIntoHead(baseHeadMeta)
   const mayEarlyFlush =
     !!opts.earlyFlushHead &&
     opts.compiledTemplate?.headBeforeBody === true
   let streamedHeadEarly = false
 
   const headWithoutPageData = () =>
-    buildStreamDocumentHead(mergedMeta, pathname, requestContext, {
+    buildStreamDocumentHead(resolveHeadMeta(), pathname, requestContext, {
       decorateDocument: opts.decorateDocument,
     })
 
@@ -1386,7 +1386,7 @@ function renderStreamForRouteMatch(
         pageData = serializedDataFromPageProps(props)
       }
       const document = buildStreamDocumentHead(
-        mergedMeta,
+        resolveHeadMeta(),
         pathname,
         requestContext,
         {

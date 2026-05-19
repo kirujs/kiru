@@ -228,7 +228,6 @@ describe("SSR server", () => {
   describe("server loader immediate shell", () => {
     const LOADER_DELAY_MS = 1000
     const SHELL_BUDGET_MS = 600
-    const HYDRATION_BUDGET_MS = 800
 
     type ImmediateShellMarks = {
       layoutAt?: number
@@ -297,8 +296,8 @@ describe("SSR server", () => {
           const tag = `[timings] layoutAt=${marks.layoutAt}ms fallbackAt=${marks.fallbackAt}ms hydratedAt=${w.__kiruHydratedAt}ms fallbackVisible=${w.__kiruFallbackVisibleAtHydration}`
           expect(
             w.__kiruHydratedAt!,
-            `hydration finished within budget (AUT clock) — ${tag}`
-          ).to.be.lessThan(HYDRATION_BUDGET_MS)
+            `hydration must finish before the ${LOADER_DELAY_MS}ms loader resolves — ${tag}`
+          ).to.be.lessThan(LOADER_DELAY_MS)
           expect(
             w.__kiruFallbackVisibleAtHydration,
             "loader fallback was still visible the moment hydration finished"
