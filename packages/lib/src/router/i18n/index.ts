@@ -7,6 +7,16 @@ export {
   type I18nOptions,
   type I18nRoutingOptions,
 } from "./createI18nConfig.js"
+export type {
+  AppI18nConfig,
+  AppI18nData,
+  AppI18nLocale,
+  AppI18nLocales,
+  IsAppI18nConfigured,
+  RouterI18nFields,
+  RouterLocaleParam,
+  RouterNavigateOptions,
+} from "./augmentation.js"
 export { expandPathsForLocales } from "./expandPaths.js"
 export {
   createI18nTranslator,

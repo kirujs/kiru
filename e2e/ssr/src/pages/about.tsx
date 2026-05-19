@@ -16,7 +16,7 @@ export default function About() {
             type="button"
             data-testid={`locale-switch-${loc}`}
             onclick={() => {
-              void router.setLocale?.(loc)
+              void router.setLocale(loc)
             }}
           >
             {loc}

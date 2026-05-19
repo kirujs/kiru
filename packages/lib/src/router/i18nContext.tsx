@@ -3,40 +3,20 @@ import { createElement } from "../element.js"
 import { setup } from "../hooks/index.js"
 import type { Signal } from "../signals/index.js"
 import { signal } from "../signals/index.js"
-import type { Internationalization } from "./types.js"
-import type { InternationalizationConfig } from "./i18n/createI18nConfig.js"
 import {
   createI18nTranslator,
   createReactiveI18nTranslator,
   type I18nTranslator,
 } from "./i18n/translate.js"
+import type {
+  AppI18nData,
+  AppI18nLocale,
+  AppI18nLocales,
+} from "./i18n/augmentation.js"
 
-type DefaultI18nConfig = Internationalization extends { config: infer C }
-  ? C
-  : never
-
-type I18nData = DefaultI18nConfig extends InternationalizationConfig<
-  infer _Locales,
-  infer Data
->
-  ? Data extends Record<string, unknown>
-    ? Data
-    : Record<string, never>
-  : Record<string, never>
-
-type I18nLocale = DefaultI18nConfig extends InternationalizationConfig<
-  infer Locales,
-  infer _Data
->
-  ? Locales[number]
-  : string
-
-type I18nLocalesList = DefaultI18nConfig extends InternationalizationConfig<
-  infer Locales,
-  infer _Data
->
-  ? Locales
-  : readonly string[]
+type I18nData = AppI18nData
+type I18nLocale = AppI18nLocale
+type I18nLocalesList = AppI18nLocales
 
 export type I18nContextValue = {
   /** On the client this is a {@link Signal} so `{locale}` in JSX stays reactive. */

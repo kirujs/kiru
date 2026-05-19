@@ -76,6 +76,11 @@ import {
   type I18nContextValue,
 } from "./i18nContext.js"
 import { addLocale, type SiteLocales } from "./localePolicy.js"
+import type {
+  RouterI18nFields,
+  RouterLocaleParam,
+  RouterNavigateOptions,
+} from "./i18n/augmentation.js"
 
 export {
   createI18nConfig,
@@ -136,7 +141,7 @@ function buildMatchSegments(match: RouteMatch | null): RouteTreeMatchSegment[] {
   return out
 }
 
-export interface Router {
+export interface RouterCore {
   manifest: RouteManifest
   pathname: Kiru.Signal<string>
   params: Kiru.Signal<Record<string, string>>
@@ -149,9 +154,7 @@ export interface Router {
   matches: Kiru.Signal<RouteTreeMatchSegment[]>
   navigate: (
     to: string,
-    replaceOrOptions?:
-      | boolean
-      | { replace?: boolean; transition?: boolean; locale?: string | false }
+    replaceOrOptions?: boolean | RouterNavigateOptions
   ) => Promise<NavigationResult>
   setQuery: (
     query: RouterQuery,
@@ -161,15 +164,7 @@ export interface Router {
     hash: string,
     options?: { replace?: boolean }
   ) => Promise<NavigationResult>
-  resolveHref: (to: string, options?: { locale?: string | false }) => string
-  /** Switch locale on the current logical route (preserves query and hash). */
-  setLocale?: (
-    nextLocale: string,
-    options?: { replace?: boolean }
-  ) => Promise<NavigationResult>
-  /** Active locale when `createRouter({ i18n })` is used. */
-  locale?: Kiru.Signal<string>
-  defaultLocale?: string
+  resolveHref: (to: string, options?: { locale?: RouterLocaleParam }) => string
   /** When set, {@link Link} `locale` prop and {@link resolveHref} can prefix paths. */
   locales?: SiteLocales
   /** @internal Hydrated + runtime i18n state. */
@@ -224,6 +219,9 @@ export interface Router {
     failure?: NavigationFailure
   }
 }
+
+/** CSR router instance; locale APIs are required when i18n is configured via module augmentation. */
+export type Router = RouterCore & RouterI18nFields
 
 function locationFromMatch(match: RouteMatch | null): RouteLocation | null {
   if (!match) return null
@@ -924,8 +922,12 @@ export type LinkProps = JSX.IntrinsicElements["a"] & {
   to: string
   replace?: boolean
   prefetch?: "hover" | "visible" | "none"
-  /** Prepends locale segment when router was created with `locales`. `false` opts out. */
-  locale?: string | false
+  /**
+   * Prepends a locale path segment for `to`.
+   * When i18n is configured (`declare module "kiru/router" { interface Internationalization … }`),
+   * must be one of your configured locales. Use `false` when `to` already includes a prefix.
+   */
+  locale?: RouterLocaleParam
   children?: JSX.Children
 }
 
