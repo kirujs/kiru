@@ -1,7 +1,6 @@
 import {
   createKiruWorkerHandle,
   assetsBindingToGetAsset,
-  toWebResponse,
 } from "@kirujs/adapter-cloudflare"
 import type { KiruHandle } from "@kirujs/adapter-contract"
 import { routes } from "../fixture/routes"
@@ -44,6 +43,6 @@ export default {
     if (out === null) {
       return new Response("Not Found", { status: 404 })
     }
-    return toWebResponse(out)
+    return out
   },
 }

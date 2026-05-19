@@ -1,7 +1,7 @@
 import {
   createKiruResponder,
   nodeRequestToFetch,
-  sendKiruResponse,
+  writeNodeResponse,
 } from "@kirujs/adapter-node"
 import Fastify from "fastify"
 import { routes } from "../fixture/routes"
@@ -23,7 +23,7 @@ fastify.all("*", async (request, reply) => {
     reply.code(404).send("Not Found")
     return
   }
-  await sendKiruResponse(reply.raw, out)
+  await writeNodeResponse(reply.raw, out)
 })
 
 if (isProd && !("Bun" in globalThis)) {

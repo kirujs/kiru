@@ -12,7 +12,7 @@ This complements:
 ## Goals
 
 1. **Same fixture** — one `routes` tree and pages; only the server entry changes per cell.
-2. **Explicit HTTP wiring** — each cell uses the documented `kiru.handle` → `KiruResponse | null` → framework response pattern (logging, API routes, 404 policy stay visible in server files).
+2. **Explicit HTTP wiring** — each cell uses the documented `kiru.handle` → `Response | null` → framework response pattern (logging, API routes, 404 policy stay visible in server files).
 3. **Fast default CI** — smoke every matrix cell; full Cypress only where depth is needed.
 4. **Valid cells only** — skip impossible pairs (e.g. Express on Cloudflare Workers).
 
@@ -37,7 +37,7 @@ e2e/ssr-matrix/             ← matrix runner + per-cell server entries
   src/
     fixture/                ← re-export or share routes with e2e/ssr
     servers/
-      node-fetch.ts         ← export default { fetch: kiru.fetch } or serveKiruNode
+      node-fetch.ts         ← export default { fetch: kiru.fetch } or createServer(toNodeListener(kiru))
       node-hono.ts
       node-express.ts
       node-fastify.ts
@@ -56,30 +56,11 @@ e2e/ssr-matrix/             ← matrix runner + per-cell server entries
 
 Each file under `src/servers/` is **only** runtime + HTTP glue. Kiru logic lives in `createKiruResponder` (Node/Bun) or `createKiruWorkerHandle` (Workers).
 
-**Node + Hono (example):**
+**Node + Hono (example):** production uses `@hono/node-server` `serve()`; see [`node-hono.ts`](../../e2e/ssr-matrix/src/servers/node-hono.ts).
 
-```ts
-import { createKiruResponder } from "@kirujs/adapter-node"
-import { toWebResponse } from "@kirujs/adapter-contract"
-import { Hono } from "hono"
-import { routes } from "../fixture/routes.js"
+**Node + Elysia:** `@elysiajs/node` + `app.listen()`; see [`node-elysia.ts`](../../e2e/ssr-matrix/src/servers/node-elysia.ts).
 
-const kiru = createKiruResponder({
-  importMetaUrl: import.meta.url,
-  routes,
-  stream: false,
-})
-
-const app = new Hono()
-app.get("/api/health", (c) => c.json({ ok: true }))
-app.all("*", async (c) => {
-  const out = await kiru.handle(c.req.raw)
-  if (out === null) return c.notFound()
-  return toWebResponse(out)
-})
-
-export default { fetch: app.fetch }
-```
+**Express / Fastify:** Kiru `nodeRequestToFetch` + `writeNodeResponse` (no fetch listen adapter on npm yet).
 
 **Node + Express (example):**
 
@@ -87,7 +68,7 @@ export default { fetch: app.fetch }
 import {
   createKiruResponder,
   nodeRequestToFetch,
-  sendKiruResponse,
+  writeNodeResponse,
 } from "@kirujs/adapter-node"
 import express from "express"
 import { routes } from "../fixture/routes.js"
@@ -102,7 +83,7 @@ app.use(async (req, res) => {
     res.status(404).send("Not Found")
     return
   }
-  await sendKiruResponse(res, out)
+  await writeNodeResponse(res, out)
 })
 
 // listen in run-cell script or export for Bun-style serve
@@ -121,15 +102,15 @@ Build selects the entry via environment variable, e.g. `KIRU_MATRIX_CELL=node-ho
 | **Cloudflare Workers** | yes | yes | — | — | yes |
 
 - **Express / Fastify on Workers** — out of scope (no Node `IncomingMessage` / `ServerResponse`).
-- **Cell id convention** — `{runtime}-{framework}`, e.g. `node-express`, `bun-hono`, `worker-fetch`. Use `node-fetch` / `bun-fetch` for `kiru.fetch` or `serveKiruNode` / `Bun.serve` with no extra framework.
+- **Cell id convention** — `{runtime}-{framework}`, e.g. `node-express`, `bun-hono`, `worker-fetch`. Use `node-fetch` / `bun-fetch` for `kiru.fetch`, `createServer(toNodeListener(kiru))`, or `Bun.serve` with no extra framework.
 
 ### Runtime-specific notes
 
 | Runtime | Start command (typical) | Kiru factory |
 |---------|-------------------------|--------------|
-| Node | `node dist/server/index.js` | `createKiruResponder` from `@kirujs/adapter-node` |
-| Bun | `bun dist/server/index.js` | `createKiruBunServer` / `createKiruResponder({ deployTarget: "bun" })` |
-| Cloudflare | `wrangler dev --port <port> --local` | `createKiruWorkerHandle` + `toWebResponse` in worker `fetch` |
+| Node | `node dist/server/index.js` | `createKiruResponder`; Hono → `@hono/node-server`, Elysia → `@elysiajs/node` |
+| Bun | `bun dist/server/index.js` | `createKiruBunServer`; Hono/Elysia use native `fetch` / `.listen()` |
+| Cloudflare | `wrangler dev --port <port> --local` | `createKiruWorkerHandle` — returns `Response | null` in worker `fetch` |
 
 **Worker + Elysia:** `CloudflareAdapter` + `.compile()` ([Elysia CF docs](https://elysiajs.com/integrations/cloudflare-worker)); `compatibility_date` ≥ `2025-06-01` in [`wrangler.toml`](../../e2e/ssr-matrix/wrangler.toml).
 
@@ -377,6 +358,6 @@ Treat the matrix as **adapter integration** coverage: “this runtime + this HTT
 
 ## Related docs
 
-- [Deploy runtimes](./deploy-runtimes.md) — `createKiruResponder`, `KiruResponse | null`, framework examples
+- [Deploy runtimes](./deploy-runtimes.md) — `createKiruResponder`, `Response | null`, framework examples
 - [Tier 2 framework parity](../router-roadmap/tier-2-framework-parity.md) — adapter contract and HTTP mix-and-match
 - [`e2e/ssr`](../../e2e/ssr) — primary SSR e2e app

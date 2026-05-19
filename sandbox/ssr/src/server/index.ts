@@ -1,4 +1,5 @@
-import { createKiruHandler, serveKiruNode } from "@kirujs/adapter-node"
+import { createServer } from "node:http"
+import { createKiruHandler, toNodeListener } from "@kirujs/adapter-node"
 import { routes } from "../routes"
 
 const isProd = process.env.NODE_ENV === "production"
@@ -37,5 +38,5 @@ export default { fetch: kiru.fetch }
 
 if (isProd) {
   const port = Number(process.env.PORT) || 5179
-  serveKiruNode(kiru, port)
+  createServer(toNodeListener(kiru)).listen(port)
 }

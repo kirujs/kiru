@@ -1,5 +1,4 @@
 import { createKiruBunServer } from "@kirujs/adapter-bun"
-import { toWebResponse } from "@kirujs/adapter-contract"
 import { Elysia } from "elysia"
 import { routes } from "../fixture/routes"
 
@@ -17,7 +16,8 @@ const app = new Elysia()
   .all("*", async ({ request }) => {
     const out = await kiru.handle(request)
     if (out === null) return new Response("Not Found", { status: 404 })
-    return toWebResponse(out)
+    return out
   })
+  .compile()
 
-export default { fetch: app.fetch }
+export default { fetch: app.handle }

@@ -1,7 +1,6 @@
 import {
   createKiruWorkerHandle,
   assetsBindingToGetAsset,
-  toWebResponse,
 } from "@kirujs/adapter-cloudflare"
 import type { KiruHandle } from "@kirujs/adapter-contract"
 import { Elysia } from "elysia"
@@ -42,7 +41,7 @@ const app = new Elysia({ adapter: CloudflareAdapter })
     const handle = await getKiruHandle()
     const out = await handle(request)
     if (out === null) return new Response("Not Found", { status: 404 })
-    return toWebResponse(out)
+    return out
   })
   .compile()
 
@@ -50,9 +49,9 @@ export default {
   fetch(
     request: Request,
     env: Env,
-    ctx: ExecutionContext
+    _ctx: ExecutionContext
   ): Response | Promise<Response> {
     workerEnv = env
-    return app.fetch(request, env, ctx)
+    return app.handle(request)
   },
 }

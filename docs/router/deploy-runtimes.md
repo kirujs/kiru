@@ -1,6 +1,6 @@
 # Deploy runtimes (Node, Bun, Cloudflare Workers)
 
-Kiru’s router renders to a **`KiruResponse`** (status, headers, body) or returns **`null`** when it does not handle the request. You wire HTTP in your framework; Kiru does not register catch-all routes for you.
+Kiru's router returns a Web **`Response`** or **`null`** when it does not handle the request. You wire HTTP in your framework; Kiru does not register catch-all routes for you.
 
 ## Choose a runtime adapter
 
@@ -10,24 +10,24 @@ Kiru’s router renders to a **`KiruResponse`** (status, headers, body) or retur
 | Bun | `@kirujs/adapter-bun` | Yes (same as Node) | Yes | `bun run dist/server` |
 | Cloudflare Workers | `@kirujs/adapter-cloudflare` | **No** | No (use `strategy: 'build'`) | Edge SSR + immutable static HTML |
 
-Shared types and helpers: `@kirujs/adapter-contract` (`KiruResponse`, `toWebResponse`, `toFetchHandler`, `composeRespond`).
+Shared types and helpers: `@kirujs/adapter-contract` (`toFetchHandler`, `composeRespond`).
 
-## `KiruResponse | null`
+## `Response | null`
 
 | `handle(request)` returns | Meaning |
 |---------------------------|---------|
-| `KiruResponse` | Kiru handled the request (SSR, static asset, image, prerender hit) |
+| `Response` | Kiru handled the request (SSR, static asset, image, prerender hit) |
 | `null` | No match — **your** policy: 404, fall through, or another handler |
 
 Runtime adapters expose:
 
 ```ts
 const kiru = createKiruResponder({ ... }) // Node/Bun
-// kiru.handle(request) → Promise<KiruResponse | null>
+// kiru.handle(request) → Promise<Response | null>
 // kiru.fetch(request)  → Web fetch (null → 404 by default)
 ```
 
-For `export default { fetch }` or `Bun.serve`, use `kiru.fetch`. For Hono, Fastify, Express, etc., call `kiru.handle` in your own catch-all and convert the result.
+For `export default { fetch }` or `Bun.serve`, use `kiru.fetch`. For Hono, Fastify, Express, etc., call `kiru.handle` in your own catch-all and return or forward the `Response`.
 
 ## ISR on edge (not supported)
 
@@ -47,7 +47,8 @@ Configure `router.adapter: 'cloudflare'` in `vite-plugin-kiru` to emit a worker 
 ## Node / Bun quick start (no HTTP framework)
 
 ```ts
-import { createKiruResponder, serveKiruNode } from "@kirujs/adapter-node"
+import { createServer } from "node:http"
+import { createKiruResponder, toNodeListener } from "@kirujs/adapter-node"
 import { routes } from "./routes"
 
 const isProd = process.env.NODE_ENV === "production"
@@ -61,23 +62,25 @@ const kiru = createKiruResponder({
 
 export default { fetch: kiru.fetch }
 
-if (isProd) serveKiruNode(kiru)
+if (isProd) {
+  const port = Number(process.env.PORT) || 3000
+  createServer(toNodeListener(kiru)).listen(port)
+}
 ```
 
-Bun: `createKiruBunServer` from `@kirujs/adapter-bun` (same `KiruResponder`, `deployTarget: "bun"`).
+Bun: `createKiruBunServer` from `@kirujs/adapter-bun` (same `KiruResponder`, `deployTarget: "bun"`). Use `Bun.serve({ fetch: kiru.fetch })` or `serveKiruBun(kiru)` instead of `createServer` when you prefer Bun's server.
 
 ### Custom middleware
 
-`createKiruResponder` accepts `middleware: KiruRespondMiddleware[]` (outermost first). Each layer receives `next(): Promise<KiruResponse | null>`. Use `composeRespond` from `@kirujs/adapter-contract` for fetch-native layers (logging, auth).
+`createKiruResponder` accepts `middleware: KiruRespondMiddleware[]` (outermost first). Each layer receives `next(): Promise<Response | null>`. Use `composeRespond` from `@kirujs/adapter-contract` for fetch-native layers (logging, auth).
 
 ### Node Request/Response bridge
 
 For Express, Fastify, or raw `node:http`, import from `@kirujs/adapter-node`:
 
 - `nodeRequestToFetch(req)` — `IncomingMessage` → Web `Request`
-- `sendKiruResponse(res, kiru)` — `KiruResponse` → `ServerResponse`
-- `sendFetchToNodeResponse(res, response)` — Web `Response` → `ServerResponse`
-- `toWebResponse(kiru)` — `KiruResponse` → Web `Response` (from `@kirujs/adapter-contract`)
+- `writeNodeResponse(res, response)` — Web `Response` → `ServerResponse`
+- `toNodeListener(handler)` — `KiruResponder` or `KiruFetch` → Node request listener
 
 ## HTTP frameworks (mix and match)
 
@@ -85,11 +88,21 @@ Pick a **runtime** package, then write the catch-all yourself so you can log, au
 
 Register **API routes first**, then Kiru.
 
-### Hono (Node / Bun / Workers)
+### Hono
+
+Catch-all wiring is the same on every runtime. Use each runtime's **first-class HTTP adapter** to listen in production:
+
+| Runtime | Listen in production |
+|---------|----------------------|
+| Node | [`@hono/node-server`](https://hono.dev/getting-started/nodejs) `serve({ fetch: app.fetch, port })` |
+| Bun | `Bun.serve({ fetch: app.fetch, port })` or `export default { fetch: app.fetch }` |
+| Workers | `export default { fetch: app.fetch }` (or your framework worker `fetch`) |
+
+**Node + Hono:**
 
 ```ts
 import { createKiruResponder } from "@kirujs/adapter-node"
-import { toWebResponse } from "@kirujs/adapter-contract"
+import { serve } from "@hono/node-server"
 import { Hono } from "hono"
 import { routes } from "./routes"
 
@@ -97,20 +110,36 @@ const kiru = createKiruResponder({ importMetaUrl: import.meta.url, routes, strea
 
 const app = new Hono()
 app.get("/api/health", (c) => c.json({ ok: true }))
-
 app.all("*", async (c) => {
   const kiruOut = await kiru.handle(c.req.raw)
   if (kiruOut === null) return c.notFound()
-  return toWebResponse(kiruOut)
+  return kiruOut
 })
 
 export default { fetch: app.fetch }
+
+if (process.env.NODE_ENV === "production") {
+  serve({ fetch: app.fetch, port: Number(process.env.PORT) || 3000 })
+}
 ```
+
+**Bun / Workers** — same `app` routes; swap the production listen line for `Bun.serve` or a Worker export.
+
+### Express and Fastify (Node / Bun)
+
+Express and Fastify have no published fetch-native listen adapter yet (the in-progress `@fastify/fetch` is not on npm). Use Kiru's Node bridge helpers on the catch-all:
+
+- `nodeRequestToFetch(req)` — `IncomingMessage` → Web `Request`
+- `writeNodeResponse(res, response)` — Web `Response` → `ServerResponse`
 
 ### Express
 
 ```ts
-import { createKiruResponder, nodeRequestToFetch, sendKiruResponse } from "@kirujs/adapter-node"
+import {
+  createKiruResponder,
+  nodeRequestToFetch,
+  writeNodeResponse,
+} from "@kirujs/adapter-node"
 import express from "express"
 import { routes } from "./routes"
 
@@ -125,7 +154,7 @@ app.use(async (req, res) => {
     res.status(404).send("Not Found")
     return
   }
-  await sendKiruResponse(res, kiruOut)
+  await writeNodeResponse(res, kiruOut)
 })
 
 app.listen(process.env.PORT ?? 3000)
@@ -134,7 +163,11 @@ app.listen(process.env.PORT ?? 3000)
 ### Fastify
 
 ```ts
-import { createKiruResponder, nodeRequestToFetch, sendKiruResponse } from "@kirujs/adapter-node"
+import {
+  createKiruResponder,
+  nodeRequestToFetch,
+  writeNodeResponse,
+} from "@kirujs/adapter-node"
 import Fastify from "fastify"
 import { routes } from "./routes"
 
@@ -149,32 +182,46 @@ fastify.all("*", async (request, reply) => {
     reply.code(404).send("Not Found")
     return
   }
-  await sendKiruResponse(reply.raw, kiruOut)
+  await writeNodeResponse(reply.raw, kiruOut)
 })
 
 await fastify.listen({ port: Number(process.env.PORT) || 3000 })
 ```
 
-### Elysia (Node / Bun)
+### Elysia
+
+| Runtime | Adapter | Listen in production |
+|---------|---------|----------------------|
+| Node | [`@elysiajs/node`](https://elysiajs.com/integrations/node) `adapter: node()` + `.listen(port)` | `app.listen(port)` |
+| Bun | default Bun adapter | `app.listen(port)` or `export default { fetch: app.fetch }` |
+| Workers | `CloudflareAdapter` + `.compile()` | Worker `fetch` delegates to `app.fetch(request)` |
+
+**Node + Elysia:**
 
 ```ts
-import { createKiruBunServer } from "@kirujs/adapter-bun"
-import { toWebResponse } from "@kirujs/adapter-contract"
+import { createKiruResponder } from "@kirujs/adapter-node"
+import { node } from "@elysiajs/node"
 import { Elysia } from "elysia"
 import { routes } from "./routes"
 
-const kiru = createKiruBunServer({ importMetaUrl: import.meta.url, routes, stream: true })
+const kiru = createKiruResponder({ importMetaUrl: import.meta.url, routes, stream: true })
 
-const app = new Elysia()
+const app = new Elysia({ adapter: node() })
   .get("/api/health", () => ({ ok: true }))
   .all("*", async ({ request }) => {
     const kiruOut = await kiru.handle(request)
     if (kiruOut === null) return new Response("Not Found", { status: 404 })
-    return toWebResponse(kiruOut)
+    return kiruOut
   })
 
 export default { fetch: app.fetch }
+
+if (process.env.NODE_ENV === "production") {
+  app.listen(Number(process.env.PORT) || 3000)
+}
 ```
+
+**Bun** — use `createKiruBunServer` instead of `createKiruResponder`; omit `node()` (Bun is the default adapter).
 
 ## Cloudflare Workers quick start
 
@@ -183,7 +230,6 @@ import {
   createKiruWorkerHandler,
   createKiruWorkerHandle,
   assetsBindingToGetAsset,
-  toWebResponse,
 } from "@kirujs/adapter-cloudflare"
 import { routes } from "./routes"
 
@@ -215,7 +261,7 @@ export default {
     const kiruHandle = await getHandle(env)
     const kiruOut = await kiruHandle(request)
     if (kiruOut === null) return new Response("Not Found", { status: 404 })
-    return toWebResponse(kiruOut)
+    return kiruOut
   },
 }
 ```

@@ -3,9 +3,9 @@ import assert from "node:assert"
 import { createServer, request as httpRequest } from "node:http"
 import {
   nodeRequestToFetch,
-  resolveKiruFetch,
-  sendFetchToNodeResponse,
+  writeNodeResponse,
 } from "./nodeBridge.js"
+import { toNodeListener } from "./serveNode.js"
 import type { KiruFetch, KiruResponder } from "./types.js"
 
 function listen(
@@ -55,31 +55,31 @@ function httpFetch(port: number, path: string, init?: RequestInit): Promise<Resp
 }
 
 describe("nodeBridge", () => {
-  it("resolveKiruFetch accepts handler object or function", async () => {
+  it("toNodeListener accepts handler object or function", async () => {
     const fn: KiruFetch = async () => new Response("fn")
     const handler: KiruResponder = {
-      handle: async () => ({
-        status: 200,
-        headers: {},
-        body: "obj",
-      }),
+      handle: async () => new Response("obj"),
       fetch: async () => new Response("obj"),
       renderer: {},
       clientDir: "",
       htmlTemplate: "",
     }
-    assert.equal(await (await resolveKiruFetch(fn)(new Request("http://x/"))).text(), "fn")
-    assert.equal(
-      await (await resolveKiruFetch(handler)(new Request("http://x/"))).text(),
-      "obj"
-    )
+    const { port: portFn, close: closeFn } = await listen(toNodeListener(fn))
+    const { port: portObj, close: closeObj } = await listen(toNodeListener(handler))
+    try {
+      assert.equal(await (await httpFetch(portFn, "/")).text(), "fn")
+      assert.equal(await (await httpFetch(portObj, "/")).text(), "obj")
+    } finally {
+      await closeFn()
+      await closeObj()
+    }
   })
 
-  it("round-trips GET through nodeRequestToFetch and sendFetchToNodeResponse", async () => {
+  it("round-trips GET through nodeRequestToFetch and writeNodeResponse", async () => {
     const { port, close } = await listen(async (req, res) => {
       const fetchReq = nodeRequestToFetch(req)
       assert.equal(new URL(fetchReq.url).pathname, "/hello")
-      await sendFetchToNodeResponse(
+      await writeNodeResponse(
         res,
         new Response("ok", {
           status: 201,
@@ -102,7 +102,7 @@ describe("nodeBridge", () => {
       const fetchReq = nodeRequestToFetch(req)
       assert.equal(fetchReq.method, "POST")
       assert.equal(await fetchReq.text(), "payload")
-      await sendFetchToNodeResponse(res, new Response("received"))
+      await writeNodeResponse(res, new Response("received"))
     })
     try {
       const response = await httpFetch(port, "/post", {

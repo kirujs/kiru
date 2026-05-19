@@ -2,12 +2,7 @@ import { createRenderer, type CreateRendererOptions } from "kiru/router"
 import type { CustomRequestContext } from "kiru/router"
 import { matchRoute, generatePublicStaticPaths } from "kiru/router"
 import { resolvePathPolicy } from "kiru/router"
-import {
-  toFetchHandler,
-  webResponseToKiru,
-  type KiruHandle,
-  type KiruResponse,
-} from "@kirujs/adapter-contract"
+import { toFetchHandler, type KiruHandle } from "@kirujs/adapter-contract"
 import { tryServeImmutablePrerender } from "./serveImmutablePrerender.js"
 import { isStaticAssetPathname } from "@kirujs/runtime"
 
@@ -44,16 +39,15 @@ export type KiruWorkerHandler = (
   ctx?: ExecutionContext
 ) => Promise<Response>
 
-function renderResultToKiru(rendered: {
+function renderResultToResponse(rendered: {
   status: number
   headers: Record<string, string>
   body: string | ReadableStream
-}): KiruResponse {
-  return {
+}): Response {
+  return new Response(rendered.body as BodyInit, {
     status: rendered.status,
     headers: rendered.headers,
-    body: rendered.body,
-  }
+  })
 }
 
 /**
@@ -99,7 +93,7 @@ export function createKiruWorkerHandle(
   return async (request: Request) => {
     const url = new URL(request.url)
     if (assetFetch && isStaticAssetPathname(url.pathname)) {
-      return webResponseToKiru(await assetFetch(request))
+      return assetFetch(request)
     }
 
     const context = getRequestContext
@@ -131,14 +125,14 @@ export function createKiruWorkerHandle(
     )
 
     if (prerendered) {
-      return renderResultToKiru(prerendered.result)
+      return renderResultToResponse(prerendered.result)
     }
 
     const rendered = await renderer.render(request, { context })
     if (!rendered) {
       return null
     }
-    return renderResultToKiru(rendered)
+    return renderResultToResponse(rendered)
   }
 }
 

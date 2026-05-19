@@ -10,11 +10,9 @@ import type { KiruDeployTarget } from "@kirujs/runtime"
 import {
   composeRespond,
   toFetchHandler,
-  webResponseToKiru,
   type KiruHandle,
   type KiruRespondMiddleware,
   type KiruResponder,
-  type KiruResponse,
 } from "@kirujs/adapter-contract"
 import { resolveStatic } from "./resolveStatic.js"
 import { serveStaticFile } from "./serveStaticFile.js"
@@ -47,14 +45,15 @@ export type CreateKiruHandlerOptions = Omit<
   notFound?: import("@kirujs/adapter-contract").ToFetchHandlerOptions["notFound"]
 }
 
-function renderResultToKiru(
-  rendered: { status: number; headers: Record<string, string>; body: string | ReadableStream }
-): KiruResponse {
-  return {
+function renderResultToResponse(rendered: {
+  status: number
+  headers: Record<string, string>
+  body: string | ReadableStream
+}): Response {
+  return new Response(rendered.body as BodyInit, {
     status: rendered.status,
     headers: rendered.headers,
-    body: rendered.body,
-  }
+  })
 }
 
 function createSsrHandle(
@@ -69,7 +68,7 @@ function createSsrHandle(
     if (!rendered) {
       return null
     }
-    return renderResultToKiru(rendered)
+    return renderResultToResponse(rendered)
   }
 }
 
@@ -85,14 +84,14 @@ function createStaticAssetsMiddleware(options: {
     if (imageHandler && imagePath && pathname === imagePath) {
       const imageRes = await imageHandler(request)
       if (imageRes) {
-        return webResponseToKiru(imageRes)
+        return imageRes
       }
-      return { status: 404, headers: {}, body: "Not Found" }
+      return new Response("Not Found", { status: 404 })
     }
 
     const staticRes = await serveStaticFile(clientDir, pathname)
     if (staticRes) {
-      return webResponseToKiru(staticRes)
+      return staticRes
     }
 
     return next()
@@ -101,7 +100,7 @@ function createStaticAssetsMiddleware(options: {
 
 /**
  * Kiru SSR (+ optional static assets and ISR).
- * {@link KiruResponder.handle} returns {@link KiruResponse} or `null`; wire HTTP in your framework.
+ * {@link KiruResponder.handle} returns `Response` or `null`; wire HTTP in your framework.
  */
 export function createKiruResponder(
   options: CreateKiruHandlerOptions

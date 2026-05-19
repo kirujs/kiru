@@ -1,7 +1,6 @@
 import {
   createKiruWorkerHandle,
   assetsBindingToGetAsset,
-  toWebResponse,
 } from "@kirujs/adapter-cloudflare"
 import type { KiruHandle } from "@kirujs/adapter-contract"
 import { Hono } from "hono"
@@ -36,7 +35,7 @@ app.all("*", async (c) => {
   const handle = await getKiruHandle(c.env)
   const out = await handle(c.req.raw)
   if (out === null) return c.notFound()
-  return toWebResponse(out)
+  return out
 })
 
 export default {

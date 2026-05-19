@@ -1,7 +1,7 @@
 import {
   createKiruResponder,
   nodeRequestToFetch,
-  sendKiruResponse,
+  writeNodeResponse,
 } from "@kirujs/adapter-node"
 import express from "express"
 import { routes } from "../fixture/routes"
@@ -23,7 +23,7 @@ app.use(async (req, res) => {
     res.status(404).send("Not Found")
     return
   }
-  await sendKiruResponse(res, out)
+  await writeNodeResponse(res, out)
 })
 
 if (isProd && !("Bun" in globalThis)) {

@@ -1,8 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { Readable } from "node:stream"
-import { toWebResponse, type KiruResponse } from "@kirujs/adapter-contract"
 
-export { resolveKiruFetch, resolveKiruHandle } from "@kirujs/adapter-contract"
+export { resolveKiruHandle } from "@kirujs/adapter-contract"
 
 /** Convert a Node.js `IncomingMessage` into a Web `Request`. */
 export function nodeRequestToFetch(req: IncomingMessage): Request {
@@ -36,7 +35,7 @@ export function nodeRequestToFetch(req: IncomingMessage): Request {
 }
 
 /** Write a Web `Response` to a Node.js `ServerResponse`. */
-export async function sendFetchToNodeResponse(
+export async function writeNodeResponse(
   res: ServerResponse,
   response: Response
 ): Promise<void> {
@@ -66,12 +65,4 @@ export async function sendFetchToNodeResponse(
     reader.releaseLock()
   }
   res.end()
-}
-
-/** Write a {@link KiruResponse} to a Node.js `ServerResponse`. */
-export async function sendKiruResponse(
-  res: ServerResponse,
-  kiru: KiruResponse
-): Promise<void> {
-  await sendFetchToNodeResponse(res, toWebResponse(kiru))
 }

@@ -7,9 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Deploy adapters
 
 - **`@kirujs/runtime`:** `KiruDeployTarget`, `getRuntimeCapabilities`, `assertISRAllowed` — shared contract for adapters and `vite-plugin-kiru`.
-- **`@kirujs/adapter-contract`:** `KiruResponse`, `KiruHandle` (`null` = not handled), `createKiruResponder` contract, `toWebResponse`, `toFetchHandler`, `composeRespond`.
-- **`@kirujs/adapter-node`:** `createKiruResponder` / `createKiruHandler` (`handle` + `fetch`), `serveKiruNode`, hybrid ISR, static assets; `nodeRequestToFetch`, `sendKiruResponse`, `sendFetchToNodeResponse`.
-- **`@kirujs/adapter-cloudflare`:** `createKiruWorkerHandle` (`KiruResponse | null`) and `createKiruWorkerHandler` (Web `fetch`).
+- **`@kirujs/adapter-contract`:** `KiruHandle` (`Response | null`, `null` = not handled), `toFetchHandler`, `composeRespond`.
+- **`@kirujs/adapter-node`:** `createKiruResponder` / `createKiruHandler` (`handle` + `fetch`), `toNodeListener`, hybrid ISR, static assets; `nodeRequestToFetch`, `writeNodeResponse`.
+- **`@kirujs/adapter-cloudflare`:** `createKiruWorkerHandle` (`Response | null`) and `createKiruWorkerHandler` (Web `fetch`).
 - **HTTP frameworks:** no separate packages — mix runtime adapter + explicit catch-all in your app ([`deploy-runtimes.md`](docs/router/deploy-runtimes.md)).
 - **`@kirujs/adapter-bun`:** `createKiruBunServer`, `serveKiruBun` — same `fetch` handler as Node via `Bun.serve` (no Hono dependency).
 - **`@kirujs/adapter-cloudflare`:** `createKiruWorkerHandler` — SSR + **immutable** prerender from Assets; **no ISR** on edge (Next.js-style).

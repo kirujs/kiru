@@ -1,5 +1,6 @@
+import { createServer } from "node:http"
 import sharp from "sharp"
-import { createKiruHandler, serveKiruNode } from "@kirujs/adapter-node"
+import { createKiruHandler, toNodeListener } from "@kirujs/adapter-node"
 import i18n from "./i18n.js"
 import { routes } from "./routes"
 import { imageConfig } from "./imageConfig.js"
@@ -33,5 +34,5 @@ export default { fetch: kiru.fetch }
 
 if (isProd) {
   const port = Number(process.env.PORT) || 5179
-  serveKiruNode(kiru, port)
+  createServer(toNodeListener(kiru)).listen(port)
 }

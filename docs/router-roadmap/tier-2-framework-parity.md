@@ -53,8 +53,8 @@ Per-request context is **SSR-only** via `createRenderer({ context })` and hydrat
 
 ## Deployment adapters
 
-- [x] **`@kirujs/adapter-contract`** — `KiruResponse`, `KiruHandle`, `toWebResponse`, `composeRespond`
-- [x] **`@kirujs/adapter-node`** — `createKiruResponder`, `resolveStatic`, hybrid ISR; Node bridge (`nodeRequestToFetch`, `sendKiruResponse`)
+- [x] **`@kirujs/adapter-contract`** — `KiruHandle` (`Response | null`), `toFetchHandler`, `composeRespond`
+- [x] **`@kirujs/adapter-node`** — `createKiruResponder`, `resolveStatic`, hybrid ISR; Node bridge (`nodeRequestToFetch`, `writeNodeResponse`, `toNodeListener`)
 - [x] **HTTP frameworks** — mix-and-match via `kiru.handle` + userland catch-all ([`deploy-runtimes.md`](../router/deploy-runtimes.md))
 - [x] **`@kirujs/adapter-bun`** — `createKiruBunServer`, `Bun.serve`
 - [x] **`@kirujs/adapter-cloudflare` (thin)** — Worker handler, immutable Assets prerender, no ISR

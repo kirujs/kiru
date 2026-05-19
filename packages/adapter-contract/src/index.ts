@@ -1,21 +1,14 @@
-/** Kiru handled the request. Convert with {@link toWebResponse} or {@link sendKiruResponse} (Node). */
-export type KiruResponse = {
-  status: number
-  headers: HeadersInit
-  body: string | ReadableStream
-}
-
 /** `null` — Kiru did not handle the request (pass through, 404, or other framework route). */
 export type KiruHandle = (
   request: Request
-) => Promise<KiruResponse | null>
+) => Promise<Response | null>
 
 export type KiruFetch = (request: Request) => Promise<Response>
 
 export type KiruRespondMiddleware = (
   request: Request,
-  next: () => Promise<KiruResponse | null>
-) => Promise<KiruResponse | null>
+  next: () => Promise<Response | null>
+) => Promise<Response | null>
 
 /** Runtime-produced app: {@link KiruHandle} plus optional Web `fetch` adapter. */
 export type KiruResponder = {
@@ -27,29 +20,12 @@ export type KiruResponder = {
   htmlTemplate: string
 }
 
-/** @deprecated Use {@link KiruResponder}. */
-export type KiruHandler = KiruResponder
-
 export type KiruMiddleware = KiruRespondMiddleware
 
 export function resolveKiruHandle(
   target: KiruResponder | KiruHandle
 ): KiruHandle {
   return typeof target === "function" ? target : target.handle.bind(target)
-}
-
-/** @deprecated Use {@link resolveKiruHandle}. */
-export function resolveKiruFetch(handler: KiruResponder | KiruFetch): KiruFetch {
-  return typeof handler === "function"
-    ? handler
-    : handler.fetch.bind(handler)
-}
-
-export function toWebResponse(kiru: KiruResponse): Response {
-  return new Response(kiru.body as BodyInit, {
-    status: kiru.status,
-    headers: kiru.headers,
-  })
 }
 
 export type ToFetchHandlerOptions = {
@@ -66,11 +42,11 @@ export function toFetchHandler(
     options?.notFound ??
     (() => new Response("Not Found", { status: 404 }))
   return async (request) => {
-    const kiru = await handle(request)
-    if (kiru === null) {
+    const response = await handle(request)
+    if (response === null) {
       return typeof notFound === "function" ? await notFound() : notFound
     }
-    return toWebResponse(kiru)
+    return response
   }
 }
 
@@ -85,23 +61,13 @@ export function composeRespond(
   )
 }
 
-export async function webResponseToKiru(
-  response: Response
-): Promise<KiruResponse> {
-  return {
-    status: response.status,
-    headers: response.headers,
-    body: response.body ?? (await response.text()),
-  }
-}
-
 /** Close over Worker `env` / `ctx` for fetch-native frameworks. */
 export function asKiruHandle(
   worker: (
     request: Request,
     env?: unknown,
     ctx?: unknown
-  ) => Promise<KiruResponse | null>,
+  ) => Promise<Response | null>,
   bindings: { env?: unknown; ctx?: unknown }
 ): KiruHandle {
   return (request) => worker(request, bindings.env, bindings.ctx)

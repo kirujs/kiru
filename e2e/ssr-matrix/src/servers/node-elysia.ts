@@ -1,5 +1,5 @@
-import { createKiruResponder, serveKiruNode } from "@kirujs/adapter-node"
-import { toWebResponse } from "@kirujs/adapter-contract"
+import { createKiruResponder } from "@kirujs/adapter-node"
+import { node } from "@elysiajs/node"
 import { Elysia } from "elysia"
 import { routes } from "../fixture/routes"
 
@@ -12,17 +12,18 @@ const kiru = createKiruResponder({
   routes,
 })
 
-const app = new Elysia()
+const app = new Elysia({ adapter: node() })
   .get("/api/health", () => ({ ok: true }))
   .all("*", async ({ request }) => {
     const out = await kiru.handle(request)
     if (out === null) return new Response("Not Found", { status: 404 })
-    return toWebResponse(out)
+    return out
   })
+  .compile()
 
-export default { fetch: app.fetch }
+export default { fetch: app.handle }
 
 if (isProd && !("Bun" in globalThis)) {
   const port = Number(process.env.PORT) || 3000
-  serveKiruNode({ fetch: app.fetch }, port)
+  app.listen(port)
 }

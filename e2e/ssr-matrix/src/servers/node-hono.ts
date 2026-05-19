@@ -1,5 +1,5 @@
-import { createKiruResponder, serveKiruNode } from "@kirujs/adapter-node"
-import { toWebResponse } from "@kirujs/adapter-contract"
+import { createKiruResponder } from "@kirujs/adapter-node"
+import { serve } from "@hono/node-server"
 import { Hono } from "hono"
 import { routes } from "../fixture/routes"
 
@@ -17,12 +17,12 @@ app.get("/api/health", (c) => c.json({ ok: true }))
 app.all("*", async (c) => {
   const out = await kiru.handle(c.req.raw)
   if (out === null) return c.notFound()
-  return toWebResponse(out)
+  return out
 })
 
 export default { fetch: app.fetch }
 
 if (isProd && !("Bun" in globalThis)) {
   const port = Number(process.env.PORT) || 3000
-  serveKiruNode({ fetch: app.fetch.bind(app) }, port)
+  serve({ fetch: app.fetch, port })
 }

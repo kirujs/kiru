@@ -1,5 +1,4 @@
 import { createKiruBunServer } from "@kirujs/adapter-bun"
-import { toWebResponse } from "@kirujs/adapter-contract"
 import { Hono } from "hono"
 import { routes } from "../fixture/routes"
 
@@ -17,7 +16,7 @@ app.get("/api/health", (c) => c.json({ ok: true }))
 app.all("*", async (c) => {
   const out = await kiru.handle(c.req.raw)
   if (out === null) return c.notFound()
-  return toWebResponse(out)
+  return out
 })
 
 export default { fetch: app.fetch }
