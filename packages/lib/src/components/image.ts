@@ -14,7 +14,7 @@ export type ImageProps = Omit<GetImagePropsOptions, "src"> & {
  *
  * @see docs/router/kiru-image.md
  */
-export const Image: Kiru.Component<ImageProps> = () => (props) => {
+export const Image: Kiru.Component<ImageProps> = (props) => {
   const {
     fill,
     placeholder = "empty",
