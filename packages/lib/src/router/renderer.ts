@@ -69,11 +69,12 @@ import {
   type PageProps,
 } from "./loaders.js"
 import {
-  isDynamicPageHead,
-  isStaticPageHead,
+  createDynamicHeadContext,
+  isAsyncPageHead,
   mergeRouteAndPageHead,
   readPageHeadExport,
-  resolvePageHead,
+  resolveMergedRoutePageHead,
+  resolveMergedRoutePageHeadSync,
 } from "./pageHead.js"
 import { wrapRouteModuleWithLoadGate } from "./pageLoadGate.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
@@ -807,7 +808,7 @@ async function renderStringWithDocument(
 
   const resolvedMeta = mergeImagePreloadsIntoHead(
     streamHeadMeta ??
-      mergeRouteAndPageHead(match.route.head, undefined, match.params)
+      mergeRouteAndPageHead(match.route.head, undefined)
   )
   const ctxScript = serializeRequestContextScript(requestContext)
   const pageDataScript =
@@ -926,7 +927,7 @@ async function renderMatchToStaticHtmlInner(
       : {}),
   })
   const { props: pageProps } = await resolvePagePropsFromModule(pageMod, loaderCtx)
-  const streamHeadMeta = resolveStreamHeadMeta(
+  const streamHeadMeta = await resolveStreamHeadMeta(
     match,
     pageMod,
     loaderCtx,
@@ -1060,18 +1061,17 @@ function isPrepareError(
 
 const MAX_SSR_MIDDLEWARE_REDIRECTS = 16
 
-function resolveStreamHeadMeta(
+async function resolveStreamHeadMeta(
   match: RouteMatch,
   pageMod: unknown,
   loaderCtx: ReturnType<typeof buildLoaderContext>,
   pageProps?: PageProps<KiruLoader<unknown>>
-): RouteHeadMeta {
+): Promise<RouteHeadMeta> {
   const pageHead = readPageHeadExport(pageMod)
-  let pageHeadMeta: RouteHeadMeta | undefined
-  if (pageHead) {
-    pageHeadMeta = resolvePageHead(pageHead, loaderCtx, pageProps)
-  }
-  return mergeRouteAndPageHead(match.route.head, pageHeadMeta, match.params)
+  const headCtx = createDynamicHeadContext(loaderCtx, pageMod, pageProps)
+  return isAsyncPageHead(pageHead)
+    ? resolveMergedRoutePageHead(match.route.head, pageHead, headCtx)
+    : resolveMergedRoutePageHeadSync(match.route.head, pageHead, headCtx)
 }
 
 function localePreferenceCookie(
@@ -1274,9 +1274,8 @@ async function prepareAppForUrl(
     const pageMod = await routeMatch.route.component()
     const pageHead = readPageHeadExport(pageMod)
     const load = readPageLoadExport(pageMod)
-    const streamPageLoad =
-      canStreamPageLoad(load) && isStaticPageHead(pageHead)
-    const dynamicHead = isDynamicPageHead(pageHead)
+    const asyncHead = isAsyncPageHead(pageHead)
+    const streamPageLoad = canStreamPageLoad(load) && !asyncHead
 
     let pageProps: Record<string, unknown>
     let pagePropsPromise: Promise<Record<string, unknown>> | undefined
@@ -1289,13 +1288,11 @@ async function prepareAppForUrl(
       pageProps = (await resolvePagePropsFromModule(pageMod, loaderCtx)).props
     }
 
-    const streamHeadMeta = resolveStreamHeadMeta(
+    const streamHeadMeta = await resolveStreamHeadMeta(
       routeMatch,
       pageMod,
       loaderCtx,
-      dynamicHead || !streamPageLoad
-        ? (pageProps as PageProps<KiruLoader<unknown>>)
-        : undefined
+      streamPageLoad ? undefined : (pageProps as PageProps<KiruLoader<unknown>>)
     )
 
     const { layoutModules, routeModule: rawRouteModule } =
@@ -1336,9 +1333,10 @@ async function prepareAppForUrl(
       { url: requestUrl, pathPolicy, i18n: i18nPayload, localeRouting }
     )
 
-    const pagePropsForMeta = dynamicHead || !streamPageLoad
-      ? (pageProps as PageProps<KiruLoader<unknown>>)
-      : undefined
+    const pagePropsForMeta =
+      asyncHead || !streamPageLoad
+        ? (pageProps as PageProps<KiruLoader<unknown>>)
+        : undefined
     const resolvedStatus = resolveRouteStatus(
       readRouteStatusExport(pageMod),
       loaderCtx,
@@ -1425,7 +1423,7 @@ function renderStreamForRouteMatch(
   const { pathname } = match
   const baseHeadMeta =
     opts.streamHeadMeta ??
-    mergeRouteAndPageHead(match.route.head, undefined, match.params)
+    mergeRouteAndPageHead(match.route.head, undefined)
   const resolveHeadMeta = () => mergeImagePreloadsIntoHead(baseHeadMeta)
   const mayEarlyFlush =
     !!opts.earlyFlushHead &&

@@ -138,8 +138,25 @@ describe("router", () => {
     })
     assert.ok(html.includes('type="application/ld+json"'))
     assert.ok(html.includes("WebPage"))
-    assert.ok(html.includes("<!-- kiru:head -->"))
-    assert.ok(html.includes("<!-- /kiru:head -->"))
+    assert.ok(html.includes("<title>T</title>"))
+  })
+
+  it("serializes keywords meta from string or array", () => {
+    const fromString = serializeDocumentHead({
+      keywords: "kiru, router, ssr",
+    })
+    assert.ok(
+      fromString.includes(
+        '<meta name="keywords" content="kiru, router, ssr" />'
+      )
+    )
+
+    const fromArray = serializeDocumentHead({
+      keywords: ["alpha", "beta"],
+    })
+    assert.ok(
+      fromArray.includes('<meta name="keywords" content="alpha, beta" />')
+    )
   })
 
   it("builds sitemap xml from static paths", () => {
@@ -502,12 +519,14 @@ describe("router", () => {
         children: [
           x.page("/users/[id]", {
             component: async () => ({
+              head: defineHeadContent((ctx) => ({
+                title: `User ${ctx.params.id}`,
+              })),
               default: () => {
                 const router = useRouter()
                 return <span>{router.params.value.id}</span>
               },
             }),
-            head: { title: "User {id}" },
           }),
         ],
       })
@@ -537,7 +556,7 @@ describe("router", () => {
     assert.ok(response?.body.includes("<title>Welcome!</title>"))
   })
 
-  it("resolves dynamic defineHeadContent after loader (SSR stream)", async () => {
+  it("resolves async defineHeadContent after loader (SSR stream)", async () => {
     const load = serverLoader(async () => ({ title: "Gizmo" }))
     const r = defineRouteTree((x) =>
       x.scope({
@@ -546,9 +565,10 @@ describe("router", () => {
           x.page("/product", {
             component: async () => ({
               load,
-              head: defineHeadContent<typeof load>((_ctx, { data }) => ({
-                title: `Product: ${data!.title}`,
-              })),
+              head: defineHeadContent<typeof load>(async (ctx) => {
+                const { data } = await ctx.loader()
+                return { title: `Product: ${data!.title}` }
+              }),
               default: () => <h1>Product</h1>,
             }),
           }),
@@ -574,6 +594,47 @@ describe("router", () => {
     reader.releaseLock()
 
     assert.ok(out.includes("<title>Product: Gizmo</title>"))
+  })
+
+  it("streams shell early with sync defineHeadContent and serverLoader", async () => {
+    const load = serverLoader({
+      load: async () => {
+        await new Promise((r) => setTimeout(r, 50))
+        return { label: "slow" }
+      },
+      fallback: () => <p data-testid="load-fallback">Loading...</p>,
+    })
+    const r = defineRouteTree((x) =>
+      x.scope({
+        head: { title: "Route" },
+        children: [
+          x.page("/items/[id]", {
+            component: async () => ({
+              load,
+              head: defineHeadContent((ctx) => ({
+                title: `Item ${ctx.params.id}`,
+              })),
+              default: () => <p data-testid="ok">ok</p>,
+            }),
+          }),
+        ],
+      })
+    )
+    const renderer = createRenderer({
+      stream: true,
+      routes: r,
+      htmlTemplate: MINIMAL_TPL,
+    })
+    const response = await renderer.render("/items/7")
+    assert.ok(response)
+    const reader = (response.body as ReadableStream<string>).getReader()
+    const first = await reader.read()
+    assert.ok(first.value?.includes("<title>Item 7</title>"))
+    assert.ok(
+      !first.value?.includes('data-testid="load-fallback"'),
+      "sync head does not wait for serverLoader"
+    )
+    reader.releaseLock()
   })
 
   it("streams shell early with static head and serverLoader fallback", async () => {

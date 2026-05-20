@@ -46,14 +46,14 @@ export const routes = defineRouteTree((r) =>
       r.page("/blog/[slug]", {
         component: () => import("./pages/blogSlug.tsx"),
         head: {
-          title: "Blog: {slug} — Kiru SSG",
+          title: "Blog — Kiru SSG",
           description: "A statically generated blog post.",
         },
       }),
       r.page("/blog/[slug]/comments/[id]", {
         component: () => import("./pages/blogComment.tsx"),
         head: {
-          title: "Comment {id} on {slug}",
+          title: "Blog comment — Kiru SSG",
           description:
             "Nested generateStaticParams (parent slug in ctx.params).",
         },

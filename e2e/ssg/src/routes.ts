@@ -49,11 +49,11 @@ export const routes = defineRouteTree((r) =>
           }),
           r.page("/posts/[slug]", {
             component: () => import("./pages/post"),
-            head: { title: "E2E SSG Post {slug}" },
+            head: { title: "E2E SSG Post" },
           }),
           r.page("/posts/[slug]/comments/[id]", {
             component: () => import("./pages/comment"),
-            head: { title: "Comment {id} on {slug}" },
+            head: { title: "E2E SSG Comment" },
           }),
         ],
       }),

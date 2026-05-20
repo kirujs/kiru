@@ -54,7 +54,6 @@ export const routes = defineRouteTree((r) =>
           r.page("/users/[id]", {
             component: () => import("./pages/user.tsx"),
             head: {
-              title: "User {id} — Kiru SSR",
               description: "Dynamic user profile (SSR).",
             },
           }),

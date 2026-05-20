@@ -143,9 +143,9 @@ export type GenerateSitemapParamsContext = GenerateStaticParamsContext
 /** Declarative SEO / document metadata (layout + route merge; child overrides). */
 export interface RouteHeadMeta {
   title?: string
-  /** When set with `title`, final title is `titleTemplate.replace("%s", title)` (e.g. `"%s | MyApp"`). */
-  titleTemplate?: string
   description?: string
+  /** Serialized as `<meta name="keywords" content="…" />` (comma-separated if an array). */
+  keywords?: string | readonly string[]
   robots?: string
   /** Absolute or root-relative URL */
   canonical?: string

@@ -4,7 +4,7 @@ import {
   readLoaderFallback,
   readPageLoadExport,
 } from "./loaders.js"
-import { isStaticPageHead, readPageHeadExport } from "./pageHead.js"
+import { isAsyncPageHead, readPageHeadExport } from "./pageHead.js"
 import { wrapRouteModuleWithLoadGate } from "./pageLoadGate.js"
 import { resolvePagePropsFromModule } from "./runPageLoad.js"
 import type { RouteModule } from "./types.js"
@@ -57,7 +57,7 @@ export async function prepareRouteForNavigation(input: {
   }
 
   const pageHead = readPageHeadExport(pageMod)
-  if (canStreamPageLoad(load) && isStaticPageHead(pageHead)) {
+  if (canStreamPageLoad(load) && !isAsyncPageHead(pageHead)) {
     const fallback = readLoaderFallback(load)
     if (fallback) {
       return {

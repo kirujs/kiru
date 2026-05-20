@@ -1,4 +1,12 @@
-import { type GenerateSitemapParamsContext, useRouter } from "kiru/router"
+import {
+  defineHeadContent,
+  type GenerateSitemapParamsContext,
+  useRouter,
+} from "kiru/router"
+
+export const head = defineHeadContent((ctx) => ({
+  title: `User ${ctx.params.id} — Kiru SSR`,
+}))
 
 export const generateSitemapParams = (_ctx: GenerateSitemapParamsContext) => {
   return [{ id: "1" }, { id: "2" }]

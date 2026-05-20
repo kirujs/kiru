@@ -79,7 +79,12 @@ import {
   clearStreamedSsrClientState,
   resetHydratedPageData,
 } from "./pageData.js"
-import { isStaticPageHead, readPageHeadExport, syncDocumentHeadForPage } from "./pageHead.js"
+import {
+  isStaticPageHead,
+  isSyncPageHead,
+  readPageHeadExport,
+  syncDocumentHeadForPage,
+} from "./pageHead.js"
 import { RequestContextProvider } from "./requestContext.js"
 import { warnRouterViewWithoutSsrBootstrap } from "./devWarnings.js"
 import { registerKiruRouter } from "./routerGlobal.js"
@@ -422,7 +427,7 @@ export function createRouter({
       if (!initial) return
       if (!canLoadProtectedLeaf(initial, contextGate.peek(), gateOptions)) return
       const pageHead = readPageHeadExport(await initial.route.component())
-      if (isStaticPageHead(pageHead)) {
+      if (isStaticPageHead(pageHead) || isSyncPageHead(pageHead)) {
         await syncDocumentHeadForPage(
           initial,
           buildLoaderContext({
@@ -540,7 +545,7 @@ export function createRouter({
           return
         }
         const pageHead = readPageHeadExport(await nextMatch.route.component())
-        if (isStaticPageHead(pageHead)) {
+        if (isStaticPageHead(pageHead) || isSyncPageHead(pageHead)) {
           await syncDocumentHeadForPage(
             nextMatch,
             buildLoaderContext({
