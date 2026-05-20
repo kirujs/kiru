@@ -1,6 +1,6 @@
 # Renderer, HTML shell, and hydration
 
-Server rendering centers on `createRenderer` (`packages/lib/src/router/renderer.ts`). Client continuation uses `bootstrapSsrClient` / `bootstrapSsgClient` (`packages/lib/src/ssr/routerHydrate.ts`).
+Server rendering centers on `createRenderer` (`packages/lib/src/router/renderer.ts`), which orchestrates smaller modules. Client continuation uses `bootstrapSsrClient` / `bootstrapSsgClient` (`packages/lib/src/ssr/routerHydrate.ts`).
 
 ## `createRenderer`
 
@@ -31,10 +31,11 @@ Internal steps (simplified):
 
 1. Locale detection redirect (i18n)
 2. **Prerender disk short-circuit** (production, non-edge) — `prerenderServe.ts`
-3. `prepareAppForUrl` — match, middleware, loaders, head
-4. Render JSX → HTML string or stream
+3. `prepareAppForUrl` (`prepareAppForUrl.ts`) — match, middleware, loaders, head
+4. Render JSX → HTML string (`ssrAppBuild.ts` / `staticRouteRender.ts`) or stream (`rendererStream.ts`)
 5. Inject scripts (`k-page-data`, `k-request-context`, `k-i18n`, action token)
 6. Remote `POST /?action=` handling on same renderer when configured
+7. Render errors → `renderErrorRecovery.ts`; ISR regen → `prerenderRegenerate.ts`
 
 ### Streaming
 

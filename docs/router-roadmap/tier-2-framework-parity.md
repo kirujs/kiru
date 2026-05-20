@@ -80,6 +80,9 @@ Per-request context is **SSR-only** via `createRenderer({ context })` and hydrat
 - [x] **`createSsrRouterShell()`** — shared SSR/SSG shell; `routerHydrate` uses inline outlet for targeted updates
 - [x] **Further dedupe** between `csr.ts` and `routerHydrate.ts` (`clientRoutePrep`, `buildLoaderContextForMatch`)
 - [x] **Narrow `@internal` router APIs** — runtime in `routerRuntime.ts`; guards via stable hooks only
+- [x] **Renderer slices** — `prepareAppForUrl`, `rendererStream`, `ssrAppBuild`, `staticRouteRender`, `renderErrorRecovery`, `prerenderRegenerate`
+- [x] **Link prefetch** — `prefetchRoute` + `loaderClient`; e2e hover dedupe on `e2e/ssr`
+- [x] **Loader registry import** — codegen uses `kiru/router/loaderRegistry` (not public barrel)
 
 ## Testing
 

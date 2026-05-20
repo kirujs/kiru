@@ -9,7 +9,7 @@ Source: `packages/lib/src/router/loaders.ts`, `runPageLoad.ts`, `prepareRoute.ts
 | Export helper | `__kiruLoader` | Runs where (first paint) | Client navigation |
 |---------------|----------------|--------------------------|-------------------|
 | `loader()` | `universal` | SSR server (or SSG build) + can run on client | Re-runs per staleTime |
-| `serverLoader()` | `server` | SSR / SSG build only | SSR: `POST /?loader=` RPC |
+| `serverLoader()` | `server` | SSR / SSG build only | SSR: `POST /?loader=` RPC; client cache when `staleTime: 0` (see below) |
 | `clientLoader()` | `client` | CSR only | Always client |
 | `staticLoader()` | `static` | SSG build → baked into module | **Does not run** (warn in dev) |
 
@@ -132,7 +132,11 @@ export const load = serverLoader({
 CSR API:
 
 - `router.invalidate()` — force refetch
-- `router.isLoaderStale` — UI flag while showing stale cache + background refetch
+- `router.isLoaderStale` — UI flag while showing cached data past `staleTime` during background revalidate (`staleTime > 0` only)
+
+**`staleTime: 0` (default):** entries are served from cache for the current pathname without background revalidate loops. Use this for **Link prefetch dedupe** (hover warms cache; the next click to the same route skips a second RPC). When you **navigate away**, the router clears cache entries for the **previous** pathname so returning later refetches.
+
+**`staleTime > 0`:** stale entries trigger a single-flight background refetch; `onCacheRefreshed` bumps `loaderEpoch` when fresh data lands.
 
 See `packages/lib/src/router/loaderCache.ts` and `docs/router/tier-3-wave-1.md`.
 
@@ -164,11 +168,11 @@ Validation failures and loader throws surface as `error` without crashing the ro
 
 ## Loader registry (SSR RPC)
 
-`vite-plugin-kiru` with `router.serverEntry` emits `virtual:kiru:loader-registry`. Server handles:
+`vite-plugin-kiru` with `router.serverEntry` emits `virtual:kiru:loader-registry`. Generated server bundles import `__INTERNAL_LOADER_REGISTRY` from **`kiru/router/loaderRegistry`** (not the public `kiru/router` barrel). Server handles:
 
 ```
 POST /?loader=<routeId>:load
-Body: serialized LoaderContext JSON
+Body: serialized LoaderContext JSON (LoaderContext.url.pathname is the matched route pathname)
 Header: x-kiru-token (signed context)
 ```
 
@@ -176,13 +180,17 @@ Client stub: `__kiruEnsureLoaderDispatch()` from `kiru/router/loaderClient` (ins
 
 ## Link prefetch
 
-`<Link>` accepts `prefetch` as `false` or `{ trigger?: "hover" | "visible", chunks?: boolean, data?: boolean }`.
+`<Link>` accepts `prefetch` as `false` or `{ trigger?: "hover" | "visible", chunks?: boolean, data?: boolean }`. Default when omitted: `{ trigger: "hover", chunks: true, data: true }` when loader RPC exists.
+
+Hover prefetch runs on **`pointerenter` and `mouseenter`** (synthetic `mouseenter` in tests still triggers prefetch).
 
 - **chunks** (default `true`): dynamic-import route modules (layouts + page) when the context gate allows.
-- **data** (default `true` when `__kiru_loaders` RPC is present): validates search params, then warms loader cache via `/?loader=` or client loaders.
+- **data** (default `true` when `__kiru_loaders` RPC is present): validates search params, then warms loader cache via `/?loader=` or client/universal loaders. **`serverLoader`** results are cached like other kinds when `staleTime: 0`; the next navigation to that pathname reuses the cache (one RPC for hover + click).
 - Prefetch does **not** run middleware, `resolveContext`, or full navigation — it only reduces latency for the next click.
 
 Protected routes with `contextStrategy: "block"` skip leaf module import until the gate is ready (same as `RouterView`).
+
+E2E: `e2e/ssr/cypress/e2e/ssr.cy.ts` — hover on `/loaders/server` link, assert a single `POST /?loader=` before and after click.
 
 ## Use-case examples for docs site
 

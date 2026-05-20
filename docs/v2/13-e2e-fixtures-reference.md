@@ -55,7 +55,7 @@ From `cypress/e2e/context.cy.ts`:
 | `/docs` | Hybrid static prerender (disk HTML in prod) |
 | `/ppr/force-dynamic` | ISR dynamic override |
 | `/ppr/force-static` | force-static 404 behavior |
-| `/loaders/server` | `serverLoader` + RPC |
+| `/loaders/server` | `serverLoader` + RPC; Cypress prefetch-on-hover (single `?loader=` for hover + click) |
 | `/loaders/server-immediate-shell` | Streaming fallback |
 | Form/action specs | `x-kiru-form`, invalidate header |
 | Tier 3 | `cypress/e2e/tier3-wave1.cy.ts` |

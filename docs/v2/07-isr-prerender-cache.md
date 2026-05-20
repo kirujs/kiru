@@ -162,6 +162,6 @@ Document clearly: **hybrid disk behavior is production-only**; dev SSR matches p
 
 ## Monitoring stale-serving
 
-Background regen sets `bypassPrerenderServe` while `renderCore` regenerates entry into cache (`renderer.ts` `onRegenerate` callback).
+Background regen sets `bypassPrerenderServe` while `renderCore` regenerates entry into cache (`createIsrRegenerateHandler` in `prerenderRegenerate.ts`).
 
 Single-flight: concurrent stale requests share one regen promise (`prerenderServe.ts`).

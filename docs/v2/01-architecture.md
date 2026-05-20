@@ -34,7 +34,7 @@ Client navigations funnel through `packages/lib/src/router/navigation.ts`:
 5. **Prepare route** — loaders, `pageHead`, streaming gate (`prepareRoute.ts`, `runPageLoad.ts`)
 6. Update outlet (`RouterView` / SSR shell subscription)
 
-SSR first paint runs the same middleware + loader ordering inside `renderer.ts` → `prepareAppForUrl`.
+SSR first paint runs the same middleware + loader ordering inside `createRenderer` → `prepareAppForUrl.ts`.
 
 ## HTML document contract
 
@@ -87,7 +87,18 @@ Kiru adapters intentionally do not register HTTP middleware.
 | `defineRouteTree.ts` | Authoring API |
 | `manifest.ts` | Compile tree, match, static path generation |
 | `csr.ts` | `createRouter`, signals, navigations |
-| `renderer.ts` | SSR render, ISR disk short-circuit, actions |
+| `renderer.ts` | `createRenderer` orchestration, actions, re-exports |
+| `prepareAppForUrl.ts` | SSR match, middleware, loaders, redirects |
+| `rendererStream.ts` | Streaming shell + templated flush |
+| `ssrAppBuild.ts` | `buildAppElement`, string render + document head |
+| `staticRouteRender.ts` | SSG / string SSR match render |
+| `renderErrorRecovery.ts` | SSR error boundary HTML / stream |
+| `prerenderRegenerate.ts` | ISR background regen (`onRegenerate`) |
+| `clientRoutePrep.ts` | Shared CSR/SSR outlet prep + document head |
+| `prefetchRoute.ts` | Link hover/visible prefetch |
+| `loaderClient.ts` | Client `/?loader=` dispatch |
+| `loaderRegistry.ts` | Server loader RPC registry (internal import path) |
+| `routerRuntime.ts` | Internal router state (gate, nav generation) |
 | `navigation.ts` | Client navigation orchestration |
 | `routeMiddleware.ts` | Middleware runner |
 | `routeMeta.ts` | Meta merge, middleware chain, context strategy |

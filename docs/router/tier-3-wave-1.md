@@ -30,7 +30,9 @@ export const load = serverLoader({
 - **`staleTime`** — milliseconds before data is considered stale (default `0`: refetch on navigation).
 - **`gcTime`** — milliseconds to keep unused cache entries (default 5 minutes).
 
-Use `router.invalidate()` to force a refetch immediately (e.g. after a mutation). `router.isLoaderStale` is true when showing cached data past `staleTime`.
+Use `router.invalidate()` to force a refetch immediately (e.g. after a mutation). `router.isLoaderStale` is true when showing cached data past `staleTime` while a background revalidate runs (`staleTime > 0` only).
+
+**`staleTime: 0` (default):** treat cached data as fresh for repeat reads on the same pathname (no background revalidate storm). Pair with **Link prefetch** so hover + click share one RPC. Leaving a pathname clears its cache entries so a later return refetches.
 
 **When to use:** client navigations where repeating loader work is expensive. **When not to:** always use `invalidate()` after writes instead of relying on short `staleTime`.
 

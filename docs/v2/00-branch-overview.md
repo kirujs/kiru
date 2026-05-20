@@ -15,6 +15,8 @@ Approximate diff vs `main` merge-base: **533 files**, **+33k / −6k** lines.
 | Vike renderer files in `sandbox/ssr` (`+onRenderHtml`, etc.) | `routes.ts` + `createRenderer` / `createKiruResponder` |
 | `e2e/ssr-bun`, `e2e/ssr-worker` (standalone) | `e2e/ssr-matrix` (13 smoke cells) |
 | `virtualManifest` vite-plugin option | Vite `build.manifest` for SSG |
+| `validateSearch` / `defineSearchParams`, `KiruValidator`, `assertValid` | `load.validation` with `Schema` + `parseInput` |
+| `Link prefetch="hover"` string attribute | `prefetch={ false \| { trigger, chunks, data } }` |
 
 ## Added packages / surfaces
 
@@ -38,6 +40,7 @@ New or reworked exports (see `packages/lib/src/router/index.ts`):
 - **Policy:** `defineRouteMiddleware`, `runRouteMiddleware`, `RouteMeta` augmentation
 - **Context:** `resolveContext` (CSR), `contextStrategy`, `contextGate`, `RequestContextProvider`
 - **Cache / ISR:** `defineISR`, `revalidatePath`, `revalidateTag`, `diskPrerenderCache`
+- **Prefetch / RPC:** `prefetchRoute`, `kiru/router/loaderClient`, `kiru/router/loaderRegistry` (codegen only)
 - **i18n:** `createI18nConfig`, `useI18n`, locale routing helpers
 - **Site:** `defineSiteConfig`, sitemap/robots generation
 - **Images:** `createImageOptimizer`, `createImageOptimizerIfRuntime`

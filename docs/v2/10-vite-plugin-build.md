@@ -106,10 +106,11 @@ When `serverEntry` set:
 
 ```ts
 // virtual:kiru:loader-registry
-// Aggregates serverLoader handlers for RPC
+// import { __INTERNAL_LOADER_REGISTRY } from "kiru/router/loaderRegistry"
+// registerLazyImport per route with serverLoader
 ```
 
-Resolved in `configResolved` via `renderLoaderRegistryVirtual`.
+Resolved in `configResolved` via `renderLoaderRegistryVirtual`. Page modules with `serverLoader` get client `__kiruEnsureLoaderDispatch` from `kiru/router/loaderClient`.
 
 ## Cloudflare adapter build
 

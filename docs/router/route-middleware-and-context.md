@@ -201,7 +201,7 @@ matchRoute
   → scope middleware[] (ancestor → leaf)
   → route middleware[] (if any)
   → optional meta policies
-  → validateSearch / validateParams (existing)
+  → `load.validation` query/params (`validateRouteInput` / `validateSearchForMatch`)
   → redirect loop if path changed
   → loaders
   → render (SSR) or commit URL + outlet (CSR)
@@ -378,7 +378,7 @@ type ContextGate =
 
 ### B. Hold navigation commit until gate passes
 
-Order: `match → resolveContext (if needed) → middleware → validateSearch → commit URL → load modules`.
+Order: `match → resolveContext (if needed) → middleware → load.validation (query/params) → commit URL → load modules`.
 
 Prevents painting protected content while URL is already `/dashboard` on direct hits.
 

@@ -116,6 +116,8 @@ action.post(schema, async ({ context, signal }, input) => { ... context.user ...
 
 ## Breaking removals checklist
 
+- [ ] Replace `validateSearch` / `defineSearchParams` / `KiruValidator` with `load.validation` + `Schema` / `parseInput`
+- [ ] Update `<Link prefetch="hover">` to `prefetch={{ trigger: "hover" }}` or omit for defaults
 - [ ] Update `*.actions.ts` handlers to `{ context, signal }` (not bare `ctx`)
 - [ ] Delete `FileRouter` imports
 - [ ] Delete `+Page.tsx` / `+config.ts` Vike files
