@@ -1,5 +1,6 @@
 import { defineConfig } from "cypress"
 import { createServer, type ViteDevServer } from "vite"
+import { runConcurrentContextCheck } from "./scripts/lib/concurrent-context.mjs"
 
 const port = 5192
 
@@ -23,6 +24,20 @@ export default defineConfig({
     excludeSpecPattern: ["**/tier3-wave1.cy.ts"],
     setupNodeEvents(on) {
       let server: ViteDevServer | null = null
+      on("task", {
+        concurrentContextCheck({
+          port,
+          concurrency,
+        }: {
+          port: number
+          concurrency?: number
+        }) {
+          return runConcurrentContextCheck({
+            origin: `http://127.0.0.1:${port}`,
+            concurrency,
+          })
+        },
+      })
       on("before:run", async () => {
         server = await startViteDevServer()
       })

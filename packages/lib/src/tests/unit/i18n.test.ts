@@ -25,6 +25,7 @@ import {
   getByPath,
 } from "../../router/i18n/index.js"
 import { buildLoaderContext } from "../../router/runPageLoad.js"
+import { staticLoaderSignal } from "../../router/navigationScope.js"
 import {
   detectLocaleFromRequest,
   resolveLocale,
@@ -104,6 +105,7 @@ describe("i18n", () => {
       context: {},
       meta: {},
       routeId: "route:1",
+      signal: staticLoaderSignal(),
       ...fields,
     })
     assert.equal(ctx.locale, "fr")

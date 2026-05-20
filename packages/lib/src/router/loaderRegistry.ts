@@ -94,6 +94,7 @@ export function createLoaderHandler(
     const loaderCtx = body as LoaderContext
     loaderCtx.context = context
     loaderCtx.request = request
+    loaderCtx.signal = request.signal
 
     try {
       const data = await handler.__kiruInvoke(loaderCtx)

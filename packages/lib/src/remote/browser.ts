@@ -31,6 +31,7 @@ export {
   type RemoteActionMethod,
   type RemoteActionOptions,
   type RemoteActionCallback,
+  type RemoteActionContext,
   type RemoteActionSchema,
   type RemoteFormActionFunction,
   type RemoteFormActionCallback,

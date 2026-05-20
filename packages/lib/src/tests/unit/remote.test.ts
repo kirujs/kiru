@@ -8,10 +8,10 @@ import {
 import {
   __INTERNAL_REMOTE_REGISTRY,
   action,
+  buildRemoteActionContext,
   createRemoteActionHandler,
   RemoteError,
 } from "../../remote/index.js"
-
 const SECRET = "test-secret-abc"
 
 // ---------------------------------------------------------------------------
@@ -193,7 +193,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/post-via-get"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action.post(async (_ctx, input: string) => input),
+      fn: action.post(async (_, input: string) => input),
     })
     const req = makeGetRequest(`${routeId}:fn`, token)
     assert.strictEqual(await handler(req), null)
@@ -204,7 +204,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/wrong-content-type"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action.post(async (_ctx, input: string) => input),
+      fn: action.post(async (_, input: string) => input),
     })
     const req = new Request(`http://localhost/?action=${routeId}:fn`, {
       method: "POST",
@@ -252,7 +252,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/body-invalid-json"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action.post(async (_ctx, _input: void) => "ok"),
+      fn: action.post(async (_, _input: void) => "ok"),
     })
     const req = new Request(`http://localhost/?action=${routeId}:fn`, {
       method: "POST",
@@ -315,7 +315,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/dispatch"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      greet: action.post(async (_ctx, name: string) => `hello ${name}`),
+      greet: action.post(async (_, name: string) => `hello ${name}`),
     })
     const req = makePostRequest(`${routeId}:greet`, token, "world")
     const res = await handler(req)
@@ -334,7 +334,7 @@ describe("remote / handler", () => {
     const routeId = "test/tuple-input"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       add: action.post(
-        async (_ctx, input: readonly [number, number]) => input[0]! + input[1]!
+        async (_, input: readonly [number, number]) => input[0]! + input[1]!
       ),
     })
     const req = makePostRequest(`${routeId}:add`, token, [3, 7])
@@ -365,7 +365,7 @@ describe("remote / handler", () => {
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       delayed: action.get(async (ctx) => {
         await new Promise<void>((r) => setTimeout(r, 5))
-        return (ctx as { ping?: string }).ping
+        return (ctx.context as { ping?: string }).ping
       }),
     })
     const req = makeGetRequest(`${routeId}:delayed`, token)
@@ -388,7 +388,41 @@ describe("remote / handler", () => {
     })
     const req = makeGetRequest(`${routeId}:whoami`, token)
     await handler(req)
-    assert.deepStrictEqual(captured, ctx)
+    assert.deepStrictEqual(
+      captured,
+      buildRemoteActionContext(ctx, req.signal)
+    )
+  })
+
+  it("returns 499 when the request aborts during a slow action", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const token = validToken()
+    const routeId = "test/abort"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      slow: action.get(async (ctx) => {
+        await new Promise<void>((resolve, reject) => {
+          const t = setTimeout(resolve, 500)
+          ctx.signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(t)
+              reject(new DOMException("Aborted", "AbortError"))
+            },
+            { once: true }
+          )
+        })
+        return "done"
+      }),
+    })
+    const ctrl = new AbortController()
+    const req = makeGetRequest(`${routeId}:slow`, token, {
+      signal: ctrl.signal,
+    })
+    const invoke = handler(req)
+    await new Promise((r) => setTimeout(r, 10))
+    ctrl.abort()
+    const res = await invoke
+    assert.strictEqual(res?.status, 499)
   })
 
   it("validates action input via KiruValidator.safeParse", async () => {
@@ -409,7 +443,7 @@ describe("remote / handler", () => {
               : { success: false as const, error: null }
           },
         },
-        async (_ctx, input) => `hello ${input.name}`
+        async (_, input) => `hello ${input.name}`
       ),
     })
     const req = makePostRequest(`${routeId}:greet`, token, { wrong: true })

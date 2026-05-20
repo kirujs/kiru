@@ -1,6 +1,6 @@
 import { formAction, redirect, RemoteError } from "kiru/remote"
 
-export const submitValidation = formAction(async (_ctx, formData) => {
+export const submitValidation = formAction(async (_, formData) => {
   const message = String(formData.get("message") ?? "").trim()
   if (!message) {
     throw new RemoteError("Message required", "VALIDATION_ERROR", {
@@ -11,7 +11,7 @@ export const submitValidation = formAction(async (_ctx, formData) => {
   return { message }
 })
 
-export const submitMessage = formAction(async (_ctx, formData) => {
+export const submitMessage = formAction(async (_, formData) => {
   const message = String(formData.get("message") ?? "").trim()
   return { message: message || "empty" }
 })

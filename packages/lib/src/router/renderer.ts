@@ -58,6 +58,11 @@ import { createLoaderHandler } from "./loaderRegistry.js"
 import { serializePageDataScript } from "./pageData.js"
 import { buildLoaderContext, resolvePagePropsFromModule } from "./runPageLoad.js"
 import {
+  loaderSignalFromRequest,
+  isAbortError,
+  throwIfAborted,
+} from "./navigationScope.js"
+import {
   emitStaticLoaderPrerenderCapture,
   pageModuleUsesStaticLoader,
 } from "./staticLoaderData.js"
@@ -117,7 +122,7 @@ import {
   makeKiruContextTokenAsync,
   createRemoteActionHandler,
 } from "../remote/index.js"
-import { __setSsrRequestContext } from "../remote/action.js"
+import { runWithSsrRequestContext } from "../remote/action.js"
 import {
   buildMiddlewareTo,
   buildMatchSegments,
@@ -397,6 +402,10 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     }
 
     const requestedPathForErrors = toPathname(url)
+    const renderSignal = loaderSignalFromRequest(
+      typeof requestOrUrl === "object" ? requestOrUrl : undefined
+    )
+
     let failureContext:
       | {
           match: RouteMatch | null
@@ -507,34 +516,28 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
           if (actionTokenInsertion) document.headHtml += actionTokenInsertion
         }
 
-        const stream = routeMatch
-          ? renderStreamForRouteMatch(app, routeMatch, requestContext, {
-              compiledTemplate,
-              decorateDocument,
-              pageData: serializedPageData,
-              streamHeadMeta: prepared.streamHeadMeta,
-              pagePropsPromise: prepared.pagePropsPromise,
-              earlyFlushHead: prepared.earlyFlushHead,
-              i18nPayload: prepared.i18nPayload,
-              documentLang: prepared.i18nPayload?.locale,
-            })
-          : (() => {
-              __setSsrRequestContext(requestContext)
-              const document: DocumentHead = {
-                headHtml: serializeRequestContextScript(requestContext),
-              }
-              decorateDocument(document)
-              const s = renderToReadableStream(app, {
-                onShellReady: (shell, controller) =>
-                  enqueueTemplatedShell(controller, {
-                    compiledTemplate,
-                    headHtml: document.headHtml,
-                    shell,
-                  }),
-              })
-              __setSsrRequestContext({})
-              return s
-            })()
+        const stream = runWithSsrRequestContext(
+          requestContext,
+          renderSignal,
+          () =>
+            routeMatch
+              ? renderStreamForRouteMatch(app, routeMatch, requestContext, {
+                  compiledTemplate,
+                  decorateDocument,
+                  pageData: serializedPageData,
+                  streamHeadMeta: prepared.streamHeadMeta,
+                  pagePropsPromise: prepared.pagePropsPromise,
+                  earlyFlushHead: prepared.earlyFlushHead,
+                  i18nPayload: prepared.i18nPayload,
+                  documentLang: prepared.i18nPayload?.locale,
+                })
+              : renderUnmatchedAppStream(
+                  app,
+                  requestContext,
+                  compiledTemplate,
+                  decorateDocument
+                )
+        )
 
         return {
           kind: "stream" as const,
@@ -555,17 +558,20 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
             app,
             routeMatch,
             requestContext,
+            renderSignal,
             pathPolicy,
             serializedPageData,
             prepared.streamHeadMeta,
             prepared.i18nPayload
           )
-        : {
+        : runWithSsrRequestContext(requestContext, renderSignal, () => ({
             body: renderToString(app),
             document: {
               headHtml: serializeRequestContextScript(requestContext),
-            },
-          }
+              bodyEndHtml: "",
+              headEndHtml: "",
+            } satisfies DocumentHead,
+          }))
 
       if (actionTokenInsertion) document.headHtml += actionTokenInsertion
 
@@ -591,6 +597,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         },
       }
     } catch (caught) {
+      if (isAbortError(caught)) return null
       const renderErr = toRenderError(caught)
 
       let recovery:
@@ -641,21 +648,20 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
             : ""
 
         if (options.stream) {
-          __setSsrRequestContext(recoveryCtx)
           const document: DocumentHead = {
             headHtml: serializeRequestContextScript(recoveryCtx),
           }
           if (recoveryTokenInsertion) document.headHtml += recoveryTokenInsertion
-          const stream = renderToReadableStream(recoveryApp, {
-            onShellReady: (shell, controller) =>
-              enqueueTemplatedShell(controller, {
-                compiledTemplate,
-                headHtml: document.headHtml,
-                shell,
-              }),
-          })
-          __setSsrRequestContext({})
-
+          const stream = runWithSsrRequestContext(recoveryCtx, renderSignal, () =>
+            renderToReadableStream(recoveryApp, {
+              onShellReady: (shell, controller) =>
+                enqueueTemplatedShell(controller, {
+                  compiledTemplate,
+                  headHtml: document.headHtml,
+                  shell,
+                }),
+            })
+          )
           return {
             kind: "stream" as const,
             result: {
@@ -666,13 +672,9 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
           }
         }
 
-        let body = ""
-        __setSsrRequestContext(recoveryCtx)
-        try {
-          body = renderToString(recoveryApp)
-        } finally {
-          __setSsrRequestContext({})
-        }
+        const body = runWithSsrRequestContext(recoveryCtx, renderSignal, () =>
+          renderToString(recoveryApp)
+        )
 
         const documentHead: DocumentHead = {
           headHtml: serializeRequestContextScript(recoveryCtx),
@@ -784,6 +786,7 @@ async function renderStringWithDocument(
   app: JSX.Element,
   match: RouteMatch,
   requestContext: CustomRequestContext,
+  renderSignal: AbortSignal,
   pathPolicy?: RouterPathPolicy,
   pageData?: unknown,
   streamHeadMeta?: RouteHeadMeta,
@@ -792,18 +795,18 @@ async function renderStringWithDocument(
   let body = ""
   const prev = renderMode.current
   renderMode.current = "stream"
-  __setSsrRequestContext(requestContext as Record<string, unknown>)
   try {
-    headlessRender(
-      {
-        write(chunk) {
-          body += chunk
+    runWithSsrRequestContext(requestContext, renderSignal, () => {
+      headlessRender(
+        {
+          write(chunk) {
+            body += chunk
+          },
         },
-      },
-      Fragment({ children: app })
-    )
+        Fragment({ children: app })
+      )
+    })
   } finally {
-    __setSsrRequestContext({})
     renderMode.current = prev
   }
 
@@ -894,6 +897,7 @@ export async function renderMatchToStaticHtml(
     locale?: string | null
     /** Public URL path for static loader capture (locale prefix included). */
     publicPath?: string
+    signal?: AbortSignal
   }
 ): Promise<{ body: string; document: DocumentHead; pageData?: unknown }> {
   return runWithImagePreloadRegistry(() =>
@@ -909,10 +913,15 @@ async function renderMatchToStaticHtmlInner(
     i18n?: InternationalizationConfig<readonly string[], unknown>
     locale?: string | null
     publicPath?: string
+    signal?: AbortSignal
   }
 ): Promise<{ body: string; document: DocumentHead; pageData?: unknown }> {
+  const renderSignal = options?.signal ?? loaderSignalFromRequest(undefined)
+  throwIfAborted(renderSignal)
+
   // Prerender paths are pathname-only (no query string at build time).
   const pageMod = await match.route.component()
+  throwIfAborted(renderSignal)
   const locale = options?.locale ?? null
   const loaderCtx = buildLoaderContext({
     params: match.params,
@@ -923,17 +932,24 @@ async function renderMatchToStaticHtmlInner(
     context: {},
     meta: mergeRouteMeta(match),
     routeId: match.route.id,
+    signal: renderSignal,
     ...(options?.i18n && locale
       ? loaderI18nFields(options.i18n, locale)
       : {}),
   })
-  const { props: pageProps } = await resolvePagePropsFromModule(pageMod, loaderCtx)
+  const resolved = await resolvePagePropsFromModule(pageMod, loaderCtx)
+  throwIfAborted(renderSignal)
+  if (resolved.discarded) {
+    throw new DOMException("Prerender aborted", "AbortError")
+  }
+  const pageProps = resolved.props
   const streamHeadMeta = await resolveStreamHeadMeta(
     match,
     pageMod,
     loaderCtx,
     pageProps as PageProps<KiruLoader<unknown>>
   )
+  throwIfAborted(renderSignal)
   const i18nPayload =
     options?.i18n && locale
       ? {
@@ -943,9 +959,11 @@ async function renderMatchToStaticHtmlInner(
           defaultLocale: options.i18n.default,
         }
       : undefined
+  throwIfAborted(renderSignal)
   const localeRouting =
     options?.i18n && locale ? getI18nLocaleRouting(options.i18n) : undefined
   const { layoutModules, routeModule } = await loadRouteTree(match)
+  throwIfAborted(renderSignal)
   const app = buildAppElement(
     match.pathname,
     match.params,
@@ -972,11 +990,13 @@ async function renderMatchToStaticHtmlInner(
     app,
     match,
     {},
+    renderSignal,
     pathPolicy,
     pageData,
     streamHeadMeta,
     i18nPayload
   )
+  throwIfAborted(renderSignal)
   return { ...rendered, pageData }
 }
 
@@ -1261,6 +1281,9 @@ async function prepareAppForUrl(
       return null
     }
 
+    const renderSignal = loaderSignalFromRequest(request)
+    throwIfAborted(renderSignal)
+
     const loaderCtx = buildLoaderContext({
       params: searchCheck.params,
       pathname: routeMatch.pathname,
@@ -1271,9 +1294,16 @@ async function prepareAppForUrl(
       context: requestContext,
       meta: mergeRouteMeta(routeMatch),
       routeId: routeMatch.route.id,
+      request,
+      signal: renderSignal,
       ...loaderI18nFields(i18n, locale),
     })
-    const pageMod = await routeMatch.route.component()
+
+    const { layoutModules, routeModule: rawRouteModule } =
+      await loadRouteTree(routeMatch)
+    throwIfAborted(renderSignal)
+
+    const pageMod = rawRouteModule
     const pageHead = readPageHeadExport(pageMod)
     const load = readPageLoadExport(pageMod)
     const asyncHead = isAsyncPageHead(pageHead)
@@ -1285,23 +1315,38 @@ async function prepareAppForUrl(
     let pageProps: Record<string, unknown>
     let pagePropsPromise: Promise<Record<string, unknown>> | undefined
 
+    const i18nMessagesPromise =
+      i18n && locale ? loadI18nMessages(i18n, locale) : Promise.resolve(undefined)
+
+    let streamHeadMeta: Awaited<ReturnType<typeof resolveStreamHeadMeta>>
+    let i18nMessages: Awaited<typeof i18nMessagesPromise>
     if (streamPageLoad) {
       // Loader data is streamed via `resource()` / `__$k_data` in the load gate;
       // do not await `resolvePagePropsFromModule` here or the shell blocks on load.
       pageProps = {}
+      ;[streamHeadMeta, i18nMessages] = await Promise.all([
+        resolveStreamHeadMeta(routeMatch, pageMod, loaderCtx, undefined),
+        i18nMessagesPromise,
+      ])
     } else {
-      pageProps = (await resolvePagePropsFromModule(pageMod, loaderCtx)).props
+      const resolved = await resolvePagePropsFromModule(pageMod, loaderCtx, {
+        routeId: routeMatch.route.id,
+      })
+      if (resolved.discarded) return null
+      throwIfAborted(renderSignal)
+      pageProps = resolved.props
+      ;[streamHeadMeta, i18nMessages] = await Promise.all([
+        resolveStreamHeadMeta(
+          routeMatch,
+          pageMod,
+          loaderCtx,
+          pageProps as PageProps<KiruLoader<unknown>>
+        ),
+        i18nMessagesPromise,
+      ])
     }
+    throwIfAborted(renderSignal)
 
-    const streamHeadMeta = await resolveStreamHeadMeta(
-      routeMatch,
-      pageMod,
-      loaderCtx,
-      streamPageLoad ? undefined : (pageProps as PageProps<KiruLoader<unknown>>)
-    )
-
-    const { layoutModules, routeModule: rawRouteModule } =
-      await loadRouteTree(routeMatch)
     let routeModule = rawRouteModule
     if (streamPageLoad && load) {
       const fallback = readLoaderFallback(load)
@@ -1314,12 +1359,11 @@ async function prepareAppForUrl(
         )
       }
     }
-
     const i18nPayload =
-      i18n && locale
+      i18n && locale && i18nMessages !== undefined
         ? {
             locale,
-            data: await loadI18nMessages(i18n, locale),
+            data: i18nMessages,
             locales: i18n.locales,
             defaultLocale: i18n.default,
           }
@@ -1440,7 +1484,6 @@ function renderStreamForRouteMatch(
       decorateDocument: opts.decorateDocument,
     })
 
-  __setSsrRequestContext(requestContext)
   const stream = renderToReadableStream(app, {
     onStreamStart: mayEarlyFlush
       ? (controller) => {
@@ -1487,7 +1530,27 @@ function renderStreamForRouteMatch(
       })
     },
   })
-  __setSsrRequestContext({})
+  return stream
+}
+
+function renderUnmatchedAppStream(
+  app: JSX.Element,
+  requestContext: CustomRequestContext,
+  compiledTemplate: CompiledRouteHtmlTemplate | null,
+  decorateDocument: (document: DocumentHead) => void
+): ReadableStream<string> {
+  const document: DocumentHead = {
+    headHtml: serializeRequestContextScript(requestContext),
+  }
+  decorateDocument(document)
+  const stream = renderToReadableStream(app, {
+    onShellReady: (shell, controller) =>
+      enqueueTemplatedShell(controller, {
+        compiledTemplate,
+        headHtml: document.headHtml,
+        shell,
+      }),
+  })
   return stream
 }
 

@@ -96,14 +96,34 @@ Add `PageProps<typeof load>` to page components.
 
 Augment `RouteMeta` and `CustomRequestContext`.
 
+## Remote action handler context
+
+Handlers no longer receive `CustomRequestContext` as the first argument. Use **`RemoteActionContext`**:
+
+```ts
+// Before
+action.post(schema, async (ctx, input) => { ... ctx.user ... })
+
+// After
+action.post(schema, async ({ context, signal }, input) => { ... context.user ... })
+```
+
+`action.get` / `formAction` follow the same shape. Zero-arg callbacks are unchanged. Client `fetch` abort: `action.post(input, { signal })` / `action.get({ signal })`.
+
+**SSR scope:** `runWithSsrRequestContext` wraps sync `headlessRender` only (single `current` slot, save/restore on nest). RPC uses the token, not that slot. Add `import "virtual:kiru:remote-registry"` to `serverEntry` for production action registration.
+
+**SSG:** `prerenderStaticRoutes({ signal })` and `maxConcurrentRenders: Infinity` run all pages in parallel (fixed from an earlier sequential `Infinity` bug).
+
 ## Breaking removals checklist
 
+- [ ] Update `*.actions.ts` handlers to `{ context, signal }` (not bare `ctx`)
 - [ ] Delete `FileRouter` imports
 - [ ] Delete `+Page.tsx` / `+config.ts` Vike files
 - [ ] Remove `e2e/ssr-bun` / `e2e/ssr-worker` if referenced in CI — use `ssr-matrix`
 - [ ] Update `builderman.js` tasks (`e2e/ssg` restored on branch)
 - [ ] Replace `RouterView`-only mount with `createRouterApp` for SSR apps
 - [ ] Configure `KIRU_ACTIONS_SECRET` when using remote actions
+- [ ] `import "virtual:kiru:remote-registry"` in SSR `serverEntry` when using `router.remote`
 
 ## Sandbox reference
 

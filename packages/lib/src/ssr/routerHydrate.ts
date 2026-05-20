@@ -28,6 +28,13 @@ import { readHydratedRequestContext } from "../router/requestContext.js"
 import { loaderI18nFields } from "../router/i18n/index.js"
 import { buildLoaderContext } from "../router/runPageLoad.js"
 import { prepareRouteForNavigation } from "../router/prepareRoute.js"
+import {
+  buildScopeCacheKey,
+  createNavigationScope,
+  isScopeCurrent,
+  type NavigationScope,
+} from "../router/navigationScope.js"
+import { formatRouterSearch } from "../router/navigation.js"
 import type { RouteModule } from "../router/types.js"
 import { requestToken } from "../globals.js"
 import { syncDocumentHeadForPage } from "../router/pageHead.js"
@@ -101,9 +108,8 @@ function ensureLoaderClient() {
   const g = globalThis as typeof globalThis & {
     __kiru_loaders?: { dispatch: LoaderDispatch }
   }
-  if (g.__kiru_loaders) return
-  g.__kiru_loaders = {
-    dispatch: async (routeId, ctx) => {
+  g.__kiru_loaders ??= {
+    dispatch: async (routeId, context) => {
       const r = await fetch(
         `/?loader=${encodeURIComponent(`${routeId}:load`)}`,
         {
@@ -112,7 +118,7 @@ function ensureLoaderClient() {
             "Content-Type": "application/json",
             "x-kiru-token": requestToken.current,
           },
-          body: JSON.stringify(ctx),
+          body: JSON.stringify(context),
         }
       )
       if (!r.ok) throw new Error("Loader request failed")
@@ -194,9 +200,10 @@ function restoreClientHashAfterHydration(
 }
 
 function loaderContextForMatch(
-  routeMatch: { params: Record<string, string> },
+  routeMatch: { params: Record<string, string>; route: { id: string } },
   pathname: string,
-  router: ReturnType<typeof createRouter>
+  router: ReturnType<typeof createRouter>,
+  signal: AbortSignal
 ) {
   return buildLoaderContext({
     params: routeMatch.params,
@@ -206,7 +213,8 @@ function loaderContextForMatch(
     query: router.query.peek(),
     context: router.requestContext?.peek() ?? readHydratedRequestContext(),
     meta: {},
-    routeId: "route:hydrate",
+    routeId: routeMatch.route.id,
+    signal,
     ...(router.__i18n && router.locale
       ? loaderI18nFields(router.__i18n.config, router.locale.peek())
       : {}),
@@ -215,19 +223,27 @@ function loaderContextForMatch(
 
 async function prepareClientRouteForMatch(
   routeMatch: {
-    route: { id: string; component: () => Promise<unknown> }
+    route: { id: string }
     params: Record<string, string>
+    pathname: string
   },
   pathname: string,
   router: ReturnType<typeof createRouter>,
   routeModule: RouteModule,
+  pageMod: unknown,
   options?: {
     useHydratedPageData?: boolean
     forceReload?: boolean
+    scope?: NavigationScope
+    getNavGeneration?: () => number
   }
-): Promise<{ routeModule: RouteModule; leafProps: LeafRouteProps }> {
-  const pageMod = await routeMatch.route.component()
-  const loaderCtx = loaderContextForMatch(routeMatch, pathname, router)
+): Promise<{ routeModule: RouteModule; leafProps: LeafRouteProps } | null> {
+  const loaderCtx = loaderContextForMatch(
+    routeMatch,
+    pathname,
+    router,
+    options?.scope?.signal ?? router.__getNavSignal!()
+  )
   const prepared = await prepareRouteForNavigation({
     pageMod,
     routeModule,
@@ -235,11 +251,14 @@ async function prepareClientRouteForMatch(
     options: {
       ...options,
       routeId: routeMatch.route.id,
+      scope: options?.scope,
+      getNavGeneration: options?.getNavGeneration,
       onCacheRefreshed: () => {
         router.loaderEpoch.value += 1
       },
     },
   })
+  if (prepared.discarded) return null
   return {
     routeModule: prepared.routeModule,
     leafProps: prepared.leafProps,
@@ -252,7 +271,9 @@ async function buildSsrClientOutlet(
   committedMatch: RouteMatch | null,
   router: SsrClientRouter,
   manifest: RouteManifest,
-  options: { useHydratedPageData: boolean; forceReload: boolean }
+  options: { useHydratedPageData: boolean; forceReload: boolean },
+  scope?: NavigationScope,
+  getNavGeneration?: () => number
 ): Promise<JSX.Element | null> {
   if (!committedMatch) {
     const tree = await loadNotFoundRouteTree(manifest, router.pathname.peek())
@@ -292,7 +313,11 @@ async function buildSsrClientOutlet(
     )
     return pending ? pending() : null
   }
-  return buildSsrClientSubtree(outletMatch, router, options)
+  return buildSsrClientSubtree(outletMatch, router, {
+    ...options,
+    scope,
+    getNavGeneration: getNavGeneration ?? router.__getNavGeneration,
+  })
 }
 
 function subscribeSsrClientOutlet(
@@ -301,19 +326,47 @@ function subscribeSsrClientOutlet(
   outlet: { value: JSX.Element | null },
   buildOptions: { useHydratedPageData: boolean }
 ): void {
-  let epoch = 0
-  const refresh = (forceReload: boolean) => {
-    const e = ++epoch
-    void (async () => {
+  let outletAbort: AbortController | null = null
+  const getNavGeneration = router.__getNavGeneration ?? (() => 0)
+  async function refreshOutlet(forceReload: boolean) {
+    outletAbort?.abort()
+    const ctrl = new AbortController()
+    outletAbort = ctrl
+    const match = router.match.peek()
+    const scope =
+      match !== null
+        ? createNavigationScope(
+            getNavGeneration(),
+            ctrl.signal,
+            buildScopeCacheKey(
+              match.route.id,
+              match.pathname,
+              formatRouterSearch(router.query.peek())
+            )
+          )
+        : createNavigationScope(getNavGeneration(), ctrl.signal)
+    try {
       const subtree = await buildSsrClientOutlet(
-        router.match.peek(),
+        match,
         router,
         manifest,
-        { ...buildOptions, forceReload }
+        { ...buildOptions, forceReload },
+        scope,
+        getNavGeneration
       )
-      if (e !== epoch) return
+      if (
+        ctrl.signal.aborted ||
+        !isScopeCurrent(scope, getNavGeneration)
+      ) {
+        return
+      }
       outlet.value = subtree
-    })()
+    } catch {
+      if (!ctrl.signal.aborted) throw new Error("SSR outlet refresh failed")
+    }
+  }
+  const refresh = (forceReload: boolean) => {
+    void refreshOutlet(forceReload)
   }
   router.match.subscribe(() => refresh(false))
   router.isNavigating.subscribe(() => refresh(false))
@@ -325,24 +378,53 @@ function subscribeSsrClientOutlet(
 async function buildSsrClientSubtree(
   match: NonNullable<ReturnType<SsrClientRouter["match"]["peek"]>>,
   router: SsrClientRouter,
-  options: { useHydratedPageData: boolean; forceReload: boolean }
+  options: {
+    useHydratedPageData: boolean
+    forceReload: boolean
+    scope?: NavigationScope
+    getNavGeneration?: () => number
+  }
 ): Promise<JSX.Element | null> {
   const pathname = router.pathname.peek()
   const tree = await loadRouteTree(match)
   if (!tree) return null
+  const scope = options.scope
+  const getNavGeneration = options.getNavGeneration ?? (() => 0)
+  if (scope && (!isScopeCurrent(scope, getNavGeneration) || scope.signal.aborted)) {
+    return null
+  }
 
+  const pageMod = tree.routeModule
   const prepared = await prepareClientRouteForMatch(
     match,
     pathname,
     router,
     tree.routeModule,
+    pageMod,
     options
+  )
+  if (
+    !prepared ||
+    (scope && (!isScopeCurrent(scope, getNavGeneration) || scope.signal.aborted))
+  ) {
+    return null
+  }
+  const loaderCtx = loaderContextForMatch(
+    match,
+    pathname,
+    router,
+    scope?.signal ?? router.__getNavSignal!()
   )
   await syncDocumentHeadForPage(
     match,
-    loaderContextForMatch(match, pathname, router),
-    prepared.leafProps as PageProps<KiruLoader<unknown>>
+    loaderCtx,
+    prepared.leafProps as PageProps<KiruLoader<unknown>>,
+    pageMod,
+    scope ? { scope, getNavGeneration } : undefined
   )
+  if (scope && (!isScopeCurrent(scope, getNavGeneration) || scope.signal.aborted)) {
+    return null
+  }
 
   return buildRoutedSubtree(
     tree.layoutModules,
@@ -421,20 +503,40 @@ export async function bootstrapSsrClient(
     useHydratedPageData: false,
   })
 
-  let invalidateEpoch = 0
-  router.loaderEpoch.subscribe(() => {
-    const e = ++invalidateEpoch
-    void (async () => {
-      const current = router.match.peek()
-      if (!current) return
-      const subtree = await buildSsrClientOutlet(current, router, manifest, {
+  let invalidateAbort: AbortController | null = null
+  const getNavGeneration = router.__getNavGeneration ?? (() => 0)
+  async function refreshOutletOnInvalidate() {
+    invalidateAbort?.abort()
+    const ctrl = new AbortController()
+    invalidateAbort = ctrl
+    const current = router.match.peek()
+    if (!current) return
+    const scope = createNavigationScope(
+      getNavGeneration(),
+      ctrl.signal,
+      buildScopeCacheKey(
+        current.route.id,
+        current.pathname,
+        formatRouterSearch(router.query.peek())
+      )
+    )
+    const subtree = await buildSsrClientOutlet(
+      current,
+      router,
+      manifest,
+      {
         useHydratedPageData: false,
         forceReload: router.forceLoaderReload.peek(),
-      })
-      router.forceLoaderReload.value = false
-      if (e !== invalidateEpoch) return
-      outlet.value = subtree
-    })()
+      },
+      scope,
+      getNavGeneration
+    )
+    router.forceLoaderReload.value = false
+    if (ctrl.signal.aborted || !isScopeCurrent(scope, getNavGeneration)) return
+    outlet.value = subtree
+  }
+  router.loaderEpoch.subscribe(() => {
+    void refreshOutletOnInvalidate()
   })
 
   restoreClientHashAfterHydration(router, pendingClientHash)

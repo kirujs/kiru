@@ -111,7 +111,9 @@ createKiruResponder({
 })
 ```
 
-Serialized into HTML as `k-request-context` for hydration.
+Serialized into HTML as `k-request-context` for hydration. During **sync** SSR render, `useRequestContext()` also reads the active `runWithSsrRequestContext` slot (cleared after the shell returns).
+
+**Remote actions:** `getRequestContext` does not apply to `/?action=` RPC — those use the signed token from the page that issued the call. Register prod handlers with `import "virtual:kiru:remote-registry"` in `serverEntry` ([09-actions-and-remote.md](./09-actions-and-remote.md)).
 
 ### CSR — `resolveContext`
 

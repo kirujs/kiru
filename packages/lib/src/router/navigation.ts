@@ -93,6 +93,12 @@ export function buildQueryString(query: RouterQuery): string {
   return params.toString()
 }
 
+/** `?foo=bar` search string for loader context from router query state. */
+export function formatRouterSearch(query: RouterQuery): string {
+  const qs = buildQueryString(query)
+  return qs ? `?${qs}` : ""
+}
+
 export function parseResolvedLocation(
   url: URL,
   baseUrl: string
@@ -190,6 +196,8 @@ export type NavigationPipelineDeps = {
   componentEnterGuards: NavigationGuard[]
   history: History
   navToken: { value: number }
+  /** Aborts in-flight outlet/loader work when a new navigation starts. */
+  navAbortController: { current: AbortController | null }
   historyIndex: { value: number }
   scrollStack: { value: ScrollStackState }
   saveScrollAt: (index: number) => void
@@ -244,6 +252,7 @@ export function createNavigateInternal(
     componentEnterGuards,
     history,
     navToken,
+    navAbortController,
     historyIndex,
     saveScrollAt,
     commitLocation,
@@ -266,6 +275,9 @@ export function createNavigateInternal(
       enableTransition = transitionsEnabled,
     }: NavigateInternalOptions
   ): Promise<NavigationResult> => {
+    navAbortController.current?.abort()
+    const navAbort = new AbortController()
+    navAbortController.current = navAbort
     const token = ++navToken.value
     isNavigating.value = true
     const resolved = localeRouting
@@ -332,6 +344,10 @@ export function createNavigateInternal(
     let failure: NavigationFailure | undefined
     let navResult: NavigationResult = { status: "committed" }
 
+    const abortNavigationWork = () => {
+      if (!navAbort.signal.aborted) navAbort.abort()
+    }
+
     const handlePopstateCancel = () => {
       if (fromPopstate && from) {
         history.pushState(null, "", addBase(from.pathname, normalizedBaseUrl))
@@ -364,6 +380,7 @@ export function createNavigateInternal(
         const g0 = await runGuards(leaveList, to, from)
         if (g0.type === "cancel") {
           failure = { type: "cancelled" }
+          abortNavigationWork()
           handlePopstateCancel()
           return { status: "cancelled" }
         }
@@ -383,6 +400,7 @@ export function createNavigateInternal(
         const gu = await runGuards(updateList, to, from)
         if (gu.type === "cancel") {
           failure = { type: "cancelled" }
+          abortNavigationWork()
           handlePopstateCancel()
           return { status: "cancelled" }
         }
@@ -426,6 +444,7 @@ export function createNavigateInternal(
           eventType: "navigation",
         })
         if (token !== navToken.value) {
+          abortNavigationWork()
           return { status: "cancelled" }
         }
         contextGate.value = resolveContextGateState(
@@ -481,6 +500,7 @@ export function createNavigateInternal(
         }
         if (mw.type === "abort") {
           failure = { type: "cancelled" }
+          abortNavigationWork()
           handlePopstateCancel()
           return { status: "cancelled" }
         }
@@ -498,6 +518,7 @@ export function createNavigateInternal(
             return runRedirect(searchCheck.failure.location)
           }
           failure = { type: "cancelled" }
+          abortNavigationWork()
           handlePopstateCancel()
           return { status: "cancelled" }
         }
@@ -509,6 +530,7 @@ export function createNavigateInternal(
       }
 
       if (token !== navToken.value) {
+        abortNavigationWork()
         return { status: "cancelled" }
       }
 
@@ -530,7 +552,11 @@ export function createNavigateInternal(
         )
         historyIndex.value = nextIndex
       }
-      await runTransition(() => commitLocation(resolved), enableTransition)
+      await runTransition(
+        () => commitLocation(resolved),
+        enableTransition,
+        navAbort.signal
+      )
 
       if (resolveContext && toMatch) {
         scheduleBackgroundContextResolve({
@@ -561,6 +587,7 @@ export function createNavigateInternal(
     } catch (error) {
       failure = { type: "error", error }
       navResult = { status: "errored", error }
+      abortNavigationWork()
       handlePopstateCancel()
     } finally {
       if (token === navToken.value) {

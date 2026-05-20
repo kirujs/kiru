@@ -6,6 +6,7 @@ import {
   resolveRouteStatus,
 } from "../../router/routeResponse.js"
 import { buildLoaderContext } from "../../router/runPageLoad.js"
+import { staticLoaderSignal } from "../../router/navigationScope.js"
 
 describe("routeResponse", () => {
   it("mergeResponseHeaders lowercases keys", () => {
@@ -37,6 +38,7 @@ describe("routeResponse", () => {
       context: {},
       meta: {},
       routeId: "route:1",
+      signal: staticLoaderSignal(),
     })
     assert.equal(resolveRouteStatus(404, ctx), 404)
   })

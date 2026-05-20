@@ -13,7 +13,13 @@ import {
   type LoaderCacheEntry,
 } from "./loaderCache.js"
 import { readLoaderCacheOptions } from "./loaders.js"
-
+import {
+  buildScopeCacheKey,
+  canCommitLoaderResult,
+  isAbortError,
+  type NavigationScope,
+  throwIfAborted,
+} from "./navigationScope.js"
 export type LoaderFetchContext = {
   params: Record<string, unknown>
   pathname: string
@@ -24,6 +30,7 @@ export type LoaderFetchContext = {
   meta?: RouteMeta
   routeId?: string
   request?: Request
+  signal: AbortSignal
   locale?: string
   locales?: readonly string[]
   defaultLocale?: string
@@ -44,6 +51,7 @@ export function buildLoaderContext(
     meta: input.meta ?? {},
     route: { id: input.routeId ?? "" },
     request: input.request,
+    signal: input.signal,
     ...(input.locale !== undefined ? { locale: input.locale } : {}),
     ...(input.locales !== undefined ? { locales: input.locales } : {}),
     ...(input.defaultLocale !== undefined
@@ -56,12 +64,15 @@ export async function runPageLoadFromModule(
   mod: unknown,
   ctx: LoaderContext
 ): Promise<unknown> {
+  throwIfAborted(ctx.signal)
   const load = readPageLoadExport(mod)
   if (!load) return undefined
   if (load.__kiruLoader === "server" && typeof window !== "undefined") {
     guardServerLoaderOnClient()
   }
-  return load.__kiruInvoke(ctx)
+  const data = await load.__kiruInvoke(ctx)
+  throwIfAborted(ctx.signal)
+  return data
 }
 
 export async function runPageLoadForMatch(
@@ -91,23 +102,29 @@ export function buildPageErrorProps(
   return { data: null, error: toRenderError(err) }
 }
 
+export type ResolvePagePropsOptions = {
+  useHydratedPageData?: boolean
+  forceReload?: boolean
+  routeId?: string
+  /** Called after a background refetch updates the loader cache (stale entry). */
+  onCacheRefreshed?: () => void
+  scope?: NavigationScope
+  getNavGeneration?: () => number
+}
+
 export type ResolvePagePropsResult = {
   props: PageProps<KiruLoader<unknown>> | Record<string, never>
   /** True when serving cached loader data past `staleTime`. */
   isStale?: boolean
+  /** Navigation or request was superseded; do not commit props to the outlet. */
+  discarded?: boolean
 }
 
 /** Run `load` and shape props for the page component (no loading state). */
 export async function resolvePagePropsFromModule(
   mod: unknown,
   ctx: LoaderContext,
-  options?: {
-    useHydratedPageData?: boolean
-    forceReload?: boolean
-    routeId?: string
-    /** Called after a background refetch updates the loader cache (stale entry). */
-    onCacheRefreshed?: () => void
-  }
+  options?: ResolvePagePropsOptions
 ): Promise<ResolvePagePropsResult> {
   const load = readPageLoadExport(mod)
   if (!load) return { props: {} }
@@ -115,6 +132,19 @@ export async function resolvePagePropsFromModule(
     options?.forceReload === true ? false : options?.useHydratedPageData !== false
   const cacheOpts = readLoaderCacheOptions(load)
   const routeId = options?.routeId
+  const scope = options?.scope
+  const getNavGeneration =
+    options?.getNavGeneration ?? (() => scope?.generation ?? 0)
+
+  const cacheKey =
+    routeId !== undefined
+      ? buildScopeCacheKey(routeId, ctx.url.pathname, ctx.url.search)
+      : undefined
+
+  const canCommit = () =>
+    canCommitLoaderResult(scope, getNavGeneration, cacheKey)
+
+  const discard = (): ResolvePagePropsResult => ({ props: {}, discarded: true })
 
   const seedLoaderCacheFromHydrated = (data: unknown): void => {
     if (
@@ -124,6 +154,7 @@ export async function resolvePagePropsFromModule(
     ) {
       return
     }
+    if (!canCommit()) return
     const key = buildLoaderCacheKey(routeId, ctx.url.pathname, ctx.url.search)
     const entry: LoaderCacheEntry = {
       data,
@@ -162,9 +193,20 @@ export async function resolvePagePropsFromModule(
       return { props: buildPageProps(cached.data), isStale: false }
     }
     if (cached && isLoaderCacheStale(cached)) {
-      void (async () => {
+      const revalidateScope = scope
+      const revalidateKey = cacheKey
+      async function revalidateStaleLoaderCache() {
         try {
           const data = await runPageLoadFromModule(mod, ctx)
+          if (
+            !canCommitLoaderResult(
+              revalidateScope,
+              getNavGeneration,
+              revalidateKey
+            )
+          ) {
+            return
+          }
           setLoaderCacheEntry(key, {
             data,
             fetchedAt: Date.now(),
@@ -172,16 +214,19 @@ export async function resolvePagePropsFromModule(
             gcTime: cacheOpts.gcTime,
           })
           options?.onCacheRefreshed?.()
-        } catch {
+        } catch (err) {
+          if (isAbortError(err)) return
           // keep showing stale data until invalidate or next navigation
         }
-      })()
+      }
+      void revalidateStaleLoaderCache()
       return { props: buildPageProps(cached.data), isStale: true }
     }
   }
 
   try {
     const data = await runPageLoadFromModule(mod, ctx)
+    if (!canCommit()) return discard()
     if (typeof document !== "undefined" && routeId) {
       const key = buildLoaderCacheKey(routeId, ctx.url.pathname, ctx.url.search)
       setLoaderCacheEntry(key, {
@@ -193,6 +238,8 @@ export async function resolvePagePropsFromModule(
     }
     return { props: buildPageProps(data), isStale: false }
   } catch (err) {
+    if (isAbortError(err) || ctx.signal.aborted) return discard()
+    if (!canCommit()) return discard()
     return { props: buildPageErrorProps(err), isStale: false }
   }
 }

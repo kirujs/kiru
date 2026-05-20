@@ -1,3 +1,4 @@
+import "virtual:kiru:remote-registry"
 import { createServer } from "node:http"
 import sharp from "sharp"
 import { createKiruHandler, toNodeListener } from "@kirujs/adapter-node"
@@ -24,9 +25,12 @@ const kiru = createKiruHandler({
     allowedOrigins: ["*"],
     exposeErrors: true,
   },
-  getRequestContext: () => ({
-    user: { name: "E2E User" },
-  }),
+  getRequestContext: async (request) => {
+    const name = request.headers.get("x-e2e-user-name")?.trim()
+    return {
+      user: { name: name || "E2E User" },
+    }
+  },
   image: isProd ? { config: imageConfig, sharp } : undefined,
 })
 

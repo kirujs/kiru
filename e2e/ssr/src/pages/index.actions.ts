@@ -1,7 +1,7 @@
 import { action } from "kiru/remote"
 
-export const getServerMessage = action.get(async (ctx) => {
-  return `hello from server (${ctx.user?.name ?? "unknown"})`
+export const getServerMessage = action.get(async ({ context }) => {
+  return `hello from server (${context.user?.name ?? "unknown"})`
 })
 
 export interface TodoItem {
@@ -48,7 +48,7 @@ export const getStreamingReviews = action.post<{ productId: string }, StreamingR
       return input as { productId: string }
     },
   },
-  async (_ctx, input: { productId: string }) => {
+  async (_, input: { productId: string }) => {
     console.log("action: get streaming reviews")
     await new Promise((r) => setTimeout(r, 1000))
     return [

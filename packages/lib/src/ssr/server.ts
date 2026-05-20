@@ -22,6 +22,10 @@ d.currentScript.remove();
 </script>
 `.replace(/\r?\n/g, "")
 
+/** `Promise.try` is not available on all supported Node versions. */
+const promiseTry = <T,>(fn: () => T | PromiseLike<T>): Promise<T> =>
+  Promise.resolve().then(fn)
+
 function withStreamRenderMode<T>(fn: () => T): T {
   const prev = renderMode.current
   renderMode.current = "stream"
@@ -189,40 +193,26 @@ export function renderToReadableStream(
     scheduleSpeculativeContinue,
   }
 
-  void (async () => {
-    try {
-      if (options?.onStreamStart) {
-        await options.onStreamStart(controller)
-      }
-    } catch (error) {
-      controller.error(error)
-      return
-    }
-  })()
+  promiseTry(() => options?.onStreamStart?.(controller)).catch((error) => {
+    controller.error(error)
+  })
 
   withStreamRenderMode(() => headlessRender(ctx, rootNode))
 
-  void (async () => {
+  void promiseTry(async () => {
     try {
       if (options?.onShellReady) {
         await options.onShellReady(shellBuffer, controller)
       } else {
         controller.enqueue(shellBuffer)
       }
-    } catch (error) {
-      controller.error(error)
-      return
     } finally {
       resolveShellFlushed()
     }
-    try {
-      await speculativeChain
-      await Promise.all(pendingWritePromises)
-      controller.close()
-    } catch (error) {
-      controller.error(error)
-    }
-  })()
+    await speculativeChain
+    await Promise.all(pendingWritePromises)
+    controller.close()
+  }).catch((error) => controller.error(error))
 
   return stream
 }

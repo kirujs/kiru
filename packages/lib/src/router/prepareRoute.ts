@@ -6,7 +6,10 @@ import {
 } from "./loaders.js"
 import { isAsyncPageHead, readPageHeadExport } from "./pageHead.js"
 import { wrapRouteModuleWithLoadGate } from "./pageLoadGate.js"
-import { resolvePagePropsFromModule } from "./runPageLoad.js"
+import {
+  resolvePagePropsFromModule,
+  type ResolvePagePropsOptions,
+} from "./runPageLoad.js"
 import type { RouteModule } from "./types.js"
 import type { LeafRouteProps } from "./routeTree.js"
 
@@ -19,7 +22,7 @@ export type PrepareRouteForNavigationOptions = {
   routeId?: string
   /** Bumps outlet when stale loader cache finishes background refetch. */
   onCacheRefreshed?: () => void
-}
+} & Pick<ResolvePagePropsOptions, "scope" | "getNavGeneration">
 
 export type PreparedRouteNavigation = {
   routeModule: RouteModule
@@ -28,6 +31,7 @@ export type PreparedRouteNavigation = {
   loaderCtx: LoaderContext
   usesLoadGate: boolean
   isLoaderStale?: boolean
+  discarded?: boolean
 }
 
 /**
@@ -86,7 +90,21 @@ export async function prepareRouteForNavigation(input: {
     forceReload: options?.forceReload,
     routeId: options?.routeId,
     onCacheRefreshed: options?.onCacheRefreshed,
+    scope: options?.scope,
+    getNavGeneration: options?.getNavGeneration,
   })
+
+  if (resolved.discarded) {
+    return {
+      routeModule,
+      leafProps: {},
+      pageMod,
+      loaderCtx,
+      usesLoadGate: false,
+      isLoaderStale: false,
+      discarded: true,
+    }
+  }
 
   return {
     routeModule,

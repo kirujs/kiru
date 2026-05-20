@@ -129,7 +129,11 @@ createKiruResponder({
 })
 ```
 
-Passed into `renderer.render(request, { context })` — flows to middleware, loaders, actions, and `k-request-context` script.
+Passed into `renderer.render(request, { context })` — flows to middleware, loaders, `k-request-context`, and action tokens. Loaders receive `context` via `LoaderContext`; sync SSR render also sets `runWithSsrRequestContext` for `useRequestContext()` / in-render `action()` (see [09-actions-and-remote.md](./09-actions-and-remote.md)).
+
+**Production server entry:** `import "virtual:kiru:remote-registry"` alongside `createKiruResponder` so action handlers are registered in the SSR bundle.
+
+**Aborted SSR:** When `request.signal` aborts or loader work is discarded mid-prepare, `render()` returns `null` (adapter typically maps to no body / connection end), not a 500. Node: `nodeRequestToFetch` + `bindClientDisconnectAbort` wire client disconnect to the same signal ([deploy-runtimes.md](../router/deploy-runtimes.md)).
 
 ## Error pages
 

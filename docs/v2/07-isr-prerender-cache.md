@@ -99,7 +99,9 @@ Cypress: `e2e/ssr/cypress/e2e/tier3-wave1.cy.ts`.
 4. Static loader bake emits `__kiruStaticLoaderPayload` on page chunks
 5. If `serverEntry`, bundle SSR server separately
 
-Concurrency: `router.ssg.build.maxConcurrentRenders` (default 10).
+Concurrency: `router.ssg.build.maxConcurrentRenders` (default **10**). Pass **`Infinity`** to render all static paths in parallel (`Promise.all`). Finite values use a worker pool.
+
+**Build abort:** `prerenderStaticRoutes({ signal })` stops scheduling further pages; Vite SSG hooks forward **SIGINT** to the same signal between pages (`runWithPrerenderSignal`).
 
 ## `generateStaticPaths`
 
@@ -144,8 +146,9 @@ export const isr = defineISR({ revalidate: 3600, tags: ["blog"] })
 ```
 
 ```ts
-action.post(schema, async (ctx, input) => {
-  await savePost(input)
+action.post(schema, async ({ context, signal }, input) => {
+  if (signal.aborted) throw new DOMException("Aborted", "AbortError")
+  await savePost(input, { authorId: context.user?.id })
 }, { revalidate: { tags: ["blog"] } })
 ```
 

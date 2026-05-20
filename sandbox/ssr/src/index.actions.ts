@@ -12,12 +12,12 @@ const mySchema: Schema<{ name: string }> = {
   },
 }
 
-export const getSandboxServerEcho = action.get(async (ctx) => {
-  const name = ctx.user?.name ?? "guest"
+export const getSandboxServerEcho = action.get(async ({ context }) => {
+  const name = context.user?.name ?? "guest"
   return `Remote OK: ${name} ${test}`
 })
 
-export const getServerEcho = action.post(mySchema, async (_ctx, input) => {
+export const getServerEcho = action.post(mySchema, async (_, input) => {
   return `Echo ${input.name}`
 })
 
@@ -63,7 +63,7 @@ export const getTodos = action.get(async () => {
   return todos
 })
 
-export const createTodo = action.post(createTodoSchema, (_ctx, input) => {
+export const createTodo = action.post(createTodoSchema, (_, input) => {
   const todo: TodoItem = {
     id: crypto.randomUUID(),
     text: input.text,
@@ -72,7 +72,7 @@ export const createTodo = action.post(createTodoSchema, (_ctx, input) => {
   return (todos.push(todo), todo)
 })
 
-export const updateTodo = action.post(updateTodoSchema, async (_ctx, input) => {
+export const updateTodo = action.post(updateTodoSchema, async (_, input) => {
   //if (Math.random() > 0.5) throw new Error("Random error")
   const todo = todos.find((t) => t.id === input.id)
   if (!todo) throw new Error("Todo not found")

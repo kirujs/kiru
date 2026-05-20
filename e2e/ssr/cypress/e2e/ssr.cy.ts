@@ -647,4 +647,12 @@ describe("SSR server", () => {
     })
   })
 
+  it("isolates request context under many concurrent SSR requests", () => {
+    const port = Cypress.env("port")
+    cy.task("concurrentContextCheck", { port, concurrency: 32 }).should(
+      "deep.equal",
+      { ok: true, concurrency: 32, origin: `http://127.0.0.1:${port}` }
+    )
+  })
+
 })

@@ -2,6 +2,7 @@ import { describe, it } from "node:test"
 import assert from "node:assert"
 import { createServer, request as httpRequest } from "node:http"
 import {
+  bindClientDisconnectAbort,
   nodeRequestToFetch,
   writeNodeResponse,
 } from "./nodeBridge.js"
@@ -77,15 +78,21 @@ describe("nodeBridge", () => {
 
   it("round-trips GET through nodeRequestToFetch and writeNodeResponse", async () => {
     const { port, close } = await listen(async (req, res) => {
-      const fetchReq = nodeRequestToFetch(req)
+      const { request: fetchReq, abort } = nodeRequestToFetch(req)
       assert.equal(new URL(fetchReq.url).pathname, "/hello")
-      await writeNodeResponse(
-        res,
-        new Response("ok", {
-          status: 201,
-          headers: { "x-test": "1", "content-type": "text/plain" },
-        })
-      )
+      const unbind = bindClientDisconnectAbort(res, abort)
+      try {
+        await writeNodeResponse(
+          res,
+          new Response("ok", {
+            status: 201,
+            headers: { "x-test": "1", "content-type": "text/plain" },
+          }),
+          abort.signal
+        )
+      } finally {
+        unbind()
+      }
     })
     try {
       const response = await httpFetch(port, "/hello")
@@ -97,12 +104,31 @@ describe("nodeBridge", () => {
     }
   })
 
+  it("aborts request.signal when IncomingMessage is aborted", () => {
+    const handlers: Record<string, () => void> = {}
+    const { request, abort } = nodeRequestToFetch({
+      headers: { host: "localhost" },
+      url: "/",
+      method: "GET",
+      once(event: string, fn: () => void) {
+        handlers[event] = fn
+      },
+      on() {
+        return this
+      },
+    } as unknown as import("node:http").IncomingMessage)
+    assert.equal(abort.signal.aborted, false)
+    handlers.aborted?.()
+    assert.equal(request.signal.aborted, true)
+    assert.equal(abort.signal.aborted, true)
+  })
+
   it("round-trips POST body", async () => {
     const { port, close } = await listen(async (req, res) => {
-      const fetchReq = nodeRequestToFetch(req)
+      const { request: fetchReq, abort } = nodeRequestToFetch(req)
       assert.equal(fetchReq.method, "POST")
       assert.equal(await fetchReq.text(), "payload")
-      await writeNodeResponse(res, new Response("received"))
+      await writeNodeResponse(res, new Response("received"), abort.signal)
     })
     try {
       const response = await httpFetch(port, "/post", {

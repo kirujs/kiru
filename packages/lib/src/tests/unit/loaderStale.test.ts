@@ -6,7 +6,13 @@ import {
   setLoaderCacheEntry,
 } from "../../router/loaderCache.js"
 import { loader } from "../../router/loaders.js"
+import { resetHydratedPageData } from "../../router/pageData.js"
 import { resolvePagePropsFromModule } from "../../router/runPageLoad.js"
+import {
+  buildScopeCacheKey,
+  createNavigationScope,
+  staticLoaderSignal,
+} from "../../router/navigationScope.js"
 
 describe("loader stale while revalidate", () => {
   it("returns stale cached props and refreshes in background", async () => {
@@ -31,6 +37,7 @@ describe("loader stale while revalidate", () => {
         context: {},
         meta: {},
         route: { id: "route:1" },
+        signal: staticLoaderSignal(),
       }
 
       const key = buildLoaderCacheKey("route:1", "/items", "")
@@ -42,9 +49,16 @@ describe("loader stale while revalidate", () => {
       })
 
       let refreshed = false
+      const scope = createNavigationScope(
+        1,
+        new AbortController().signal,
+        buildScopeCacheKey("route:1", "/items", "")
+      )
       const first = await resolvePagePropsFromModule(mod, ctx, {
         routeId: "route:1",
         useHydratedPageData: false,
+        scope,
+        getNavGeneration: () => 1,
         onCacheRefreshed: () => {
           refreshed = true
         },
@@ -58,8 +72,27 @@ describe("loader stale while revalidate", () => {
       await new Promise((r) => setTimeout(r, 20))
       assert.equal(refreshed, true)
       assert.equal(invokeCount, 1)
+
+      refreshed = false
+      const staleScope = createNavigationScope(
+        0,
+        new AbortController().signal,
+        buildScopeCacheKey("route:1", "/items", "")
+      )
+      await resolvePagePropsFromModule(mod, ctx, {
+        routeId: "route:1",
+        useHydratedPageData: false,
+        scope: staleScope,
+        getNavGeneration: () => 1,
+        onCacheRefreshed: () => {
+          refreshed = true
+        },
+      })
+      await new Promise((r) => setTimeout(r, 20))
+      assert.equal(refreshed, false)
     } finally {
       globalThis.document = prevDocument
+      resetHydratedPageData()
       clearLoaderCacheForTests()
     }
   })

@@ -3,8 +3,28 @@ import { Readable } from "node:stream"
 
 export { resolveKiruHandle } from "@kirujs/adapter-contract"
 
-/** Convert a Node.js `IncomingMessage` into a Web `Request`. */
-export function nodeRequestToFetch(req: IncomingMessage): Request {
+export type NodeFetchRequest = {
+  request: Request
+  /** Shared with `request.signal`; abort when the client disconnects. */
+  abort: AbortController
+}
+
+function abortUnlessResponseFinished(
+  res: ServerResponse,
+  abort: AbortController
+): void {
+  if (abort.signal.aborted) return
+  if (res.writableEnded || res.writableFinished) return
+  abort.abort()
+}
+
+/** Convert a Node.js `IncomingMessage` into a Web `Request` with a linked abort signal. */
+export function nodeRequestToFetch(req: IncomingMessage): NodeFetchRequest {
+  const abort = new AbortController()
+  const abortFromSocket = () => abort.abort()
+  req.once("aborted", abortFromSocket)
+  req.once("error", abortFromSocket)
+
   const host = req.headers.host ?? "localhost"
   const url = `http://${host}${req.url ?? "/"}`
 
@@ -22,22 +42,37 @@ export function nodeRequestToFetch(req: IncomingMessage): Request {
   const hasBody =
     method !== "GET" && method !== "HEAD" && method !== "OPTIONS"
 
-  if (hasBody) {
-    return new Request(url, {
-      method,
-      headers,
-      // @ts-expect-error — `duplex` not yet in all Request typedefs
-      body: Readable.toWeb(req),
-      duplex: "half",
-    })
+  const init: RequestInit & { duplex?: "half" } = {
+    method,
+    headers,
+    signal: abort.signal,
   }
-  return new Request(url, { method, headers })
+
+  if (hasBody) {
+    init.body = Readable.toWeb(req) as BodyInit
+    init.duplex = "half"
+  }
+
+  return { request: new Request(url, init), abort }
+}
+
+/** Abort in-flight SSR when the client closes the connection before the response finishes. */
+export function bindClientDisconnectAbort(
+  res: ServerResponse,
+  abort: AbortController
+): () => void {
+  const onResClose = () => abortUnlessResponseFinished(res, abort)
+  res.on("close", onResClose)
+  return () => {
+    res.off("close", onResClose)
+  }
 }
 
 /** Write a Web `Response` to a Node.js `ServerResponse`. */
 export async function writeNodeResponse(
   res: ServerResponse,
-  response: Response
+  response: Response,
+  renderSignal?: AbortSignal
 ): Promise<void> {
   res.statusCode = response.status
   response.headers.forEach((value, key) => {
@@ -51,10 +86,23 @@ export async function writeNodeResponse(
   }
 
   const reader = response.body.getReader()
+  const onAbort = () => {
+    void reader.cancel()
+  }
+  renderSignal?.addEventListener("abort", onAbort)
+
   try {
     while (true) {
+      if (renderSignal?.aborted) {
+        await reader.cancel()
+        break
+      }
       const { done, value } = await reader.read()
       if (done) break
+      if (renderSignal?.aborted) {
+        await reader.cancel()
+        break
+      }
       if (typeof value === "string") {
         res.write(value)
       } else if (value instanceof Uint8Array) {
@@ -62,7 +110,10 @@ export async function writeNodeResponse(
       }
     }
   } finally {
+    renderSignal?.removeEventListener("abort", onAbort)
     reader.releaseLock()
   }
-  res.end()
+  if (!res.writableEnded) {
+    res.end()
+  }
 }

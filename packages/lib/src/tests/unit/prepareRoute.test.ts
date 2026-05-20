@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { createElement } from "../../index.js"
 import { buildLoaderContext } from "../../router/runPageLoad.js"
+import { staticLoaderSignal } from "../../router/navigationScope.js"
 import { prepareRouteForNavigation } from "../../router/prepareRoute.js"
 import { serverLoader } from "../../router/loaders.js"
 
@@ -22,6 +23,7 @@ describe("prepareRouteForNavigation", () => {
       hash: "",
       query: {},
       context: {},
+      signal: staticLoaderSignal(),
     })
     const prepared = await prepareRouteForNavigation({
       pageMod,

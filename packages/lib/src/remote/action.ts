@@ -30,18 +30,38 @@ export { RemoteError, isRemoteError } from "./errors.js"
 // SSR request-context threading
 // ---------------------------------------------------------------------------
 
-/** Set by the renderer before synchronous SSR rendering so that actions
- *  invoked directly (e.g. via `resource(myAction)`) receive the real
- *  per-request context instead of `null`. */
-let _currentSsrCtx: CustomRequestContext
-
-export function __setSsrRequestContext(ctx: CustomRequestContext): void {
-  _currentSsrCtx = ctx
+/** Per-request context and abort signal passed to remote / form action handlers. */
+export type RemoteActionContext = {
+  context: CustomRequestContext
+  signal: AbortSignal
 }
 
-/** Active SSR render context (see {@link __setSsrRequestContext}). */
-export function __getSsrRequestContext(): CustomRequestContext | undefined {
-  return _currentSsrCtx
+import { getSsrActionContext, runWithSsrActionContext } from "./ssrActionScope.js"
+
+export function buildRemoteActionContext(
+  context: CustomRequestContext,
+  signal: AbortSignal
+): RemoteActionContext {
+  return { context, signal }
+}
+
+/** Active SSR action context while inside a sync `runWithSsrRequestContext` scope. */
+export function __getSsrActionContext(): RemoteActionContext {
+  return getSsrActionContext()
+}
+
+/** Request context from the active SSR action scope. */
+export function __getSsrRequestContext(): CustomRequestContext {
+  return getSsrActionContext().context
+}
+
+/** Run synchronous SSR render work with action context (nested save/restore). */
+export function runWithSsrRequestContext<T>(
+  ctx: CustomRequestContext,
+  signal: AbortSignal,
+  fn: () => T
+): T {
+  return runWithSsrActionContext(ctx, signal, fn)
 }
 
 // ---------------------------------------------------------------------------
@@ -51,7 +71,7 @@ export function __getSsrRequestContext(): CustomRequestContext | undefined {
 export type RemoteActionMethod = "GET" | "POST"
 
 export type RemoteActionCallback<Input, Output> = (
-  ctx: CustomRequestContext,
+  ctx: RemoteActionContext,
   input: Input
 ) => Promise<Output> | Output
 
@@ -67,7 +87,7 @@ export type RemoteGetAction<Output> = ((
 ) => Promise<Output>) & {
   __kiruRemoteAction: true
   __kiruRemoteMethod: "GET"
-  __kiruInvoke: (ctx: CustomRequestContext, input: unknown) => Promise<Output>
+  __kiruInvoke: (ctx: RemoteActionContext, input: unknown) => Promise<Output>
 }
 
 export type RemoteRevalidateMeta = {
@@ -91,7 +111,7 @@ export type RemotePostAction<Input, Output> = ((
 ) => Promise<Output>) & {
   __kiruRemoteAction: true
   __kiruRemoteMethod: "POST"
-  __kiruInvoke: (ctx: CustomRequestContext, input: unknown) => Promise<Output>
+  __kiruInvoke: (ctx: RemoteActionContext, input: unknown) => Promise<Output>
   __kiruInvalidateRoutes?: string[]
   __kiruRevalidate?: RemoteRevalidateMeta
 }
@@ -101,16 +121,16 @@ export type RemoteActionFunction<Input, Output> =
   | RemotePostAction<Input, Output>
 
 type GetCallback<Output> =
-  | ((ctx: CustomRequestContext) => Promise<Output> | Output)
+  | ((ctx: RemoteActionContext) => Promise<Output> | Output)
   | (() => Promise<Output> | Output)
 
 function wrapGetCallback<Output>(
   callback: GetCallback<Output>
-): (ctx: CustomRequestContext) => Promise<Output> | Output {
+): (ctx: RemoteActionContext) => Promise<Output> | Output {
   if (callback.length === 0) {
     return () => (callback as () => Promise<Output> | Output)()
   }
-  return callback as (ctx: CustomRequestContext) => Promise<Output> | Output
+  return callback as (ctx: RemoteActionContext) => Promise<Output> | Output
 }
 
 function createRemoteAction<Input, Output>(
@@ -121,8 +141,9 @@ function createRemoteAction<Input, Output>(
 ): RemoteGetAction<Output> | RemotePostAction<Input, Output> {
   if (method === "GET") {
     const wrapped = (async (_options?: RemoteActionOptions): Promise<Output> => {
+      const ctx = getSsrActionContext()
       await validateActionInput(undefined)
-      return runAction(_currentSsrCtx, undefined as Input)
+      return runAction(ctx, undefined as Input)
     }) as RemoteGetAction<Output>
 
     wrapped.__kiruRemoteAction = true
@@ -138,8 +159,9 @@ function createRemoteAction<Input, Output>(
     input: Input,
     _options?: RemoteActionOptions
   ): Promise<Output> => {
+    const ctx = getSsrActionContext()
     await validateActionInput(input)
-    return runAction(_currentSsrCtx, input)
+    return runAction(ctx, input)
   }) as RemotePostAction<Input, Output>
 
   wrapped.__kiruRemoteAction = true
@@ -256,7 +278,7 @@ export function isKiruRedirect(value: unknown): value is KiruRedirect {
 }
 
 export type RemoteFormActionCallback<Output> = (
-  ctx: CustomRequestContext,
+  ctx: RemoteActionContext,
   formData: FormData
 ) => Promise<Output> | Output
 
@@ -274,7 +296,7 @@ export type RemoteFormActionFunction<Output> = {
   __kiruInvalidateRoutes?: string[]
   __kiruRevalidate?: RemoteRevalidateMeta
   __kiruInvoke: (
-    ctx: CustomRequestContext,
+    ctx: RemoteActionContext,
     formData: FormData
   ) => Promise<Output>
 }

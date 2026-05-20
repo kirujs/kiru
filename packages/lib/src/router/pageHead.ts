@@ -2,6 +2,11 @@ import type { KiruLoader, LoaderContext, PageProps } from "./loaders.js"
 import { mergeAndSyncClientDocumentHead } from "./documentHeadClient.js"
 import { mergeRouteHead } from "./meta.js"
 import { resolvePagePropsFromModule } from "./runPageLoad.js"
+import {
+  canCommitLoaderResult,
+  type NavigationScope,
+  throwIfAborted,
+} from "./navigationScope.js"
 import type { RouteHeadMeta } from "./types.js"
 
 export type PageHeadKind = "static" | "sync" | "async"
@@ -17,6 +22,7 @@ export type DynamicHeadContext<
   meta: LoaderContext["meta"]
   route: LoaderContext["route"]
   request?: LoaderContext["request"]
+  signal: LoaderContext["signal"]
   locale?: LoaderContext["locale"]
   locales?: LoaderContext["locales"]
   defaultLocale?: LoaderContext["defaultLocale"]
@@ -91,12 +97,17 @@ export function createDynamicHeadContext(
     meta: loaderCtx.meta,
     route: loaderCtx.route,
     request: loaderCtx.request,
+    signal: loaderCtx.signal,
     locale: loaderCtx.locale,
     locales: loaderCtx.locales,
     defaultLocale: loaderCtx.defaultLocale,
     loader: async () => {
       if (cached) return cached
+      throwIfAborted(loaderCtx.signal)
       const resolved = await resolvePagePropsFromModule(pageMod, loaderCtx)
+      if (resolved.discarded) {
+        throw new DOMException("Aborted", "AbortError")
+      }
       cached = resolved.props as PageProps<KiruLoader<unknown>>
       return cached
     },
@@ -177,6 +188,11 @@ export function isDynamicPageHead(head: KiruPageHead | undefined): boolean {
   return isAsyncPageHead(head) || isSyncPageHead(head)
 }
 
+export type SyncDocumentHeadCommit = {
+  scope?: NavigationScope
+  getNavGeneration?: () => number
+}
+
 /** Update `document.title` from route + page exports (CSR / post-hydration navigations). */
 export async function syncDocumentHeadForPage(
   match: {
@@ -185,17 +201,28 @@ export async function syncDocumentHeadForPage(
     pathname: string
   },
   loaderCtx: LoaderContext,
-  pageProps?: PageProps<KiruLoader<unknown>>
+  pageProps?: PageProps<KiruLoader<unknown>>,
+  pageMod?: unknown,
+  commit?: SyncDocumentHeadCommit
 ): Promise<void> {
-  const pageMod = await match.route.component()
-  const pageHead = readPageHeadExport(pageMod)
-  const headCtx = createDynamicHeadContext(loaderCtx, pageMod, pageProps)
+  const getNavGeneration = commit?.getNavGeneration ?? (() => 0)
+  if (!canCommitLoaderResult(commit?.scope, getNavGeneration)) return
+  throwIfAborted(loaderCtx.signal)
+
+  const mod = pageMod ?? (await match.route.component())
+  throwIfAborted(loaderCtx.signal)
+  if (!canCommitLoaderResult(commit?.scope, getNavGeneration)) return
+
+  const pageHead = readPageHeadExport(mod)
+  const headCtx = createDynamicHeadContext(loaderCtx, mod, pageProps)
   let pageHeadMeta: RouteHeadMeta | undefined
   if (pageHead) {
     pageHeadMeta = isAsyncPageHead(pageHead)
       ? await resolvePageHead(pageHead, headCtx)
       : resolvePageHeadSync(pageHead, headCtx)
   }
+  if (!canCommitLoaderResult(commit?.scope, getNavGeneration)) return
+  throwIfAborted(loaderCtx.signal)
   mergeAndSyncClientDocumentHead(match.route.head, pageHeadMeta, {
     pathname: match.pathname,
   })

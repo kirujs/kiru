@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - **`@kirujs/runtime`:** `KiruDeployTarget`, `getRuntimeCapabilities`, `assertISRAllowed` — shared contract for adapters and `vite-plugin-kiru`.
 - **`@kirujs/adapter-contract`:** `KiruHandle` (`Response | null`, `null` = not handled), `toFetchHandler`, `composeRespond`.
-- **`@kirujs/adapter-node`:** `createKiruResponder` / `createKiruHandler` (`handle` + `fetch`), `toNodeListener`, hybrid ISR, static assets; `nodeRequestToFetch`, `writeNodeResponse`.
+- **`@kirujs/adapter-node`:** `createKiruResponder` / `createKiruHandler` (`handle` + `fetch`), `toNodeListener`, hybrid ISR, static assets; `nodeRequestToFetch` → `{ request, abort }`, `bindClientDisconnectAbort`, abort-aware `writeNodeResponse`.
 - **`@kirujs/adapter-cloudflare`:** `createKiruWorkerHandle` (`Response | null`) and `createKiruWorkerHandler` (Web `fetch`).
 - **HTTP frameworks:** no separate packages — mix runtime adapter + explicit catch-all in your app ([`deploy-runtimes.md`](docs/router/deploy-runtimes.md)).
 - **`@kirujs/adapter-bun`:** `createKiruBunServer`, `serveKiruBun` — same `fetch` handler as Node via `Bun.serve` (no Hono dependency).
@@ -28,13 +28,24 @@ All notable changes to this project will be documented in this file.
 - **Rendering:** Fix function-component child vnode indices in `headlessRender` (SSR stream vs hydration alignment); skip static-DOM hosts in `createVNodeId` so hydration container indices match SSR.
 - **DX:** Dev-only warnings when `RouterView` is mounted on SSR/SSG HTML without the correct bootstrap, when `serverLoader` runs without loader RPC, and when `staticLoader` is invoked on client navigations.
 - **Refactors:** Extract client navigation pipeline to [`navigation.ts`](packages/lib/src/router/navigation.ts) and prerender disk short-circuit to [`prerenderServe.ts`](packages/lib/src/router/prerenderServe.ts) (behavior unchanged).
-- **E2E:** SSR invalidate-after-action, search-schema validation, form-action progressive enhancement and redirect flows; hybrid `/docs` disk HTML assertion.
+- **E2E:** SSR invalidate-after-action, search-schema validation, form-action progressive enhancement and redirect flows; hybrid `/docs` disk HTML assertion; `/context-concurrency` + `scripts/concurrent-request-context.mjs` for parallel per-request context isolation.
 
 ### Remote / forms
 
+- **Breaking — action handler context:** `action.get` / `action.post` / `formAction` callbacks receive **`RemoteActionContext`** `{ context, signal }` instead of bare `CustomRequestContext`. Use `context.user` (etc.) where you previously used `ctx.user`. Zero-arg handlers are unchanged. Client calls may pass `{ signal }` (GET last arg, POST second arg); the server forwards `Request.signal` into the handler. Aborted RPCs return **499**. SSR sets context only during **sync** `runWithSsrRequestContext`; RPC uses the token, not that slot.
 - **Actions:** `action.post(schema, handler)` validates with `parseInput`; optional `action({ invalidate: ['route-id'] })` refetches matching loaders after success.
 - **Fix:** `createFormController` sends `x-kiru-form` so enhanced submissions receive JSON (including redirects) instead of native 303 responses; structured `fieldErrors` on validation failure.
-- **Tests:** Unit coverage for Standard Schema / `parseInput`, loader validation, route response headers, form-action redirect handling (enhanced JSON and native `303`).
+- **Tests:** Unit coverage for Standard Schema / `parseInput`, loader validation, route response headers, form-action redirect handling (enhanced JSON and native `303`), action abort (499) and `RemoteActionContext` injection.
+
+### Abortable navigation and rendering
+
+- **CSR:** Each `navigate()` aborts the previous navigation’s `AbortController` and bumps `navToken`; `NavigationScope` gates loader cache commits and stale background refetch so fast double-navigation cannot apply stale props.
+- **SSR action scope:** Single `current` scope (`runWithSsrRequestContext`) around `headlessRender` only — no ALS; do not await inside the scope callback.
+- **Loaders:** `LoaderContext.signal` is **required**; `loaderSignalFromRequest`, `staticLoaderSignal`, and `runWithPrerenderSignal` for SSG builds.
+- **SSR:** `prepareAppForUrl` honors `request.signal`; aborted renders return `null` (not 500) when loader work is discarded or the request is cancelled mid-prepare.
+- **SSG:** `prerenderStaticRoutes({ signal })` and Vite prerender **SIGINT** cooperative abort between pages; **`maxConcurrentRenders: Infinity`** now runs paths in parallel (was incorrectly sequential).
+- **Node adapter:** `nodeRequestToFetch` returns `{ request, abort }`; `bindClientDisconnectAbort` + `writeNodeResponse(..., signal)` cancel in-flight SSR when the client disconnects. `toNodeListener` wires this automatically.
+- **Tests:** `navigationAbort`, `ssrAbort`, `ssgAbort`, and extended `navigationScope` / `loaderStale` coverage.
 
 ### Dependencies
 
@@ -45,3 +56,6 @@ All notable changes to this project will be documented in this file.
 - `serverLoader` on client navigations requires `kiru/router/ssr`, `createRenderer`, and a server loader endpoint (`/?loader=`). Pure CSR/SSG apps should use `loader`, `clientLoader`, or `staticLoader`.
 - `CustomRequestContext` is `{}` on pure CSR/SSG. Per-request values are SSR-only via `createRenderer({ context })`; there is no client reactive context API for loaders.
 - Loader invalidation after actions is opt-in via route ids; global stale-data UX (`pending` + stale flag) is not implemented yet.
+- Abort is cooperative: long-running loaders and actions must respect `signal` (or check `signal.aborted`) to stop promptly.
+- Production SSR must `import "virtual:kiru:remote-registry"` in `serverEntry` when using `router.remote` (dev loads it automatically).
+- Migrating remote actions: see [`docs/v2/14-migration-from-main.md`](docs/v2/14-migration-from-main.md#remote-action-handler-context) and [`docs/v2/09-actions-and-remote.md`](docs/v2/09-actions-and-remote.md).

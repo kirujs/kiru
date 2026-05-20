@@ -133,11 +133,12 @@ sequenceDiagram
   participant Load as clientLoader/loader
 
   User->>Router: Link click / navigate()
+  Note over Router: Previous nav AbortController aborted; navToken bumped
   Router->>Ctx: optional await (block strategy)
   Router->>MW: runRouteMiddleware
   MW-->>Router: redirect?
-  Router->>Load: prepareRouteForNavigation
-  Load-->>Router: leaf props
+  Router->>Load: prepareRouteForNavigation (LoaderContext.signal)
+  Load-->>Router: leaf props (discarded if nav superseded)
   Router->>User: DOM update
 ```
 

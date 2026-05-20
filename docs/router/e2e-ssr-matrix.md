@@ -66,6 +66,7 @@ Each file under `src/servers/` is **only** runtime + HTTP glue. Kiru logic lives
 
 ```ts
 import {
+  bindClientDisconnectAbort,
   createKiruResponder,
   nodeRequestToFetch,
   writeNodeResponse,
@@ -78,12 +79,18 @@ const kiru = createKiruResponder({ importMetaUrl: import.meta.url, routes, strea
 const app = express()
 app.get("/api/health", (_req, res) => res.json({ ok: true }))
 app.use(async (req, res) => {
-  const out = await kiru.handle(nodeRequestToFetch(req))
-  if (out === null) {
-    res.status(404).send("Not Found")
-    return
+  const { request, abort } = nodeRequestToFetch(req)
+  const unbind = bindClientDisconnectAbort(res, abort)
+  try {
+    const out = await kiru.handle(request)
+    if (out === null) {
+      res.status(404).send("Not Found")
+      return
+    }
+    await writeNodeResponse(res, out, abort.signal)
+  } finally {
+    unbind()
   }
-  await writeNodeResponse(res, out)
 })
 
 // listen in run-cell script or export for Bun-style serve

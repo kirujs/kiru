@@ -1,4 +1,5 @@
 import {
+  bindClientDisconnectAbort,
   createKiruResponder,
   nodeRequestToFetch,
   writeNodeResponse,
@@ -18,12 +19,18 @@ const kiru = createKiruResponder({
 const fastify = Fastify()
 fastify.get("/api/health", async () => ({ ok: true }))
 fastify.all("*", async (request, reply) => {
-  const out = await kiru.handle(nodeRequestToFetch(request.raw))
-  if (out === null) {
-    reply.code(404).send("Not Found")
-    return
+  const { request: fetchReq, abort } = nodeRequestToFetch(request.raw)
+  const unbind = bindClientDisconnectAbort(reply.raw, abort)
+  try {
+    const out = await kiru.handle(fetchReq)
+    if (out === null) {
+      reply.code(404).send("Not Found")
+      return
+    }
+    await writeNodeResponse(reply.raw, out, abort.signal)
+  } finally {
+    unbind()
   }
-  await writeNodeResponse(reply.raw, out)
 })
 
 if (isProd && !("Bun" in globalThis)) {

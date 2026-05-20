@@ -67,7 +67,7 @@ New `router` options:
 |---------|----------------|
 | `e2e/csr` | SPA, loaders, i18n, images, context gate, middleware redirect |
 | `e2e/ssg` | Prerender, staticLoader bake, context client nav, i18n |
-| `e2e/ssr` | SSR, hybrid `/docs`, ISR/PPR, actions, serverLoader, streaming |
+| `e2e/ssr` | SSR, hybrid `/docs`, ISR/PPR, actions, serverLoader, streaming, concurrent request-context isolation |
 | `e2e/ssr-matrix` | Same SSR app behind Node/Bun × fetch/Hono/Express/Fastify/Elysia + Workers |
 | `sandbox/ssr` | Human-friendly SSR + hybrid docs route |
 
@@ -86,6 +86,7 @@ Not exhaustive — use `git log cabe32db..HEAD` for full history:
 9. Tier 3 wave 1 (ISR, loader cache, i18n, Image)
 10. `staticLoader` prebake into JS modules (not only HTML)
 11. Route middleware + CSR `resolveContext` (replaces nav guard zoo)
+12. Abortable navigation/render (`LoaderContext.signal`, SSR action scope, Node disconnect abort)
 
 ## Known limitations (ship blockers for docs)
 

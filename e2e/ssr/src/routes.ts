@@ -121,6 +121,10 @@ export const routes = defineRouteTree((r) =>
         error: () => import("./pages/leaf-error-page"),
         head: { title: "SSR error (leaf)" },
       }),
+      r.page("/context-concurrency", {
+        component: () => import("./pages/context-concurrency"),
+        head: { title: "E2E SSR context concurrency" },
+      }),
     ],
   })
 )

@@ -4,9 +4,11 @@ import {
   formAction,
   KIRU_FORM_TOKEN_FIELD,
   __INTERNAL_REMOTE_REGISTRY,
+  buildRemoteActionContext,
   createRemoteActionHandler,
   redirect,
 } from "../../remote/index.js"
+import { staticLoaderSignal } from "../../router/navigationScope.js"
 import { makeKiruContextToken } from "../../remote/token.js"
 
 const SECRET = "test-secret-form-actions"
@@ -94,7 +96,7 @@ function validToken(ctx: Record<string, unknown> = {}) {
 
 describe("formAction / wrapper", () => {
   it("should return object with __kiruFormAction set to true", () => {
-    const action = formAction(async (_ctx, _formData) => {
+    const action = formAction(async (_, _formData) => {
       return { success: true }
     })
 
@@ -102,7 +104,7 @@ describe("formAction / wrapper", () => {
   })
 
   it("should return object with __kiruFormActionId property", () => {
-    const action = formAction(async (_ctx, _formData) => {
+    const action = formAction(async (_, _formData) => {
       return { success: true }
     })
 
@@ -111,7 +113,7 @@ describe("formAction / wrapper", () => {
   })
 
   it("should return object with __kiruInvoke method", () => {
-    const action = formAction(async (_ctx, _formData) => {
+    const action = formAction(async (_, _formData) => {
       return { success: true }
     })
 
@@ -130,31 +132,32 @@ describe("formAction / wrapper", () => {
     })
 
     const testCtx = { userId: "123", role: "admin" }
+    const actionCtx = buildRemoteActionContext(testCtx, staticLoaderSignal())
     const testFormData = new FormData()
     testFormData.set("field1", "value1")
     testFormData.set("field2", "value2")
 
-    await action.__kiruInvoke(testCtx, testFormData)
+    await action.__kiruInvoke(actionCtx, testFormData)
 
-    assert.deepStrictEqual(receivedCtx, testCtx)
+    assert.deepStrictEqual(receivedCtx, actionCtx)
     assert.strictEqual(receivedFormData, testFormData)
   })
 
   it("should return Promise resolving to callback result", async () => {
     const expectedResult = { success: true, data: "test-data" }
 
-    const action = formAction(async (_ctx, _formData) => {
+    const action = formAction(async (_, _formData) => {
       return expectedResult
     })
 
-    const result = action.__kiruInvoke({}, new FormData())
+    const result = action.__kiruInvoke(buildRemoteActionContext({}, staticLoaderSignal()), new FormData())
 
     assert.ok(result instanceof Promise)
     assert.deepStrictEqual(await result, expectedResult)
   })
 
   it("should handle async callbacks correctly", async () => {
-    const action = formAction(async (_ctx, formData) => {
+    const action = formAction(async (_, formData) => {
       // Simulate async operation
       await new Promise((resolve) => setTimeout(resolve, 10))
       const name = formData.get("name")
@@ -164,13 +167,13 @@ describe("formAction / wrapper", () => {
     const formData = new FormData()
     formData.set("name", "Alice")
 
-    const result = await action.__kiruInvoke({}, formData)
+    const result = await action.__kiruInvoke(buildRemoteActionContext({}, staticLoaderSignal()), formData)
 
     assert.deepStrictEqual(result, { message: "Hello, Alice" })
   })
 
   it("should handle synchronous callbacks by wrapping in Promise", async () => {
-    const action = formAction((_ctx, formData) => {
+    const action = formAction((_, formData) => {
       const name = formData.get("name")
       return { message: `Hello, ${name}` }
     })
@@ -178,7 +181,7 @@ describe("formAction / wrapper", () => {
     const formData = new FormData()
     formData.set("name", "Bob")
 
-    const result = action.__kiruInvoke({}, formData)
+    const result = action.__kiruInvoke(buildRemoteActionContext({}, staticLoaderSignal()), formData)
 
     assert.ok(result instanceof Promise)
     assert.deepStrictEqual(await result, { message: "Hello, Bob" })
@@ -192,7 +195,7 @@ describe("formAction / registration", () => {
     const actionName = "testAction"
     let callbackInvoked = false
 
-    const action = formAction(async (_ctx, _formData) => {
+    const action = formAction(async (_, _formData) => {
       callbackInvoked = true
       return { success: true }
     })
@@ -220,12 +223,12 @@ describe("formAction / registration", () => {
     let action1Invoked = false
     let action2Invoked = false
 
-    const action1 = formAction(async (_ctx, _formData) => {
+    const action1 = formAction(async (_, _formData) => {
       action1Invoked = true
       return { action: "action1" }
     })
 
-    const action2 = formAction(async (_ctx, _formData) => {
+    const action2 = formAction(async (_, _formData) => {
       action2Invoked = true
       return { action: "action2" }
     })
@@ -271,7 +274,7 @@ describe("formAction / registration", () => {
     let firstCallbackInvoked = false
     let secondCallbackInvoked = false
 
-    const firstAction = formAction(async (_ctx, _formData) => {
+    const firstAction = formAction(async (_, _formData) => {
       firstCallbackInvoked = true
       return { version: "first" }
     })
@@ -280,7 +283,7 @@ describe("formAction / registration", () => {
       [actionName]: firstAction,
     })
 
-    const secondAction = formAction(async (_ctx, _formData) => {
+    const secondAction = formAction(async (_, _formData) => {
       secondCallbackInvoked = true
       return { version: "second" }
     })
@@ -312,7 +315,7 @@ describe("formAction / native submission", () => {
 
     let invoked = false
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: formAction(async (_ctx, _formData) => {
+      testAction: formAction(async (_, _formData) => {
         invoked = true
         return { success: true }
       }),
@@ -339,7 +342,7 @@ describe("formAction / native submission", () => {
 
     let invoked = false
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: formAction(async (_ctx, _formData) => {
+      testAction: formAction(async (_, _formData) => {
         invoked = true
         return { success: true }
       }),
@@ -365,7 +368,7 @@ describe("formAction / native submission", () => {
     const routeId = "test/missing-token"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: formAction(async (_ctx, _formData) => {
+      testAction: formAction(async (_, _formData) => {
         return { success: true }
       }),
     })
@@ -393,7 +396,7 @@ describe("formAction / native submission", () => {
     const routeId = "test/invalid-token"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: formAction(async (_ctx, _formData) => {
+      testAction: formAction(async (_, _formData) => {
         return { success: true }
       }),
     })
@@ -438,7 +441,10 @@ describe("formAction / native submission", () => {
 
     assert.ok(res)
     assert.strictEqual(res.status, 303)
-    assert.deepStrictEqual(receivedContext, expectedContext)
+    assert.deepStrictEqual(
+      receivedContext,
+      buildRemoteActionContext(expectedContext, req.signal)
+    )
   })
 
   it("should return null when action query parameter is missing", async () => {
@@ -446,7 +452,7 @@ describe("formAction / native submission", () => {
     const routeId = "test/no-action"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: formAction(async (_ctx, _formData) => {
+      testAction: formAction(async (_, _formData) => {
         return { success: true }
       }),
     })
@@ -475,7 +481,7 @@ describe("formAction / native submission", () => {
     const routeId = "test/malformed"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: formAction(async (_ctx, _formData) => {
+      testAction: formAction(async (_, _formData) => {
         return { success: true }
       }),
     })
@@ -506,7 +512,7 @@ describe("formAction / native submission", () => {
 
     // Register a different action
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      otherAction: formAction(async (_ctx, _formData) => {
+      otherAction: formAction(async (_, _formData) => {
         return { success: true }
       }),
     })

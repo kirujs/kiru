@@ -59,8 +59,9 @@ From `cypress/e2e/context.cy.ts`:
 | `/loaders/server-immediate-shell` | Streaming fallback |
 | Form/action specs | `x-kiru-form`, invalidate header |
 | Tier 3 | `cypress/e2e/tier3-wave1.cy.ts` |
+| `/context-concurrency` | Parallel SSR isolation (`x-e2e-user-name` header) |
 
-**Server:** `src/server.ts` + `createKiruResponder`.
+**Server:** `src/server.ts` + `createKiruResponder` + `import "virtual:kiru:remote-registry"`.
 
 **Bootstrap:** `kiru/router/ssr`.
 
@@ -68,7 +69,7 @@ From `cypress/e2e/context.cy.ts`:
 
 **Site:** `src/site.config.ts` — sitemap include/exclude lists.
 
-**Scripts:** `scripts/verify-hybrid-prerender.mjs` — canonical hybrid check.
+**Scripts:** `scripts/verify-hybrid-prerender.mjs` — canonical hybrid check; `scripts/concurrent-request-context.mjs` — after build, spawns prod `dist/server` on a free port, 32 parallel GETs to `/context-concurrency` with distinct `x-e2e-user-name`, asserts HTML + `k-request-context` + `echoContextUser` RPC (shared logic with `cy.task("concurrentContextCheck")`).
 
 ## `e2e/ssr-matrix` — adapter smoke
 

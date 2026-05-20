@@ -7,19 +7,16 @@ declare module "kiru/router" {
   }
 }
 
-const requireAuth: RouteMiddleware = (ctx) => {
-  if (!ctx.meta.requiresAuth) return
-  const user = (ctx.context as { user?: unknown }).user
+const requireAuth: RouteMiddleware = ({ context, meta }) => {
+  if (!meta.requiresAuth) return
+  const user = context.user
   if (user) return
-  const login =
-    typeof ctx.meta.unauthorizedRedirect === "string"
-      ? ctx.meta.unauthorizedRedirect
-      : "/login"
+  const login = typeof meta.unauthorizedRedirect === "string" ? meta.unauthorizedRedirect : "/login"
   return { redirect: login }
 }
 
-export const blockUserZero: RouteMiddleware = (ctx) => {
-  if (ctx.to.params.id === "0") return { redirect: "/about" }
+export const blockUserZero: RouteMiddleware = ({ to }) => {
+  if (to.params.id === "0") return { redirect: "/about" }
 }
 
 export const routeMiddleware = [requireAuth, blockUserZero]

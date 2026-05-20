@@ -11,6 +11,7 @@ import {
 import { loader } from "../../router/loaders.js"
 import { resetHydratedPageData } from "../../router/pageData.js"
 import { resolvePagePropsFromModule } from "../../router/runPageLoad.js"
+import { staticLoaderSignal } from "../../router/navigationScope.js"
 
 describe("loaderCache", () => {
   it("stores and retrieves fresh entries", () => {
@@ -76,6 +77,7 @@ describe("loaderCache", () => {
         context: {},
         meta: {},
         route: { id: "route:loader-cache" },
+        signal: staticLoaderSignal(),
       }
       const routeId = "route:loader-cache"
 

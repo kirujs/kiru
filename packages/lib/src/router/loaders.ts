@@ -32,6 +32,8 @@ export interface LoaderContext {
   meta: RouteMeta
   route: { id: string }
   request?: Request
+  /** Aborts in-flight loader work when navigation or the request is cancelled. */
+  signal: AbortSignal
   /** Active locale when i18n is enabled. */
   locale?: string
   locales?: readonly string[]

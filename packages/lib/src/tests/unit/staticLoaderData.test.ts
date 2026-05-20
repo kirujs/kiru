@@ -9,6 +9,7 @@ import {
   resolveStaticLoaderDataFromModule,
 } from "../../router/staticLoaderData.js"
 import { buildLoaderContext } from "../../router/runPageLoad.js"
+import { staticLoaderSignal } from "../../router/navigationScope.js"
 
 describe("staticLoaderData", () => {
   it("onStaticLoaderPrerenderCapture receives prerender events", () => {
@@ -42,6 +43,7 @@ describe("staticLoaderData", () => {
       hash: "",
       query: {},
       context: {},
+      signal: staticLoaderSignal(),
     })
     assert.deepEqual(resolveStaticLoaderDataFromModule(mod, ctx), {
       title: "About",

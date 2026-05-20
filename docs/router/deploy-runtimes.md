@@ -80,9 +80,10 @@ To wrap `kiru.handle` yourself (e.g. logging), use `composeRespond` from `@kiruj
 
 For Express, Fastify, or raw `node:http`, import from `@kirujs/adapter-node`:
 
-- `nodeRequestToFetch(req)` — `IncomingMessage` → Web `Request`
-- `writeNodeResponse(res, response)` — Web `Response` → `ServerResponse`
-- `toNodeListener(handler)` — `KiruResponder` or `KiruFetch` → Node request listener
+- `nodeRequestToFetch(req)` — `IncomingMessage` → `{ request, abort }` (Web `Request` with `signal`, plus an `AbortController` you can link to the response)
+- `bindClientDisconnectAbort(res, abort)` — aborts in-flight SSR when the client closes the connection early
+- `writeNodeResponse(res, response, renderSignal?)` — Web `Response` → `ServerResponse` (cancels the body reader when `renderSignal` aborts)
+- `toNodeListener(handler)` — `KiruResponder` or `KiruFetch` → Node request listener (wires the above automatically)
 
 ## HTTP frameworks (mix and match)
 
@@ -131,13 +132,15 @@ if (process.env.NODE_ENV === "production") {
 
 Express and Fastify have no published fetch-native listen adapter yet (the in-progress `@fastify/fetch` is not on npm). Use Kiru's Node bridge helpers on the catch-all:
 
-- `nodeRequestToFetch(req)` — `IncomingMessage` → Web `Request`
-- `writeNodeResponse(res, response)` — Web `Response` → `ServerResponse`
+- `nodeRequestToFetch(req)` — `IncomingMessage` → `{ request, abort }`
+- `bindClientDisconnectAbort(res, abort)` — cooperative abort on client disconnect
+- `writeNodeResponse(res, response, abort.signal)` — stream body with abort-aware cancellation
 
 ### Express
 
 ```ts
 import {
+  bindClientDisconnectAbort,
   createKiruResponder,
   nodeRequestToFetch,
   writeNodeResponse,
@@ -151,12 +154,18 @@ const app = express()
 app.get("/api/health", (_req, res) => res.json({ ok: true }))
 
 app.use(async (req, res) => {
-  const kiruOut = await kiru.handle(nodeRequestToFetch(req))
-  if (kiruOut === null) {
-    res.status(404).send("Not Found")
-    return
+  const { request, abort } = nodeRequestToFetch(req)
+  const unbind = bindClientDisconnectAbort(res, abort)
+  try {
+    const kiruOut = await kiru.handle(request)
+    if (kiruOut === null) {
+      res.status(404).send("Not Found")
+      return
+    }
+    await writeNodeResponse(res, kiruOut, abort.signal)
+  } finally {
+    unbind()
   }
-  await writeNodeResponse(res, kiruOut)
 })
 
 app.listen(process.env.PORT ?? 3000)
@@ -166,6 +175,7 @@ app.listen(process.env.PORT ?? 3000)
 
 ```ts
 import {
+  bindClientDisconnectAbort,
   createKiruResponder,
   nodeRequestToFetch,
   writeNodeResponse,
@@ -179,12 +189,18 @@ const fastify = Fastify()
 fastify.get("/api/health", async () => ({ ok: true }))
 
 fastify.all("*", async (request, reply) => {
-  const kiruOut = await kiru.handle(nodeRequestToFetch(request.raw))
-  if (kiruOut === null) {
-    reply.code(404).send("Not Found")
-    return
+  const { request: kiruReq, abort } = nodeRequestToFetch(request.raw)
+  const unbind = bindClientDisconnectAbort(reply.raw, abort)
+  try {
+    const kiruOut = await kiru.handle(kiruReq)
+    if (kiruOut === null) {
+      reply.code(404).send("Not Found")
+      return
+    }
+    await writeNodeResponse(reply.raw, kiruOut, abort.signal)
+  } finally {
+    unbind()
   }
-  await writeNodeResponse(reply.raw, kiruOut)
 })
 
 await fastify.listen({ port: Number(process.env.PORT) || 3000 })

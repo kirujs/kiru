@@ -1,4 +1,7 @@
-import { nodeRequestToFetch } from "@kirujs/adapter-node"
+import {
+  bindClientDisconnectAbort,
+  nodeRequestToFetch,
+} from "@kirujs/adapter-node"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import type { ViteDevServer, ModuleNode } from "vite"
 import { resolveDefaultFetch } from "./fetchResponse.js"
@@ -149,9 +152,14 @@ function applyResponseHeaders(response: Response, res: ServerResponse): void {
 
 async function pipeReaderRaw(
   reader: ReadableStreamDefaultReader<unknown>,
-  res: ServerResponse
+  res: ServerResponse,
+  renderSignal?: AbortSignal
 ): Promise<void> {
   while (true) {
+    if (renderSignal?.aborted) {
+      await reader.cancel()
+      break
+    }
     const { done, value } = await reader.read()
     if (done) break
     if (typeof value === "string") {
@@ -176,7 +184,8 @@ async function pipeReaderRaw(
 async function streamFetchResponseToNode(
   response: Response,
   res: ServerResponse,
-  injectHeadHtml?: () => Promise<string>
+  injectHeadHtml?: () => Promise<string>,
+  renderSignal?: AbortSignal
 ): Promise<void> {
   applyResponseHeaders(response, res)
 
@@ -195,7 +204,7 @@ async function streamFetchResponseToNode(
   const reader = response.body.getReader()
   try {
     if (!isHtml || !injectHeadHtml) {
-      await pipeReaderRaw(reader, res)
+      await pipeReaderRaw(reader, res, renderSignal)
       return
     }
 
@@ -204,6 +213,10 @@ async function streamFetchResponseToNode(
     let injected = false
 
     while (true) {
+      if (renderSignal?.aborted) {
+        await reader.cancel()
+        break
+      }
       const { done, value } = await reader.read()
       if (done) break
       const text = chunkToString(value, decoder)
@@ -305,8 +318,16 @@ export async function handleSsrDevRequest(
   const fetch = resolveDefaultFetch(appMod?.default)
   if (!fetch) return false
 
-  const fetchReq = nodeRequestToFetch(req)
-  const response = await fetch(fetchReq)
+  const { request: fetchReq, abort } = nodeRequestToFetch(req)
+  const unbind = bindClientDisconnectAbort(res, abort)
+  let response: Response
+  try {
+    response = await fetch(fetchReq)
+  } catch (err) {
+    unbind()
+    if (abort.signal.aborted) return false
+    throw err
+  }
 
   // If the Hono app couldn't match a route it returns a plain-text 404.
   // Pass those through so Vite's own error overlay can handle them.
@@ -314,9 +335,11 @@ export async function handleSsrDevRequest(
     response.status === 404 &&
     !response.headers.get("content-type")?.includes("text/html")
   ) {
+    unbind()
     return false
   }
 
+  try {
   await streamFetchResponseToNode(response, res, async () => {
     const chunks: string[] = []
     if (opts.devtoolsHeadHtml) chunks.push(opts.devtoolsHeadHtml)
@@ -324,6 +347,9 @@ export async function handleSsrDevRequest(
     const cssTags = await resolveDevCssLinkTagsForEntries(server, entryUrls)
     if (cssTags) chunks.push(cssTags)
     return chunks.join("\n    ")
-  })
+  }, abort.signal)
   return true
+  } finally {
+    unbind()
+  }
 }

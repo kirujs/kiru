@@ -86,9 +86,12 @@ interface LoaderContext {
   meta: RouteMeta               // merged route meta
   route: { id: string }
   request?: Request              // SSR first paint
+  signal: AbortSignal            // navigation / request / prerender cancel
   locale?: string                // when i18n enabled
 }
 ```
+
+Cooperative abort: check `signal.aborted` or use `throwIfAborted(signal)` from `kiru/router` (see navigation scope). SSG builds use `runWithPrerenderSignal` / `prerenderStaticRoutes({ signal })`.
 
 Augment `CustomRequestContext` for typed `context.user`, etc.
 

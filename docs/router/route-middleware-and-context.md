@@ -525,7 +525,7 @@ function runRouteMiddleware(
 - [ ] E2E CSR: public `/` under `contextStrategy: "none"` — no `resolveContext` wait; home renders immediately
 - [ ] E2E SSR: same `meta` flag redirects on direct request without leaf HTML
 - [ ] E2E SSR hydrate: `k-request-context` + protected route — no second flash on hydrate
-- [ ] Navigation race: fast double navigation ignores stale `resolveContext` (nav epoch)
+- [x] Navigation race: fast double navigation ignores stale `resolveContext` (nav epoch)
 
 ---
 

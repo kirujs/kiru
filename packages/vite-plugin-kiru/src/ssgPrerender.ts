@@ -164,6 +164,15 @@ export async function runSsgPrerender(input: {
       }
     )
 
+    const buildAbort = new AbortController()
+    let sigintHook: (() => void) | undefined
+    if (typeof process !== "undefined" && process.on) {
+      sigintHook = () => {
+        buildAbort.abort()
+      }
+      process.once("SIGINT", sigintHook)
+    }
+
     let outputs: SsgPrerenderCache["outputs"]
     try {
       outputs = await prerenderStaticRoutes({
@@ -173,6 +182,7 @@ export async function runSsgPrerender(input: {
         >[0]["pathPolicy"],
         maxConcurrentRenders: state.router.ssg!.maxConcurrentRenders,
         i18n,
+        signal: buildAbort.signal,
         ...(opts.router?.htmlShell
           ? {}
           : {
@@ -180,6 +190,9 @@ export async function runSsgPrerender(input: {
             }),
       })
     } finally {
+      if (sigintHook && typeof process !== "undefined" && process.off) {
+        process.off("SIGINT", sigintHook)
+      }
       offCapture()
     }
 

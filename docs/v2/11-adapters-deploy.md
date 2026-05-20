@@ -15,6 +15,7 @@ composeRespond(middleware, handle)  // wrap handle chain
 ## Node / Bun (`@kirujs/adapter-node`, `@kirujs/adapter-bun`)
 
 ```ts
+import "virtual:kiru:remote-registry"
 import { createKiruResponder, toNodeListener } from "@kirujs/adapter-node"
 import { createServer } from "node:http"
 import { routes } from "./routes"

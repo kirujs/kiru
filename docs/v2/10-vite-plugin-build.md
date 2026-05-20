@@ -51,10 +51,10 @@ kiru({
 | Option | Effect |
 |--------|--------|
 | `ssg` | Prerender at end of client `closeBundle` |
-| `ssg.build.maxConcurrentRenders` | Parallelism (default 10) |
+| `ssg.build.maxConcurrentRenders` | Parallelism (default 10; `Infinity` = all paths at once) |
 | `serverEntry` | SSR dev middleware + `dist/server` bundle; sets `appType: "mpa"` on client build |
 | `adapter` | Target platform + ISR compatibility warnings |
-| `remote` | Glob → client stubs + `virtual:kiru:loader-registry` / remote registry |
+| `remote` | Glob → client stubs + `virtual:kiru:remote-registry` (import from `serverEntry`) |
 | `htmlTemplate` | Shell filename in outDir (default `index.html`) |
 | `htmlShell` | Custom per-route HTML assembly |
 | `images` | Sharp build variants, `Image` metadata |

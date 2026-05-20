@@ -10,9 +10,11 @@ export {
 } from "./createKiruHandler.js"
 export { toNodeListener } from "./serveNode.js"
 export {
+  bindClientDisconnectAbort,
   nodeRequestToFetch,
   resolveKiruHandle,
   writeNodeResponse,
+  type NodeFetchRequest,
 } from "./nodeBridge.js"
 export { composeRespond } from "./middleware.js"
 export { serveStaticFile } from "./serveStaticFile.js"

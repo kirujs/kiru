@@ -1,6 +1,11 @@
-import type { RemoteFormActionFunction } from "./action.js"
+import type { RemoteActionContext, RemoteFormActionFunction } from "./action.js"
+import {
+  buildRemoteActionContext,
+  isKiruRedirect,
+  KIRU_FORM_TOKEN_FIELD,
+} from "./action.js"
+import { isAbortError } from "../router/navigationScope.js"
 import { isRemoteError } from "./errors.js"
-import { isKiruRedirect, KIRU_FORM_TOKEN_FIELD } from "./action.js"
 import { unwrapKiruToken } from "./token.js"
 
 export { RemoteError, isRemoteError } from "./errors.js"
@@ -46,6 +51,8 @@ export {
   type KiruRedirect,
   type RemoteRevalidateMeta,
   type RemoteActionMeta,
+  type RemoteActionContext,
+  buildRemoteActionContext,
 } from "./action.js"
 
 export {
@@ -58,10 +65,7 @@ type RegisteredRemoteAction = {
   __kiruRemoteMethod: import("./action.js").RemoteActionMethod
   __kiruInvalidateRoutes?: string[]
   __kiruRevalidate?: import("./action.js").RemoteRevalidateMeta
-  __kiruInvoke: (
-    ctx: import("../router/types.js").CustomRequestContext,
-    input: unknown
-  ) => Promise<unknown>
+  __kiruInvoke: (ctx: RemoteActionContext, input: unknown) => Promise<unknown>
 }
 
 type AnyRegisteredAction =
@@ -143,12 +147,17 @@ function invalidateHeadersForAction(
 
 async function invokeJsonRemoteAction(
   handler: RegisteredRemoteAction,
+  request: Request,
   context: import("../router/types.js").CustomRequestContext,
   input: unknown,
   options?: CreateRemoteActionHandlerOptions
 ): Promise<Response> {
+  const actionCtx = buildRemoteActionContext(context, request.signal)
   try {
-    const result = await handler.__kiruInvoke(context, input)
+    if (request.signal.aborted) {
+      return new Response(null, { status: 499 })
+    }
+    const result = await handler.__kiruInvoke(actionCtx, input)
     const { applyServerRevalidate } = await import("../router/revalidate.js")
     await applyServerRevalidate(handler.__kiruRevalidate)
     return new Response(JSON.stringify(result), {
@@ -156,6 +165,9 @@ async function invokeJsonRemoteAction(
       headers: { ...jsonHeaders, ...invalidateHeadersForAction(handler) },
     })
   } catch (e) {
+    if (isAbortError(e) || request.signal.aborted) {
+      return new Response(null, { status: 499 })
+    }
     if (isRemoteError(e) && options?.exposeErrors) {
       return new Response(JSON.stringify({ error: e.toJSON() }), {
         status: e.status,
@@ -219,8 +231,12 @@ export function createRemoteActionHandler(
           return new Response(null, { status: 500 })
         }
 
+        const actionCtx = buildRemoteActionContext(context, request.signal)
         try {
-          const result = await handler.__kiruInvoke(context, formData)
+          if (request.signal.aborted) {
+            return new Response(null, { status: 499 })
+          }
+          const result = await handler.__kiruInvoke(actionCtx, formData)
           const { applyServerRevalidate } = await import("../router/revalidate.js")
           await applyServerRevalidate(handler.__kiruRevalidate)
           const isEnhanced = !!request.headers.get("x-kiru-form")
@@ -251,6 +267,9 @@ export function createRemoteActionHandler(
             headers: { Location: referer },
           })
         } catch (e) {
+          if (isAbortError(e) || request.signal.aborted) {
+            return new Response(null, { status: 499 })
+          }
           if (isRemoteError(e) && options?.exposeErrors) {
             return new Response(JSON.stringify({ error: e.toJSON() }), {
               status: e.status,
@@ -321,7 +340,7 @@ export function createRemoteActionHandler(
         }
       }
 
-      return invokeJsonRemoteAction(handler, context, input, options)
+      return invokeJsonRemoteAction(handler, request, context, input, options)
     } catch {
       return new Response(null, { status: 500 })
     }

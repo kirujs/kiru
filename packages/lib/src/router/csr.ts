@@ -54,6 +54,7 @@ import {
   buildMatchSegments,
   buildQueryString,
   createNavigateInternal,
+  formatRouterSearch,
   ensureHistoryIndex,
   formatNavigationSnapshotLabel,
   parseResolvedLocation,
@@ -75,6 +76,12 @@ import {
 import type { KiruLoader, PageProps } from "./loaders.js"
 import { buildLoaderContext } from "./runPageLoad.js"
 import { prepareRouteForNavigation } from "./prepareRoute.js"
+import {
+  buildScopeCacheKey,
+  createNavigationScope,
+  isScopeCurrent,
+  staticLoaderSignal,
+} from "./navigationScope.js"
 import {
   clearStreamedSsrClientState,
   resetHydratedPageData,
@@ -209,6 +216,10 @@ export interface RouterCore {
   contextPendingFallback?: () => JSX.Element
   /** @internal */
   __gateOptions?: ContextGateOptions
+  /** @internal Active navigation generation for outlet commit gates. */
+  __getNavGeneration?: () => number
+  /** @internal AbortSignal for in-flight navigation / outlet work. */
+  __getNavSignal?: () => AbortSignal
   isNavigating: Kiru.Signal<boolean>
   currentNavigation: Kiru.Signal<CurrentNavigation | null>
   /** Bumps when {@link invalidate} requests a loader refetch. */
@@ -409,7 +420,7 @@ export function createRouter({
       ? formatPublicPathname(logical, locale.peek(), localeRouting, resolvedPathPolicy)
       : logical
 
-  void (async () => {
+  async function validateInitialSearch() {
     const initialMatch = match.peek()
     if (!initialMatch) return
     const check = await validateSearchForMatch(initialMatch, query.peek(), {
@@ -419,31 +430,35 @@ export function createRouter({
       validatedQuery.value = check.validatedQuery ?? null
       validatedRouteParams.value = check.params
     }
-  })()
+  }
+  void validateInitialSearch()
+
+  async function syncInitialDocumentHead() {
+    const initial = match.peek()
+    if (!initial) return
+    if (!canLoadProtectedLeaf(initial, contextGate.peek(), gateOptions)) return
+    const pageHead = readPageHeadExport(await initial.route.component())
+    if (isStaticPageHead(pageHead) || isSyncPageHead(pageHead)) {
+      await syncDocumentHeadForPage(
+        initial,
+        buildLoaderContext({
+          params: initial.params,
+          pathname: initial.pathname,
+          search: typeof window !== "undefined" ? window.location.search : "",
+          hash: hash.peek(),
+          query: query.peek(),
+          context: requestContext.peek(),
+          meta: mergeRouteMeta(initial),
+          routeId: initial.route.id,
+          signal: navAbortController.current?.signal ?? staticLoaderSignal(),
+          ...loaderI18nExtras(),
+        })
+      )
+    }
+  }
 
   if (typeof document !== "undefined") {
-    void (async () => {
-      const initial = match.peek()
-      if (!initial) return
-      if (!canLoadProtectedLeaf(initial, contextGate.peek(), gateOptions)) return
-      const pageHead = readPageHeadExport(await initial.route.component())
-      if (isStaticPageHead(pageHead) || isSyncPageHead(pageHead)) {
-        await syncDocumentHeadForPage(
-          initial,
-          buildLoaderContext({
-            params: initial.params,
-            pathname: initial.pathname,
-            search: typeof window !== "undefined" ? window.location.search : "",
-            hash: hash.peek(),
-            query: query.peek(),
-            context: requestContext.peek(),
-            meta: mergeRouteMeta(initial),
-            routeId: initial.route.id,
-            ...loaderI18nExtras(),
-          })
-        )
-      }
-    })()
+    void syncInitialDocumentHead()
     if (resolveContextOption) {
       const initial = match.peek()
       if (initial) {
@@ -509,6 +524,9 @@ export function createRouter({
   }
 
   const navToken = { value: 0 }
+  const navAbortController: { current: AbortController | null } = {
+    current: null,
+  }
   const transitionsEnabled = !!transition
   const historyIndex = { value: 0 }
   const scrollStack = {
@@ -527,6 +545,33 @@ export function createRouter({
     query: query.peek(),
   })
 
+  async function syncDocumentHeadAfterCommit(
+    routeMatch: NonNullable<RouteMatch>,
+    loc: RouteLocationParts
+  ) {
+    if (!canLoadProtectedLeaf(routeMatch, contextGate.peek(), gateOptions)) {
+      return
+    }
+    const pageHead = readPageHeadExport(await routeMatch.route.component())
+    if (isStaticPageHead(pageHead) || isSyncPageHead(pageHead)) {
+      await syncDocumentHeadForPage(
+        routeMatch,
+        buildLoaderContext({
+          params: routeMatch.params,
+          pathname: routeMatch.pathname,
+          search: formatRouterSearch(loc.query),
+          hash: loc.hash,
+          query: loc.query,
+          context: requestContext.peek(),
+          meta: mergeRouteMeta(routeMatch),
+          routeId: routeMatch.route.id,
+          signal: navAbortController.current?.signal ?? staticLoaderSignal(),
+          ...loaderI18nExtras(),
+        })
+      )
+    }
+  }
+
   const commitLocation = (next: RouteLocationParts) => {
     if (next.pathname !== pathname.peek()) {
       resetHydratedPageData()
@@ -540,31 +585,7 @@ export function createRouter({
     params.value = nextMatch?.params ?? {}
     matches.value = buildMatchSegments(nextMatch)
     if (typeof document !== "undefined" && nextMatch) {
-      void (async () => {
-        if (!canLoadProtectedLeaf(nextMatch, contextGate.peek(), gateOptions)) {
-          return
-        }
-        const pageHead = readPageHeadExport(await nextMatch.route.component())
-        if (isStaticPageHead(pageHead) || isSyncPageHead(pageHead)) {
-          await syncDocumentHeadForPage(
-            nextMatch,
-            buildLoaderContext({
-              params: nextMatch.params,
-              pathname: nextMatch.pathname,
-              search: (() => {
-                const qs = buildQueryString(next.query)
-                return qs ? `?${qs}` : ""
-              })(),
-              hash: next.hash,
-              query: next.query,
-              context: requestContext.peek(),
-              meta: mergeRouteMeta(nextMatch),
-              routeId: nextMatch.route.id,
-              ...loaderI18nExtras(),
-            })
-          )
-        }
-      })()
+      void syncDocumentHeadAfterCommit(nextMatch, next)
     }
   }
 
@@ -599,6 +620,7 @@ export function createRouter({
       componentEnterGuards,
       history,
       navToken,
+      navAbortController,
       historyIndex,
       scrollStack,
       saveScrollAt,
@@ -730,6 +752,9 @@ export function createRouter({
     contextGate,
     contextPendingFallback,
     __gateOptions: gateOptions,
+    __getNavGeneration: () => navToken.value,
+    __getNavSignal: () =>
+      navAbortController.current?.signal ?? staticLoaderSignal(),
     async refreshContext() {
       if (!resolveContextOption) return
       const m = match.peek()
@@ -883,8 +908,7 @@ export function createRouter({
                 i18nRuntime.setLocale(nextLocale, data)
               }
             })
-            const qs = buildQueryString(query.peek())
-            const search = qs ? `?${qs}` : ""
+            const search = formatRouterSearch(query.peek())
             const href = formatPublicHref(
               pathname.peek(),
               nextLocale,
@@ -1178,7 +1202,7 @@ export function RouterView() {
     contextGate: "off" as const,
     hasResolveContext: false,
   }
-  let epoch = 0
+  const getNavGeneration = router.__getNavGeneration ?? (() => 0)
   const children = resource(
     {
       match,
@@ -1189,9 +1213,20 @@ export function RouterView() {
       contextState: router.contextState,
       currentNavigation: router.currentNavigation,
     },
-    async ({ match, pathname }) => {
-      const e = ++epoch
+    async ({ match, pathname }, { signal }) => {
       router.isLoaderPending.value = true
+      const scope =
+        match !== null
+          ? createNavigationScope(
+              getNavGeneration(),
+              signal,
+              buildScopeCacheKey(
+                match.route.id,
+                match.pathname,
+                formatRouterSearch(query.peek())
+              )
+            )
+          : createNavigationScope(getNavGeneration(), signal)
       const nav = router.currentNavigation.peek()
       const deferOptions = {
         ...gateOptions,
@@ -1221,7 +1256,7 @@ export function RouterView() {
         const tree = match
           ? await loadRouteTree(match)
           : await loadNotFoundRouteTree(manifest, pathname)
-        if (epoch !== e) return
+        if (!isScopeCurrent(scope, getNavGeneration) || signal.aborted) return null
 
         let leafProps: LeafRouteProps = {}
         let routeModule = tree?.routeModule
@@ -1237,15 +1272,14 @@ export function RouterView() {
             if (pending) return pending()
             return null
           }
-          const mod = await match.route.component()
+          const pageMod = tree.routeModule
+          const pageHead = readPageHeadExport(pageMod)
+          const headCommit = { scope, getNavGeneration }
           const loaderCtx = buildLoaderContext({
             params:
               router.validatedRouteParams.peek() ?? match.params,
             pathname: match.pathname,
-            search: (() => {
-              const qs = buildQueryString(query.peek())
-              return qs ? `?${qs}` : ""
-            })(),
+            search: formatRouterSearch(query.peek()),
             hash: hash.peek(),
             query: query.peek(),
             validatedQuery: router.validatedQuery.peek() as
@@ -1254,6 +1288,7 @@ export function RouterView() {
             context: requestContext.peek(),
             meta: mergeRouteMeta(match),
             routeId: match.route.id,
+            signal,
             ...(router.__i18n && router.locale
               ? loaderI18nFields(
                   router.__i18n.config,
@@ -1261,37 +1296,71 @@ export function RouterView() {
                 )
               : {}),
           })
-          const prepared = await prepareRouteForNavigation({
-            pageMod: mod,
+          const headCanRunParallel =
+            isStaticPageHead(pageHead) || isSyncPageHead(pageHead)
+          const preparePromise = prepareRouteForNavigation({
+            pageMod,
             routeModule: tree.routeModule,
             loaderCtx,
             options: {
               useHydratedPageData: true,
               forceReload: router.forceLoaderReload.peek(),
               routeId: match.route.id,
+              scope,
+              getNavGeneration,
               onCacheRefreshed: () => {
                 router.loaderEpoch.value += 1
               },
             },
           })
+          const prepared = headCanRunParallel
+            ? (
+                await Promise.all([
+                  preparePromise,
+                  syncDocumentHeadForPage(
+                    match,
+                    loaderCtx,
+                    undefined,
+                    pageMod,
+                    headCommit
+                  ),
+                ])
+              )[0]
+            : await preparePromise
+          if (
+            prepared.discarded ||
+            !isScopeCurrent(scope, getNavGeneration) ||
+            signal.aborted
+          ) {
+            return null
+          }
           router.forceLoaderReload.value = false
           router.isLoaderStale.value = prepared.isLoaderStale === true
           routeModule = prepared.routeModule
           leafProps = prepared.leafProps
-          if (!prepared.usesLoadGate) {
+          if (!prepared.usesLoadGate && !headCanRunParallel) {
             await syncDocumentHeadForPage(
               match,
               loaderCtx,
-              leafProps as PageProps<KiruLoader<unknown>>
+              leafProps as PageProps<KiruLoader<unknown>>,
+              pageMod,
+              headCommit
             )
           }
         }
 
+        if (!isScopeCurrent(scope, getNavGeneration) || signal.aborted) return null
+
         return tree && routeModule
           ? buildRoutedSubtree(tree.layoutModules, routeModule, leafProps)
           : null
+      } catch (err) {
+        if (signal.aborted) return null
+        throw err
       } finally {
-        if (epoch === e) router.isLoaderPending.value = false
+        if (!signal.aborted && isScopeCurrent(scope, getNavGeneration)) {
+          router.isLoaderPending.value = false
+        }
       }
     }
   )
