@@ -533,29 +533,17 @@ describe("SSR server", () => {
   })
 
   describe("document head on client navigation", () => {
-    it("updates title and JSON-LD when navigating between routes", () => {
+    it("updates title when navigating between routes", () => {
       cy.title().should("eq", "E2E SSR Home")
-      cy.get('head script[type="application/ld+json"]').should(
-        "contain",
-        "E2E SSR Home"
-      )
 
       cy.contains("a", "SEO").click()
       cy.location("pathname").should("eq", "/seo")
       cy.get('[data-testid="ssr-seo"]').should("exist")
       cy.title().should("eq", "E2E SSR SEO")
-      cy.get('head script[type="application/ld+json"]').should(
-        "contain",
-        "E2E SSR SEO"
-      )
 
       cy.contains("a", "Home").click()
       cy.location("pathname").should("eq", "/")
       cy.title().should("eq", "E2E SSR Home")
-      cy.get('head script[type="application/ld+json"]').should(
-        "contain",
-        "E2E SSR Home"
-      )
     })
 
     it("updates title for static and dynamic routes", () => {

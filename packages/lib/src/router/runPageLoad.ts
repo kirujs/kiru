@@ -10,6 +10,7 @@ import {
   getLoaderCacheEntry,
   isLoaderCacheStale,
   setLoaderCacheEntry,
+  type LoaderCacheEntry,
 } from "./loaderCache.js"
 import { readLoaderCacheOptions } from "./loaders.js"
 
@@ -112,24 +113,43 @@ export async function resolvePagePropsFromModule(
   if (!load) return { props: {} }
   const useHydrated =
     options?.forceReload === true ? false : options?.useHydratedPageData !== false
-  if (useHydrated && typeof document !== "undefined") {
-    if (load.__kiruLoader === "server") {
-      const hydrated = readHydratedPageData()
-      if (hydrated !== undefined) {
-        return { props: buildPageProps(hydrated) }
-      }
-      guardServerLoaderOnClient()
-    }
-    if (load.__kiruLoader === "static") {
-      const hydrated = readHydratedPageData()
-      if (hydrated !== undefined) {
-        return { props: buildPageProps(hydrated) }
-      }
-    }
-  }
-
   const cacheOpts = readLoaderCacheOptions(load)
   const routeId = options?.routeId
+
+  const seedLoaderCacheFromHydrated = (data: unknown): void => {
+    if (
+      typeof document === "undefined" ||
+      !routeId ||
+      (load.__kiruLoader !== "client" && load.__kiruLoader !== "universal")
+    ) {
+      return
+    }
+    const key = buildLoaderCacheKey(routeId, ctx.url.pathname, ctx.url.search)
+    const entry: LoaderCacheEntry = {
+      data,
+      fetchedAt: Date.now(),
+      staleTime: cacheOpts.staleTime,
+      gcTime: cacheOpts.gcTime,
+    }
+    setLoaderCacheEntry(key, entry)
+  }
+
+  if (useHydrated && typeof document !== "undefined") {
+    const hydrated = readHydratedPageData()
+    if (hydrated !== undefined) {
+      if (
+        load.__kiruLoader === "server" ||
+        load.__kiruLoader === "static" ||
+        load.__kiruLoader === "universal"
+      ) {
+        seedLoaderCacheFromHydrated(hydrated)
+        return { props: buildPageProps(hydrated) }
+      }
+    }
+    if (load.__kiruLoader === "server") {
+      guardServerLoaderOnClient()
+    }
+  }
   if (
     typeof document !== "undefined" &&
     routeId &&

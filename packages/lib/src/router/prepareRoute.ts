@@ -57,7 +57,13 @@ export async function prepareRouteForNavigation(input: {
   }
 
   const pageHead = readPageHeadExport(pageMod)
-  if (canStreamPageLoad(load) && !isAsyncPageHead(pageHead)) {
+  // Invalidation must refetch via `resolvePagePropsFromModule` (RPC), not reuse a
+  // gated resource that may still resolve from streamed SSR cache.
+  if (
+    options?.forceReload !== true &&
+    canStreamPageLoad(load) &&
+    !isAsyncPageHead(pageHead)
+  ) {
     const fallback = readLoaderFallback(load)
     if (fallback) {
       return {

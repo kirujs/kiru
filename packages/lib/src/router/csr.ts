@@ -720,6 +720,7 @@ export function createRouter({
         invalidateLoaderCache()
       }
       resetHydratedPageData()
+      clearStreamedSsrClientState()
       forceLoaderReload.value = true
       loaderEpoch.value += 1
     },

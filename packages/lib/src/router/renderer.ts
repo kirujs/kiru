@@ -413,7 +413,8 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         pathPolicy,
         i18nConfig,
         typeof requestOrUrl === "object" ? requestOrUrl : undefined,
-        globalMiddleware
+        globalMiddleware,
+        { enableStreamingLoad: options.stream }
       )
       if (!prepared) return null
 
@@ -1140,7 +1141,8 @@ async function prepareAppForUrl(
   pathPolicy: ReturnType<typeof resolvePathPolicy>,
   i18n?: InternationalizationConfig<readonly string[], unknown>,
   request?: Request,
-  globalMiddleware: RouteMiddleware[] = []
+  globalMiddleware: RouteMiddleware[] = [],
+  renderOpts: { enableStreamingLoad?: boolean } = {}
 ): Promise<PrepareAppResult> {
   const requestUrl = parseRequestUrl(url)
   const rawPath = pathnameForMatch(toPathname(url), pathPolicy)
@@ -1275,7 +1277,10 @@ async function prepareAppForUrl(
     const pageHead = readPageHeadExport(pageMod)
     const load = readPageLoadExport(pageMod)
     const asyncHead = isAsyncPageHead(pageHead)
-    const streamPageLoad = canStreamPageLoad(load) && !asyncHead
+    const streamPageLoad =
+      !!renderOpts.enableStreamingLoad &&
+      canStreamPageLoad(load) &&
+      !asyncHead
 
     let pageProps: Record<string, unknown>
     let pagePropsPromise: Promise<Record<string, unknown>> | undefined

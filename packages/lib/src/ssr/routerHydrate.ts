@@ -215,7 +215,7 @@ function loaderContextForMatch(
 
 async function prepareClientRouteForMatch(
   routeMatch: {
-    route: { component: () => Promise<unknown> }
+    route: { id: string; component: () => Promise<unknown> }
     params: Record<string, string>
   },
   pathname: string,
@@ -232,7 +232,13 @@ async function prepareClientRouteForMatch(
     pageMod,
     routeModule,
     loaderCtx,
-    options,
+    options: {
+      ...options,
+      routeId: routeMatch.route.id,
+      onCacheRefreshed: () => {
+        router.loaderEpoch.value += 1
+      },
+    },
   })
   return {
     routeModule: prepared.routeModule,
