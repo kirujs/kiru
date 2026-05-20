@@ -1,8 +1,5 @@
-import { Fragment } from "../element.js"
 import { renderToString } from "../renderToString.js"
-import { renderToReadableStream } from "../ssr/server.js"
-import { headlessRender } from "../headlessRender.js"
-import { renderMode } from "../globals.js"
+import { runWithImagePreloadRegistry } from "../image/preloadRegistry.js"
 import {
   compileRouteTree,
   generatePublicStaticPaths,
@@ -10,109 +7,52 @@ import {
 } from "./manifest.js"
 import { tryServePrerenderedFromDisk } from "./prerenderServe.js"
 import {
-  buildRoutedSubtree,
-  loadErrorRouteTree,
-  loadNotFoundRouteTree,
-  loadRootErrorRouteTree,
-  loadRouteTree,
-  type LeafRouteProps,
-} from "./routeTree.js"
-import {
-  mergeImagePreloadsIntoHead,
-  runWithImagePreloadRegistry,
-} from "../image/preloadRegistry.js"
-import { serializeDocumentHead } from "./meta.js"
-import {
-  formatPathname,
-  pathnameForMatch,
-  resolvePathPolicy,
-  type RouterPathPolicy,
-} from "./pathPolicy.js"
-import {
   compileRouteHtmlTemplate,
   renderCompiledTemplate,
   validateRouteHtmlTemplate,
 } from "./htmlTemplate.js"
-import { createStaticRouter } from "./csr.js"
 import { serializeRequestContextScript } from "./requestContext.js"
 import {
-  detectLocaleFromRequest,
-  formatPublicPathname,
   getI18nLocaleRouting,
-  loaderI18nFields,
-  loadI18nMessages,
-  resolveInvalidLocaleRedirect,
-  shouldRejectInvalidLocale,
-  shouldRunLocaleDetection,
-  splitAppPathnameDetailed,
   type InternationalizationConfig,
 } from "./i18n/index.js"
-import {
-  createI18nRuntime,
-  serializeI18nScript,
-  type HydratedI18nPayload,
-} from "./i18nContext.js"
-import { createSsrRouterShell } from "./routerShell.js"
 import { createLoaderHandler } from "./loaderRegistry.js"
-import { serializePageDataScript } from "./pageData.js"
-import { buildLoaderContext, resolvePagePropsFromModule } from "./runPageLoad.js"
-import {
-  loaderSignalFromRequest,
-  isAbortError,
-  throwIfAborted,
-} from "./navigationScope.js"
-import {
-  emitStaticLoaderPrerenderCapture,
-  pageModuleUsesStaticLoader,
-} from "./staticLoaderData.js"
-import type { KiruLoader, PageProps } from "./loaders.js"
-import {
-  createDynamicHeadContext,
-  isAsyncPageHead,
-  mergeRouteAndPageHead,
-  readPageHeadExport,
-  resolveMergedRoutePageHead,
-  resolveMergedRoutePageHeadSync,
-} from "./pageHead.js"
-import { resolveSsrRouteModule } from "./prepareRoute.js"
-import {
-  enqueueTemplatedShell,
-  renderStreamForRouteMatch,
-  renderUnmatchedAppStream,
-  serializedDataFromPageProps,
-} from "./rendererStream.js"
-import { validateSearchForMatch } from "./validateSearchForMatch.js"
-import {
-  cachePolicyToHeaders,
-  mergeResponseHeaders,
-  readRouteCacheExport,
-  readRouteHeadersExport,
-  readRouteStatusExport,
-  resolveRouteStatus,
-} from "./routeResponse.js"
-import {
-  getISRRevalidate,
-  getISRTags,
-  readRouteISRExport,
-} from "./routeRevalidate.js"
+import { loaderSignalFromRequest } from "./navigationScope.js"
+import { readRouteISRExport } from "./routeRevalidate.js"
 import {
   diskPrerenderCache,
   setGlobalPrerenderCache,
-  type PrerenderCacheEntry,
   type PrerenderCacheStore,
 } from "./prerenderCache.js"
 import {
-  type CustomRequestContext,
-  type DocumentHead,
-  type ErrorPageProps,
-  type RenderResult,
-  type RouteHeadMeta,
-  type RouteManifest,
-  type RouteMatch,
-  type RouteModule,
-  type RouteTreeDefinition,
-  type StreamRenderResult,
-  toRenderError,
+  prepareAppForUrl,
+  isPrepareRedirect,
+  isPrepareError,
+  tryLocaleDetectionRedirect,
+  localeDetectionRedirectRenderHit,
+  DEFAULT_SSR_HEADERS,
+  type RenderRequestContext,
+} from "./prepareAppForUrl.js"
+import { renderSsrErrorRecovery } from "./renderErrorRecovery.js"
+import { createIsrRegenerateHandler } from "./prerenderRegenerate.js"
+import {
+  renderStreamForRouteMatch,
+  renderUnmatchedAppStream,
+} from "./rendererStream.js"
+import { renderStringWithDocument } from "./ssrAppBuild.js"
+import {
+  pathnameForMatch,
+  resolvePathPolicy,
+  type RouterPathPolicy,
+} from "./pathPolicy.js"
+import type {
+  CustomRequestContext,
+  DocumentHead,
+  RenderResult,
+  RouteManifest,
+  RouteMatch,
+  RouteTreeDefinition,
+  StreamRenderResult,
 } from "./types.js"
 import type { KiruDeployTarget } from "@kirujs/runtime"
 import { isEdgeDeployTarget } from "@kirujs/runtime"
@@ -122,17 +62,8 @@ import {
   createRemoteActionHandler,
 } from "../remote/index.js"
 import { runWithSsrRequestContext } from "../remote/action.js"
-import {
-  buildMiddlewareTo,
-  buildMatchSegments,
-} from "./navigation.js"
-import { mergeRouteMeta } from "./routeMeta.js"
-import {
-  runRouteMiddleware,
-  toMiddlewareRedirect,
-} from "./routeMiddleware.js"
 import type { RouteMiddleware } from "./types.js"
-import { parseRequestUrl, type RequestUrlState } from "./requestUrl.js"
+import { toPathname } from "./requestUrl.js"
 
 export {
   buildRoutedSubtree,
@@ -141,6 +72,8 @@ export {
   loadRootErrorRouteTree,
   loadRouteTree,
 } from "./routeTree.js"
+export { renderMatchToStaticHtml } from "./staticRouteRender.js"
+export type { RenderRequestContext } from "./prepareAppForUrl.js"
 
 /** Serialized `k-request-token` script for remote actions (SSR / prerender hydration). */
 export function serializeKiruRequestTokenScript(
@@ -169,12 +102,6 @@ export async function serializeKiruRequestTokenScriptAsync(
     secret
   )
   return `<script type="application/json" k-request-token>${token}</script>`
-}
-
-export interface RenderRequestContext {
-  headers?: HeadersInit
-  method?: string
-  context?: CustomRequestContext
 }
 
 export type RendererActionsOptions = {
@@ -300,7 +227,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     return ensurePrerenderCache
   }
 
-  let bypassPrerenderServe = false
+  const bypassPrerenderServe = { current: false }
 
   const renderCoreInner = async (
     requestOrUrl: Request | string,
@@ -327,7 +254,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     }
 
     if (
-      !bypassPrerenderServe &&
+      !bypassPrerenderServe.current &&
       !edgeTarget &&
       (options.prerenderCache || prerenderedHtmlDir)
     ) {
@@ -357,31 +284,13 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
               pathPolicy,
               getStaticPathSet: getPrerenderPathSet,
               actionsSecret: actionsSecret ?? "",
-              onRegenerate: async (pathname) => {
-                const cache = await getPrerenderCache()
-                if (!cache) return
-                bypassPrerenderServe = true
-                try {
-                  const regenHit = await renderCore(pathname, ctx)
-                  const body =
-                    regenHit?.kind === "string"
-                      ? regenHit.result.body
-                      : undefined
-                  if (typeof body !== "string" || !body) return
-                  const regenMod = await prerenderMatch.route.component()
-                  const regenIsr = readRouteISRExport(regenMod)
-                  const entry: PrerenderCacheEntry = {
-                    html: body,
-                    pathname,
-                    generatedAt: Date.now(),
-                    revalidate: getISRRevalidate(regenIsr) ?? false,
-                    tags: getISRTags(regenIsr) ?? [],
-                  }
-                  await cache.set(pathname, entry)
-                } finally {
-                  bypassPrerenderServe = false
-                }
-              },
+              onRegenerate: createIsrRegenerateHandler({
+                manifest,
+                pathPolicy,
+                renderCore,
+                getPrerenderCache,
+                bypassPrerenderServe,
+              }),
             },
             ctx
           )
@@ -428,7 +337,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
 
       if (isPrepareError(prepared)) {
         const errorHeaders = {
-          ...DEFAULT_HEADERS,
+          ...DEFAULT_SSR_HEADERS,
           ...prepared.headers,
         }
         if (options.stream) {
@@ -453,7 +362,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
 
       if (isPrepareRedirect(prepared)) {
         const redirectHeaders = {
-          ...DEFAULT_HEADERS,
+          ...DEFAULT_SSR_HEADERS,
           location: prepared.location,
           ...prepared.headers,
         }
@@ -543,7 +452,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
           result: {
             status: routeMatch ? responseStatus : 404,
             headers: {
-              ...DEFAULT_HEADERS,
+              ...DEFAULT_SSR_HEADERS,
               ...responseHeaders,
               "transfer-encoding": "chunked",
             },
@@ -583,7 +492,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         kind: "string" as const,
         result: {
           status: routeMatch ? responseStatus : 404,
-          headers: { ...DEFAULT_HEADERS, ...responseHeaders },
+          headers: { ...DEFAULT_SSR_HEADERS, ...responseHeaders },
           body:
             compiledTemplate !== null
               ? renderCompiledTemplate(
@@ -596,132 +505,20 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         },
       }
     } catch (caught) {
-      if (isAbortError(caught)) return null
-      const renderErr = toRenderError(caught)
-
-      let recovery:
-        | {
-            app: JSX.Element
-            requestContext: CustomRequestContext
-          }
-        | undefined
-      try {
-        const tree =
-          failureContext?.match != null
-            ? await loadErrorRouteTree(failureContext.match)
-            : await loadRootErrorRouteTree(manifest)
-        if (tree) {
-          const requestContext =
-            failureContext?.requestContext ??
-            ((ctx?.context ?? {}) as CustomRequestContext)
-          recovery = {
-            app: buildAppElement(
-              failureContext?.pathname ?? requestedPathForErrors,
-              failureContext?.match?.params ?? {},
-              tree.layoutModules,
-              tree.routeModule,
-              manifest,
-              requestContext,
-              { error: renderErr } satisfies ErrorPageProps,
-              {
-                url: parseRequestUrl(url),
-                pathPolicy,
-              }
-            ),
-            requestContext,
-          }
-        }
-      } catch {
-        recovery = undefined
-      }
-
-      if (recovery) {
-        const { app: recoveryApp, requestContext: recoveryCtx } = recovery
-        const recoveryTokenInsertion =
-          actionsSecret && recoveryCtx
-            ? await buildActionTokenInsertion(
-                recoveryCtx,
-                actionsSecret,
-                deployTarget
-              )
-            : ""
-
-        if (options.stream) {
-          const document: DocumentHead = {
-            headHtml: serializeRequestContextScript(recoveryCtx),
-          }
-          if (recoveryTokenInsertion) document.headHtml += recoveryTokenInsertion
-          const stream = runWithSsrRequestContext(recoveryCtx, renderSignal, () =>
-            renderToReadableStream(recoveryApp, {
-              onShellReady: (shell, controller) =>
-                enqueueTemplatedShell(controller, {
-                  compiledTemplate,
-                  headHtml: document.headHtml,
-                  shell,
-                }),
-            })
-          )
-          return {
-            kind: "stream" as const,
-            result: {
-              status: 500,
-              headers: { ...DEFAULT_HEADERS, "transfer-encoding": "chunked" },
-              body: stream,
-            },
-          }
-        }
-
-        const body = runWithSsrRequestContext(recoveryCtx, renderSignal, () =>
-          renderToString(recoveryApp)
-        )
-
-        const documentHead: DocumentHead = {
-          headHtml: serializeRequestContextScript(recoveryCtx),
-        }
-        if (recoveryTokenInsertion) documentHead.headHtml += recoveryTokenInsertion
-        const fullHead =
-          documentHead.headHtml +
-          (documentHead.headEndHtml ? `\n    ${documentHead.headEndHtml}` : "")
-        const fullBody = body + (documentHead.bodyEndHtml ?? "")
-        return {
-          kind: "string" as const,
-          result: {
-            status: 500,
-            headers: DEFAULT_HEADERS,
-            body:
-              compiledTemplate !== null
-                ? compiledTemplate.render(fullBody, fullHead)
-                : fullBody,
-          },
-        }
-      }
-
-      const body = `<!DOCTYPE html><html><head><title>Error</title></head><body><pre>${String(
-        renderErr.message
-      ).replace(/</g, "&lt;")}</pre></body></html>`
-      if (options.stream) {
-        return {
-          kind: "stream" as const,
-          result: {
-            status: 500,
-            headers: { ...DEFAULT_HEADERS },
-            body: new ReadableStream<string>({
-              start(controller) {
-                controller.enqueue(body)
-                controller.close()
-              },
-            }),
-          },
-        }
-      }
-      return {
-        kind: "string" as const,
-        result: {
-          status: 500,
-          headers: DEFAULT_HEADERS,
-          body,
-        },
-      }
+      return renderSsrErrorRecovery({
+        caught,
+        url,
+        manifest,
+        pathPolicy,
+        requestedPathname: requestedPathForErrors,
+        failureContext,
+        fallbackContext: (ctx?.context ?? {}) as CustomRequestContext,
+        renderSignal,
+        stream: options.stream,
+        compiledTemplate,
+        actionsSecret: actionsSecret ?? undefined,
+        deployTarget,
+      })
     }
   }
 
@@ -776,224 +573,6 @@ export function createRenderer(
   }
 }
 
-/**
- * Single-pass render: produces the body string and resolves document head
- * simultaneously. Used by the string renderer and SSG, where the head does
- * not need to be known before the body starts.
- */
-async function renderStringWithDocument(
-  app: JSX.Element,
-  match: RouteMatch,
-  requestContext: CustomRequestContext,
-  renderSignal: AbortSignal,
-  pathPolicy?: RouterPathPolicy,
-  pageData?: unknown,
-  streamHeadMeta?: RouteHeadMeta,
-  i18nPayload?: HydratedI18nPayload
-): Promise<{ body: string; document: DocumentHead }> {
-  let body = ""
-  const prev = renderMode.current
-  renderMode.current = "stream"
-  try {
-    runWithSsrRequestContext(requestContext, renderSignal, () => {
-      headlessRender(
-        {
-          write(chunk) {
-            body += chunk
-          },
-        },
-        Fragment({ children: app })
-      )
-    })
-  } finally {
-    renderMode.current = prev
-  }
-
-  const resolvedMeta = mergeImagePreloadsIntoHead(
-    streamHeadMeta ??
-      mergeRouteAndPageHead(match.route.head, undefined)
-  )
-  const ctxScript = serializeRequestContextScript(requestContext)
-  const pageDataScript =
-    pageData !== undefined ? serializePageDataScript(pageData) : ""
-  const i18nScript =
-    i18nPayload !== undefined ? serializeI18nScript(i18nPayload) : ""
-  return {
-    body,
-    document: {
-      headHtml:
-        serializeDocumentHead(resolvedMeta, {
-          pathname: match.pathname,
-          pathPolicy,
-        }) +
-        (ctxScript ? `\n    ${ctxScript}` : "") +
-        (i18nScript ? `\n    ${i18nScript}` : "") +
-        (pageDataScript ? `\n    ${pageDataScript}` : ""),
-      title: resolvedMeta.title,
-    },
-  }
-}
-
-function buildAppElement(
-  pathname: string,
-  params: Record<string, string>,
-  layoutModules: Array<RouteModule | null>,
-  routeModule: RouteModule,
-  manifest: RouteManifest,
-  requestContext: CustomRequestContext,
-  leafProps?: LeafRouteProps,
-  options?: {
-    url?: RequestUrlState
-    pathPolicy?: RouterPathPolicy
-    i18n?: HydratedI18nPayload
-    localeRouting?: import("./i18n/localeRouting.js").I18nLocaleRouting
-  }
-) {
-  const staticRouter = createStaticRouter({
-    manifest,
-    pathname,
-    query: options?.url?.query ?? {},
-    hash: options?.url?.hash ?? "",
-    pathPolicy: options?.pathPolicy,
-    localeRouting: options?.localeRouting,
-    locale: options?.i18n?.locale,
-  })
-  staticRouter.params.value = params
-  const subtree = buildRoutedSubtree(layoutModules, routeModule, leafProps)
-  const i18nRuntime = options?.i18n
-    ? createI18nRuntime({
-        initialLocale: options.i18n.locale,
-        initialData: options.i18n.data,
-        locales: options.i18n.locales ?? [options.i18n.locale],
-        defaultLocale: options.i18n.defaultLocale ?? options.i18n.locale,
-      })
-    : undefined
-  return createSsrRouterShell(
-    staticRouter,
-    requestContext,
-    () => subtree,
-    undefined,
-    i18nRuntime
-  )
-}
-
-/** Shared SSG / SSR string render for a matched route. */
-export async function renderMatchToStaticHtml(
-  manifest: RouteManifest,
-  match: RouteMatch,
-  pathPolicy?: RouterPathPolicy,
-  options?: {
-    i18n?: InternationalizationConfig<readonly string[], unknown>
-    locale?: string | null
-    /** Public URL path for static loader capture (locale prefix included). */
-    publicPath?: string
-    signal?: AbortSignal
-  }
-): Promise<{ body: string; document: DocumentHead; pageData?: unknown }> {
-  return runWithImagePreloadRegistry(() =>
-    renderMatchToStaticHtmlInner(manifest, match, pathPolicy, options)
-  )
-}
-
-async function renderMatchToStaticHtmlInner(
-  manifest: RouteManifest,
-  match: RouteMatch,
-  pathPolicy?: RouterPathPolicy,
-  options?: {
-    i18n?: InternationalizationConfig<readonly string[], unknown>
-    locale?: string | null
-    publicPath?: string
-    signal?: AbortSignal
-  }
-): Promise<{ body: string; document: DocumentHead; pageData?: unknown }> {
-  const renderSignal = options?.signal ?? loaderSignalFromRequest(undefined)
-  throwIfAborted(renderSignal)
-
-  // Prerender paths are pathname-only (no query string at build time).
-  const pageMod = await match.route.component()
-  throwIfAborted(renderSignal)
-  const locale = options?.locale ?? null
-  const loaderCtx = buildLoaderContext({
-    params: match.params,
-    pathname: match.pathname,
-    search: "",
-    hash: "",
-    query: {},
-    context: {},
-    meta: mergeRouteMeta(match),
-    routeId: match.route.id,
-    signal: renderSignal,
-    ...(options?.i18n && locale
-      ? loaderI18nFields(options.i18n, locale)
-      : {}),
-  })
-  const resolved = await resolvePagePropsFromModule(pageMod, loaderCtx)
-  throwIfAborted(renderSignal)
-  if (resolved.discarded) {
-    throw new DOMException("Prerender aborted", "AbortError")
-  }
-  const pageProps = resolved.props
-  const streamHeadMeta = await resolveStreamHeadMeta(
-    match,
-    pageMod,
-    loaderCtx,
-    pageProps as PageProps<KiruLoader<unknown>>
-  )
-  throwIfAborted(renderSignal)
-  const i18nPayload =
-    options?.i18n && locale
-      ? {
-          locale,
-          data: await loadI18nMessages(options.i18n, locale),
-          locales: options.i18n.locales,
-          defaultLocale: options.i18n.default,
-        }
-      : undefined
-  throwIfAborted(renderSignal)
-  const localeRouting =
-    options?.i18n && locale ? getI18nLocaleRouting(options.i18n) : undefined
-  const { layoutModules, routeModule } = await loadRouteTree(match)
-  throwIfAborted(renderSignal)
-  const app = buildAppElement(
-    match.pathname,
-    match.params,
-    layoutModules,
-    routeModule,
-    manifest,
-    {},
-    pageProps,
-    { pathPolicy, i18n: i18nPayload, localeRouting }
-  )
-  const pageData = serializedDataFromPageProps(pageProps)
-  if (
-    options?.publicPath &&
-    pageData !== undefined &&
-    pageModuleUsesStaticLoader(pageMod)
-  ) {
-    emitStaticLoaderPrerenderCapture({
-      routeId: match.route.id,
-      pathname: options.publicPath,
-      pageData,
-    })
-  }
-  const rendered = await renderStringWithDocument(
-    app,
-    match,
-    {},
-    renderSignal,
-    pathPolicy,
-    pageData,
-    streamHeadMeta,
-    i18nPayload
-  )
-  throwIfAborted(renderSignal)
-  return { ...rendered, pageData }
-}
-
-const DEFAULT_HEADERS: Record<string, string> = {
-  "content-type": "text/html; charset=utf-8",
-}
-
 function headersRecordFromResponse(headers: Headers): Record<string, string> {
   const out: Record<string, string> = {}
   headers.forEach((value, key) => {
@@ -1024,371 +603,6 @@ async function responseToStreamRenderResult(
       },
     }),
   }
-}
-
-type PreparedApp = {
-  app: JSX.Element
-  routeMatch: RouteMatch | null
-  requestContext: CustomRequestContext
-  /** Loader data embedded in HTML for hydration (success path only). */
-  serializedPageData?: unknown
-  /** Merged route + page head for document assembly. */
-  streamHeadMeta?: RouteHeadMeta
-  /** In-flight loader when shell streams before load settles. */
-  pagePropsPromise?: Promise<Record<string, unknown>>
-  /** Flush static head prefix before shell render. */
-  earlyFlushHead?: boolean
-  i18nPayload?: HydratedI18nPayload
-  responseStatus: number
-  responseHeaders: Record<string, string>
-}
-
-type PrepareRedirect = {
-  kind: "redirect"
-  location: string
-  headers?: Record<string, string>
-}
-
-type PrepareError = {
-  kind: "error"
-  status: number
-  body?: string
-  headers?: Record<string, string>
-}
-
-type PrepareAppResult = PreparedApp | PrepareRedirect | PrepareError | null
-
-function isPrepareRedirect(
-  p: Exclude<PrepareAppResult, null>
-): p is PrepareRedirect {
-  return "kind" in p && p.kind === "redirect"
-}
-
-function isPrepareError(
-  p: Exclude<PrepareAppResult, null>
-): p is PrepareError {
-  return "kind" in p && p.kind === "error"
-}
-
-const MAX_SSR_MIDDLEWARE_REDIRECTS = 16
-
-async function resolveStreamHeadMeta(
-  match: RouteMatch,
-  pageMod: unknown,
-  loaderCtx: ReturnType<typeof buildLoaderContext>,
-  pageProps?: PageProps<KiruLoader<unknown>>
-): Promise<RouteHeadMeta> {
-  const pageHead = readPageHeadExport(pageMod)
-  const headCtx = createDynamicHeadContext(loaderCtx, pageMod, pageProps)
-  return isAsyncPageHead(pageHead)
-    ? resolveMergedRoutePageHead(match.route.head, pageHead, headCtx)
-    : resolveMergedRoutePageHeadSync(match.route.head, pageHead, headCtx)
-}
-
-function localePreferenceCookie(
-  config: InternationalizationConfig<readonly string[], unknown>,
-  locale: string
-): string {
-  return `${config.localeCookie}=${encodeURIComponent(locale)}; Path=/; Max-Age=31536000; SameSite=Lax`
-}
-
-function tryLocaleDetectionRedirect(
-  rawPath: string,
-  request: Request | undefined,
-  i18n: InternationalizationConfig<readonly string[], unknown>,
-  pathPolicy: ReturnType<typeof resolvePathPolicy>
-): { location: string; headers: Record<string, string> } | null {
-  if (!request || !shouldRunLocaleDetection(rawPath, i18n)) return null
-  const localeRouting = getI18nLocaleRouting(i18n)
-  const detected = detectLocaleFromRequest(request, i18n)
-  const target = formatPublicPathname("/", detected, localeRouting, pathPolicy)
-  const current = formatPathname(rawPath, pathPolicy)
-  if (target === current) return null
-  return {
-    location: target,
-    headers: { "set-cookie": localePreferenceCookie(i18n, detected) },
-  }
-}
-
-function localeDetectionRedirectRenderHit(
-  location: string,
-  extraHeaders: Record<string, string>,
-  stream: boolean
-) {
-  const redirectHeaders = {
-    ...DEFAULT_HEADERS,
-    location,
-    ...extraHeaders,
-  }
-  if (stream) {
-    return {
-      kind: "stream" as const,
-      result: {
-        status: 302,
-        headers: redirectHeaders,
-        body: new ReadableStream<string>({
-          start(controller) {
-            controller.close()
-          },
-        }),
-      },
-    }
-  }
-  return {
-    kind: "string" as const,
-    result: {
-      status: 302,
-      headers: redirectHeaders,
-      body: "",
-    },
-  }
-}
-
-async function prepareAppForUrl(
-  url: string,
-  ctx: RenderRequestContext | undefined,
-  manifest: RouteManifest,
-  pathPolicy: ReturnType<typeof resolvePathPolicy>,
-  i18n?: InternationalizationConfig<readonly string[], unknown>,
-  request?: Request,
-  globalMiddleware: RouteMiddleware[] = [],
-  renderOpts: { enableStreamingLoad?: boolean } = {}
-): Promise<PrepareAppResult> {
-  const requestUrl = parseRequestUrl(url)
-  const rawPath = pathnameForMatch(toPathname(url), pathPolicy)
-
-  const localeRedirect =
-    i18n && tryLocaleDetectionRedirect(rawPath, request, i18n, pathPolicy)
-  if (localeRedirect) {
-    return {
-      kind: "redirect",
-      location: localeRedirect.location,
-      headers: localeRedirect.headers,
-    }
-  }
-
-  let locale: string | null = null
-  let logicalPath = rawPath
-  if (i18n) {
-    const localeRouting = getI18nLocaleRouting(i18n)
-    const split = splitAppPathnameDetailed(rawPath, localeRouting)
-    if (split.kind === "invalid-locale") {
-      if (shouldRejectInvalidLocale(localeRouting)) {
-        logicalPath = split.pathname
-        locale = split.locale
-      } else {
-        const location = resolveInvalidLocaleRedirect(split, localeRouting, pathPolicy)
-        return { kind: "redirect", location }
-      }
-    } else {
-      logicalPath = split.pathname
-      locale = split.locale
-    }
-  }
-  const requestedPathname = formatPathname(logicalPath, pathPolicy)
-  let path = requestedPathname
-
-  for (let depth = 0; depth < MAX_SSR_MIDDLEWARE_REDIRECTS; depth++) {
-    const routeMatch = matchRoute(manifest, path, pathPolicy)
-
-    if (!routeMatch) {
-      if (path === requestedPathname) {
-        const notFoundTree = await loadNotFoundRouteTree(
-          manifest,
-          requestedPathname
-        )
-        if (!notFoundTree) return null
-        const requestContext = (ctx?.context ?? {}) as CustomRequestContext
-        const { layoutModules, routeModule } = notFoundTree
-        const app = buildAppElement(
-          requestedPathname,
-          {},
-          layoutModules,
-          routeModule,
-          manifest,
-          requestContext,
-          undefined,
-          { url: requestUrl, pathPolicy }
-        )
-        return {
-          app,
-          routeMatch: null,
-          requestContext,
-          responseStatus: 404,
-          responseHeaders: mergeResponseHeaders(ctx?.headers),
-        }
-      }
-      return null
-    }
-
-    const requestContext = (ctx?.context ?? {}) as CustomRequestContext
-    const href = `${path}${requestUrl.search}${requestUrl.hash}`
-    const segments = buildMatchSegments(routeMatch)
-    const mwTo = buildMiddlewareTo(
-      {
-        pathname: routeMatch.pathname,
-        hash: requestUrl.hash,
-        query: requestUrl.query,
-        href,
-      },
-      routeMatch,
-      segments
-    )
-    const mw = await runRouteMiddleware({
-      to: mwTo,
-      from: null,
-      meta: mergeRouteMeta(routeMatch),
-      context: requestContext,
-      request,
-      globalMiddleware,
-      match: routeMatch,
-    })
-    if (mw.type === "redirect") {
-      path = toPathname(toMiddlewareRedirect(mw.to).path)
-      continue
-    }
-    if (mw.type === "abort") return null
-    if (mw.type === "error") {
-      return {
-        kind: "error",
-        status: mw.status,
-        body: mw.body,
-        headers: mergeResponseHeaders(ctx?.headers),
-      }
-    }
-
-    if (path !== requestedPathname) {
-      return { kind: "redirect", location: path }
-    }
-
-    const searchCheck = await validateSearchForMatch(routeMatch, requestUrl.query, {
-      hash: requestUrl.hash,
-    })
-    if (!searchCheck.ok) {
-      if (searchCheck.failure.kind === "redirect") {
-        return { kind: "redirect", location: searchCheck.failure.location }
-      }
-      return null
-    }
-
-    const renderSignal = loaderSignalFromRequest(request)
-    throwIfAborted(renderSignal)
-
-    const loaderCtx = buildLoaderContext({
-      params: searchCheck.params,
-      pathname: routeMatch.pathname,
-      search: requestUrl.search,
-      hash: requestUrl.hash,
-      query: requestUrl.query,
-      validatedQuery: searchCheck.validatedQuery,
-      context: requestContext,
-      meta: mergeRouteMeta(routeMatch),
-      routeId: routeMatch.route.id,
-      request,
-      signal: renderSignal,
-      ...loaderI18nFields(i18n, locale),
-    })
-
-    const { layoutModules, routeModule: rawRouteModule } =
-      await loadRouteTree(routeMatch)
-    throwIfAborted(renderSignal)
-
-    const pageMod = rawRouteModule
-    const pageHead = readPageHeadExport(pageMod)
-    const asyncHead = isAsyncPageHead(pageHead)
-
-    const ssrPrepared = await resolveSsrRouteModule({
-      pageMod,
-      routeModule: rawRouteModule,
-      loaderCtx,
-      enableStreamingLoad: renderOpts.enableStreamingLoad,
-      routeId: routeMatch.route.id,
-    })
-    if (ssrPrepared.discarded) return null
-    throwIfAborted(renderSignal)
-
-    const { routeModule, pageProps, streamPageLoad } = ssrPrepared
-    const pagePropsPromise: Promise<Record<string, unknown>> | undefined =
-      undefined
-
-    const i18nMessagesPromise =
-      i18n && locale ? loadI18nMessages(i18n, locale) : Promise.resolve(undefined)
-
-    let streamHeadMeta: Awaited<ReturnType<typeof resolveStreamHeadMeta>>
-    let i18nMessages: Awaited<typeof i18nMessagesPromise>
-    ;[streamHeadMeta, i18nMessages] = await Promise.all([
-      resolveStreamHeadMeta(
-        routeMatch,
-        pageMod,
-        loaderCtx,
-        streamPageLoad
-          ? undefined
-          : (pageProps as PageProps<KiruLoader<unknown>>)
-      ),
-      i18nMessagesPromise,
-    ])
-    throwIfAborted(renderSignal)
-    const i18nPayload =
-      i18n && locale && i18nMessages !== undefined
-        ? {
-            locale,
-            data: i18nMessages,
-            locales: i18n.locales,
-            defaultLocale: i18n.default,
-          }
-        : undefined
-    const localeRouting =
-      i18n && locale ? getI18nLocaleRouting(i18n) : undefined
-
-    const app = buildAppElement(
-      routeMatch.pathname,
-      routeMatch.params,
-      layoutModules,
-      routeModule,
-      manifest,
-      requestContext,
-      pageProps as LeafRouteProps,
-      { url: requestUrl, pathPolicy, i18n: i18nPayload, localeRouting }
-    )
-
-    const pagePropsForMeta =
-      asyncHead || !streamPageLoad
-        ? (pageProps as PageProps<KiruLoader<unknown>>)
-        : undefined
-    const resolvedStatus = resolveRouteStatus(
-      readRouteStatusExport(pageMod),
-      loaderCtx,
-      pagePropsForMeta
-    )
-    const responseStatus = resolvedStatus ?? 200
-    const routeHeadersExport = readRouteHeadersExport(pageMod)
-    const responseHeaders = mergeResponseHeaders(
-      ctx?.headers,
-      cachePolicyToHeaders(
-        readRouteCacheExport(pageMod),
-        routeMatch.route.static === true,
-        getISRRevalidate(readRouteISRExport(pageMod))
-      ),
-      routeHeadersExport?.resolve(loaderCtx, pagePropsForMeta)
-    )
-
-    return {
-      app,
-      routeMatch,
-      requestContext,
-      serializedPageData: streamPageLoad
-        ? undefined
-        : serializedDataFromPageProps(pageProps),
-      streamHeadMeta,
-      pagePropsPromise,
-      earlyFlushHead: streamPageLoad,
-      i18nPayload,
-      responseStatus,
-      responseHeaders,
-    }
-  }
-
-  return null
 }
 
 function prepareRenderer(options: CreateRendererOptions) {
@@ -1483,10 +697,3 @@ async function buildActionTokenInsertion(
   return tag ? `\n    ${tag}` : ""
 }
 
-function toPathname(url: string): string {
-  try {
-    return new URL(url, "http://localhost").pathname
-  } catch {
-    return url
-  }
-}

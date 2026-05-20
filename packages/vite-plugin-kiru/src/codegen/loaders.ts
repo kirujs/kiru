@@ -166,7 +166,7 @@ function serverRegisterLoaders(
 ) {
   const names = matches.map((m) => m.name).join(", ")
   code.append(
-    `\nimport { __INTERNAL_LOADER_REGISTRY as __$lr__ } from "kiru/router";\n__$lr__.register(${JSON.stringify(
+    `\nimport { __INTERNAL_LOADER_REGISTRY as __$lr__ } from "kiru/router/loaderRegistry";\n__$lr__.register(${JSON.stringify(
       routeId
     )}, { ${names} });\n`
   )

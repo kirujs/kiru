@@ -4,6 +4,64 @@ describe("SSR server", () => {
     cy.visit(`http://127.0.0.1:${port}/`)
   })
 
+  it("prefetches server loader data on link hover before navigation", () => {
+    type LoaderInterception = { request?: { body?: unknown } }
+
+    const serverLoaderPostCount = (interceptions: LoaderInterception[]) =>
+      interceptions.filter((i) => {
+        const raw = i.request?.body
+        let ctx: { url?: { pathname?: string } } | null = null
+        try {
+          ctx =
+            typeof raw === "string"
+              ? (JSON.parse(raw) as { url?: { pathname?: string } })
+              : raw && typeof raw === "object"
+                ? (raw as { url?: { pathname?: string } })
+                : null
+        } catch {
+          return false
+        }
+        const pathname = ctx?.url?.pathname
+        if (
+          pathname === "/loaders/server" ||
+          pathname?.endsWith("/loaders/server") === true
+        ) {
+          return true
+        }
+        const serialized =
+          typeof raw === "string" ? raw : JSON.stringify(raw ?? "")
+        return (
+          serialized.includes("/loaders/server") &&
+          !serialized.includes("immediate-shell")
+        )
+      }).length
+
+    cy.intercept("POST", /\?loader=/).as("loaderPost")
+
+    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get('a[href="/loaders/server"]')
+      .first()
+      .scrollIntoView()
+      .trigger("pointerenter", { bubbles: true })
+      .trigger("mouseover", { bubbles: true })
+
+    cy.get<LoaderInterception[]>("@loaderPost.all", { timeout: 10_000 }).should(
+      (interceptions) => {
+        expect(serverLoaderPostCount(interceptions)).to.eq(1)
+      }
+    )
+
+    cy.get('a[href="/loaders/server"]').first().click()
+    cy.location("pathname").should("eq", "/loaders/server")
+    cy.get('[data-testid="loader-data"]').should(
+      "contain",
+      "server@/loaders/server"
+    )
+    cy.get<LoaderInterception[]>("@loaderPost.all").should((interceptions) => {
+      expect(serverLoaderPostCount(interceptions)).to.eq(1)
+    })
+  })
+
   it("renders serverLoader data on history back and forward", () => {
     cy.intercept("POST", /\?loader=/).as("serverLoader")
 

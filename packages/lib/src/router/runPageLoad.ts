@@ -13,6 +13,7 @@ import {
   buildLoaderCacheKey,
   getLoaderCacheEntry,
   isLoaderCacheStale,
+  scheduleStaleLoaderRevalidate,
   setLoaderCacheEntry,
   type LoaderCacheEntry,
 } from "./loaderCache.js"
@@ -244,17 +245,24 @@ export async function resolvePagePropsFromModule(
     typeof document !== "undefined" &&
     routeId &&
     !options?.forceReload &&
-    (load.__kiruLoader === "client" || load.__kiruLoader === "universal")
+    (load.__kiruLoader === "client" ||
+      load.__kiruLoader === "universal" ||
+      load.__kiruLoader === "server")
   ) {
     const key = buildLoaderCacheKey(routeId, ctx.url.pathname, ctx.url.search)
     const cached = getLoaderCacheEntry(key)
-    if (cached && !isLoaderCacheStale(cached)) {
-      return { props: buildPageProps(cached.data), isStale: false }
-    }
-    if (cached && isLoaderCacheStale(cached)) {
+    if (cached) {
+      // staleTime 0: serve cached data for prefetch + in-flight navigation dedupe
+      // without background revalidate (which would loop with loaderEpoch).
+      if (cached.staleTime === 0) {
+        return { props: buildPageProps(cached.data), isStale: false }
+      }
+      if (!isLoaderCacheStale(cached)) {
+        return { props: buildPageProps(cached.data), isStale: false }
+      }
       const revalidateScope = scope
       const revalidateKey = cacheKey
-      async function revalidateStaleLoaderCache() {
+      scheduleStaleLoaderRevalidate(key, async () => {
         try {
           const data = await runPageLoadFromModule(mod, ctx)
           if (
@@ -277,8 +285,7 @@ export async function resolvePagePropsFromModule(
           if (isAbortError(err)) return
           // keep showing stale data until invalidate or next navigation
         }
-      }
-      void revalidateStaleLoaderCache()
+      })
       return { props: buildPageProps(cached.data), isStale: true }
     }
   }

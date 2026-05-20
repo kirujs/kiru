@@ -15,6 +15,19 @@ export type LoaderCacheEntry<T = unknown> = {
 }
 
 const cache = new Map<string, LoaderCacheEntry>()
+const staleRevalidateInFlight = new Map<string, Promise<void>>()
+
+/** Single-flight stale background refetch per cache key. */
+export function scheduleStaleLoaderRevalidate(
+  key: string,
+  run: () => Promise<void>
+): void {
+  if (staleRevalidateInFlight.has(key)) return
+  const flight = run().finally(() => {
+    staleRevalidateInFlight.delete(key)
+  })
+  staleRevalidateInFlight.set(key, flight)
+}
 
 const KEY_SEP = "|||"
 
@@ -85,4 +98,5 @@ export function invalidateLoaderCache(
 /** @internal Test helper */
 export function clearLoaderCacheForTests(): void {
   cache.clear()
+  staleRevalidateInFlight.clear()
 }

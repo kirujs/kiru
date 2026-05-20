@@ -64,6 +64,10 @@
       "types": "./dist/router/loaderClient.d.ts",
       "default": "./dist/router/loaderClient.js"
     },
+    "./router/loaderRegistry": {
+      "types": "./dist/router/loaderRegistry.d.ts",
+      "default": "./dist/router/loaderRegistry.js"
+    },
     "./router/csr": {
       "types": "./dist/router/bootstrap/csr.d.ts",
       "default": "./dist/router/bootstrap/csr.js"

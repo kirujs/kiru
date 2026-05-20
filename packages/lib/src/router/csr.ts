@@ -530,9 +530,13 @@ export function createRouter({
   }
 
   const commitLocation = (next: RouteLocationParts) => {
-    if (next.pathname !== pathname.peek()) {
+    const prevPath = pathname.peek()
+    if (next.pathname !== prevPath) {
       resetHydratedPageData()
       clearStreamedSsrClientState()
+      if (prevPath) {
+        invalidateLoaderCache({ pathname: prevPath })
+      }
     }
     pathname.value = next.pathname
     hash.value = next.hash
@@ -1107,11 +1111,7 @@ export const Link: Kiru.Component<LinkProps> = () => {
       locale === false ? { locale: false } : locale ? { locale } : undefined
     )
   )
-  const onpointerenter: Kiru.PointerEventHandler<HTMLAnchorElement> = (
-    event
-  ) => {
-    $.props.onpointerenter?.(event)
-    if (event.defaultPrevented) return
+  const runHoverPrefetch = () => {
     const p = $.props.prefetch
     const resolved =
       p === false
@@ -1127,6 +1127,18 @@ export const Link: Kiru.Component<LinkProps> = () => {
       href.peek(),
       resolved
     )
+  }
+
+  const onpointerenter: Kiru.PointerEventHandler<HTMLAnchorElement> = (event) => {
+    $.props.onpointerenter?.(event)
+    if (event.defaultPrevented) return
+    runHoverPrefetch()
+  }
+
+  const onmouseenter: Kiru.MouseEventHandler<HTMLAnchorElement> = (event) => {
+    $.props.onmouseenter?.(event)
+    if (event.defaultPrevented) return
+    runHoverPrefetch()
   }
 
   onMount(() => {
@@ -1160,7 +1172,14 @@ export const Link: Kiru.Component<LinkProps> = () => {
   }
 
   return ({ to, replace, children, ...rest }) =>
-    createElement("a", { children, href, onpointerenter, onclick, ...rest })
+    createElement("a", {
+      children,
+      href,
+      onpointerenter,
+      onmouseenter,
+      onclick,
+      ...rest,
+    })
 }
 
 /**

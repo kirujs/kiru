@@ -60,3 +60,11 @@ export function normalizeRouterHash(hash: string): string {
   if (!hash || hash === "#") return ""
   return hash.startsWith("#") ? hash : `#${hash}`
 }
+
+export function toPathname(url: string): string {
+  try {
+    return new URL(url, "http://localhost").pathname
+  } catch {
+    return url
+  }
+}

@@ -8,7 +8,7 @@ import {
   isLoaderCacheStale,
   setLoaderCacheEntry,
 } from "../../router/loaderCache.js"
-import { loader } from "../../router/loaders.js"
+import { loader, type KiruLoader } from "../../router/loaders.js"
 import { resetHydratedPageData } from "../../router/pageData.js"
 import { resolvePagePropsFromModule } from "../../router/runPageLoad.js"
 import { staticLoaderSignal } from "../../router/navigationScope.js"
@@ -45,6 +45,54 @@ describe("loaderCache", () => {
     invalidateLoaderCache({ routeIds: ["route:1"] })
     assert.equal(getLoaderCacheEntry(buildLoaderCacheKey("route:1", "/", "")), undefined)
     assert.ok(getLoaderCacheEntry(buildLoaderCacheKey("route:2", "/", "")))
+  })
+
+  it("reuses loader cache for serverLoader after prefetch (no second fetch)", async () => {
+    const prevDocument = globalThis.document
+    clearLoaderCacheForTests()
+    let invokes = 0
+    // @ts-expect-error test shim
+    globalThis.document = {}
+
+    try {
+      const load: KiruLoader<{ count: number }> = {
+        __kiruLoader: "server",
+        __kiruInvoke: async () => {
+          invokes += 1
+          return { count: invokes }
+        },
+      }
+      const mod = { load }
+      const ctx = {
+        params: {},
+        url: { pathname: "/loaders/server", search: "", hash: "" },
+        query: {},
+        context: {},
+        meta: {},
+        route: { id: "route:server-loader" },
+        signal: staticLoaderSignal(),
+      }
+      const routeId = "route:server-loader"
+
+      await resolvePagePropsFromModule(mod, ctx, {
+        useHydratedPageData: false,
+        routeId,
+      })
+      assert.equal(invokes, 1)
+
+      const cached = await resolvePagePropsFromModule(mod, ctx, {
+        useHydratedPageData: false,
+        routeId,
+      })
+      assert.deepEqual(
+        (cached.props as { data: { count: number } }).data,
+        { count: 1 }
+      )
+      assert.equal(invokes, 1)
+    } finally {
+      globalThis.document = prevDocument
+      clearLoaderCacheForTests()
+    }
   })
 
   it("seeds loader cache from k-page-data for universal loader on hydrate", async () => {

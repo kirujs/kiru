@@ -20,7 +20,7 @@ export function renderLoaderRegistryVirtual(
     ([routeId, viteId]) =>
       `__INTERNAL_LOADER_REGISTRY.registerLazyImport(${JSON.stringify(routeId)}, () => import(${JSON.stringify(viteId)}));`
   )
-  return `import { __INTERNAL_LOADER_REGISTRY } from "kiru/router";\n${lines.join("\n")}\nexport {};\n`
+  return `import { __INTERNAL_LOADER_REGISTRY } from "kiru/router/loaderRegistry";\n${lines.join("\n")}\nexport {};\n`
 }
 
 export async function readLoaderModuleManifest(
