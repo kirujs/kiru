@@ -35,6 +35,8 @@ export default function Layout({ children }: { children: JSX.Children }) {
         <Link to="/ssr-break">SSR break</Link>
         {" | "}
         <Link to="/ssr-break-leaf">SSR break (leaf)</Link>
+        {" | "}
+        <Link to="/nav-break">Nav break</Link>
       </nav>
       {children}
     </main>

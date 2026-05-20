@@ -30,9 +30,10 @@ import {
   buildRoutedSubtree,
   loadNotFoundRouteTree,
   loadRouteTree,
+  renderClientErrorOutlet,
   type LeafRouteProps,
 } from "./routeTree.js"
-import type { Router } from "./csr.js"
+import type { Router } from "./routerInstance.js"
 import { getRouterRuntime } from "./routerRuntime.js"
 import type { RouteManifest, RouteMatch, RouteModule } from "./types.js"
 
@@ -249,6 +250,12 @@ export async function buildClientOutletSubtree(
       : null
   } catch (err) {
     if (signal.aborted) return null
+    const recovery = await renderClientErrorOutlet(
+      router.manifest,
+      match,
+      err
+    )
+    if (recovery) return recovery
     throw err
   }
 }

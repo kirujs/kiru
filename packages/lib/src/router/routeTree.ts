@@ -7,6 +7,7 @@ import type {
   RouteMatch,
   RouteModule,
 } from "./types.js"
+import { toRenderError } from "./types.js"
 
 export type LeafRouteProps =
   | ErrorPageProps
@@ -53,6 +54,21 @@ export async function loadErrorRouteTree(
     ...match.route.scopes.map((scope) => scope.layout?.() ?? null),
   ])
   return { layoutModules, routeModule }
+}
+
+/** Client outlet error UI (route `error` modules, same as SSR recovery). */
+export async function renderClientErrorOutlet(
+  manifest: RouteManifest,
+  match: RouteMatch | null,
+  err: unknown
+): Promise<JSX.Element | null> {
+  const renderErr = toRenderError(err)
+  let tree = match != null ? await loadErrorRouteTree(match) : null
+  if (!tree) tree = await loadRootErrorRouteTree(manifest)
+  if (!tree) return null
+  return buildRoutedSubtree(tree.layoutModules, tree.routeModule, {
+    error: renderErr,
+  })
 }
 
 export async function loadRootErrorRouteTree(

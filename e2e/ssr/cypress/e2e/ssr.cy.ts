@@ -259,6 +259,20 @@ describe("SSR server", () => {
       )
     })
 
+    it("recovers via client navigation after SSR error page", () => {
+      const port = Cypress.env("port")
+      cy.visit(`http://127.0.0.1:${port}/`, { failOnStatusCode: true })
+      cy.get('a[href="/nav-break"]').click()
+      cy.get('[data-testid="ssr-error-page"]').should(
+        "contain",
+        "SSR error boundary: e2e-nav-boom"
+      )
+      cy.get('a[href="/"]').first().click()
+      cy.location("pathname").should("eq", "/")
+      cy.get('[data-testid="ssr-error-page"]').should("not.exist")
+      cy.get('[data-testid="ssr-home"]').should("exist")
+    })
+
     it("uses leaf route error over scope error", () => {
       const port = Cypress.env("port")
       cy.request({

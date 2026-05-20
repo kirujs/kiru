@@ -1,6 +1,4 @@
-import { createContext, useContext } from "../context.js"
 import { signal } from "../signals/base.js"
-import { resource } from "../resource.js"
 import { matchRoute } from "./manifest.js"
 import {
   addBase,
@@ -14,7 +12,6 @@ import {
   splitRouterTo,
   type RouterQuery,
 } from "./requestUrl.js"
-import { createElement } from "../element.js"
 import type {
   AfterEachHook,
   ContextGateMode,
@@ -59,12 +56,16 @@ import {
   type ScrollStackState,
 } from "./navigation.js"
 import { compileRouteTree } from "./manifest.js"
-import { setup } from "../hooks/index.js"
-import { onMount } from "../hooks/onMount.js"
-import { buildClientOutletSubtree } from "./clientRoutePrep.js"
-import { runLinkPrefetch, type LinkPrefetch } from "./prefetchRoute.js"
+import type { Router } from "./routerInstance.js"
+export type { Router, RouterCore, RouterNavigationMode } from "./routerInstance.js"
+export { RouterProvider, useRouter } from "./routerContext.js"
+export type { RouterProviderProps } from "./routerContext.js"
+export { Link } from "./link.js"
+export type { LinkProps, LinkPrefetch } from "./link.js"
+export { RouterView } from "./routerView.js"
+import { useRouter } from "./routerContext.js"
 import { buildLoaderContext } from "./runPageLoad.js"
-import { attachRouterRuntime, getRouterRuntime } from "./routerRuntime.js"
+import { attachRouterRuntime } from "./routerRuntime.js"
 import { staticLoaderSignal } from "./navigationScope.js"
 import {
   clearStreamedSsrClientState,
@@ -76,8 +77,6 @@ import {
   readPageHeadExport,
   syncDocumentHeadForPage,
 } from "./pageHead.js"
-import { RequestContextProvider } from "./requestContext.js"
-import { warnRouterViewWithoutSsrBootstrap } from "./devWarnings.js"
 import { registerKiruRouter } from "./routerGlobal.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { invalidateLoaderCache } from "./loaderCache.js"
@@ -98,11 +97,6 @@ import {
   readHydratedI18n,
 } from "./i18nContext.js"
 import { addLocale, type I18nLocaleRouting } from "./i18n/localeRouting.js"
-import type {
-  RouterI18nFields,
-  RouterLocaleParam,
-  RouterNavigateOptions,
-} from "./i18n/augmentation.js"
 
 export {
   createI18nConfig,
@@ -151,76 +145,9 @@ function resolveRouterHref(
   return `${href}${search}${hash}`
 }
 
-export type RouterNavigationMode = "history" | "static"
 export type { RouterQuery } from "./requestUrl.js"
 
 export type { RouteTreeMatchSegment } from "./navigation.js"
-
-export interface RouterCore {
-  manifest: RouteManifest
-  pathname: Kiru.Signal<string>
-  params: Kiru.Signal<Record<string, string>>
-  hash: Kiru.Signal<string>
-  query: Kiru.Signal<RouterQuery>
-  baseUrl: string
-  path: Kiru.Signal<string>
-  match: Kiru.Signal<RouteMatch | null>
-  /** Active scope chain + leaf route (for breadcrumbs, meta). */
-  matches: Kiru.Signal<RouteTreeMatchSegment[]>
-  navigate: (
-    to: string,
-    replaceOrOptions?: boolean | RouterNavigateOptions
-  ) => Promise<NavigationResult>
-  setQuery: (
-    query: RouterQuery,
-    options?: { replace?: boolean }
-  ) => Promise<NavigationResult>
-  setHash: (
-    hash: string,
-    options?: { replace?: boolean }
-  ) => Promise<NavigationResult>
-  resolveHref: (to: string, options?: { locale?: RouterLocaleParam }) => string
-  /** Normalized URL routing when {@link createRouter} was given `i18n`. */
-  localeRouting?: I18nLocaleRouting
-  /** `"history"` = SPA navigation; `"static"` = prerender/SSR (native &lt;a&gt; only). */
-  navigationMode: RouterNavigationMode
-  requestContext: Kiru.Signal<CustomRequestContext>
-  contextState: Kiru.Signal<ContextState>
-  contextGate: Kiru.Signal<ContextGateState>
-  refreshContext: () => Promise<void>
-  afterEach: (hook: AfterEachHook) => () => void
-  /** Outlet UI while context gate is pending (`createRouter` default; scopes may override). */
-  contextPendingFallback?: () => JSX.Element
-  isNavigating: Kiru.Signal<boolean>
-  currentNavigation: Kiru.Signal<CurrentNavigation | null>
-  /** Bumps when {@link invalidate} requests a loader refetch. */
-  loaderEpoch: Kiru.Signal<number>
-  forceLoaderReload: Kiru.Signal<boolean>
-  /** True while the route outlet is reloading loader data. */
-  isLoaderPending: Kiru.Signal<boolean>
-  /** True when showing loader data past `staleTime` (before refetch completes). */
-  isLoaderStale: Kiru.Signal<boolean>
-  /** Validated query for the active route (`load.validation.query`). */
-  validatedQuery: Kiru.Signal<unknown | null>
-  /** Route params passed to loaders (validated when `load.validation.params` is set). */
-  validatedRouteParams: Kiru.Signal<Record<string, unknown> | null>
-  /**
-   * Refetch loaders for the active route (bumps `loaderEpoch`, clears hydrated page data).
-   * When `routeIds` is set, no-op unless the active route id is listed.
-   * Remote actions can trigger invalidation via `x-kiru-invalidate` (see {@link applyInvalidateResponseHeader}).
-   */
-  invalidate: (options?: {
-    current?: boolean
-    routeIds?: string[]
-  }) => Promise<void>
-  back: () => void
-  forward: () => void
-  go: (delta: number) => void
-  dispose: () => void
-}
-
-/** CSR router instance; locale APIs are required when i18n is configured via module augmentation. */
-export type Router = RouterCore & RouterI18nFields
 
 function locationFromMatch(match: RouteMatch | null): RouteLocation | null {
   if (!match) return null
@@ -353,6 +280,7 @@ export function createRouter({
   const forceLoaderReload = signal(false)
   const isLoaderPending = signal(false)
   const isLoaderStale = signal(false)
+  const outletRenderError = signal<Error | null>(null)
   const validatedQuery = signal<unknown | null>(null)
   const validatedRouteParams = signal<Record<string, unknown> | null>(null)
   const hydratedCtx =
@@ -530,6 +458,7 @@ export function createRouter({
   }
 
   const commitLocation = (next: RouteLocationParts) => {
+    outletRenderError.value = null
     const prevPath = pathname.peek()
     if (next.pathname !== prevPath) {
       resetHydratedPageData()
@@ -695,6 +624,7 @@ export function createRouter({
     forceLoaderReload,
     isLoaderPending,
     isLoaderStale,
+    outletRenderError,
     validatedQuery,
     validatedRouteParams,
     async invalidate(options) {
@@ -992,6 +922,7 @@ export function createStaticRouter({
     forceLoaderReload: signal(false),
     isLoaderPending: signal(false),
     isLoaderStale: signal(false),
+    outletRenderError: signal<Error | null>(null),
     validatedQuery: signal(null),
     validatedRouteParams: signal(null),
     async invalidate() {},
@@ -1041,36 +972,6 @@ export function createStaticRouter({
   return routerRef
 }
 
-const RouterContext = createContext<Router | null>(null)
-
-export interface RouterProviderProps {
-  router: Router
-  children?: JSX.Children
-}
-
-const RequestContextBridge: Kiru.Component<{
-  router: Router
-  children?: JSX.Children
-}> = ({ router, children }) => {
-  return createElement(RequestContextProvider, {
-    value: router.requestContext.value,
-    children,
-  })
-}
-
-export function RouterProvider({ router, children }: RouterProviderProps) {
-  return createElement(RouterContext, {
-    value: router,
-    children: createElement(RequestContextBridge, { router, children }),
-  })
-}
-
-export function useRouter(): Router {
-  const router = useContext(RouterContext)
-  if (!router) throw new Error("useRouter must be used inside RouterProvider")
-  return router
-}
-
 /** Active route match segments (scopes + leaf), for breadcrumbs and `meta`. */
 export function useMatches(): () => RouteTreeMatchSegment[] {
   const router = useRouter()
@@ -1085,168 +986,3 @@ export function useSearchParams<T = Record<string, unknown>>(): Kiru.Signal<
   return router.validatedQuery as Kiru.Signal<T | null>
 }
 
-export type { LinkPrefetch } from "./prefetchRoute.js"
-
-export type LinkProps = JSX.IntrinsicElements["a"] & {
-  to: string
-  replace?: boolean
-  /** @default `{ trigger: "hover", chunks: true, data: true }` when loader RPC exists */
-  prefetch?: LinkPrefetch
-  /**
-   * Prepends a locale path segment for `to`.
-   * When i18n is configured (`declare module "kiru/router" { interface Internationalization … }`),
-   * must be one of your configured locales. Use `false` when `to` already includes a prefix.
-   */
-  locale?: RouterLocaleParam
-  children?: JSX.Children
-}
-
-export const Link: Kiru.Component<LinkProps> = () => {
-  const $ = setup<typeof Link>()
-  const router = useRouter()
-
-  const href = $.derive(({ to, locale }) =>
-    router.resolveHref(
-      to,
-      locale === false ? { locale: false } : locale ? { locale } : undefined
-    )
-  )
-  const runHoverPrefetch = () => {
-    const p = $.props.prefetch
-    const resolved =
-      p === false
-        ? false
-        : { trigger: "hover" as const, chunks: true, data: true, ...p }
-    if (resolved === false || resolved.trigger === "visible") return
-    runLinkPrefetch(
-      router as import("./clientRoutePrep.js").ClientOutletRouter & {
-        manifest: typeof router.manifest
-        baseUrl: string
-        navigationMode: string
-      },
-      href.peek(),
-      resolved
-    )
-  }
-
-  const onpointerenter: Kiru.PointerEventHandler<HTMLAnchorElement> = (event) => {
-    $.props.onpointerenter?.(event)
-    if (event.defaultPrevented) return
-    runHoverPrefetch()
-  }
-
-  const onmouseenter: Kiru.MouseEventHandler<HTMLAnchorElement> = (event) => {
-    $.props.onmouseenter?.(event)
-    if (event.defaultPrevented) return
-    runHoverPrefetch()
-  }
-
-  onMount(() => {
-    const p = $.props.prefetch
-    const resolved =
-      p === false
-        ? false
-        : { trigger: "hover" as const, chunks: true, data: true, ...p }
-    if (resolved !== false && resolved.trigger === "visible") {
-      runLinkPrefetch(
-        router as import("./clientRoutePrep.js").ClientOutletRouter & {
-          manifest: typeof router.manifest
-          baseUrl: string
-          navigationMode: string
-        },
-        href.peek(),
-        resolved
-      )
-    }
-  })
-
-  const onclick: Kiru.MouseEventHandler<HTMLAnchorElement> = (event) => {
-    $.props.onclick?.(event)
-    if (event.defaultPrevented) return
-    event.preventDefault()
-    const { to, replace, locale: linkLocale } = $.props
-    void router.navigate(
-      to,
-      linkLocale !== undefined ? { replace, locale: linkLocale } : replace
-    )
-  }
-
-  return ({ to, replace, children, ...rest }) =>
-    createElement("a", {
-      children,
-      href,
-      onpointerenter,
-      onmouseenter,
-      onclick,
-      ...rest,
-    })
-}
-
-/**
- * CSR route outlet: loads the matched route tree on navigation.
- *
- * For SSR/SSG documents use `createRouterApp` from `kiru/router/ssr` or
- * `kiru/router/ssg` (or `bootstrapSsrClient` / `bootstrapSsgClient` from
- * `kiru/ssr/router`). `RouterView` alone does not preload the server route
- * subtree or serialized loader data required for hydration.
- */
-export function RouterView() {
-  const router = useRouter()
-  const { match, pathname, loaderEpoch, contextGate } = router
-  const { getNavGeneration } = getRouterRuntime(router)
-  const children = resource(
-    {
-      match,
-      pathname,
-      loaderEpoch,
-      contextGate,
-      isNavigating: router.isNavigating,
-      contextState: router.contextState,
-      currentNavigation: router.currentNavigation,
-    },
-    async ({ match, pathname }, { signal }) => {
-      router.isLoaderPending.value = true
-      try {
-        return await buildClientOutletSubtree({
-          router: router as import("./clientRoutePrep.js").ClientOutletRouter,
-          match,
-          pathname,
-          signal,
-          getNavGeneration,
-          useHydratedPageData: true,
-          forceReload: router.forceLoaderReload.peek(),
-        })
-      } catch (err) {
-        if (signal.aborted) return null
-        throw err
-      } finally {
-        if (!signal.aborted) {
-          router.isLoaderPending.value = false
-        }
-      }
-    }
-  )
-
-  onMount(() => {
-    warnRouterViewWithoutSsrBootstrap()
-    const canEndNavigation = () => {
-      const nav = router.currentNavigation.peek()
-      if (!nav?.to) return true
-      if (pathname.peek() !== nav.to.pathname) return false
-      const m = match.peek()
-      if (!m) return true
-      return JSON.stringify(m.params) === JSON.stringify(nav.to.params)
-    }
-    const onPendingChange = (pending: boolean) => {
-      if (!pending && router.isNavigating.peek() && canEndNavigation()) {
-        router.isNavigating.value = false
-        router.currentNavigation.value = null
-      }
-    }
-    const unsub = children.isPending.subscribe(onPendingChange)
-    onPendingChange(children.isPending.peek())
-    return unsub
-  })
-
-  return () => children.value
-}

@@ -1,5 +1,4 @@
 import { flushSync } from "./scheduler.js"
-import { isBrowser } from "./env.js"
 
 export namespace ViewTransitions {
   type ViewTransitionJob = () => Promise<void>
@@ -8,8 +7,12 @@ export namespace ViewTransitions {
   let running = false
   let scheduled = false
   let transition: ViewTransition | null = null
-  const supported =
-    isBrowser && typeof document.startViewTransition === "function"
+  function isSupported() {
+    return (
+      typeof document !== "undefined" &&
+      typeof document.startViewTransition === "function"
+    )
+  }
 
   export function run<T>(
     callback: () => T | Promise<T>,
@@ -72,7 +75,7 @@ export namespace ViewTransitions {
       flushSync()
     }
 
-    if (!supported) {
+    if (!isSupported()) {
       await runJobs()
     } else {
       transition = document.startViewTransition(runJobs)

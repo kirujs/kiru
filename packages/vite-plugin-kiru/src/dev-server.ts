@@ -290,11 +290,10 @@ export interface SsrDevOptions {
    */
   loadLoaderRegistry?: () => Promise<void>
   /**
-   * Raw HTML snippets for `<head>` (e.g. Kiru devtools scripts), injected
-   * before dev CSS link tags. Same markup as {@link transformIndexHtml} for
-   * the devtools plugin hook.
+   * Raw HTML snippets for `<head>` (e.g. Kiru devtools + transformIndexHtml delta),
+   * injected before dev CSS link tags.
    */
-  devtoolsHeadHtml?: string
+  getHeadInjection?: () => Promise<string>
 }
 
 /**
@@ -342,7 +341,8 @@ export async function handleSsrDevRequest(
   try {
   await streamFetchResponseToNode(response, res, async () => {
     const chunks: string[] = []
-    if (opts.devtoolsHeadHtml) chunks.push(opts.devtoolsHeadHtml)
+    const headInjection = await opts.getHeadInjection?.()
+    if (headInjection) chunks.push(headInjection)
     const entryUrls = await opts.getEntryUrls()
     const cssTags = await resolveDevCssLinkTagsForEntries(server, entryUrls)
     if (cssTags) chunks.push(cssTags)

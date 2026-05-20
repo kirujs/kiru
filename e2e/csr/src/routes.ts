@@ -5,6 +5,7 @@ export const routes = defineRouteTree((r) =>
   r.scope({
     layout: () => import("./pages/layout.tsx"),
     notFound: () => import("./pages/not-found/index.tsx"),
+    error: () => import("./pages/csr-error-page.tsx"),
     children: [
       r.page("/", () => import("./pages/index.tsx")),
       r.page("/about", () => import("./pages/about/index.tsx")),
@@ -22,6 +23,9 @@ export const routes = defineRouteTree((r) =>
       r.page("/style", () => import("./pages/style/index.tsx")),
       r.page("/todos", () => import("./pages/todos/index.tsx")),
       r.page("/navigation", () => import("./pages/navigation/index.tsx")),
+      r.page("/csr-break", () => import("./pages/csr-break.tsx")),
+      r.page("/csr-break-loader", () => import("./pages/csr-break-loader.tsx")),
+      r.page("/view-transitions", () => import("./pages/view-transitions/index.tsx")),
       r.page("/slow-target", {
         component: async () => {
           await new Promise((resolve) => setTimeout(resolve, 400))
@@ -51,6 +55,8 @@ export const routeLinks = [
   { path: "/style", displayName: "style" },
   { path: "/todos", displayName: "todos" },
   { path: "/navigation", displayName: "navigation" },
+  { path: "/csr-break", displayName: "csr-break" },
+  { path: "/csr-break-loader", displayName: "csr-break-loader" },
   { path: "/loaders/client", displayName: "loaders-client" },
   { path: "/loaders/universal", displayName: "loaders-universal" },
   { path: "/context", displayName: "context-home" },

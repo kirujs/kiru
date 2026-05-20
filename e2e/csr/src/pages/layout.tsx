@@ -11,7 +11,9 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
         <ul>
           {routeLinks.map(({ path, displayName }) => (
             <li>
-              <Link to={path}>{displayName}</Link>
+              <Link to={path} data-testid={`nav-${displayName}`}>
+                {displayName}
+              </Link>
             </li>
           ))}
         </ul>

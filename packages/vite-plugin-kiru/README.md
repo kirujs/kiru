@@ -158,7 +158,15 @@ At runtime, **do not** serve `index.html` from disk for every path: the built sh
 
 In development, **`router.serverEntry` always wins**: when both `ssg` and `serverEntry` are set, the plugin keeps the SSR dev middleware (so streaming, request context, and remote actions behave like a pure SSR app). Prerendered HTML is produced at `vite build` time only.
 
-**Kiru devtools and `transformIndexHtml`:** SSG dev reads `index.html` through `server.transformIndexHtml`, so Vite plugin HTML transforms apply. SSR dev serves HTML from your server bundle (for example `resolveStatic` reading `index.html` from disk), which bypasses that pipeline. The plugin therefore injects the same Kiru devtools `<head>` snippet used by the `transformIndexHtml` hook into the SSR dev response (alongside dev CSS link injection). Other plugins that only contribute via `transformIndexHtml` still do not run on SSR-rendered documents unless you integrate them separately (for example by transforming the template before passing it to `createRenderer`).
+**Kiru devtools and `transformIndexHtml`:**
+
+| Mode | `transformIndexHtml` |
+|------|----------------------|
+| SSG dev | Full document via `server.transformIndexHtml` before render |
+| SSR dev | Head delta from `transformIndexHtml` injected into streamed SSR responses (plus devtools snippet and dev CSS links) |
+| SSR prod | Raw `index.html` from `dist/client` or project root via `resolveStatic` — run build/preview for plugin HTML parity |
+
+SSG dev reads `index.html` through `server.transformIndexHtml`, so Vite plugin HTML transforms apply. SSR dev still builds the renderer shell from disk, but **any extra markup** Vite plugins add inside `<head>` during `transformIndexHtml` is merged into SSR dev responses by `collectSsrDevHeadExtras` in `handleSsrDevRequest`. For custom `createRenderer({ htmlTemplate })` placeholders, use `getDevHtmlTemplate` from `vite-plugin-kiru` in dev or pre-transform the template yourself.
 
 ## SSR client entry
 

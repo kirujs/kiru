@@ -33,6 +33,7 @@ import {
   handleSsrDevRequest,
   injectDevCssLinks,
 } from "./dev-server.js"
+import { collectSsrDevHeadExtras } from "./devIndexHtml.js"
 import {
   capturePreviewRequestUrl,
   createSsgPreviewMiddleware,
@@ -359,15 +360,25 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             return next()
           }
           try {
+            const templateName = opts.router?.htmlTemplate ?? "index.html"
             const handled = await handleSsrDevRequest(server, req, res, {
               serverEntry: getServerEntry(),
               getEntryUrls,
-              devtoolsHeadHtml: devtoolsEnabled
-                ? devtoolsHeadInjectionHtml(
-                    state.dtClientPathname,
-                    dtHostScriptPath
-                  )
-                : undefined,
+              getHeadInjection: () =>
+                collectSsrDevHeadExtras(
+                  server,
+                  state.projectRoot,
+                  templateName,
+                  req.originalUrl ?? "/",
+                  devtoolsEnabled
+                    ? [
+                        devtoolsHeadInjectionHtml(
+                          state.dtClientPathname,
+                          dtHostScriptPath
+                        ),
+                      ]
+                    : []
+                ),
               loadRemoteRegistry: state.router.remote
                 ? async () => {
                     await server.ssrLoadModule(REMOTE_REGISTRY_VIRTUAL_ID)
