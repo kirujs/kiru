@@ -1049,13 +1049,11 @@ export interface RouterProviderProps {
 const RequestContextBridge: Kiru.Component<{
   router: Router
   children?: JSX.Children
-}> = () => {
-  const $ = setup<typeof RequestContextBridge>()
-  return () =>
-    createElement(RequestContextProvider, {
-      value: $.props.router.requestContext.value,
-      children: $.props.children,
-    })
+}> = ({ router, children }) => {
+  return createElement(RequestContextProvider, {
+    value: router.requestContext.value,
+    children,
+  })
 }
 
 export function RouterProvider({ router, children }: RouterProviderProps) {
