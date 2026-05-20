@@ -39,8 +39,6 @@ export type CreateKiruHandlerOptions = Omit<
   serveStaticAssets?: boolean
   /** Per-request context passed to `renderer.render`. */
   getRequestContext?: GetRequestContext
-  /** Extra middleware (outermost first) around the built-in static + SSR stack. */
-  middleware?: KiruRespondMiddleware[]
   /** Web `fetch` when `handle` returns `null`. Default: 404. */
   notFound?: import("@kirujs/adapter-contract").ToFetchHandlerOptions["notFound"]
 }
@@ -125,7 +123,6 @@ export function createKiruResponder(
     serveStaticAssets = isProd,
     stream,
     deployTarget = "node",
-    middleware = [],
     notFound,
     ...rendererOpts
   } = options
@@ -151,7 +148,7 @@ export function createKiruResponder(
         })
       : null
 
-  const layers: KiruRespondMiddleware[] = [...middleware]
+  const layers: KiruRespondMiddleware[] = []
   if (serveStaticAssets && isProd) {
     layers.push(
       createStaticAssetsMiddleware({

@@ -9,7 +9,7 @@
 | Area | Path |
 |------|------|
 | Config API | `packages/lib/src/router/i18n/createI18nConfig.ts` |
-| URL split / format | `packages/lib/src/router/i18n/routing.ts`, `localePolicy.ts` |
+| URL split / format | `packages/lib/src/router/i18n/routing.ts`, `i18n/localeRouting.ts` |
 | Detection / BCP47 | `packages/lib/src/router/i18n/detect.ts` |
 | Client router | `packages/lib/src/router/csr.tsx` |
 | SSR renderer | `packages/lib/src/router/renderer.ts` |
@@ -40,7 +40,7 @@ Compared to Next.js (routing layer only — Next does **not** ship message catal
 | `Accept-Language` + cookie on `/` | Yes — `localeDetection`, `KIRU_LOCALE`, `detectPaths` |
 | BCP47 fallback (`nl-BE` → `nl`) | Yes — `resolveLocale` |
 | `<html lang>` | Yes — `lang="{{kiru_locale}}"` in `htmlTemplate` (dev warns if misconfigured) |
-| `hreflang` in sitemap | Yes — `defineSiteConfig({ locales })`, `loc` aligned with `as-needed` |
+| `hreflang` in sitemap | Yes — `writeSiteArtifacts({ localeRouting })` from `getI18nLocaleRouting(i18n)`, `loc` aligned with `as-needed` |
 
 **Ahead of Next:** type-safe `useI18n()` via `declare module "kiru/router" { interface Internationalization { config: typeof i18n } }`.
 
@@ -50,7 +50,7 @@ Compared to Next.js (routing layer only — Next does **not** ship message catal
 
 ### P0 — URL correctness & SEO
 
-1. **`localePrefix`** — `as-needed` (default) \| `always` \| `never` on `createI18nConfig` and `SiteLocales`. Applied in `addLocale`, public href helpers, sitemap, prerender expansion.
+1. **`localePrefix`** — `as-needed` (default) \| `always` \| `never` on `createI18nConfig` / `I18nLocaleRouting`. Applied in `addLocale`, public href helpers, sitemap, prerender expansion.
 2. **Invalid locale segment** — `splitAppPathnameDetailed` + `invalidLocale: 'redirect' \| 'not-found'`. Unsupported BCP47-like segments are never treated as logical path segments.
 
 ### P1 — Developer ergonomics
@@ -62,7 +62,7 @@ Compared to Next.js (routing layer only — Next does **not** ship message catal
 
 ### P2 — Build & static output
 
-7. **`expandPathsForLocales`** + **`generatePublicStaticPaths(..., siteLocales)`** for SSG/ISR public paths.
+7. **`expandPathsForLocales`** + **`generatePublicStaticPaths(..., localeRouting)`** for SSG/ISR public paths.
 8. **Sitemap** — default-locale `loc` unprefixed when `localePrefix: 'as-needed'`.
 
 ### P3 — Detection & persistence
@@ -84,12 +84,12 @@ Compared to Next.js (routing layer only — Next does **not** ship message catal
 - [x] **P1** Server loader receives `ctx.locale` matching URL.
 - [x] **P1** `setLocale('fr')` on `/about` → `/fr/about` (e2e; query preserved in router API).
 - [x] **P1** `<Link to="/fr/about" locale={false}>` does not double-prefix.
-- [x] **P2** `generatePublicStaticPaths` includes all locale public paths when `siteLocales` / i18n configured.
+- [x] **P2** `generatePublicStaticPaths` includes all locale public paths when `localeRouting` / i18n configured.
 - [x] **P3** Visiting `/` with `Accept-Language: fr` redirects to `/fr` when detection enabled.
 - [x] **P3** `KIRU_LOCALE=en` overrides Accept-Language on `/` (unit + detection pipeline).
 - [x] **P4** SSR HTML includes `<html lang="fr">` for French routes (`{{kiru_locale}}`).
 - [x] `e2e/ssr` tier3 i18n + `e2e/csr` / `e2e/ssg` i18n specs.
-- [x] `packages/lib/src/tests/unit/i18n.test.ts` + `localePolicy.test.ts`.
+- [x] `packages/lib/src/tests/unit/i18n.test.ts` + `localeRouting.test.ts`.
 
 ---
 
@@ -97,7 +97,7 @@ Compared to Next.js (routing layer only — Next does **not** ship message catal
 
 | Area | Unit | E2e |
 |------|------|-----|
-| `localePrefix` / `addLocale` | `localePolicy.test.ts`, `i18n.test.ts` | `/about` unprefixed in SSR/CSR/SSG i18n specs |
+| `localePrefix` / `addLocale` | `localeRouting.test.ts`, `i18n.test.ts` | `/about` unprefixed in SSR/CSR/SSG i18n specs |
 | Invalid locale redirect | `i18n.test.ts` | SSR `tier3-wave1` 302; CSR `i18n.cy.ts` |
 | Invalid locale `not-found` | `i18n.test.ts` (renderer) | — |
 | Loader `ctx.locale` | `i18n.test.ts` | SSR `/fr/loaders/server` |

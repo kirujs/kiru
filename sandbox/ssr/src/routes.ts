@@ -47,17 +47,18 @@ export const routes = defineRouteTree((r) =>
           },
         },
       }),
-      r.page("/users/[id]", {
-        component: () => import("./pages/user.tsx"),
-        beforeEnter: (to) => {
-          console.log("beforeEnter", to)
-          if (to.params.id === "0") return "/about"
-          return
-        },
-        head: {
-          title: "User {id} — Kiru SSR",
-          description: "Dynamic user profile (SSR).",
-        },
+      r.scope({
+        contextStrategy: "block",
+        meta: { requiresAuth: true },
+        children: [
+          r.page("/users/[id]", {
+            component: () => import("./pages/user.tsx"),
+            head: {
+              title: "User {id} — Kiru SSR",
+              description: "Dynamic user profile (SSR).",
+            },
+          }),
+        ],
       }),
       r.page("/demo-loader", {
         component: () => import("./pages/demo-loader.tsx"),

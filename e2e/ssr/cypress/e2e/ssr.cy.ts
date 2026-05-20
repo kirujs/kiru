@@ -226,7 +226,8 @@ describe("SSR server", () => {
   })
 
   describe("server loader immediate shell", () => {
-    const LOADER_DELAY_MS = 1000
+    /** Must exceed i18n preload + hydrate on CI (observed ~1.35s before loader was 1.2s). */
+    const LOADER_DELAY_MS = 2000
     const SHELL_BUDGET_MS = 600
 
     type ImmediateShellMarks = {

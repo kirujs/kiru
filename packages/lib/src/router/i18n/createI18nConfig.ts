@@ -1,9 +1,7 @@
-import {
-  normalizeSiteLocales,
-  type InvalidLocalePolicy,
-  type LocalePrefixPolicy,
-  type SiteLocales,
-} from "../localePolicy.js"
+import type {
+  InvalidLocalePolicy,
+  LocalePrefixPolicy,
+} from "./localeRouting.js"
 
 export type I18nRoutingOptions = {
   localePrefix?: LocalePrefixPolicy
@@ -64,17 +62,6 @@ export function createI18nConfig<const Locales extends readonly string[]>(
     localeDetection: resolvedRouting.localeDetection,
     localeCookie: resolvedRouting.localeCookie,
     detectPaths: resolvedRouting.detectPaths,
-  })
-}
-
-export function i18nToSiteLocales(
-  config: InternationalizationConfig<readonly string[], unknown>
-): SiteLocales {
-  return normalizeSiteLocales({
-    default: config.default,
-    prefixes: [...config.locales],
-    localePrefix: config.localePrefix,
-    invalidLocale: config.invalidLocale,
   })
 }
 

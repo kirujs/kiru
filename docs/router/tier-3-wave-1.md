@@ -137,7 +137,7 @@ createRenderer({ routes, i18n, /* ... */ })
 createRouterApp({ routes, i18n, container })
 ```
 
-Optional: `defineSiteConfig({ locales: { default: "en", prefixes: ["en", "fr"] } })` for hreflang in `sitemap.xml` (can mirror `i18n.locales`).
+Export `i18n` from the routes module (or pass it to `prerenderStaticRoutes` / `createRenderer`) so SSG prerender and `sitemap.xml` hreflang use the same locale list as the app.
 
 ### Pages
 

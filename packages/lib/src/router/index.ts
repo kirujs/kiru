@@ -19,6 +19,9 @@ export * from "./pageData.js"
 export * from "./runPageLoad.js"
 export { __INTERNAL_LOADER_REGISTRY } from "./loaderRegistry.js"
 export * from "./manifest.js"
+export * from "./routeMeta.js"
+export * from "./routeMiddleware.js"
+export * from "./contextGate.js"
 export * from "./meta.js"
 export * from "./htmlTemplate.js"
 export * from "./csr.js"
@@ -38,13 +41,12 @@ export * from "./requestContext.js"
 export * from "./prerenderedHtml.js"
 export * from "./navigationGuards.js"
 export * from "./pathPolicy.js"
-export * from "./localePolicy.js"
 export * from "./i18n/index.js"
 export {
   useI18n,
-  useOptionalI18n,
   I18nProvider,
   serializeI18nScript,
+  ensureClientI18nReady,
   readHydratedI18n,
   type I18nTranslator,
 } from "./i18nContext.js"

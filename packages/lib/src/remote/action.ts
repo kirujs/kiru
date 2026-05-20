@@ -39,6 +39,11 @@ export function __setSsrRequestContext(ctx: CustomRequestContext): void {
   _currentSsrCtx = ctx
 }
 
+/** Active SSR render context (see {@link __setSsrRequestContext}). */
+export function __getSsrRequestContext(): CustomRequestContext | undefined {
+  return _currentSsrCtx
+}
+
 // ---------------------------------------------------------------------------
 // Remote action (JSON)
 // ---------------------------------------------------------------------------

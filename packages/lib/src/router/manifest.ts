@@ -19,9 +19,18 @@ import type {
   RouteManifest,
   RouteMatch,
   RouteHeadMeta,
+  RouteMiddleware,
+  RouteMeta,
   RouteNodeDefinition,
   RouteTreeDefinition,
 } from "./types.js"
+
+function normalizeMiddleware(
+  value: RouteMiddleware | RouteMiddleware[] | undefined
+): RouteMiddleware[] | undefined {
+  if (!value) return undefined
+  return Array.isArray(value) ? value : [value]
+}
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -44,14 +53,12 @@ function commonPrefixLength(a: string[], b: string[]): number {
 }
 
 function mergeShallowMeta(
-  ...layers: Array<Record<string, unknown> | undefined>
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
+  ...layers: Array<Partial<RouteMeta> | undefined>
+): RouteMeta {
+  const out: RouteMeta = {}
   for (const layer of layers) {
     if (!layer) continue
-    for (const [k, v] of Object.entries(layer)) {
-      out[k] = v
-    }
+    Object.assign(out, layer)
   }
   return out
 }
@@ -145,6 +152,9 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
         notFound: node.notFound,
         head: node.head,
         meta: node.meta,
+        contextStrategy: node.contextStrategy,
+        contextPendingFallback: node.contextPendingFallback,
+        middleware: normalizeMiddleware(node.middleware),
         error: node.error,
       }
       const nextParents = parents.concat(scope)
@@ -160,7 +170,7 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
       node.static === false ? false : (node.static ?? inheritedStatic)
 
     let head: RouteHeadMeta = {}
-    let meta: Record<string, unknown> = {}
+    let meta: RouteMeta = {}
     for (const parentScope of parents) {
       head = mergeRouteHead(head, parentScope.head)
       meta = mergeShallowMeta(meta, parentScope.meta)
@@ -183,16 +193,7 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
       scopes: parents,
       head,
       meta,
-      beforeEnter: Array.isArray(node.beforeEnter)
-        ? node.beforeEnter
-        : node.beforeEnter
-          ? [node.beforeEnter]
-          : undefined,
-      beforeActivate: Array.isArray(node.beforeActivate)
-        ? node.beforeActivate
-        : node.beforeActivate
-          ? [node.beforeActivate]
-          : undefined,
+      middleware: normalizeMiddleware(node.middleware),
       error: node.error ?? scopeError,
     })
   }
@@ -608,12 +609,12 @@ export async function generatePublicStaticPaths(
   manifest: RouteManifest,
   pathPolicy?: RouterPathPolicy,
   buildMeta?: RouteBuildMeta,
-  siteLocales?: import("./localePolicy.js").SiteLocales
+  localeRouting?: import("./i18n/localeRouting.js").I18nLocaleRouting
 ): Promise<string[]> {
   const logical = await generateStaticPaths(manifest, pathPolicy, buildMeta)
-  if (!siteLocales) return logical
+  if (!localeRouting) return logical
   const { expandPathsForLocales } = await import("./i18n/expandPaths.js")
-  return expandPathsForLocales(logical, siteLocales, pathPolicy)
+  return expandPathsForLocales(logical, localeRouting, pathPolicy)
 }
 
 export async function generateSitemapPaths(

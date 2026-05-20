@@ -3,8 +3,8 @@ import {
   isLocaleLikeSegment,
   resolveInvalidLocalePolicy,
   stripLocale,
-  type SiteLocales,
-} from "../localePolicy.js"
+  type I18nLocaleRouting,
+} from "./localeRouting.js"
 import {
   addBase,
   formatPathname,
@@ -33,9 +33,9 @@ export type AppPathSplitResult =
 
 export function splitAppPathname(
   pathname: string,
-  locales: SiteLocales
+  routing: I18nLocaleRouting
 ): AppPathSplit {
-  const result = splitAppPathnameDetailed(pathname, locales)
+  const result = splitAppPathnameDetailed(pathname, routing)
   if (result.kind === "invalid-locale") {
     return { locale: result.locale, pathname: result.pathname }
   }
@@ -44,13 +44,13 @@ export function splitAppPathname(
 
 export function splitAppPathnameDetailed(
   pathname: string,
-  locales: SiteLocales
+  routing: I18nLocaleRouting
 ): AppPathSplitResult {
   const normalized = pathnameForMatch(pathname)
   const segments = normalized === "/" ? [] : normalized.slice(1).split("/")
   const first = segments[0]
 
-  if (first && locales.prefixes.includes(first)) {
+  if (first && routing.prefixes.includes(first)) {
     const rest = segments.slice(1)
     return {
       kind: "ok",
@@ -62,68 +62,68 @@ export function splitAppPathnameDetailed(
   if (
     first &&
     isLocaleLikeSegment(first) &&
-    !locales.prefixes.includes(first)
+    !routing.prefixes.includes(first)
   ) {
     const rest = segments.slice(1)
     return {
       kind: "invalid-locale",
       segment: first,
       pathname: rest.length ? `/${rest.join("/")}` : "/",
-      locale: locales.default,
+      locale: routing.default,
     }
   }
 
-  const { locale, pathname: logical } = stripLocale(normalized, locales)
+  const { locale, pathname: logical } = stripLocale(normalized, routing)
   const resolved =
-    locale && locales.prefixes.includes(locale) ? locale : locales.default
+    locale && routing.prefixes.includes(locale) ? locale : routing.default
   return { kind: "ok", locale: resolved, pathname: logical }
 }
 
 export function formatPublicPathname(
   logicalPath: string,
   locale: string,
-  locales: SiteLocales,
+  routing: I18nLocaleRouting,
   policy?: RouterPathPolicy
 ): string {
-  return formatPathname(addLocale(logicalPath, locale, locales), policy)
+  return formatPathname(addLocale(logicalPath, locale, routing), policy)
 }
 
 export function formatPublicHref(
   logicalPath: string,
   locale: string,
-  locales: SiteLocales,
+  routing: I18nLocaleRouting,
   policy: RouterPathPolicy | undefined,
   baseUrl: string,
   search: string,
   hash: string
 ): string {
-  const publicPath = formatPublicPathname(logicalPath, locale, locales, policy)
+  const publicPath = formatPublicPathname(logicalPath, locale, routing, policy)
   return `${addBase(publicPath, baseUrl)}${search}${hash}`
 }
 
 export function resolveInvalidLocaleRedirect(
   split: Extract<AppPathSplitResult, { kind: "invalid-locale" }>,
-  locales: SiteLocales,
+  routing: I18nLocaleRouting,
   pathPolicy?: RouterPathPolicy
 ): string {
-  return formatPublicPathname(split.pathname, split.locale, locales, pathPolicy)
+  return formatPublicPathname(split.pathname, split.locale, routing, pathPolicy)
 }
 
-export function shouldRejectInvalidLocale(locales: SiteLocales): boolean {
-  return resolveInvalidLocalePolicy(locales) === "not-found"
+export function shouldRejectInvalidLocale(routing: I18nLocaleRouting): boolean {
+  return resolveInvalidLocalePolicy(routing) === "not-found"
 }
 
 /** Strip a leading locale segment from `to` when href is already localized. */
 export function stripLocalePrefixFromPath(
   pathname: string,
-  locales: SiteLocales
+  routing: I18nLocaleRouting
 ): string {
   const normalized = normalizePathname(pathname)
   const segments = normalized === "/" ? [] : normalized.slice(1).split("/")
   const first = segments[0]
   if (
     first &&
-    (locales.prefixes.includes(first) || isLocaleLikeSegment(first))
+    (routing.prefixes.includes(first) || isLocaleLikeSegment(first))
   ) {
     const rest = segments.slice(1)
     return rest.length ? `/${rest.join("/")}` : "/"
@@ -134,7 +134,7 @@ export function stripLocalePrefixFromPath(
 export function parseAppLocation(
   url: URL,
   baseUrl: string,
-  locales?: SiteLocales,
+  routing?: I18nLocaleRouting,
   policy?: RouterPathPolicy
 ): {
   pathname: string
@@ -147,7 +147,7 @@ export function parseAppLocation(
   const rawPath = stripBase(url.pathname, baseUrl)
   const search = url.search
   const hash = url.hash
-  if (!locales) {
+  if (!routing) {
     const pathname = pathnameForMatch(url.pathname, policy)
     return {
       pathname,
@@ -157,9 +157,9 @@ export function parseAppLocation(
       href: `${addBase(pathname, baseUrl)}${search}${hash}`,
     }
   }
-  const detailed = splitAppPathnameDetailed(rawPath, locales)
+  const detailed = splitAppPathnameDetailed(rawPath, routing)
   if (detailed.kind === "invalid-locale") {
-    const redirectPath = resolveInvalidLocaleRedirect(detailed, locales, policy)
+    const redirectPath = resolveInvalidLocaleRedirect(detailed, routing, policy)
     return {
       pathname: detailed.pathname,
       locale: detailed.locale,
@@ -177,7 +177,7 @@ export function parseAppLocation(
     href: formatPublicHref(
       detailed.pathname,
       detailed.locale,
-      locales,
+      routing,
       policy,
       baseUrl,
       search,

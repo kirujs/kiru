@@ -33,6 +33,85 @@ export function toRenderError(thrown: unknown): Error {
 export interface CustomRequestContext {}
 
 /**
+ * Augment with app-specific route metadata (auth policy, roles, etc.):
+ *
+ * ```ts
+ * declare module "kiru/router" {
+ *   interface RouteMeta {
+ *     requiresAuth?: boolean
+ *     unauthorizedRedirect?: string
+ *   }
+ * }
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface RouteMeta {}
+
+/** CSR context resolve / outlet block behavior (scope-level; nearest scope wins). */
+export type ContextStrategy = "inherit" | "none" | "background" | "block"
+
+/** Outlet UI while context gate is pending (app or scope). */
+export type ContextPendingFallback = () => JSX.Element
+
+/** App default when scope strategy is `inherit` (`off` = no gate; `block` = await context on every route). */
+export type ContextGateMode = "off" | "block"
+
+export type ContextState = "idle" | "pending" | "ready" | "denied"
+
+export type ContextGateState =
+  | { status: "idle" }
+  | { status: "pending"; reason: "auth" }
+  | { status: "ready"; context: CustomRequestContext }
+  | { status: "denied"; redirect: string }
+
+export type ResolveContextEvent =
+  | { type: "initial" }
+  | {
+      type: "navigation"
+      to: RouteLocationSnapshot
+      from: RouteLocationSnapshot | null
+    }
+  | { type: "refresh" }
+
+export type RouteMiddlewareRedirect =
+  | string
+  | { path: string; replace?: boolean }
+
+export type RouteMiddlewareResult =
+  | void
+  | { redirect: RouteMiddlewareRedirect }
+  | { error: number; body?: string }
+  | { abort: true }
+
+export type RouteTreeMatchSegment = {
+  id: string
+  kind: "scope" | "route"
+  meta: RouteMeta
+}
+
+export type RouteMiddlewareTo = {
+  pathname: string
+  params: Record<string, string>
+  query: Record<string, string[]>
+  hash: string
+  href: string
+  routeId: string
+  segments: RouteTreeMatchSegment[]
+}
+
+export type RouteMiddlewareContext = {
+  meta: RouteMeta
+  to: RouteMiddlewareTo
+  from: RouteMiddlewareTo | null
+  request?: Request
+  context: CustomRequestContext
+}
+
+export type RouteMiddleware = (
+  ctx: RouteMiddlewareContext
+) => RouteMiddlewareResult | Promise<RouteMiddlewareResult>
+
+/**
  * Augment for type-safe `useI18n()`:
  *
  * ```ts
@@ -148,15 +227,8 @@ export interface RouteDefinitionConfig {
   component: RouteLoader
   static?: boolean
   head?: RouteHeadMeta
-  beforeEnter?: NavigationGuard | NavigationGuard[]
-  /**
-   * Runs after the target route module is loaded and before the URL commits (CSR).
-   * On SSR, runs after the route module is loaded and before render.
-   */
-  beforeActivate?: NavigationGuard | NavigationGuard[]
-  /** Arbitrary route metadata (merged shallowly from ancestor scopes). */
-  meta?: Record<string, unknown>
-  /** Error UI module for this route (wrapped around subtree when render throws). */
+  meta?: Partial<RouteMeta>
+  middleware?: RouteMiddleware | RouteMiddleware[]
   error?: RouteLoader
 }
 
@@ -167,9 +239,8 @@ export interface RouteDefinition {
   component: RouteLoader
   static?: boolean
   head?: RouteHeadMeta
-  beforeEnter?: NavigationGuard | NavigationGuard[]
-  beforeActivate?: NavigationGuard | NavigationGuard[]
-  meta?: Record<string, unknown>
+  meta?: Partial<RouteMeta>
+  middleware?: RouteMiddleware | RouteMiddleware[]
   error?: RouteLoader
 }
 
@@ -179,7 +250,10 @@ export interface RouteScopeDefinition {
   layout?: RouteLoader
   notFound?: RouteLoader
   head?: RouteHeadMeta
-  meta?: Record<string, unknown>
+  meta?: Partial<RouteMeta>
+  contextStrategy?: ContextStrategy
+  contextPendingFallback?: ContextPendingFallback
+  middleware?: RouteMiddleware | RouteMiddleware[]
   error?: RouteLoader
   children: RouteNodeDefinition[]
 }
@@ -196,7 +270,10 @@ export interface RouteBuilder {
     layout?: RouteLoader
     notFound?: RouteLoader
     head?: RouteHeadMeta
-    meta?: Record<string, unknown>
+    meta?: Partial<RouteMeta>
+    contextStrategy?: ContextStrategy
+    contextPendingFallback?: ContextPendingFallback
+    middleware?: RouteMiddleware | RouteMiddleware[]
     error?: RouteLoader
     children: RouteNodeDefinition[]
   }): RouteScopeDefinition
@@ -212,7 +289,10 @@ export interface CompiledRouteScope {
   layout?: RouteLoader
   notFound?: RouteLoader
   head?: RouteHeadMeta
-  meta?: Record<string, unknown>
+  meta?: Partial<RouteMeta>
+  contextStrategy?: ContextStrategy
+  contextPendingFallback?: ContextPendingFallback
+  middleware?: RouteMiddleware[]
   error?: RouteLoader
 }
 
@@ -227,12 +307,9 @@ export interface CompiledRoute {
   static: boolean
   component: RouteLoader
   scopes: CompiledRouteScope[]
-  /** Merged from ancestor scopes and this route */
   head: RouteHeadMeta
-  /** Merged shallow meta from scopes + route */
-  meta: Record<string, unknown>
-  beforeEnter?: NavigationGuard[]
-  beforeActivate?: NavigationGuard[]
+  meta: RouteMeta
+  middleware?: RouteMiddleware[]
   error?: RouteLoader
 }
 

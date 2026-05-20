@@ -104,7 +104,7 @@ export const routes = defineRouteTree((r) =>
         component: async () => ({
           default: () => "This page should be redirected away.",
         }),
-        beforeEnter: () => "/",
+        middleware: [() => ({ redirect: "/" })],
         head: { title: "Guarded Route" },
       }),
       r.page("/blocked", {

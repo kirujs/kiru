@@ -1,4 +1,5 @@
 import { defineRouteTree } from "kiru/router"
+import { contextRouteChildren } from "./context/defineContextRoutes.js"
 
 export const routes = defineRouteTree((r) =>
   r.scope({
@@ -12,7 +13,7 @@ export const routes = defineRouteTree((r) =>
         component: async () => ({
           default: () => "Guarded should redirect",
         }),
-        beforeEnter: () => "/about",
+        middleware: [() => ({ redirect: "/about" })],
       }),
       r.page("/counter", () => import("./pages/counter/index.tsx")),
       r.page("/effects", () => import("./pages/effects/index.tsx")),
@@ -33,6 +34,7 @@ export const routes = defineRouteTree((r) =>
         () => import("./pages/loaders/universal.tsx")
       ),
       r.page("/image-demo", () => import("./pages/image-demo/index.tsx")),
+      ...contextRouteChildren(r),
     ],
   })
 )
@@ -51,4 +53,8 @@ export const routeLinks = [
   { path: "/navigation", displayName: "navigation" },
   { path: "/loaders/client", displayName: "loaders-client" },
   { path: "/loaders/universal", displayName: "loaders-universal" },
+  { path: "/context", displayName: "context-home" },
+  { path: "/context/profile", displayName: "context-profile" },
+  { path: "/context/admin", displayName: "context-admin" },
+  { path: "/context/login", displayName: "context-login" },
 ]

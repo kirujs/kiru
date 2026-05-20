@@ -2,7 +2,7 @@ import { defineHeadContent, serverLoader, type PageProps } from "kiru/router"
 
 export const load = serverLoader({
   load: async (ctx) => {
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await new Promise((resolve) => setTimeout(resolve, 2000))
     return {
       source: "server",
       pathname: ctx.url.pathname,

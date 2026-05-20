@@ -1,12 +1,21 @@
 export {
   createI18nConfig,
-  i18nToSiteLocales,
   loaderI18nFields,
   loadI18nMessages,
   type InternationalizationConfig,
   type I18nOptions,
   type I18nRoutingOptions,
 } from "./createI18nConfig.js"
+export {
+  addLocale,
+  getI18nLocaleRouting,
+  isLocaleLikeSegment,
+  normalizeI18nLocaleRouting,
+  stripLocale,
+  type I18nLocaleRouting,
+  type InvalidLocalePolicy,
+  type LocalePrefixPolicy,
+} from "./localeRouting.js"
 export type {
   AppI18nConfig,
   AppI18nData,

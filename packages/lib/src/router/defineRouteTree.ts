@@ -30,9 +30,8 @@ const routeBuilder: RouteBuilder = {
       component: value.component,
       static: value.static,
       head: value.head,
-      beforeEnter: value.beforeEnter,
-      beforeActivate: value.beforeActivate,
       meta: value.meta,
+      middleware: value.middleware,
       error: value.error,
     }
   },
@@ -44,6 +43,9 @@ const routeBuilder: RouteBuilder = {
       notFound: config.notFound,
       head: config.head,
       meta: config.meta,
+      contextStrategy: config.contextStrategy,
+      contextPendingFallback: config.contextPendingFallback,
+      middleware: config.middleware,
       error: config.error,
       children: config.children,
     }

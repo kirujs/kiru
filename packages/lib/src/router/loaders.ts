@@ -1,4 +1,4 @@
-import type { CustomRequestContext } from "./types.js"
+import type { CustomRequestContext, RouteMeta } from "./types.js"
 import type { RouterQuery } from "./requestUrl.js"
 import type {
   EnforceLoaderValidation,
@@ -29,6 +29,8 @@ export interface LoaderContext {
   /** Raw URL query (`?foo=bar&baz=1`). */
   query: RouterQuery
   context: CustomRequestContext
+  meta: RouteMeta
+  route: { id: string }
   request?: Request
   /** Active locale when i18n is enabled. */
   locale?: string

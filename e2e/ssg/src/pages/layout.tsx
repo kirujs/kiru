@@ -11,6 +11,12 @@ export default function Layout({ children }: { children: JSX.Children }) {
         <Link to="/posts/one">Post one</Link>
         {" | "}
         <Link to="/loaders/static">Static loader</Link>
+        {" | "}
+        <Link to="/context">Context</Link>
+        {" | "}
+        <Link to="/context/admin">Context admin</Link>
+        {" | "}
+        <Link to="/context/profile">Context profile</Link>
       </nav>
       {children}
     </main>

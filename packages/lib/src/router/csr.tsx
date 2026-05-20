@@ -17,17 +17,41 @@ import {
 import { createElement } from "../element.js"
 import type {
   AfterEachHook,
+  ContextGateMode,
+  ContextGateState,
+  ContextPendingFallback,
+  ContextState,
   CurrentNavigation,
+  CustomRequestContext,
   NavigationFailure,
   NavigationGuard,
   NavigationResult,
+  ResolveContextEvent,
   RouteLocation,
   RouteLocationSnapshot,
   RouteManifest,
   RouteMatch,
+  RouteMiddleware,
   RouteTreeDefinition,
 } from "./types.js"
+import { readHydratedRequestContext } from "./requestContext.js"
 import {
+  canLoadProtectedLeaf,
+  resolvePendingOutletMatch,
+  shouldDeferProtectedOutlet,
+  idleContextGate,
+  initialContextState,
+  resolveContextGateState,
+} from "./contextGate.js"
+import {
+  effectiveContextPendingFallback,
+  mergeRouteMeta,
+} from "./routeMeta.js"
+import { runContextResolve } from "./contextResolve.js"
+import type { ContextGateOptions } from "./routeMeta.js"
+import { warnProtectedImportBeforeGate } from "./devWarnings.js"
+import {
+  buildMatchSegments,
   buildQueryString,
   createNavigateInternal,
   ensureHistoryIndex,
@@ -56,16 +80,15 @@ import {
   resetHydratedPageData,
 } from "./pageData.js"
 import { isStaticPageHead, readPageHeadExport, syncDocumentHeadForPage } from "./pageHead.js"
-import type { CustomRequestContext } from "./types.js"
+import { RequestContextProvider } from "./requestContext.js"
 import { warnRouterViewWithoutSsrBootstrap } from "./devWarnings.js"
 import { registerKiruRouter } from "./routerGlobal.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { invalidateLoaderCache } from "./loaderCache.js"
 import {
-  createI18nConfig,
   formatPublicHref,
   formatPublicPathname,
-  i18nToSiteLocales,
+  getI18nLocaleRouting,
   loaderI18nFields,
   loadI18nMessages,
   resolveInvalidLocaleRedirect,
@@ -79,7 +102,7 @@ import {
   readHydratedI18n,
   type I18nContextValue,
 } from "./i18nContext.js"
-import { addLocale, type SiteLocales } from "./localePolicy.js"
+import { addLocale, type I18nLocaleRouting } from "./i18n/localeRouting.js"
 import type {
   RouterI18nFields,
   RouterLocaleParam,
@@ -91,7 +114,7 @@ export {
   type InternationalizationConfig,
   type I18nOptions,
 } from "./i18n/index.js"
-export { useI18n, useOptionalI18n, I18nProvider } from "./i18nContext.js"
+export { useI18n, I18nProvider } from "./i18nContext.js"
 
 function joinPath(base: string, path: string): string {
   if (path.startsWith("#") || path.startsWith("?")) {
@@ -106,7 +129,7 @@ function resolveRouterHref(
   logicalPathname: string,
   to: string,
   hrefOpts: { locale?: string | false } | undefined,
-  siteLocales: SiteLocales | undefined,
+  localeRouting: I18nLocaleRouting | undefined,
   activeLocale: string | undefined,
   policy: RouterPathPolicy,
   baseUrl: string
@@ -117,15 +140,15 @@ function resolveRouterHref(
       ? formatPathname(logicalPathname, policy)
       : formatPathname(joinPath(logicalPathname, pathPart), policy)
   let href: string
-  if (hrefOpts?.locale === false && siteLocales) {
+  if (hrefOpts?.locale === false && localeRouting) {
     href = addBase(relative, baseUrl)
   } else {
     const targetLocale =
       hrefOpts?.locale === false
         ? undefined
         : (hrefOpts?.locale ?? activeLocale)
-    if (targetLocale && siteLocales) {
-      href = addBase(addLocale(relative, targetLocale, siteLocales), baseUrl)
+    if (targetLocale && localeRouting) {
+      href = addBase(addLocale(relative, targetLocale, localeRouting), baseUrl)
     } else {
       href = addBase(stripBase(relative, baseUrl), baseUrl)
     }
@@ -137,24 +160,6 @@ export type RouterNavigationMode = "history" | "static"
 export type { RouterQuery } from "./requestUrl.js"
 
 export type { RouteTreeMatchSegment } from "./navigation.js"
-
-function buildMatchSegments(match: RouteMatch | null): RouteTreeMatchSegment[] {
-  if (!match) return []
-  const out: RouteTreeMatchSegment[] = []
-  for (const scope of match.route.scopes) {
-    out.push({
-      id: scope.id,
-      kind: "scope",
-      meta: scope.meta ?? {},
-    })
-  }
-  out.push({
-    id: match.route.id,
-    kind: "route",
-    meta: match.route.meta ?? {},
-  })
-  return out
-}
 
 export interface RouterCore {
   manifest: RouteManifest
@@ -180,8 +185,8 @@ export interface RouterCore {
     options?: { replace?: boolean }
   ) => Promise<NavigationResult>
   resolveHref: (to: string, options?: { locale?: RouterLocaleParam }) => string
-  /** When set, {@link Link} `locale` prop and {@link resolveHref} can prefix paths. */
-  locales?: SiteLocales
+  /** Normalized URL routing when {@link createRouter} was given `i18n`. */
+  localeRouting?: I18nLocaleRouting
   /** @internal Hydrated + runtime i18n state. */
   __i18n?: {
     runtime: ReturnType<typeof createI18nRuntime<unknown>>
@@ -190,9 +195,15 @@ export interface RouterCore {
   }
   /** `"history"` = SPA navigation; `"static"` = prerender/SSR (native &lt;a&gt; only). */
   navigationMode: RouterNavigationMode
-  beforeEach: (guard: NavigationGuard) => () => void
-  beforeResolve: (guard: NavigationGuard) => () => void
+  requestContext: Kiru.Signal<CustomRequestContext>
+  contextState: Kiru.Signal<ContextState>
+  contextGate: Kiru.Signal<ContextGateState>
+  refreshContext: () => Promise<void>
   afterEach: (hook: AfterEachHook) => () => void
+  /** Outlet UI while context gate is pending (`createRouter` default; scopes may override). */
+  contextPendingFallback?: () => JSX.Element
+  /** @internal */
+  __gateOptions?: ContextGateOptions
   isNavigating: Kiru.Signal<boolean>
   currentNavigation: Kiru.Signal<CurrentNavigation | null>
   /** Bumps when {@link invalidate} requests a loader refetch. */
@@ -259,34 +270,79 @@ function pathFromLocation(location: Location, baseUrl: string): string {
   return stripBase(location.pathname, baseUrl)
 }
 
+/**
+ * Options for {@link createRouter} (CSR / hydrated client).
+ *
+ * Request context and auth gating use {@link resolveContext} plus scope
+ * `contextStrategy` / {@link contextGate}.
+ * @see docs/router/route-middleware-and-context.md
+ */
+export type CreateRouterOptions = {
+  /** Route tree from {@link defineRouteTree} or a precompiled {@link RouteManifest}. */
+  routes: RouteTreeDefinition | RouteManifest
+  /** Browser history API (defaults to `window.history`). */
+  history?: History
+  /** Initial URL (defaults to `window.location`; use in tests or non-browser hosts). */
+  location?: Location
+  /** Base path and trailing-slash rules for matching, links, and middleware `href`. */
+  pathPolicy?: RouterPathPolicy
+  /** When true, navigations use the View Transitions API where supported. */
+  transition?: boolean
+  /**
+   * Locale-aware routing ({@link Link}, {@link resolveHref}, message bundles).
+   * See {@link createRenderer} `i18n` and `createI18nConfig`.
+   */
+  i18n?: InternationalizationConfig<readonly string[], unknown>
+  /**
+   * Loads {@link CustomRequestContext} on the client (session, tenant, etc.).
+   * Required for `contextStrategy: "block"` scopes; pairs with
+   * {@link RequestContextProvider} / {@link useRequestContext}.
+   */
+  resolveContext?: (event: ResolveContextEvent) => Promise<CustomRequestContext>
+  /**
+   * App default when scope `contextStrategy` is `inherit`.
+   * `"off"` (default): only explicit scope strategies gate the outlet.
+   * `"block"`: treat inherit routes like `block` (await context before leaf).
+   */
+  contextGate?: ContextGateMode
+  /**
+   * Outlet UI while a blocked route waits for context (app default; scopes may
+   * override via `contextPendingFallback` on `r.scope()`).
+   */
+  contextPendingFallback?: ContextPendingFallback
+  /**
+   * When true (default), reuse the last resolved context on navigations that do
+   * not await context (`background` / non-block inherit). Set false to refetch on
+   * every navigation.
+   */
+  stickyContext?: boolean
+  /**
+   * Global route middleware (runs after context resolve, before URL commit).
+   * Same pipeline as {@link createRenderer} `routeMiddleware`.
+   */
+  routeMiddleware?: RouteMiddleware[]
+}
+
 export function createRouter({
   routes,
   history = window.history,
   location = window.location,
   pathPolicy,
   transition = false,
-  locales: localesOption,
   i18n,
-}: {
-  routes: RouteTreeDefinition | RouteManifest
-  history?: History
-  location?: Location
-  pathPolicy?: RouterPathPolicy
-  transition?: boolean
-  /** Locale prefixes for {@link Link} `locale` prop. @see docs/router/tier-3-wave-1.md#i18n */
-  locales?: SiteLocales
-  /** Type-safe i18n config from {@link createI18nConfig}. */
-  i18n?: InternationalizationConfig<readonly string[], unknown>
-}): Router {
+  resolveContext: resolveContextOption,
+  contextGate: contextGateMode = "off",
+  contextPendingFallback,
+  stickyContext = true,
+  routeMiddleware: globalMiddleware = [],
+}: CreateRouterOptions): Router {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
   const resolvedPathPolicy = resolvePathPolicy(pathPolicy)
   const normalizedBaseUrl = resolvedPathPolicy.baseUrl
-  const siteLocales = i18n
-    ? i18nToSiteLocales(i18n)
-    : localesOption
+  const localeRouting = i18n ? getI18nLocaleRouting(i18n) : undefined
   const rawInitialPath = pathFromLocation(location, normalizedBaseUrl)
-  const initialSplit = siteLocales
-    ? splitAppPathname(rawInitialPath, siteLocales)
+  const initialSplit = localeRouting
+    ? splitAppPathname(rawInitialPath, localeRouting)
     : { locale: null as string | null, pathname: rawInitialPath }
   const hydratedI18n = readHydratedI18n()
   const initialLocale =
@@ -307,24 +363,15 @@ export function createRouter({
     : undefined
   const loaderI18nExtras = () =>
     i18n && locale ? loaderI18nFields(i18n, locale.peek()) : {}
-  if (i18n && i18nRuntime && !hydratedI18n) {
-    void loadI18nMessages(i18n, initialLocale).then((data) => {
-      i18nRuntime.setLocale(initialLocale, data)
-    })
-  } else if (i18n && i18nRuntime && hydratedI18n) {
+  if (i18n && i18nRuntime && hydratedI18n) {
     i18nRuntime.setLocale(hydratedI18n.locale, hydratedI18n.data)
   }
-  const locales = siteLocales
   const hash = signal(location.hash)
   const query = signal(parseQuery(location.search))
   const path = pathname
   const match = signal(
     matchRoute(manifest, initialSplit.pathname, resolvedPathPolicy)
   )
-  const toBrowserPath = (logical: string) =>
-    siteLocales && locale
-      ? formatPublicPathname(logical, locale.peek(), siteLocales, resolvedPathPolicy)
-      : logical
   const params = signal(match.value?.params ?? {})
   const matches = signal(buildMatchSegments(match.peek()))
   const isNavigating = signal(false)
@@ -335,6 +382,27 @@ export function createRouter({
   const isLoaderStale = signal(false)
   const validatedQuery = signal<unknown | null>(null)
   const validatedRouteParams = signal<Record<string, unknown> | null>(null)
+  const hydratedCtx =
+    typeof document !== "undefined" ? readHydratedRequestContext() : {}
+  const requestContext = signal<CustomRequestContext>(hydratedCtx)
+  const contextState = signal<ContextState>(initialContextState(hydratedCtx))
+  const gateOptions: ContextGateOptions = {
+    contextGate: contextGateMode,
+    hasResolveContext: !!resolveContextOption,
+  }
+  const contextGate = signal<ContextGateState>(
+    resolveContextGateState(
+      match.peek(),
+      contextState.peek(),
+      requestContext.peek(),
+      gateOptions
+    )
+  )
+
+  const toBrowserPath = (logical: string) =>
+    localeRouting && locale
+      ? formatPublicPathname(logical, locale.peek(), localeRouting, resolvedPathPolicy)
+      : logical
 
   void (async () => {
     const initialMatch = match.peek()
@@ -352,6 +420,7 @@ export function createRouter({
     void (async () => {
       const initial = match.peek()
       if (!initial) return
+      if (!canLoadProtectedLeaf(initial, contextGate.peek(), gateOptions)) return
       const pageHead = readPageHeadExport(await initial.route.component())
       if (isStaticPageHead(pageHead)) {
         await syncDocumentHeadForPage(
@@ -362,12 +431,45 @@ export function createRouter({
             search: typeof window !== "undefined" ? window.location.search : "",
             hash: hash.peek(),
             query: query.peek(),
-            context: {} as CustomRequestContext,
+            context: requestContext.peek(),
+            meta: mergeRouteMeta(initial),
+            routeId: initial.route.id,
             ...loaderI18nExtras(),
           })
         )
       }
     })()
+    if (resolveContextOption) {
+      const initial = match.peek()
+      if (initial) {
+        void runContextResolve({
+          match: initial,
+          to: {
+            pathname: initial.pathname,
+            params: initial.params,
+            query: query.peek(),
+            hash: hash.peek(),
+          },
+          from: null,
+          resolveContext: resolveContextOption,
+          gateOptions,
+          contextState,
+          requestContext,
+          navEpoch: 0,
+          getNavEpoch: () => 0,
+          stickyContext,
+          hadReadyContext: contextState.peek() === "ready",
+          eventType: "initial",
+        }).then(() => {
+          contextGate.value = resolveContextGateState(
+            initial,
+            contextState.peek(),
+            requestContext.peek(),
+            gateOptions
+          )
+        })
+      }
+    }
   }
 
   const syncWindowNavigationProbe = () => {
@@ -386,8 +488,6 @@ export function createRouter({
   currentNavigation.subscribe(syncWindowNavigationProbe)
   syncWindowNavigationProbe()
 
-  const beforeEachGuards: NavigationGuard[] = []
-  const beforeResolveGuards: NavigationGuard[] = []
   const afterEachHooks: AfterEachHook[] = []
   const leaveByRoute = new Map<string, NavigationGuard[]>()
   const updateByRoute = new Map<string, NavigationGuard[]>()
@@ -436,6 +536,9 @@ export function createRouter({
     matches.value = buildMatchSegments(nextMatch)
     if (typeof document !== "undefined" && nextMatch) {
       void (async () => {
+        if (!canLoadProtectedLeaf(nextMatch, contextGate.peek(), gateOptions)) {
+          return
+        }
         const pageHead = readPageHeadExport(await nextMatch.route.component())
         if (isStaticPageHead(pageHead)) {
           await syncDocumentHeadForPage(
@@ -449,7 +552,9 @@ export function createRouter({
               })(),
               hash: next.hash,
               query: next.query,
-              context: {} as CustomRequestContext,
+              context: requestContext.peek(),
+              meta: mergeRouteMeta(nextMatch),
+              routeId: nextMatch.route.id,
               ...loaderI18nExtras(),
             })
           )
@@ -476,8 +581,13 @@ export function createRouter({
       matches,
       isNavigating,
       currentNavigation,
-      beforeEachGuards,
-      beforeResolveGuards,
+      globalMiddleware,
+      contextGateMode,
+      stickyContext,
+      resolveContext: resolveContextOption,
+      requestContext,
+      contextState,
+      contextGate,
       afterEachHooks,
       leaveByRoute,
       updateByRoute,
@@ -501,7 +611,7 @@ export function createRouter({
       setLastNavigation: (entry) => {
         lastNavigationHolder.entry = entry
       },
-      siteLocales,
+      localeRouting,
       locale,
       onLocaleChange:
         i18n && i18nRuntime
@@ -518,15 +628,15 @@ export function createRouter({
     transitionsEnabled
   )
 
-  if (typeof window !== "undefined" && siteLocales) {
-    const initialDetailed = splitAppPathnameDetailed(rawInitialPath, siteLocales)
+  if (typeof window !== "undefined" && localeRouting) {
+    const initialDetailed = splitAppPathnameDetailed(rawInitialPath, localeRouting)
     if (
       initialDetailed.kind === "invalid-locale" &&
-      !shouldRejectInvalidLocale(siteLocales)
+      !shouldRejectInvalidLocale(localeRouting)
     ) {
       const redirectPath = resolveInvalidLocaleRedirect(
         initialDetailed,
-        siteLocales,
+        localeRouting,
         resolvedPathPolicy
       )
       void navigateInternal(
@@ -609,6 +719,42 @@ export function createRouter({
       loaderEpoch.value += 1
     },
     navigationMode: "history",
+    requestContext,
+    contextState,
+    contextGate,
+    contextPendingFallback,
+    __gateOptions: gateOptions,
+    async refreshContext() {
+      if (!resolveContextOption) return
+      const m = match.peek()
+      if (!m) return
+      await runContextResolve({
+        match: m,
+        to: {
+          pathname: m.pathname,
+          params: m.params,
+          query: query.peek(),
+          hash: hash.peek(),
+        },
+        from: null,
+        resolveContext: resolveContextOption,
+        gateOptions,
+        contextState,
+        requestContext,
+        navEpoch: navToken.value,
+        getNavEpoch: () => navToken.value,
+        stickyContext: false,
+        hadReadyContext: false,
+        eventType: "refresh",
+      })
+      contextGate.value = resolveContextGateState(
+        m,
+        contextState.peek(),
+        requestContext.peek(),
+        gateOptions
+      )
+      loaderEpoch.value += 1
+    },
     navigate(to, replaceOrOptions = false) {
       const options =
         typeof replaceOrOptions === "boolean"
@@ -621,13 +767,13 @@ export function createRouter({
           ? pathname.peek()
           : joinPath(pathname.peek(), pathPart)
       const href =
-        options.locale !== undefined && siteLocales && locale
+        options.locale !== undefined && localeRouting && locale
           ? options.locale === false
             ? formatPathname(logical, resolvedPathPolicy)
             : formatPublicPathname(
                 logical,
                 options.locale,
-                siteLocales,
+                localeRouting,
                 resolvedPathPolicy
               )
           : toBrowserPath(logical)
@@ -704,7 +850,7 @@ export function createRouter({
         return result
       })
     },
-    locales,
+    localeRouting,
     locale,
     defaultLocale: i18n?.default,
     resolveHref(to, hrefOpts) {
@@ -712,13 +858,13 @@ export function createRouter({
         pathname.value,
         to,
         hrefOpts,
-        locales,
+        localeRouting,
         locale ? locale.peek() : undefined,
         resolvedPathPolicy,
         normalizedBaseUrl
       )
     },
-    ...(i18n && siteLocales && locale && i18nRuntime
+    ...(i18n && localeRouting && locale && i18nRuntime
       ? {
           setLocale(nextLocale, opts) {
             if (typeof document !== "undefined") {
@@ -736,7 +882,7 @@ export function createRouter({
             const href = formatPublicHref(
               pathname.peek(),
               nextLocale,
-              siteLocales,
+              localeRouting,
               resolvedPathPolicy,
               normalizedBaseUrl,
               search,
@@ -750,14 +896,6 @@ export function createRouter({
           },
         }
       : {}),
-    beforeEach(guard) {
-      beforeEachGuards.push(guard)
-      return () => removeArrayEntry(beforeEachGuards, guard)
-    },
-    beforeResolve(guard) {
-      beforeResolveGuards.push(guard)
-      return () => removeArrayEntry(beforeResolveGuards, guard)
-    },
     afterEach(hook) {
       afterEachHooks.push(hook)
       return () => removeArrayEntry(afterEachHooks, hook)
@@ -813,7 +951,7 @@ export function createStaticRouter({
   hash = "",
   query = {},
   pathPolicy,
-  siteLocales,
+  localeRouting,
   locale,
 }: {
   manifest: RouteManifest
@@ -821,7 +959,7 @@ export function createStaticRouter({
   hash?: string
   query?: RouterQuery
   pathPolicy?: RouterPathPolicy
-  siteLocales?: SiteLocales
+  localeRouting?: I18nLocaleRouting
   locale?: string
 }): Router {
   const resolvedPathPolicy = resolvePathPolicy(pathPolicy)
@@ -873,18 +1011,16 @@ export function createStaticRouter({
         path.value,
         to,
         hrefOpts,
-        siteLocales,
+        localeRouting,
         locale,
         resolvedPathPolicy,
         normalizedBaseUrl
       )
     },
-    beforeEach() {
-      return emptyUnsub
-    },
-    beforeResolve() {
-      return emptyUnsub
-    },
+    requestContext: signal({}),
+    contextState: signal<ContextState>("idle"),
+    contextGate: signal<ContextGateState>(idleContextGate()),
+    async refreshContext() {},
     afterEach() {
       return emptyUnsub
     },
@@ -905,8 +1041,23 @@ export interface RouterProviderProps {
   children?: JSX.Children
 }
 
+const RequestContextBridge: Kiru.Component<{
+  router: Router
+  children?: JSX.Children
+}> = () => {
+  const $ = setup<typeof RequestContextBridge>()
+  return () =>
+    createElement(RequestContextProvider, {
+      value: $.props.router.requestContext.value,
+      children: $.props.children,
+    })
+}
+
 export function RouterProvider({ router, children }: RouterProviderProps) {
-  return createElement(RouterContext, { value: router, children })
+  return createElement(RouterContext, {
+    value: router,
+    children: createElement(RequestContextBridge, { router, children }),
+  })
 }
 
 export function useRouter(): Router {
@@ -1009,14 +1160,60 @@ export const Link: Kiru.Component<LinkProps> = () => {
  */
 export function RouterView() {
   const router = useRouter()
-  const { match, pathname, manifest, hash, query, loaderEpoch } = router
+  const {
+    match,
+    pathname,
+    manifest,
+    hash,
+    query,
+    loaderEpoch,
+    contextGate,
+    requestContext,
+  } = router
+  const gateOptions = router.__gateOptions ?? {
+    contextGate: "off" as const,
+    hasResolveContext: false,
+  }
   let epoch = 0
   const children = resource(
-    { match, pathname, loaderEpoch },
+    {
+      match,
+      pathname,
+      loaderEpoch,
+      contextGate,
+      isNavigating: router.isNavigating,
+      contextState: router.contextState,
+      currentNavigation: router.currentNavigation,
+    },
     async ({ match, pathname }) => {
       const e = ++epoch
       router.isLoaderPending.value = true
+      const nav = router.currentNavigation.peek()
+      const deferOptions = {
+        ...gateOptions,
+        manifest,
+        isNavigating: router.isNavigating.peek(),
+        navigationToPathname: nav?.to.pathname,
+        contextState: router.contextState.peek(),
+      }
+      const outletMatch = resolvePendingOutletMatch(
+        match,
+        manifest,
+        deferOptions.isNavigating,
+        deferOptions.navigationToPathname
+      )
       try {
+        if (
+          match &&
+          shouldDeferProtectedOutlet(match, contextGate.peek(), deferOptions)
+        ) {
+          const pending = effectiveContextPendingFallback(
+            outletMatch,
+            router.contextPendingFallback
+          )
+          if (pending) return pending()
+          return null
+        }
         const tree = match
           ? await loadRouteTree(match)
           : await loadNotFoundRouteTree(manifest, pathname)
@@ -1025,6 +1222,17 @@ export function RouterView() {
         let leafProps: LeafRouteProps = {}
         let routeModule = tree?.routeModule
         if (match && tree) {
+          if (
+            shouldDeferProtectedOutlet(match, contextGate.peek(), deferOptions)
+          ) {
+            warnProtectedImportBeforeGate(match.route.id)
+            const pending = effectiveContextPendingFallback(
+              outletMatch,
+              router.contextPendingFallback
+            )
+            if (pending) return pending()
+            return null
+          }
           const mod = await match.route.component()
           const loaderCtx = buildLoaderContext({
             params:
@@ -1039,7 +1247,9 @@ export function RouterView() {
             validatedQuery: router.validatedQuery.peek() as
               | Record<string, unknown>
               | undefined,
-            context: {} as CustomRequestContext,
+            context: requestContext.peek(),
+            meta: mergeRouteMeta(match),
+            routeId: match.route.id,
             ...(router.__i18n && router.locale
               ? loaderI18nFields(
                   router.__i18n.config,
@@ -1084,12 +1294,18 @@ export function RouterView() {
 
   onMount(() => {
     warnRouterViewWithoutSsrBootstrap()
+    const canEndNavigation = () => {
+      const nav = router.currentNavigation.peek()
+      if (!nav?.to) return true
+      if (pathname.peek() !== nav.to.pathname) return false
+      const m = match.peek()
+      if (!m) return true
+      return JSON.stringify(m.params) === JSON.stringify(nav.to.params)
+    }
     const onPendingChange = (pending: boolean) => {
-      if (!pending) {
-        if (router.isNavigating.peek()) {
-          router.isNavigating.value = false
-          router.currentNavigation.value = null
-        }
+      if (!pending && router.isNavigating.peek() && canEndNavigation()) {
+        router.isNavigating.value = false
+        router.currentNavigation.value = null
       }
     }
     const unsub = children.isPending.subscribe(onPendingChange)

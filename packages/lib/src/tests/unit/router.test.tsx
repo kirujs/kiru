@@ -733,7 +733,7 @@ describe("router", () => {
     assert.strictEqual(router.resolveHref("#top"), "/app/users/1#top")
   })
 
-  it("runs global beforeEach guards and can cancel navigation", async () => {
+  it("runs global middleware and can abort navigation", async () => {
     const manifest = compileRouteTree(routes)
     const historyEvents: Array<{ kind: "push" | "replace"; to: string }> = []
     const history = {
@@ -746,15 +746,19 @@ describe("router", () => {
     } as any as History
 
     const location = { pathname: "/" } as any as Location
-    const router = createRouter({ routes: manifest, history, location })
-    router.beforeEach(() => false)
+    const router = createRouter({
+      routes: manifest,
+      history,
+      location,
+      routeMiddleware: [() => ({ abort: true })],
+    })
     router.navigate("/about")
     await new Promise((r) => setTimeout(r, 0))
     assert.strictEqual(router.path.value, "/")
     assert.strictEqual(historyEvents.length, 0)
   })
 
-  it("runs global guards and can redirect navigation", async () => {
+  it("runs global middleware and can redirect navigation", async () => {
     const manifest = compileRouteTree(routes)
     const historyEvents: Array<{ kind: "push" | "replace"; to: string }> = []
     const history = {
@@ -767,10 +771,16 @@ describe("router", () => {
     } as any as History
 
     const location = { pathname: "/" } as any as Location
-    const router = createRouter({ routes: manifest, history, location })
-    router.beforeEach((to) => {
-      if (to.pathname === "/about") return "/login"
-      return
+    const router = createRouter({
+      routes: manifest,
+      history,
+      location,
+      routeMiddleware: [
+        (ctx) => {
+          if (ctx.to.pathname === "/about") return { redirect: "/login" }
+          return
+        },
+      ],
     })
     router.navigate("/about")
     await new Promise((r) => setTimeout(r, 0))
@@ -778,22 +788,26 @@ describe("router", () => {
     assert.ok(historyEvents.some((e) => e.to === "/login"))
   })
 
-  it("SSR runs beforeEnter and returns redirect when the guard redirects", async () => {
+  it("SSR runs route middleware and returns redirect when middleware redirects", async () => {
     const r = defineRouteTree((x) =>
       x.scope({
         children: [
           x.page("/about", async () => ({ default: () => <p>about</p> })),
           x.page("/users/[id]", {
             component: async () => ({ default: () => <p>user</p> }),
-            beforeEnter: (to) => {
-              if (to.params.id === "0") return "/about"
-              return undefined
-            },
           }),
         ],
       })
     )
-    const renderer = createRenderer({ routes: r })
+    const renderer = createRenderer({
+      routes: r,
+      routeMiddleware: [
+        (ctx) => {
+          if (ctx.to.params.id === "0") return { redirect: "/about" }
+          return
+        },
+      ],
+    })
     const response = await renderer.render("/users/0")
     assert.strictEqual(response?.status, 302)
     assert.strictEqual(response?.headers.location, "/about")
@@ -803,14 +817,14 @@ describe("router", () => {
     assert.ok(ok?.body.includes("user"))
   })
 
-  it("runs per-route beforeEnter guards", async () => {
+  it("runs per-route middleware abort", async () => {
     const guarded = defineRouteTree((x) =>
       x.scope({
         children: [
           x.page("/", async () => ({ default: () => <p>ok</p> })),
           x.page("/blocked", {
             component: async () => ({ default: () => <p>no</p> }),
-            beforeEnter: () => false,
+            middleware: [() => ({ abort: true })],
           }),
         ],
       })

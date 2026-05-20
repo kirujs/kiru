@@ -3,9 +3,9 @@ import {
   generatePublicStaticPaths,
   matchRoute,
 } from "./manifest.js"
-import type { SiteLocales } from "./localePolicy.js"
 import { splitAppPathname } from "./i18n/routing.js"
 import type { InternationalizationConfig } from "./i18n/createI18nConfig.js"
+import { getI18nLocaleRouting } from "./i18n/localeRouting.js"
 import type { RouterPathPolicy } from "./pathPolicy.js"
 import { createRenderer, renderMatchToStaticHtml } from "./renderer.js"
 import type {
@@ -61,7 +61,6 @@ export async function prerenderStaticRoutes({
   htmlTemplate,
   pathPolicy,
   maxConcurrentRenders = DEFAULT_MAX_CONCURRENT_RENDERS,
-  siteLocales,
   i18n,
 }: {
   routes: RouteTreeDefinition | RouteManifest
@@ -69,17 +68,19 @@ export async function prerenderStaticRoutes({
   pathPolicy?: RouterPathPolicy
   /** @default 10 */
   maxConcurrentRenders?: number
-  /** When set, prerender each locale's public URL. */
-  siteLocales?: SiteLocales
-  /** Enables locale-aware SSR during prerender (messages + URL split). */
+  /**
+   * Locale-aware prerender (per-locale public URLs, messages, URL split).
+   * Routing prefixes are derived via {@link getI18nLocaleRouting}.
+   */
   i18n?: InternationalizationConfig<readonly string[], unknown>
 }): Promise<StaticRouteOutput[]> {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
+  const localeRouting = i18n ? getI18nLocaleRouting(i18n) : undefined
   const paths = await generatePublicStaticPaths(
     manifest,
     pathPolicy,
     undefined,
-    siteLocales
+    localeRouting
   )
   const renderer =
     htmlTemplate !== undefined
@@ -97,14 +98,14 @@ export async function prerenderStaticRoutes({
     paths,
     maxConcurrentRenders,
     async (publicPath) => {
-      const logicalPath = siteLocales
-        ? splitAppPathname(publicPath, siteLocales).pathname
+      const logicalPath = localeRouting
+        ? splitAppPathname(publicPath, localeRouting).pathname
         : publicPath
       const routeMatch = matchRoute(manifest, logicalPath, pathPolicy)
       if (!routeMatch) return null
 
-      const locale = siteLocales
-        ? splitAppPathname(publicPath, siteLocales).locale
+      const locale = localeRouting
+        ? splitAppPathname(publicPath, localeRouting).locale
         : null
       const staticRenderOpts =
         i18n && locale

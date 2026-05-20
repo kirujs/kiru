@@ -50,7 +50,7 @@ export interface PluginState {
   remotePaths: string[]
   /** `routeId` → Vite module id for pages that export `serverLoader`. */
   loaderModulesByRouteId: Map<string, string>
-  /** Populated in `buildStart` before the client bundle when `router.ssg` is enabled. */
+  /** Populated in `closeBundle` after the client bundle when `router.ssg` is enabled. */
   ssgPrerenderCache: SsgPrerenderCache | null
   router: {
     ssg: null | {

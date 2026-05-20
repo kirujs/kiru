@@ -11,6 +11,14 @@ export type DotPath<T> = T extends object
     }[keyof T & string]
   : never
 
+export function hasLoadedI18nBundle(data: unknown): boolean {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    Object.keys(data as object).length > 0
+  )
+}
+
 export function getByPath(root: unknown, path: string): unknown {
   if (!path) return root
   let cur: unknown = root

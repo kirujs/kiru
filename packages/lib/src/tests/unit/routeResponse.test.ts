@@ -35,6 +35,8 @@ describe("routeResponse", () => {
       hash: "",
       query: {},
       context: {},
+      meta: {},
+      routeId: "route:1",
     })
     assert.equal(resolveRouteStatus(404, ctx), 404)
   })

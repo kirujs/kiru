@@ -1,4 +1,4 @@
-import { addLocale, type SiteLocales } from "../localePolicy.js"
+import { addLocale, type I18nLocaleRouting } from "./localeRouting.js"
 import { formatPathname, type RouterPathPolicy } from "../pathPolicy.js"
 
 /**
@@ -7,13 +7,13 @@ import { formatPathname, type RouterPathPolicy } from "../pathPolicy.js"
  */
 export function expandPathsForLocales(
   logicalPaths: readonly string[],
-  locales: SiteLocales,
+  routing: I18nLocaleRouting,
   pathPolicy?: RouterPathPolicy
 ): string[] {
   const out = new Set<string>()
   for (const logical of logicalPaths) {
-    for (const prefix of locales.prefixes) {
-      out.add(formatPathname(addLocale(logical, prefix, locales), pathPolicy))
+    for (const prefix of routing.prefixes) {
+      out.add(formatPathname(addLocale(logical, prefix, routing), pathPolicy))
     }
   }
   return Array.from(out).sort()

@@ -39,7 +39,7 @@ import { serializeRequestContextScript } from "./requestContext.js"
 import {
   detectLocaleFromRequest,
   formatPublicPathname,
-  i18nToSiteLocales,
+  getI18nLocaleRouting,
   loaderI18nFields,
   loadI18nMessages,
   resolveInvalidLocaleRedirect,
@@ -117,7 +117,16 @@ import {
   createRemoteActionHandler,
 } from "../remote/index.js"
 import { __setSsrRequestContext } from "../remote/action.js"
-import { runGuards, toRedirect } from "./runNavigationGuards.js"
+import {
+  buildMiddlewareTo,
+  buildMatchSegments,
+} from "./navigation.js"
+import { mergeRouteMeta } from "./routeMeta.js"
+import {
+  runRouteMiddleware,
+  toMiddlewareRedirect,
+} from "./routeMiddleware.js"
+import type { RouteMiddleware } from "./types.js"
 import { parseRequestUrl, type RequestUrlState } from "./requestUrl.js"
 
 export {
@@ -229,11 +238,18 @@ export type CreateRendererOptions = {
    * @see docs/router/deploy-runtimes.md
    */
   deployTarget?: KiruDeployTarget
+  /** Global route middleware (SSR + CSR). */
+  routeMiddleware?: RouteMiddleware[]
 }
 
 function engine(options: CreateRendererOptions & { stream: boolean }) {
-  const { manifest, compiledTemplate, actionsSecret, handleRemoteAction } =
-    prepareRenderer(options)
+  const {
+    manifest,
+    compiledTemplate,
+    actionsSecret,
+    handleRemoteAction,
+    globalMiddleware,
+  } = prepareRenderer(options)
   const pathPolicy = resolvePathPolicy(options.pathPolicy)
   const i18nConfig = options.i18n
 
@@ -244,7 +260,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         manifest,
         pathPolicy,
         undefined,
-        i18nConfig ? i18nToSiteLocales(i18nConfig) : undefined
+        i18nConfig ? getI18nLocaleRouting(i18nConfig) : undefined
       ).then((paths) => new Set(paths))
     }
     return prerenderPathSet
@@ -395,9 +411,35 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         manifest,
         pathPolicy,
         i18nConfig,
-        typeof requestOrUrl === "object" ? requestOrUrl : undefined
+        typeof requestOrUrl === "object" ? requestOrUrl : undefined,
+        globalMiddleware
       )
       if (!prepared) return null
+
+      if (isPrepareError(prepared)) {
+        const errorHeaders = {
+          ...DEFAULT_HEADERS,
+          ...prepared.headers,
+        }
+        if (options.stream) {
+          return {
+            kind: "string" as const,
+            result: {
+              status: prepared.status,
+              headers: errorHeaders,
+              body: prepared.body ?? "",
+            },
+          }
+        }
+        return {
+          kind: "string" as const,
+          result: {
+            status: prepared.status,
+            headers: errorHeaders,
+            body: prepared.body ?? "",
+          },
+        }
+      }
 
       if (isPrepareRedirect(prepared)) {
         const redirectHeaders = {
@@ -800,7 +842,7 @@ function buildAppElement(
     url?: RequestUrlState
     pathPolicy?: RouterPathPolicy
     i18n?: HydratedI18nPayload
-    siteLocales?: import("./localePolicy.js").SiteLocales
+    localeRouting?: import("./i18n/localeRouting.js").I18nLocaleRouting
   }
 ) {
   const staticRouter = createStaticRouter({
@@ -809,7 +851,7 @@ function buildAppElement(
     query: options?.url?.query ?? {},
     hash: options?.url?.hash ?? "",
     pathPolicy: options?.pathPolicy,
-    siteLocales: options?.siteLocales,
+    localeRouting: options?.localeRouting,
     locale: options?.i18n?.locale,
   })
   staticRouter.params.value = params
@@ -877,6 +919,8 @@ async function renderMatchToStaticHtmlInner(
     hash: "",
     query: {},
     context: {},
+    meta: mergeRouteMeta(match),
+    routeId: match.route.id,
     ...(options?.i18n && locale
       ? loaderI18nFields(options.i18n, locale)
       : {}),
@@ -897,8 +941,8 @@ async function renderMatchToStaticHtmlInner(
           defaultLocale: options.i18n.default,
         }
       : undefined
-  const siteLocales =
-    options?.i18n && locale ? i18nToSiteLocales(options.i18n) : undefined
+  const localeRouting =
+    options?.i18n && locale ? getI18nLocaleRouting(options.i18n) : undefined
   const { layoutModules, routeModule } = await loadRouteTree(match)
   const app = buildAppElement(
     match.pathname,
@@ -908,7 +952,7 @@ async function renderMatchToStaticHtmlInner(
     manifest,
     {},
     pageProps,
-    { pathPolicy, i18n: i18nPayload, siteLocales }
+    { pathPolicy, i18n: i18nPayload, localeRouting }
   )
   const pageData = serializedDataFromPageProps(pageProps)
   if (
@@ -993,7 +1037,14 @@ type PrepareRedirect = {
   headers?: Record<string, string>
 }
 
-type PrepareAppResult = PreparedApp | PrepareRedirect | null
+type PrepareError = {
+  kind: "error"
+  status: number
+  body?: string
+  headers?: Record<string, string>
+}
+
+type PrepareAppResult = PreparedApp | PrepareRedirect | PrepareError | null
 
 function isPrepareRedirect(
   p: Exclude<PrepareAppResult, null>
@@ -1001,7 +1052,13 @@ function isPrepareRedirect(
   return "kind" in p && p.kind === "redirect"
 }
 
-const MAX_SSR_BEFORE_ENTER_REDIRECTS = 16
+function isPrepareError(
+  p: Exclude<PrepareAppResult, null>
+): p is PrepareError {
+  return "kind" in p && p.kind === "error"
+}
+
+const MAX_SSR_MIDDLEWARE_REDIRECTS = 16
 
 function resolveStreamHeadMeta(
   match: RouteMatch,
@@ -1031,9 +1088,9 @@ function tryLocaleDetectionRedirect(
   pathPolicy: ReturnType<typeof resolvePathPolicy>
 ): { location: string; headers: Record<string, string> } | null {
   if (!request || !shouldRunLocaleDetection(rawPath, i18n)) return null
-  const siteLocales = i18nToSiteLocales(i18n)
+  const localeRouting = getI18nLocaleRouting(i18n)
   const detected = detectLocaleFromRequest(request, i18n)
-  const target = formatPublicPathname("/", detected, siteLocales, pathPolicy)
+  const target = formatPublicPathname("/", detected, localeRouting, pathPolicy)
   const current = formatPathname(rawPath, pathPolicy)
   if (target === current) return null
   return {
@@ -1082,7 +1139,8 @@ async function prepareAppForUrl(
   manifest: RouteManifest,
   pathPolicy: ReturnType<typeof resolvePathPolicy>,
   i18n?: InternationalizationConfig<readonly string[], unknown>,
-  request?: Request
+  request?: Request,
+  globalMiddleware: RouteMiddleware[] = []
 ): Promise<PrepareAppResult> {
   const requestUrl = parseRequestUrl(url)
   const rawPath = pathnameForMatch(toPathname(url), pathPolicy)
@@ -1100,14 +1158,14 @@ async function prepareAppForUrl(
   let locale: string | null = null
   let logicalPath = rawPath
   if (i18n) {
-    const siteLocales = i18nToSiteLocales(i18n)
-    const split = splitAppPathnameDetailed(rawPath, siteLocales)
+    const localeRouting = getI18nLocaleRouting(i18n)
+    const split = splitAppPathnameDetailed(rawPath, localeRouting)
     if (split.kind === "invalid-locale") {
-      if (shouldRejectInvalidLocale(siteLocales)) {
+      if (shouldRejectInvalidLocale(localeRouting)) {
         logicalPath = split.pathname
         locale = split.locale
       } else {
-        const location = resolveInvalidLocaleRedirect(split, siteLocales, pathPolicy)
+        const location = resolveInvalidLocaleRedirect(split, localeRouting, pathPolicy)
         return { kind: "redirect", location }
       }
     } else {
@@ -1118,7 +1176,7 @@ async function prepareAppForUrl(
   const requestedPathname = formatPathname(logicalPath, pathPolicy)
   let path = requestedPathname
 
-  for (let depth = 0; depth < MAX_SSR_BEFORE_ENTER_REDIRECTS; depth++) {
+  for (let depth = 0; depth < MAX_SSR_MIDDLEWARE_REDIRECTS; depth++) {
     const routeMatch = matchRoute(manifest, path, pathPolicy)
 
     if (!routeMatch) {
@@ -1151,17 +1209,39 @@ async function prepareAppForUrl(
       return null
     }
 
-    const routeGuards = routeMatch.route.beforeEnter ?? []
-    if (routeGuards.length) {
-      const to = {
+    const requestContext = (ctx?.context ?? {}) as CustomRequestContext
+    const href = `${path}${requestUrl.search}${requestUrl.hash}`
+    const segments = buildMatchSegments(routeMatch)
+    const mwTo = buildMiddlewareTo(
+      {
         pathname: routeMatch.pathname,
-        params: routeMatch.params,
-      }
-      const g2 = await runGuards(routeGuards, to, null)
-      if (g2.type === "cancel") return null
-      if (g2.type === "redirect") {
-        path = toPathname(toRedirect(g2.to).path)
-        continue
+        hash: requestUrl.hash,
+        query: requestUrl.query,
+        href,
+      },
+      routeMatch,
+      segments
+    )
+    const mw = await runRouteMiddleware({
+      to: mwTo,
+      from: null,
+      meta: mergeRouteMeta(routeMatch),
+      context: requestContext,
+      request,
+      globalMiddleware,
+      match: routeMatch,
+    })
+    if (mw.type === "redirect") {
+      path = toPathname(toMiddlewareRedirect(mw.to).path)
+      continue
+    }
+    if (mw.type === "abort") return null
+    if (mw.type === "error") {
+      return {
+        kind: "error",
+        status: mw.status,
+        body: mw.body,
+        headers: mergeResponseHeaders(ctx?.headers),
       }
     }
 
@@ -1179,7 +1259,6 @@ async function prepareAppForUrl(
       return null
     }
 
-    const requestContext = (ctx?.context ?? {}) as CustomRequestContext
     const loaderCtx = buildLoaderContext({
       params: searchCheck.params,
       pathname: routeMatch.pathname,
@@ -1188,6 +1267,8 @@ async function prepareAppForUrl(
       query: requestUrl.query,
       validatedQuery: searchCheck.validatedQuery,
       context: requestContext,
+      meta: mergeRouteMeta(routeMatch),
+      routeId: routeMatch.route.id,
       ...loaderI18nFields(i18n, locale),
     })
     const pageMod = await routeMatch.route.component()
@@ -1241,8 +1322,8 @@ async function prepareAppForUrl(
             defaultLocale: i18n.default,
           }
         : undefined
-    const siteLocales =
-      i18n && locale ? i18nToSiteLocales(i18n) : undefined
+    const localeRouting =
+      i18n && locale ? getI18nLocaleRouting(i18n) : undefined
 
     const app = buildAppElement(
       routeMatch.pathname,
@@ -1252,7 +1333,7 @@ async function prepareAppForUrl(
       manifest,
       requestContext,
       pageProps as LeafRouteProps,
-      { url: requestUrl, pathPolicy, i18n: i18nPayload, siteLocales }
+      { url: requestUrl, pathPolicy, i18n: i18nPayload, localeRouting }
     )
 
     const pagePropsForMeta = dynamicHead || !streamPageLoad
@@ -1489,6 +1570,7 @@ function prepareRenderer(options: CreateRendererOptions) {
     compiledTemplate,
     actionsSecret,
     handleRemoteAction: handlePost,
+    globalMiddleware: options.routeMiddleware ?? [],
   }
 }
 

@@ -70,9 +70,11 @@ if (isProd) {
 
 Bun: `createKiruBunServer` from `@kirujs/adapter-bun` (same `KiruResponder`, `deployTarget: "bun"`). Use `Bun.serve({ fetch: kiru.fetch })` or `serveKiruBun(kiru)` instead of `createServer` when you prefer Bun's server.
 
-### Custom middleware
+### Route middleware (auth, redirects)
 
-`createKiruResponder` accepts `middleware: KiruRespondMiddleware[]` (outermost first). Each layer receives `next(): Promise<Response | null>`. Use `composeRespond` from `@kirujs/adapter-contract` for fetch-native layers (logging, auth).
+Pass **`routeMiddleware`** on `createKiruResponder` / `createRenderer` (same as CSR `createRouter`). See [route-middleware-and-context.md](./route-middleware-and-context.md). CORS, logging, and other HTTP concerns belong in your server framework, not the Kiru handler.
+
+To wrap `kiru.handle` yourself (e.g. logging), use `composeRespond` from `@kirujs/adapter-contract` around the returned `handle`.
 
 ### Node Request/Response bridge
 

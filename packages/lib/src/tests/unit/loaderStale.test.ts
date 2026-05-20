@@ -29,6 +29,8 @@ describe("loader stale while revalidate", () => {
         url: { pathname: "/items", search: "", hash: "" },
         query: {},
         context: {},
+        meta: {},
+        route: { id: "route:1" },
       }
 
       const key = buildLoaderCacheKey("route:1", "/items", "")

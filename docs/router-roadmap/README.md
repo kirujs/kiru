@@ -27,6 +27,12 @@ Actionable backlog for making `kiru/router` competitive with Next.js, SvelteKit,
 | Deploy runtimes (Node, Bun, Workers) | [deploy-runtimes.md](../router/deploy-runtimes.md) |
 | E2E SSR matrix (runtimes × HTTP frameworks) | [e2e-ssr-matrix.md](../router/e2e-ssr-matrix.md) |
 
+## Design specs
+
+| Spec | Path | Status |
+|------|------|--------|
+| Route middleware, `meta`, `contextStrategy`, `resolveContext`, context gate | [route-middleware-and-context.md](../router/route-middleware-and-context.md) | Shipped (v2) |
+
 ## Related code areas
 
 | Area | Path |

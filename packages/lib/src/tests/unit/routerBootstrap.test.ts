@@ -19,7 +19,7 @@ describe("router bootstrap entries", () => {
 
   it("kiru/router/csr createRouterApp returns an AppHandle", async () => {
     await withJSDOM(async (container) => {
-      const app = createCsrRouterApp({ routes, container })
+      const app = await createCsrRouterApp({ routes, container })
       assert.ok(typeof app.unmount === "function")
     })
   })

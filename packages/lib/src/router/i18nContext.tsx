@@ -1,11 +1,13 @@
 import { createContext, useContext } from "../context.js"
 import { createElement } from "../element.js"
-import { setup } from "../hooks/index.js"
 import type { Signal } from "../signals/index.js"
 import { signal } from "../signals/index.js"
+import type { InternationalizationConfig } from "./i18n/index.js"
+import { loadI18nMessages } from "./i18n/index.js"
 import {
   createI18nTranslator,
   createReactiveI18nTranslator,
+  hasLoadedI18nBundle,
   type I18nTranslator,
 } from "./i18n/translate.js"
 import type {
@@ -44,8 +46,14 @@ export function I18nProvider({
   return createElement(I18nContext, { value, children })
 }
 
-function useOptionalI18nRuntime(): I18nRuntime | null {
-  return useContext(I18nRuntimeContext)
+function i18nFromRuntime(runtime: I18nRuntime): I18nContextValue {
+  const { locales, defaultLocale } = runtime.value()
+  return {
+    locale: runtime.locale as Signal<I18nLocale>,
+    t: createReactiveI18nTranslator(runtime.data as Signal<I18nData>),
+    locales,
+    defaultLocale,
+  }
 }
 
 /**
@@ -55,16 +63,8 @@ function useOptionalI18nRuntime(): I18nRuntime | null {
  * `locale` is a signal on the client and unwraps in JSX.
  */
 export function useI18n(): I18nContextValue {
-  const runtime = useOptionalI18nRuntime()
-  if (runtime) {
-    const { locales, defaultLocale } = runtime.value()
-    return {
-      locale: runtime.locale as Signal<I18nLocale>,
-      t: createReactiveI18nTranslator(runtime.data as Signal<I18nData>),
-      locales,
-      defaultLocale,
-    }
-  }
+  const runtime = useContext(I18nRuntimeContext)
+  if (runtime) return i18nFromRuntime(runtime)
   const ctx = useContext(I18nContext)
   if (!ctx) {
     throw new Error(
@@ -72,20 +72,6 @@ export function useI18n(): I18nContextValue {
     )
   }
   return ctx
-}
-
-export function useOptionalI18n(): I18nContextValue | null {
-  const runtime = useOptionalI18nRuntime()
-  if (runtime) {
-    const { locales, defaultLocale } = runtime.value()
-    return {
-      locale: runtime.locale as Signal<I18nLocale>,
-      t: createReactiveI18nTranslator(runtime.data as Signal<I18nData>),
-      locales,
-      defaultLocale,
-    }
-  }
-  return useContext(I18nContext)
 }
 
 export type HydratedI18nPayload = {
@@ -101,6 +87,25 @@ export function serializeI18nScript(payload: HydratedI18nPayload): string {
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029")
   return `<script type="application/json" k-i18n>${json}</script>`
+}
+
+/**
+ * Loads the active locale bundle when the document has no `k-i18n` payload.
+ * Call before {@link mount} or {@link hydrate} so `useI18n().t` never runs on an empty bundle.
+ */
+export async function ensureClientI18nReady(router: {
+  __i18n?: {
+    runtime: I18nRuntime
+    config: InternationalizationConfig<readonly string[], unknown>
+  }
+  locale?: { peek(): string }
+}): Promise<void> {
+  const bag = router.__i18n
+  if (!bag) return
+  if (hasLoadedI18nBundle(bag.runtime.data.peek())) return
+  const locale = router.locale?.peek() ?? bag.config.default
+  const data = await loadI18nMessages(bag.config, locale)
+  bag.runtime.setLocale(locale, data)
 }
 
 export function readHydratedI18n(): HydratedI18nPayload | null {
@@ -121,14 +126,11 @@ export function readHydratedI18n(): HydratedI18nPayload | null {
 export const I18nReactiveRoot: Kiru.Component<{
   runtime: I18nRuntime
   children?: JSX.Children
-}> = () => {
-  const $ = setup<typeof I18nReactiveRoot>()
-  return () =>
-    createElement(I18nRuntimeContext, {
-      value: $.props.runtime,
-      children: $.props.children,
-    })
-}
+}> = ({ runtime, children }) =>
+  createElement(I18nRuntimeContext, {
+    value: runtime,
+    children: children,
+  })
 
 export function createI18nRuntime<Data>(options: {
   initialLocale: string

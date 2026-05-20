@@ -1,5 +1,5 @@
 /** Build-time shapes for user `defineSiteConfig()` output (loaded via `ssrLoadModule`). */
-export type SsgSiteLocales = {
+export type SsgLocaleRouting = {
   default: string
   prefixes: readonly string[]
 }
@@ -14,7 +14,6 @@ export type SsgSiteConfig = {
   pathPolicy: SsgPathPolicy
   sitemap: false | ({ include?: string[] } & Record<string, unknown>)
   robots: false | Record<string, unknown>
-  locales?: SsgSiteLocales
 }
 
 export type SsgCompiledRoute = {
@@ -52,7 +51,7 @@ export type SsgPrerenderCache = {
   staticLoaderPayloadByModule: Record<string, Record<string, unknown>>
   site: SsgSiteConfig | null | undefined
   pathPolicy: SsgPathPolicy | undefined
-  siteLocales: SsgSiteLocales | undefined
+  localeRouting: SsgLocaleRouting | undefined
   routes: unknown
   buildMeta: SsgRouteBuildMeta
   manifest: SsgRouteManifest
@@ -73,7 +72,7 @@ export type SsgPrerenderRouter = {
     loadPageModule: (route: SsgCompiledRoute) => Promise<unknown>,
     options?: { includeRoutePaths?: string[] }
   ) => Promise<SsgRouteBuildMeta>
-  normalizeSiteLocales: (locales: unknown) => SsgSiteLocales | undefined
+  getI18nLocaleRouting: (config: unknown) => SsgLocaleRouting
   onStaticLoaderPrerenderCapture: (
     listener: (payload: {
       routeId: string
@@ -96,6 +95,7 @@ export type SsgWriteBundleRouter = {
     paths: string[]
     site: SsgSiteConfig
     buildDate?: string
+    localeRouting?: SsgLocaleRouting
   }) => Promise<void>
   matchRoute: (
     manifest: SsgRouteManifest,
@@ -115,6 +115,6 @@ export type SsgWriteBundleRouter = {
   }) => void
   splitAppPathname: (
     pathname: string,
-    locales: SsgSiteLocales
+    locales: SsgLocaleRouting
   ) => { pathname: string }
 }

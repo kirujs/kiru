@@ -7,28 +7,74 @@ import {
   shouldRejectInvalidLocale,
   type AppPathSplitResult,
 } from "./i18n/routing.js"
-import type { SiteLocales } from "./localePolicy.js"
+import type { I18nLocaleRouting } from "./i18n/localeRouting.js"
 import { addBase, stripBase, type RouterPathPolicy } from "./pathPolicy.js"
 import { parseQuery, type RouterQuery } from "./requestUrl.js"
 import type { Signal } from "../signals/base.js"
 import type {
   AfterEachHook,
+  ContextGateMode,
+  ContextGateState,
+  ContextState,
   CurrentNavigation,
+  CustomRequestContext,
   NavigationFailure,
   NavigationGuard,
   NavigationResult,
+  ResolveContextEvent,
   RouteLocation,
   RouteLocationSnapshot,
   RouteManifest,
   RouteMatch,
+  RouteMiddleware,
+  RouteMiddlewareTo,
+  RouteTreeMatchSegment,
 } from "./types.js"
 import { runGuards, toRedirect } from "./runNavigationGuards.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
+import { collectMiddlewareChain, mergeRouteMeta } from "./routeMeta.js"
+import { runRouteMiddleware, toMiddlewareRedirect } from "./routeMiddleware.js"
+import { runContextResolve, scheduleBackgroundContextResolve } from "./contextResolve.js"
+import {
+  resolveContextGateState,
+  type ContextGateOptions,
+} from "./contextGate.js"
+export type { RouteTreeMatchSegment }
 
-export type RouteTreeMatchSegment = {
-  id: string
-  kind: "scope" | "route"
-  meta: Record<string, unknown>
+export function buildMatchSegments(
+  match: RouteMatch | null
+): RouteTreeMatchSegment[] {
+  if (!match) return []
+  const out: RouteTreeMatchSegment[] = []
+  for (const scope of match.route.scopes) {
+    out.push({
+      id: scope.id,
+      kind: "scope",
+      meta: scope.meta ?? {},
+    })
+  }
+  out.push({
+    id: match.route.id,
+    kind: "route",
+    meta: match.route.meta ?? {},
+  })
+  return out
+}
+
+export function buildMiddlewareTo(
+  resolved: RouteLocationParts & { href: string },
+  match: RouteMatch,
+  segments: RouteTreeMatchSegment[]
+): RouteMiddlewareTo {
+  return {
+    pathname: match.pathname,
+    params: match.params,
+    query: resolved.query,
+    hash: resolved.hash,
+    href: resolved.href,
+    routeId: match.route.id,
+    segments,
+  }
 }
 
 export type RouteLocationParts = {
@@ -131,8 +177,13 @@ export type NavigationPipelineDeps = {
   matches: Signal<RouteTreeMatchSegment[]>
   isNavigating: Signal<boolean>
   currentNavigation: Signal<CurrentNavigation | null>
-  beforeEachGuards: NavigationGuard[]
-  beforeResolveGuards: NavigationGuard[]
+  globalMiddleware: RouteMiddleware[]
+  contextGateMode: ContextGateMode
+  stickyContext: boolean
+  resolveContext?: (event: ResolveContextEvent) => Promise<CustomRequestContext>
+  requestContext: { value: CustomRequestContext }
+  contextState: { value: ContextState }
+  contextGate: { value: ContextGateState }
   afterEachHooks: AfterEachHook[]
   leaveByRoute: Map<string, NavigationGuard[]>
   updateByRoute: Map<string, NavigationGuard[]>
@@ -157,7 +208,7 @@ export type NavigationPipelineDeps = {
     from: RouteLocation | null
     failure?: NavigationFailure
   }) => void
-  siteLocales?: SiteLocales
+  localeRouting?: I18nLocaleRouting
   locale?: Signal<string>
   onLocaleChange?: (locale: string) => void
 }
@@ -180,8 +231,13 @@ export function createNavigateInternal(
     match,
     isNavigating,
     currentNavigation,
-    beforeEachGuards,
-    beforeResolveGuards,
+    globalMiddleware,
+    contextGateMode,
+    stickyContext,
+    resolveContext,
+    requestContext,
+    contextState,
+    contextGate,
     afterEachHooks,
     leaveByRoute,
     updateByRoute,
@@ -197,7 +253,7 @@ export function createNavigateInternal(
     snapshotFromParts,
     currentLocationParts,
     setLastNavigation,
-    siteLocales,
+    localeRouting,
     locale,
     onLocaleChange,
   } = deps
@@ -212,15 +268,15 @@ export function createNavigateInternal(
   ): Promise<NavigationResult> => {
     const token = ++navToken.value
     isNavigating.value = true
-    const resolved = siteLocales
+    const resolved = localeRouting
       ? parseAppLocation(
           targetUrl,
           normalizedBaseUrl,
-          siteLocales,
+          localeRouting,
           resolvedPathPolicy
         )
       : parseResolvedLocation(targetUrl, normalizedBaseUrl)
-    const invalidLocale = siteLocales
+    const invalidLocale = localeRouting
       ? (
           resolved as {
             invalidLocale?: Extract<
@@ -230,11 +286,11 @@ export function createNavigateInternal(
           }
         ).invalidLocale
       : undefined
-    if (siteLocales && invalidLocale) {
-      if (!shouldRejectInvalidLocale(siteLocales)) {
+    if (localeRouting && invalidLocale) {
+      if (!shouldRejectInvalidLocale(localeRouting)) {
         const location = resolveInvalidLocaleRedirect(
           invalidLocale,
-          siteLocales,
+          localeRouting,
           resolvedPathPolicy
         )
         return navigateInternal(
@@ -243,7 +299,7 @@ export function createNavigateInternal(
         )
       }
     }
-    if (siteLocales && locale && resolved.locale) {
+    if (localeRouting && locale && resolved.locale) {
       if (locale.peek() !== resolved.locale) {
         locale.value = resolved.locale
         onLocaleChange?.(resolved.locale)
@@ -288,13 +344,13 @@ export function createNavigateInternal(
     ): Promise<NavigationResult> => {
       failure = { type: "redirect", to: redirectTo }
       const r = toRedirect(redirectTo)
-      return navigateInternal(
-        new URL(addBase(r.path, normalizedBaseUrl), origin),
-        {
-          replace: r.replace ?? true,
-          fromPopstate: false,
-        }
-      )
+      const nextUrl = r.path.includes("://")
+        ? new URL(r.path)
+        : new URL(r.path, origin)
+      return navigateInternal(nextUrl, {
+        replace: r.replace ?? true,
+        fromPopstate: false,
+      })
     }
 
     try {
@@ -313,14 +369,6 @@ export function createNavigateInternal(
         }
         if (g0.type === "redirect") return runRedirect(g0.to)
       }
-
-      const g1 = await runGuards(beforeEachGuards, to, from)
-      if (g1.type === "cancel") {
-        failure = { type: "cancelled" }
-        handlePopstateCancel()
-        return { status: "cancelled" }
-      }
-      if (g1.type === "redirect") return runRedirect(g1.to)
 
       const isUpdatingRoute =
         !!fromMatch &&
@@ -341,37 +389,105 @@ export function createNavigateInternal(
         if (gu.type === "redirect") return runRedirect(gu.to)
       }
 
-      const routeGuards = toMatch?.route.beforeEnter ?? []
       const isEnteringNewRoute =
         !fromMatch || !toMatch || fromMatch.route.id !== toMatch.route.id
-      if (isEnteringNewRoute && routeGuards.length) {
-        const g2 = await runGuards(routeGuards, to, from)
-        if (g2.type === "cancel") {
+
+      const toSnapshot = snapshotFromParts(
+        {
+          pathname: resolved.pathname,
+          hash: resolved.hash,
+          query: resolved.query,
+        },
+        toMatch?.params ?? {}
+      )
+      const fromSnapshot = fromMatch
+        ? snapshotFromParts(fromParts, fromMatch.params)
+        : null
+
+      const gateOptions: ContextGateOptions = {
+        contextGate: contextGateMode,
+        hasResolveContext: !!resolveContext,
+      }
+
+      if (resolveContext && toMatch) {
+        const hadReady = contextState.value === "ready"
+        await runContextResolve({
+          match: toMatch,
+          to: toSnapshot,
+          from: fromSnapshot,
+          resolveContext,
+          gateOptions,
+          contextState,
+          requestContext,
+          navEpoch: token,
+          getNavEpoch: () => navToken.value,
+          stickyContext,
+          hadReadyContext: hadReady,
+          eventType: "navigation",
+        })
+        if (token !== navToken.value) {
+          return { status: "cancelled" }
+        }
+        contextGate.value = resolveContextGateState(
+          toMatch,
+          contextState.value,
+          requestContext.value,
+          gateOptions
+        )
+      }
+
+      if (
+        globalMiddleware.length ||
+        (toMatch && collectMiddlewareChain(toMatch).length > 0)
+      ) {
+        const segments = toMatch ? buildMatchSegments(toMatch) : []
+        const mwTo = toMatch
+          ? buildMiddlewareTo(resolved, toMatch, segments)
+          : {
+              pathname: targetPath,
+              params: {},
+              query: resolved.query,
+              hash: resolved.hash,
+              href: resolved.href,
+              routeId: "",
+              segments: [],
+            }
+        const mwFrom =
+          fromMatch && fromSnapshot
+            ? buildMiddlewareTo(
+                {
+                  pathname: fromParts.pathname,
+                  hash: fromParts.hash,
+                  query: fromParts.query,
+                  href: "",
+                },
+                fromMatch,
+                buildMatchSegments(fromMatch)
+              )
+            : null
+        if (mwFrom && !mwFrom.href) {
+          mwFrom.href = addBase(fromParts.pathname, normalizedBaseUrl)
+        }
+        const mw = await runRouteMiddleware({
+          to: mwTo,
+          from: mwFrom,
+          meta: toMatch ? mergeRouteMeta(toMatch) : {},
+          context: requestContext.value,
+          globalMiddleware,
+          match: toMatch,
+        })
+        if (mw.type === "redirect") {
+          return runRedirect(toMiddlewareRedirect(mw.to))
+        }
+        if (mw.type === "abort") {
           failure = { type: "cancelled" }
           handlePopstateCancel()
           return { status: "cancelled" }
         }
-        if (g2.type === "redirect") return runRedirect(g2.to)
-      }
-
-      const beforeActivate = toMatch?.route.beforeActivate ?? []
-      if (isEnteringNewRoute && beforeActivate.length) {
-        const ga = await runGuards(beforeActivate, to, from)
-        if (ga.type === "cancel") {
-          failure = { type: "cancelled" }
-          handlePopstateCancel()
-          return { status: "cancelled" }
+        if (mw.type === "error") {
+          return runRedirect("/login")
         }
-        if (ga.type === "redirect") return runRedirect(ga.to)
       }
-
-      const g3 = await runGuards(beforeResolveGuards, to, from)
-      if (g3.type === "cancel") {
-        failure = { type: "cancelled" }
-        handlePopstateCancel()
-        return { status: "cancelled" }
-      }
-      if (g3.type === "redirect") return runRedirect(g3.to)
 
       if (toMatch) {
         const searchCheck = await validateSearchForMatch(toMatch, resolved.query, {
@@ -415,6 +531,28 @@ export function createNavigateInternal(
         historyIndex.value = nextIndex
       }
       await runTransition(() => commitLocation(resolved), enableTransition)
+
+      if (resolveContext && toMatch) {
+        scheduleBackgroundContextResolve({
+          match: toMatch,
+          to: toSnapshot,
+          from: fromSnapshot,
+          resolveContext,
+          gateOptions,
+          contextState,
+          requestContext,
+          navEpoch: token,
+          getNavEpoch: () => navToken.value,
+          stickyContext,
+          hadReadyContext: contextState.value === "ready",
+        })
+        contextGate.value = resolveContextGateState(
+          toMatch,
+          contextState.value,
+          requestContext.value,
+          gateOptions
+        )
+      }
 
       if (isEnteringNewRoute && componentEnterGuards.length) {
         await runGuards(componentEnterGuards, to, from)

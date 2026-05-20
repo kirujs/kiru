@@ -13,7 +13,7 @@ import {
 } from "../../router/index.js"
 import {
   createI18nConfig,
-  i18nToSiteLocales,
+  getI18nLocaleRouting,
   loaderI18nFields,
   loadI18nMessages,
   resolveInvalidLocaleRedirect,
@@ -82,7 +82,7 @@ describe("i18n", () => {
   })
 
   it("splitAppPathname strips locale for route matching", () => {
-    const locales = i18nToSiteLocales(i18n)
+    const locales = getI18nLocaleRouting(i18n)
     assert.deepEqual(splitAppPathname("/fr/about", locales), {
       locale: "fr",
       pathname: "/about",
@@ -102,6 +102,8 @@ describe("i18n", () => {
       hash: "",
       query: {},
       context: {},
+      meta: {},
+      routeId: "route:1",
       ...fields,
     })
     assert.equal(ctx.locale, "fr")
@@ -157,19 +159,19 @@ describe("i18n", () => {
   })
 
   it("expandPathsForLocales emits public paths per locale", () => {
-    const locales = i18nToSiteLocales(i18n)
+    const locales = getI18nLocaleRouting(i18n)
     const expanded = expandPathsForLocales(["/about"], locales)
     assert.ok(expanded.includes("/about"))
     assert.ok(expanded.includes("/fr/about"))
   })
 
   it("stripLocalePrefixFromPath removes leading locale segment", () => {
-    const locales = i18nToSiteLocales(i18n)
+    const locales = getI18nLocaleRouting(i18n)
     assert.equal(stripLocalePrefixFromPath("/fr/about", locales), "/about")
   })
 
   it("splitAppPathnameDetailed detects invalid locale segment", () => {
-    const locales = i18nToSiteLocales(i18n)
+    const locales = getI18nLocaleRouting(i18n)
     const split = splitAppPathnameDetailed("/de/about", locales)
     assert.equal(split.kind, "invalid-locale")
     if (split.kind === "invalid-locale") {
@@ -227,11 +229,11 @@ describe("i18n", () => {
         })
       )
     )
-    const siteLocales = i18nToSiteLocales(i18n)
+    const localeRouting = getI18nLocaleRouting(i18n)
     const router = createStaticRouter({
       manifest,
       pathname: "/about",
-      siteLocales,
+      localeRouting,
       locale: "en",
     })
     assert.equal(router.resolveHref("/about", { locale: "fr" }), "/fr/about")
@@ -250,12 +252,12 @@ describe("i18n", () => {
       })
     )
     const manifest = compileRouteTree(routes)
-    const siteLocales = i18nToSiteLocales(i18n)
+    const localeRouting = getI18nLocaleRouting(i18n)
     const paths = await generatePublicStaticPaths(
       manifest,
       undefined,
       undefined,
-      siteLocales
+      localeRouting
     )
     assert.ok(paths.includes("/about"))
     assert.ok(paths.includes("/fr/about"))

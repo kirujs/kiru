@@ -1,5 +1,6 @@
 import { createContext, useContext } from "../context.js"
 import { createElement } from "../element.js"
+import { __getSsrRequestContext } from "../remote/action.js"
 import type { CustomRequestContext } from "./types.js"
 
 const RequestContext = createContext<CustomRequestContext>({})
@@ -20,7 +21,15 @@ export function useOptionalRequestContext(): CustomRequestContext {
 
 /** Per-request context; `{}` when not provided (pure CSR/SSG or outside a provider). */
 export function useRequestContext(): CustomRequestContext {
-  return useOptionalRequestContext() ?? {}
+  const fromProvider = useOptionalRequestContext()
+  if (fromProvider && Object.keys(fromProvider).length > 0) {
+    return fromProvider
+  }
+  const fromSsr = __getSsrRequestContext()
+  if (fromSsr && Object.keys(fromSsr).length > 0) {
+    return fromSsr
+  }
+  return fromProvider ?? {}
 }
 
 function escapeScriptJson(json: string): string {

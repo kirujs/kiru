@@ -34,6 +34,8 @@ describe("staticLoaderData", () => {
       },
     }
     const ctx = buildLoaderContext({
+      meta: {},
+      routeId: "route:1",
       params: {},
       pathname: "/about",
       search: "",

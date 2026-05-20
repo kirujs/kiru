@@ -23,6 +23,7 @@ export {
   type I18nOptions,
   type DotPath,
 } from "./i18n/index.js"
-export { useI18n, useOptionalI18n, I18nProvider } from "./i18nContext.js"
+export { useI18n, I18nProvider } from "./i18nContext.js"
 export * from "./prepareRoute.js"
+export * from "./routeMiddleware.js"
 export * from "../validation/index.js"

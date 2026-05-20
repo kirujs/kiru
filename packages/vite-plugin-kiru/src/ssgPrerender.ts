@@ -22,10 +22,21 @@ function resolveSsrModuleFile(
   vite: ViteDevServer,
   mod: unknown
 ): string | undefined {
+  if (mod && typeof mod === "object") {
+    const meta = (mod as { __vite_ssr_import_meta__?: { filename?: string } })
+      .__vite_ssr_import_meta__
+    if (meta?.filename) return meta.filename
+  }
+  if (!mod || typeof mod !== "object") return undefined
+  const exports = mod as Record<string, unknown>
   for (const node of vite.moduleGraph.idToModuleMap.values()) {
-    if (node.ssrModule === mod) {
-      return node.file ?? undefined
-    }
+    if (!node.file) continue
+    if (node.ssrModule === mod) return node.file
+    const ssr = node.ssrModule
+    if (!ssr || typeof ssr !== "object") continue
+    const ssrExports = ssr as Record<string, unknown>
+    if (exports.load && ssrExports.load === exports.load) return node.file
+    if (exports.default && ssrExports.default === exports.default) return node.file
   }
   return undefined
 }
@@ -95,7 +106,7 @@ export async function runSsgPrerender(input: {
       prerenderStaticRoutes,
       compileRouteTree,
       discoverRouteBuildMeta,
-      normalizeSiteLocales,
+      getI18nLocaleRouting,
       onStaticLoaderPrerenderCapture,
       pageModuleUsesStaticLoader,
     } = (await vite.ssrLoadModule("kiru/router")) as SsgPrerenderRouter
@@ -143,12 +154,8 @@ export async function runSsgPrerender(input: {
     }
 
     const pathPolicy = (site as { pathPolicy?: unknown } | undefined)?.pathPolicy
-    const siteLocales = (site as { locales?: unknown } | undefined)?.locales
-      ? normalizeSiteLocales(
-          (site as { locales: Parameters<typeof normalizeSiteLocales>[0] })
-            .locales
-        )
-      : undefined
+    const i18n = routesMod.i18n ?? routesMod.default?.i18n
+    const localeRouting = i18n ? getI18nLocaleRouting(i18n) : undefined
 
     const byRouteId: Record<string, Record<string, unknown>> = {}
     const offCapture = onStaticLoaderPrerenderCapture(
@@ -165,8 +172,7 @@ export async function runSsgPrerender(input: {
           typeof prerenderStaticRoutes
         >[0]["pathPolicy"],
         maxConcurrentRenders: state.router.ssg!.maxConcurrentRenders,
-        siteLocales,
-        i18n: routesMod.i18n ?? routesMod.default?.i18n,
+        i18n,
         ...(opts.router?.htmlShell
           ? {}
           : {
@@ -203,7 +209,7 @@ export async function runSsgPrerender(input: {
       staticLoaderPayloadByModule,
       site: site as SsgSiteConfig | null | undefined,
       pathPolicy: pathPolicy as SsgSiteConfig["pathPolicy"] | undefined,
-      siteLocales,
+      localeRouting,
       routes,
       buildMeta,
       manifest,

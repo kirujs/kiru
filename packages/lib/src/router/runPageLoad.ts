@@ -1,7 +1,7 @@
 import type { RouterQuery } from "./csr.js"
 import type { KiruLoader, LoaderContext, PageProps } from "./loaders.js"
 import { isKiruLoader, readPageLoadExport } from "./loaders.js"
-import type { CustomRequestContext, RouteMatch } from "./types.js"
+import type { CustomRequestContext, RouteMatch, RouteMeta } from "./types.js"
 import { toRenderError } from "./types.js"
 import { readHydratedPageData } from "./pageData.js"
 import { guardServerLoaderOnClient } from "./devWarnings.js"
@@ -20,6 +20,8 @@ export type LoaderFetchContext = {
   hash: string
   query: RouterQuery
   context: CustomRequestContext
+  meta?: RouteMeta
+  routeId?: string
   request?: Request
   locale?: string
   locales?: readonly string[]
@@ -38,6 +40,8 @@ export function buildLoaderContext(
     },
     query: (input.validatedQuery ?? input.query) as LoaderContext["query"],
     context: input.context,
+    meta: input.meta ?? {},
+    route: { id: input.routeId ?? "" },
     request: input.request,
     ...(input.locale !== undefined ? { locale: input.locale } : {}),
     ...(input.locales !== undefined ? { locales: input.locales } : {}),

@@ -6,11 +6,7 @@ import {
   resolvePathPolicy,
   type RouterPathPolicy,
 } from "./pathPolicy.js"
-import {
-  addLocale,
-  normalizeSiteLocales,
-  type SiteLocales,
-} from "./localePolicy.js"
+import { addLocale, type I18nLocaleRouting } from "./i18n/localeRouting.js"
 
 export type ChangeFrequency =
   | "always"
@@ -73,11 +69,6 @@ export interface SiteConfigInput {
   pathPolicy?: RouterPathPolicy
   sitemap?: boolean | SitemapOptionsInput
   robots?: boolean | RobotsOptions
-  /**
-   * Locale prefixes for hreflang sitemap alternates and routing helpers.
-   * @see docs/router/tier-3-wave-1.md#i18n
-   */
-  locales?: SiteLocales
 }
 
 export interface SiteConfig {
@@ -85,7 +76,6 @@ export interface SiteConfig {
   pathPolicy: Required<RouterPathPolicy>
   sitemap: false | SitemapOptions
   robots: false | RobotsOptions
-  locales?: SiteLocales
 }
 
 function parseHttpOrigin(value: string, label: string): string {
@@ -153,11 +143,7 @@ export function defineSiteConfig(input: SiteConfigInput): SiteConfig {
     robots = input.robots
   }
 
-  const locales = input.locales
-    ? normalizeSiteLocales(input.locales)
-    : undefined
-
-  return { url: origin, pathPolicy, sitemap, robots, locales }
+  return { url: origin, pathPolicy, sitemap, robots }
 }
 
 function escXml(s: string): string {
@@ -199,7 +185,8 @@ function resolveSitemapUrl(
   path: string,
   site: SiteConfig,
   opts: SitemapOptions,
-  buildDate?: string
+  buildDate?: string,
+  localeRouting?: I18nLocaleRouting
 ): ResolvedSitemapUrl {
   const routePath = normalizePathname(path)
   const override = opts.overrides[routePath]
@@ -210,9 +197,9 @@ function resolveSitemapUrl(
       : lastmodSource
 
   const alternates: SitemapHreflangAlternate[] = []
-  if (site.locales) {
-    for (const prefix of site.locales.prefixes) {
-      const localizedPath = addLocale(routePath, prefix, site.locales)
+  if (localeRouting) {
+    for (const prefix of localeRouting.prefixes) {
+      const localizedPath = addLocale(routePath, prefix, localeRouting)
       alternates.push({
         hreflang: prefix,
         href: absoluteRouteUrl(opts.domain, localizedPath, site.pathPolicy),
@@ -222,14 +209,14 @@ function resolveSitemapUrl(
       hreflang: "x-default",
       href: absoluteRouteUrl(
         opts.domain,
-        addLocale(routePath, site.locales.default, site.locales),
+        addLocale(routePath, localeRouting.default, localeRouting),
         site.pathPolicy
       ),
     })
   }
 
-  const canonicalPath = site.locales
-    ? addLocale(routePath, site.locales.default, site.locales)
+  const canonicalPath = localeRouting
+    ? addLocale(routePath, localeRouting.default, localeRouting)
     : routePath
 
   return {
@@ -309,7 +296,8 @@ function renderUrlEntry(origin: string, entry: ResolvedSitemapUrl): string {
 export function buildSitemapXml(
   paths: string[],
   site: SiteConfig,
-  buildDate?: string
+  buildDate?: string,
+  localeRouting?: I18nLocaleRouting
 ): string {
   if (!site.sitemap) {
     throw new Error("buildSitemapXml: site.sitemap is not enabled")
@@ -317,7 +305,7 @@ export function buildSitemapXml(
   const opts = site.sitemap
   const origin = opts.domain
   const entries = paths.map((path) =>
-    resolveSitemapUrl(path, site, opts, buildDate)
+    resolveSitemapUrl(path, site, opts, buildDate, localeRouting)
   )
   const hasImages = entries.some((e) => e.images.length > 0)
   const hasVideos = entries.some((e) => e.videos.length > 0)
@@ -350,14 +338,19 @@ export async function writeSiteArtifacts({
   paths,
   site,
   buildDate,
+  localeRouting,
 }: {
   outDir: string
   paths: string[]
   site: SiteConfig
   buildDate?: string
+  /**
+   * Locale prefixes for hreflang alternates (from app `i18n` / {@link getI18nLocaleRouting}).
+   */
+  localeRouting?: I18nLocaleRouting
 }): Promise<void> {
   if (site.sitemap) {
-    const xml = buildSitemapXml(paths, site, buildDate)
+    const xml = buildSitemapXml(paths, site, buildDate, localeRouting)
     await writeFile(join(outDir, "sitemap.xml"), xml, "utf8")
   }
   if (site.robots) {

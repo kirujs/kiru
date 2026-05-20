@@ -75,6 +75,52 @@ function isSsrBundleBuild(userConfig: UserConfig): boolean {
   return ssr === true || typeof ssr === "string"
 }
 
+async function ensureSsgPrerenderCache(input: {
+  state: PluginState
+  opts: KiruPluginOptions
+  resolvedViteConfig: ResolvedConfig
+}): Promise<NonNullable<PluginState["ssgPrerenderCache"]>> {
+  const { state, opts, resolvedViteConfig } = input
+  if (state.ssgPrerenderCache) return state.ssgPrerenderCache
+  const templateName = opts.router?.htmlTemplate ?? "index.html"
+  const templatePath = path.resolve(state.projectRoot, templateName)
+  const templateHtml = await fs.readFile(templatePath, "utf8")
+  state.ssgPrerenderCache = await runSsgPrerender({
+    state,
+    opts,
+    resolvedViteConfig,
+    templateHtml,
+  })
+  return state.ssgPrerenderCache
+}
+
+const STATIC_LOADER_PAYLOAD_CONST = "__kiruStaticLoaderPayload"
+
+async function injectStaticLoaderPayloadIntoClientChunks(input: {
+  clientDir: string
+  staticLoaderPayloadByModule: Record<string, Record<string, unknown>>
+  clientManifest?: Record<string, unknown>
+}): Promise<void> {
+  const { clientDir, staticLoaderPayloadByModule, clientManifest } = input
+  for (const [moduleKey, payload] of Object.entries(staticLoaderPayloadByModule)) {
+    const manifestKey = moduleKey.replace(/^\//, "")
+    const entry = clientManifest?.[manifestKey] as { file?: string } | undefined
+    const chunkRel = entry?.file
+    if (!chunkRel) continue
+    const filePath = path.join(clientDir, chunkRel)
+    let src: string
+    try {
+      src = await fs.readFile(filePath, "utf8")
+    } catch {
+      continue
+    }
+    if (!src.includes(STATIC_LOADER_PAYLOAD_CONST)) continue
+    if (src.includes(`const ${STATIC_LOADER_PAYLOAD_CONST}`)) continue
+    const injection = `const ${STATIC_LOADER_PAYLOAD_CONST}=${JSON.stringify(payload)};`
+    await fs.writeFile(filePath, `${injection}${src}`, "utf8")
+  }
+}
+
 async function readViteClientManifest(
   outDir: string
 ): Promise<Record<string, unknown> | undefined> {
@@ -480,24 +526,16 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       }
 
       if (state.router.ssg?.routesModuleAbs) {
-        if (!state.ssgPrerenderCache) {
-          const templateName = opts.router?.htmlTemplate ?? "index.html"
-          const templatePath = path.resolve(state.projectRoot, templateName)
-          const templateHtml = await fs.readFile(templatePath, "utf8")
-          state.ssgPrerenderCache = await runSsgPrerender({
-            state,
-            opts,
-            resolvedViteConfig,
-            templateHtml,
-          })
-        }
-
-        const cache = state.ssgPrerenderCache
+        const cache = await ensureSsgPrerenderCache({
+          state,
+          opts,
+          resolvedViteConfig,
+        })
         const {
           outputs,
           site,
           pathPolicy,
-          siteLocales,
+          localeRouting,
           buildMeta,
           manifest,
         } = cache
@@ -519,7 +557,14 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             (p) => p !== routePath && p.startsWith(routePath + "/")
           )
 
+        const clientDir = path.resolve(state.projectRoot, state.outDir)
         const clientManifest = await readViteClientManifest(state.outDir)
+
+        await injectStaticLoaderPayloadIntoClientChunks({
+          clientDir,
+          staticLoaderPayloadByModule: cache.staticLoaderPayloadByModule,
+          clientManifest,
+        })
 
         for (const output of outputs) {
           let html: string
@@ -556,8 +601,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           await fs.mkdir(path.dirname(target), { recursive: true })
           await fs.writeFile(target, html, "utf8")
 
-          const logicalPath = siteLocales
-            ? splitAppPathname(output.path, siteLocales).pathname
+          const logicalPath = localeRouting
+            ? splitAppPathname(output.path, localeRouting).pathname
             : output.path
           const routeMatch = matchRoute(manifest, logicalPath, pathPolicy)
           if (routeMatch) {
@@ -584,6 +629,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             paths: sitemapPaths,
             site,
             buildDate: new Date().toISOString().slice(0, 10),
+            localeRouting,
           })
         }
       }

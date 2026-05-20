@@ -48,17 +48,17 @@ describe("site", () => {
     assert.ok(xml.includes("<loc>https://example.com/r&amp;d</loc>"))
   })
 
-  it("buildSitemapXml emits hreflang alternates when locales configured", () => {
+  it("buildSitemapXml emits hreflang alternates when localeRouting provided", () => {
     const site = defineSiteConfig({
       url: "https://example.com",
       sitemap: true,
-      locales: {
-        default: "en",
-        prefixes: ["en", "fr"],
-        localePrefix: "as-needed",
-      },
     })
-    const xml = buildSitemapXml(["/about"], site)
+    const xml = buildSitemapXml(["/about"], site, undefined, {
+      default: "en",
+      prefixes: ["en", "fr"],
+      localePrefix: "as-needed",
+      invalidLocale: "redirect",
+    })
     assert.ok(xml.includes('xmlns:xhtml="http://www.w3.org/1999/xhtml"'))
     assert.ok(xml.includes('hreflang="fr"'))
     assert.ok(xml.includes('hreflang="x-default"'))
