@@ -116,4 +116,63 @@ export async function prepareRouteForNavigation(input: {
   }
 }
 
+export type ResolveSsrRouteModuleResult = {
+  routeModule: RouteModule
+  pageProps: Record<string, unknown>
+  streamPageLoad: boolean
+  discarded?: boolean
+}
+
+/**
+ * Shared SSR prep: resolve loader props or wrap with streaming load gate (mirrors client path).
+ */
+export async function resolveSsrRouteModule(input: {
+  pageMod: unknown
+  routeModule: RouteModule
+  loaderCtx: LoaderContext
+  enableStreamingLoad?: boolean
+  routeId?: string
+}): Promise<ResolveSsrRouteModuleResult> {
+  const { pageMod, routeModule, loaderCtx, enableStreamingLoad, routeId } = input
+  const pageHead = readPageHeadExport(pageMod)
+  const load = readPageLoadExport(pageMod)
+  const streamPageLoad =
+    !!enableStreamingLoad &&
+    canStreamPageLoad(load) &&
+    !isAsyncPageHead(pageHead)
+
+  if (streamPageLoad && load) {
+    const fallback = readLoaderFallback(load)
+    if (fallback) {
+      return {
+        routeModule: wrapRouteModuleWithLoadGate(
+          routeModule,
+          load,
+          loaderCtx,
+          fallback
+        ),
+        pageProps: {},
+        streamPageLoad: true,
+      }
+    }
+  }
+
+  const resolved = await resolvePagePropsFromModule(pageMod, loaderCtx, {
+    routeId,
+  })
+  if (resolved.discarded) {
+    return {
+      routeModule,
+      pageProps: {},
+      streamPageLoad: false,
+      discarded: true,
+    }
+  }
+  return {
+    routeModule,
+    pageProps: resolved.props as Record<string, unknown>,
+    streamPageLoad: false,
+  }
+}
+
 export type { PageProps, KiruLoader }

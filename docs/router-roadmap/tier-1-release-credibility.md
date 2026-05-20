@@ -57,7 +57,7 @@
 
 ## Code quality (focused refactors)
 
-- [x] **Extract navigation pipeline from `csr.tsx`** — guards + commit + redirect loop into `navigation.ts` (behavior unchanged)
+- [x] **Extract navigation pipeline from `csr.ts`** — guards + commit + redirect loop into `navigation.ts` (behavior unchanged)
 - [x] **Extract prerender short-circuit from `renderer.ts`** — disk read + hydrate path (behavior unchanged)
 - [x] **Add CHANGELOG / router section** for user-visible router releases
 

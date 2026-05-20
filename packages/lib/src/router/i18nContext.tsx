@@ -2,7 +2,6 @@ import { createContext, useContext } from "../context.js"
 import { createElement } from "../element.js"
 import type { Signal } from "../signals/index.js"
 import { signal } from "../signals/index.js"
-import type { InternationalizationConfig } from "./i18n/index.js"
 import { loadI18nMessages } from "./i18n/index.js"
 import {
   createI18nTranslator,
@@ -15,6 +14,8 @@ import type {
   AppI18nLocale,
   AppI18nLocales,
 } from "./i18n/augmentation.js"
+import type { Router } from "./csr.js"
+import { tryGetRouterRuntime } from "./routerRuntime.js"
 
 type I18nData = AppI18nData
 type I18nLocale = AppI18nLocale
@@ -94,13 +95,9 @@ export function serializeI18nScript(payload: HydratedI18nPayload): string {
  * Call before {@link mount} or {@link hydrate} so `useI18n().t` never runs on an empty bundle.
  */
 export async function ensureClientI18nReady(router: {
-  __i18n?: {
-    runtime: I18nRuntime
-    config: InternationalizationConfig<readonly string[], unknown>
-  }
   locale?: { peek(): string }
 }): Promise<void> {
-  const bag = router.__i18n
+  const bag = tryGetRouterRuntime(router as Router)?.i18n
   if (!bag) return
   if (hasLoadedI18nBundle(bag.runtime.data.peek())) return
   const locale = router.locale?.peek() ?? bag.config.default

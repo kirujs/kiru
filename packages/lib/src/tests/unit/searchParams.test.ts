@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
-  defineSearchParams,
+  createQueryValidation,
   validateSearchFromQuery,
 } from "../../router/searchParams.js"
 
@@ -16,7 +16,7 @@ describe("validateSearchFromQuery", () => {
   }
 
   it("returns parsed data when valid", async () => {
-    const config = defineSearchParams(validator)
+    const config = createQueryValidation(validator)
     const r = await validateSearchFromQuery<{ q: string }>(config, {
       q: ["hello"],
     })
@@ -25,7 +25,7 @@ describe("validateSearchFromQuery", () => {
   })
 
   it("returns notFound when invalid", async () => {
-    const config = defineSearchParams(validator)
+    const config = createQueryValidation(validator)
     const r = await validateSearchFromQuery(config, {})
     assert.equal(r.ok, false)
   })

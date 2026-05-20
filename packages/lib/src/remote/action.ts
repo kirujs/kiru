@@ -5,9 +5,6 @@ import { RemoteError } from "./errors.js"
 
 export type {
   ActionSchema,
-  KiruSchemaInput,
-  KiruValidator,
-  KiruValidationResult,
   Schema,
   StandardJSONSchema,
   StandardJSONSchemaV1,
@@ -16,7 +13,6 @@ export type {
   StandardSchemaWithJson,
 } from "../validation/index.js"
 export {
-  assertValid,
   isStandardJSONSchemaV1,
   isStandardSchemaV1,
   parseInput,

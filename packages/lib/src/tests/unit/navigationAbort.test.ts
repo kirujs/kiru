@@ -13,6 +13,7 @@ import {
   createNavigationScope,
 } from "../../router/navigationScope.js"
 import { prepareRouteForNavigation } from "../../router/prepareRoute.js"
+import { getRouterRuntime } from "../../router/routerRuntime.js"
 import { buildLoaderContext, resolvePagePropsFromModule } from "../../router/runPageLoad.js"
 import { staticLoaderSignal } from "../../router/navigationScope.js"
 
@@ -62,10 +63,11 @@ describe("navigation abort integration", () => {
 
     const navA = router.navigate("/page-a")
     await new Promise<void>((r) => queueMicrotask(r))
-    const firstSignal = router.__getNavSignal!()
+    const { getNavSignal, getNavGeneration } = getRouterRuntime(router)
+    const firstSignal = getNavSignal()
 
     const navB = router.navigate("/page-b")
-    const secondSignal = router.__getNavSignal!()
+    const secondSignal = getNavSignal()
 
     assert.notEqual(firstSignal, secondSignal)
     assert.equal(firstSignal.aborted, true)
@@ -74,7 +76,7 @@ describe("navigation abort integration", () => {
     await Promise.all([navA, navB])
 
     assert.equal(router.pathname.value, "/page-b")
-    assert.equal(router.__getNavGeneration!(), 2)
+    assert.equal(getNavGeneration(), 2)
   })
 
   it("discards a slow loader when navigation generation advances mid-flight", async () => {

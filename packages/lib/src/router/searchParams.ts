@@ -21,11 +21,7 @@ export {
   validationInvalid,
 } from "./validationInvalid.js"
 
-/**
- * Normalized search validation (internal). Prefer `load.validation.query` on the page module.
- * @see defineSearchParams
- * @deprecated Use `export const load = loader({ validation: { query: … } })` instead of `validateSearch`.
- */
+/** Internal query validation config (from `load.validation.query`). */
 export type KiruSearchParams = {
   __kiruSearchParams: true
   schema: Schema<unknown>
@@ -41,15 +37,8 @@ export type DefineSearchParamsOptions<T> = {
   redirectToCanonical?: boolean
 }
 
-/**
- * Declare URL search validation for a route (legacy `export const validateSearch`).
- *
- * @example
- * ```ts
- * export const validateSearch = defineSearchParams(z.object({ q: z.string() }))
- * ```
- */
-export function defineSearchParams<T>(
+/** Build internal query validation from a loader `validation.query` schema. */
+export function createQueryValidation<T>(
   schema: Schema<T>,
   options?: DefineSearchParamsOptions<T>
 ): KiruSearchParams {
@@ -71,22 +60,6 @@ export function isKiruSearchParams(value: unknown): value is KiruSearchParams {
   )
 }
 
-function isSchemaLike(value: unknown): value is Schema<unknown> {
-  if (!value || typeof value !== "object") return false
-  return "~standard" in value || "safeParse" in value || "parse" in value
-}
-
-/** Read `validateSearch` from a page module (legacy export). */
-export function readValidateSearchExport(mod: unknown): KiruSearchParams | undefined {
-  if (!mod || typeof mod !== "object") return undefined
-  const v = (mod as Record<string, unknown>).validateSearch
-  if (isKiruSearchParams(v)) return v
-  if (isSchemaLike(v)) {
-    return defineSearchParams(v)
-  }
-  return undefined
-}
-
 function queryToSearchRecord(query: RouterQuery): Record<string, string | string[]> {
   const out: Record<string, string | string[]> = {}
   for (const [key, values] of Object.entries(query)) {
@@ -100,7 +73,7 @@ export type ValidateSearchResult<T> =
   | { ok: true; data: T }
   | { ok: false; invalid: ValidationInvalidResult }
 
-/** Validate raw router query against a {@link KiruSearchParams} config. */
+/** Validate raw router query against a query validation config. */
 export async function validateSearchFromQuery<T>(
   config: KiruSearchParams,
   query: RouterQuery

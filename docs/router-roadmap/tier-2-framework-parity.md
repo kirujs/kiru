@@ -32,7 +32,7 @@ Per-request context is **SSR-only** via `createRenderer({ context })` and hydrat
 
 ## Typed URL state
 
-- [x] **Search param schemas** — `load.validation.query` on `loader` / `serverLoader` / `clientLoader`; legacy `validateSearch` via `defineSearchParams`; [Standard Schema](https://standardschema.dev) + `parse` / `safeParse` (`@standard-schema/spec` optional peer)
+- [x] **Search param schemas** — `load.validation.query` on `loader` / `serverLoader` / `clientLoader`; [Standard Schema](https://standardschema.dev) + `parse` / `safeParse` (`@standard-schema/spec` optional peer)
 - [x] **Parse on navigation** — defaults, `onInvalid` → 404 or redirect, `redirectToCanonical`
 - [x] **SSR: same validation in `createRenderer`** before render (`validateRouteInput`)
 - [x] **`useSearchParams<T>()`** — validated query signal on the router
@@ -78,8 +78,8 @@ Per-request context is **SSR-only** via `createRenderer({ context })` and hydrat
 
 - [x] **Shared `prepareRouteForNavigation()`** — `RouterView`, `bootstrapSsrClient`, renderer prep
 - [x] **`createSsrRouterShell()`** — shared SSR/SSG shell; `routerHydrate` uses inline outlet for targeted updates
-- [ ] **Further dedupe** between `csr.tsx` and `routerHydrate.ts` (head sync, load gate, leaf props)
-- [ ] **Narrow `@internal` router APIs** — hide `__registerComponentGuard` behind stable hooks only
+- [x] **Further dedupe** between `csr.ts` and `routerHydrate.ts` (`clientRoutePrep`, `buildLoaderContextForMatch`)
+- [x] **Narrow `@internal` router APIs** — runtime in `routerRuntime.ts`; guards via stable hooks only
 
 ## Testing
 

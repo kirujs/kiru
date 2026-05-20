@@ -32,7 +32,6 @@ import {
   compileRouteHtmlTemplate,
   renderCompiledTemplate,
   validateRouteHtmlTemplate,
-  type CompiledRouteHtmlTemplate,
 } from "./htmlTemplate.js"
 import { createStaticRouter } from "./csr.js"
 import { serializeRequestContextScript } from "./requestContext.js"
@@ -66,13 +65,7 @@ import {
   emitStaticLoaderPrerenderCapture,
   pageModuleUsesStaticLoader,
 } from "./staticLoaderData.js"
-import {
-  canStreamPageLoad,
-  readLoaderFallback,
-  readPageLoadExport,
-  type KiruLoader,
-  type PageProps,
-} from "./loaders.js"
+import type { KiruLoader, PageProps } from "./loaders.js"
 import {
   createDynamicHeadContext,
   isAsyncPageHead,
@@ -81,7 +74,13 @@ import {
   resolveMergedRoutePageHead,
   resolveMergedRoutePageHeadSync,
 } from "./pageHead.js"
-import { wrapRouteModuleWithLoadGate } from "./pageLoadGate.js"
+import { resolveSsrRouteModule } from "./prepareRoute.js"
+import {
+  enqueueTemplatedShell,
+  renderStreamForRouteMatch,
+  renderUnmatchedAppStream,
+  serializedDataFromPageProps,
+} from "./rendererStream.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import {
   cachePolicyToHeaders,
@@ -878,15 +877,6 @@ function buildAppElement(
   )
 }
 
-function serializedDataFromPageProps(
-  pageProps: Record<string, unknown>
-): unknown | undefined {
-  if ("error" in pageProps && pageProps.error === null && "data" in pageProps) {
-    return pageProps.data
-  }
-  return undefined
-}
-
 /** Shared SSG / SSR string render for a matched route. */
 export async function renderMatchToStaticHtml(
   manifest: RouteManifest,
@@ -1305,60 +1295,39 @@ async function prepareAppForUrl(
 
     const pageMod = rawRouteModule
     const pageHead = readPageHeadExport(pageMod)
-    const load = readPageLoadExport(pageMod)
     const asyncHead = isAsyncPageHead(pageHead)
-    const streamPageLoad =
-      !!renderOpts.enableStreamingLoad &&
-      canStreamPageLoad(load) &&
-      !asyncHead
 
-    let pageProps: Record<string, unknown>
-    let pagePropsPromise: Promise<Record<string, unknown>> | undefined
+    const ssrPrepared = await resolveSsrRouteModule({
+      pageMod,
+      routeModule: rawRouteModule,
+      loaderCtx,
+      enableStreamingLoad: renderOpts.enableStreamingLoad,
+      routeId: routeMatch.route.id,
+    })
+    if (ssrPrepared.discarded) return null
+    throwIfAborted(renderSignal)
+
+    const { routeModule, pageProps, streamPageLoad } = ssrPrepared
+    const pagePropsPromise: Promise<Record<string, unknown>> | undefined =
+      undefined
 
     const i18nMessagesPromise =
       i18n && locale ? loadI18nMessages(i18n, locale) : Promise.resolve(undefined)
 
     let streamHeadMeta: Awaited<ReturnType<typeof resolveStreamHeadMeta>>
     let i18nMessages: Awaited<typeof i18nMessagesPromise>
-    if (streamPageLoad) {
-      // Loader data is streamed via `resource()` / `__$k_data` in the load gate;
-      // do not await `resolvePagePropsFromModule` here or the shell blocks on load.
-      pageProps = {}
-      ;[streamHeadMeta, i18nMessages] = await Promise.all([
-        resolveStreamHeadMeta(routeMatch, pageMod, loaderCtx, undefined),
-        i18nMessagesPromise,
-      ])
-    } else {
-      const resolved = await resolvePagePropsFromModule(pageMod, loaderCtx, {
-        routeId: routeMatch.route.id,
-      })
-      if (resolved.discarded) return null
-      throwIfAborted(renderSignal)
-      pageProps = resolved.props
-      ;[streamHeadMeta, i18nMessages] = await Promise.all([
-        resolveStreamHeadMeta(
-          routeMatch,
-          pageMod,
-          loaderCtx,
-          pageProps as PageProps<KiruLoader<unknown>>
-        ),
-        i18nMessagesPromise,
-      ])
-    }
+    ;[streamHeadMeta, i18nMessages] = await Promise.all([
+      resolveStreamHeadMeta(
+        routeMatch,
+        pageMod,
+        loaderCtx,
+        streamPageLoad
+          ? undefined
+          : (pageProps as PageProps<KiruLoader<unknown>>)
+      ),
+      i18nMessagesPromise,
+    ])
     throwIfAborted(renderSignal)
-
-    let routeModule = rawRouteModule
-    if (streamPageLoad && load) {
-      const fallback = readLoaderFallback(load)
-      if (fallback) {
-        routeModule = wrapRouteModuleWithLoadGate(
-          rawRouteModule,
-          load,
-          loaderCtx,
-          fallback
-        )
-      }
-    }
     const i18nPayload =
       i18n && locale && i18nMessages !== undefined
         ? {
@@ -1420,179 +1389,6 @@ async function prepareAppForUrl(
   }
 
   return null
-}
-
-function buildStreamDocumentHead(
-  meta: RouteHeadMeta,
-  pathname: string,
-  requestContext: CustomRequestContext,
-  opts: {
-    pageData?: unknown
-    i18nPayload?: HydratedI18nPayload
-    decorateDocument: (document: DocumentHead) => void
-  }
-): DocumentHead {
-  const ctxScript = serializeRequestContextScript(requestContext)
-  const pageDataScript =
-    opts.pageData !== undefined ? serializePageDataScript(opts.pageData) : ""
-  const i18nScript =
-    opts.i18nPayload !== undefined ? serializeI18nScript(opts.i18nPayload) : ""
-  const document: DocumentHead = {
-    headHtml:
-      serializeDocumentHead(meta, { pathname }) +
-      (ctxScript ? `\n    ${ctxScript}` : "") +
-      (i18nScript ? `\n    ${i18nScript}` : "") +
-      (pageDataScript ? `\n    ${pageDataScript}` : ""),
-    title: meta.title,
-  }
-  opts.decorateDocument(document)
-  return document
-}
-
-/**
- * Streaming SSR: defers document assembly into `onShellReady` so `</html>`
- * precedes streamed data scripts. Static page head + streaming load flushes
- * the head prefix in `onStreamStart` while the shell renders.
- */
-function renderStreamForRouteMatch(
-  app: JSX.Element,
-  match: RouteMatch,
-  requestContext: CustomRequestContext,
-  opts: {
-    compiledTemplate: CompiledRouteHtmlTemplate | null
-    decorateDocument: (document: DocumentHead) => void
-    pageData?: unknown
-    streamHeadMeta?: RouteHeadMeta
-    pagePropsPromise?: Promise<Record<string, unknown>>
-    earlyFlushHead?: boolean
-    i18nPayload?: HydratedI18nPayload
-    documentLang?: string
-  }
-): ReadableStream<string> {
-  const { pathname } = match
-  const baseHeadMeta =
-    opts.streamHeadMeta ??
-    mergeRouteAndPageHead(match.route.head, undefined)
-  const resolveHeadMeta = () => mergeImagePreloadsIntoHead(baseHeadMeta)
-  const mayEarlyFlush =
-    !!opts.earlyFlushHead &&
-    opts.compiledTemplate?.headBeforeBody === true
-  let streamedHeadEarly = false
-
-  const headWithoutPageData = () =>
-    buildStreamDocumentHead(resolveHeadMeta(), pathname, requestContext, {
-      decorateDocument: opts.decorateDocument,
-    })
-
-  const stream = renderToReadableStream(app, {
-    onStreamStart: mayEarlyFlush
-      ? (controller) => {
-          const document = headWithoutPageData()
-          const split = opts.compiledTemplate!.splitForStream(
-            document.headHtml,
-            opts.documentLang
-          )
-          controller.enqueue(split.prefix)
-          streamedHeadEarly = true
-        }
-      : undefined,
-    onShellReady: async (shell, controller) => {
-      if (streamedHeadEarly) {
-        // Flush layout + fallback + `</html>` immediately so the parser can
-        // close the document and the async entry script can hydrate while load
-        // is still in flight. Loader data follows via streamed `__$k_data`.
-        enqueueTemplatedShellBody(controller, {
-          compiledTemplate: opts.compiledTemplate,
-          shell,
-        })
-        return
-      }
-      let pageData = opts.pageData
-      if (opts.pagePropsPromise) {
-        const props = await opts.pagePropsPromise
-        pageData = serializedDataFromPageProps(props)
-      }
-      const document = buildStreamDocumentHead(
-        resolveHeadMeta(),
-        pathname,
-        requestContext,
-        {
-          pageData,
-          i18nPayload: opts.i18nPayload,
-          decorateDocument: opts.decorateDocument,
-        }
-      )
-      enqueueTemplatedShell(controller, {
-        compiledTemplate: opts.compiledTemplate,
-        headHtml: document.headHtml,
-        shell,
-        documentLang: opts.documentLang,
-      })
-    },
-  })
-  return stream
-}
-
-function renderUnmatchedAppStream(
-  app: JSX.Element,
-  requestContext: CustomRequestContext,
-  compiledTemplate: CompiledRouteHtmlTemplate | null,
-  decorateDocument: (document: DocumentHead) => void
-): ReadableStream<string> {
-  const document: DocumentHead = {
-    headHtml: serializeRequestContextScript(requestContext),
-  }
-  decorateDocument(document)
-  const stream = renderToReadableStream(app, {
-    onShellReady: (shell, controller) =>
-      enqueueTemplatedShell(controller, {
-        compiledTemplate,
-        headHtml: document.headHtml,
-        shell,
-      }),
-  })
-  return stream
-}
-
-/**
- * Flush prefix + shell + suffix into the streaming controller in one shot.
- * When no template is configured we pass the shell through unchanged.
- */
-function enqueueTemplatedShell(
-  controller: ReadableStreamDefaultController<string>,
-  args: {
-    compiledTemplate: CompiledRouteHtmlTemplate | null
-    headHtml: string
-    shell: string
-    documentLang?: string
-  }
-): void {
-  if (!args.compiledTemplate) {
-    controller.enqueue(args.shell)
-    return
-  }
-  const split = args.compiledTemplate.splitForStream(
-    args.headHtml,
-    args.documentLang
-  )
-  controller.enqueue(split.prefix)
-  controller.enqueue(args.shell)
-  controller.enqueue(split.suffix)
-}
-
-function enqueueTemplatedShellBody(
-  controller: ReadableStreamDefaultController<string>,
-  args: {
-    compiledTemplate: CompiledRouteHtmlTemplate | null
-    shell: string
-  }
-): void {
-  if (!args.compiledTemplate) {
-    controller.enqueue(args.shell)
-    return
-  }
-  controller.enqueue(args.shell)
-  controller.enqueue(args.compiledTemplate.splitForStream("").suffix)
 }
 
 function prepareRenderer(options: CreateRendererOptions) {

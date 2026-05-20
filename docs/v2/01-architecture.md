@@ -86,7 +86,7 @@ Kiru adapters intentionally do not register HTTP middleware.
 |------|----------------|
 | `defineRouteTree.ts` | Authoring API |
 | `manifest.ts` | Compile tree, match, static path generation |
-| `csr.tsx` | `createRouter`, signals, navigations |
+| `csr.ts` | `createRouter`, signals, navigations |
 | `renderer.ts` | SSR render, ISR disk short-circuit, actions |
 | `navigation.ts` | Client navigation orchestration |
 | `routeMiddleware.ts` | Middleware runner |

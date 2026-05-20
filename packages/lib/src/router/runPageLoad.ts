@@ -1,6 +1,10 @@
-import type { RouterQuery } from "./csr.js"
+import type { RouterQuery } from "./requestUrl.js"
 import type { KiruLoader, LoaderContext, PageProps } from "./loaders.js"
 import { isKiruLoader, readPageLoadExport } from "./loaders.js"
+import { loaderI18nFields } from "./i18n/createI18nConfig.js"
+import { tryGetRouterRuntime } from "./routerRuntime.js"
+import { mergeRouteMeta } from "./routeMeta.js"
+import { formatRouterSearch } from "./navigation.js"
 import type { CustomRequestContext, RouteMatch, RouteMeta } from "./types.js"
 import { toRenderError } from "./types.js"
 import { readHydratedPageData } from "./pageData.js"
@@ -34,6 +38,61 @@ export type LoaderFetchContext = {
   locale?: string
   locales?: readonly string[]
   defaultLocale?: string
+}
+
+/** Router fields needed to build a {@link LoaderContext} for a matched route. */
+export type LoaderContextRouterSlice = {
+  hash: { peek(): string }
+  query: { peek(): RouterQuery }
+  requestContext: { peek(): CustomRequestContext }
+  validatedQuery?: { peek(): unknown | null }
+  validatedRouteParams?: { peek(): Record<string, unknown> | null }
+  locale?: { peek(): string | null }
+}
+
+function loaderI18nFromRouter(
+  router: LoaderContextRouterSlice
+): ReturnType<typeof loaderI18nFields> {
+  const runtime = tryGetRouterRuntime(router as import("./csr.js").Router)
+  if (runtime?.i18n && router.locale) {
+    return loaderI18nFields(runtime.i18n.config, router.locale.peek())
+  }
+  return {}
+}
+
+export function buildLoaderContextForMatch(
+  router: LoaderContextRouterSlice,
+  match: Pick<RouteMatch, "params" | "pathname" | "route">,
+  signal: AbortSignal,
+  overrides?: {
+    validatedQuery?: Record<string, unknown>
+    params?: Record<string, unknown>
+    pathname?: string
+    context?: CustomRequestContext
+  }
+): LoaderContext {
+  const params =
+    overrides?.params ??
+    router.validatedRouteParams?.peek() ??
+    match.params
+  const pathname = overrides?.pathname ?? match.pathname
+  return buildLoaderContext({
+    params,
+    pathname,
+    search: formatRouterSearch(router.query.peek()),
+    hash: router.hash.peek(),
+    query: router.query.peek(),
+    validatedQuery: (overrides?.validatedQuery ??
+      router.validatedQuery?.peek() ??
+      undefined) as Record<string, unknown> | undefined,
+    context:
+      overrides?.context ??
+      router.requestContext.peek(),
+    meta: mergeRouteMeta(match),
+    routeId: match.route.id,
+    signal,
+    ...loaderI18nFromRouter(router),
+  })
 }
 
 export function buildLoaderContext(

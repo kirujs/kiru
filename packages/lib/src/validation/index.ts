@@ -16,18 +16,6 @@ export {
   toOutputJsonSchema,
 } from "./standardSchema.js"
 
-export type KiruValidationResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: unknown }
-
-/**
- * @deprecated Prefer {@link Schema} with {@link parseInput}.
- * Legacy wrapper shape; still accepted wherever {@link Schema} is allowed.
- */
-export interface KiruValidator<T> {
-  safeParse(input: unknown): KiruValidationResult<T>
-}
-
 /**
  * Input schema for actions, loaders, and search validation.
  *
@@ -47,9 +35,6 @@ export type Schema<TInput> =
         | { success: true; data: TInput }
         | { success: false; error: unknown }
     }
-
-/** @deprecated Use {@link Schema}. */
-export type KiruSchemaInput<T> = Schema<T>
 
 /** Alias for {@link Schema} on `action()` / `formAction()`. */
 export type ActionSchema<TInput> = Schema<TInput>
@@ -108,20 +93,5 @@ export function kiruValidatorFromParseGuard<Input>(
       if (guard(input)) return { success: true as const, data: input }
       return { success: false as const, error: null }
     },
-  }
-}
-
-/**
- * {@link parseInput} and throw a generic `Error` on failure (message only).
- */
-export async function assertValid<T>(
-  schema: Schema<T>,
-  input: unknown,
-  message = "Validation failed"
-): Promise<T> {
-  try {
-    return await parseInput(schema, input)
-  } catch {
-    throw new Error(message)
   }
 }

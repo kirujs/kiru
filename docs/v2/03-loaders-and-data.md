@@ -114,8 +114,7 @@ export const load = loader({
 ```
 
 - Typed `query` / `params` in loader + `useSearchParams<T>()`
-- Legacy `export const validateSearch` still supported
-- `parseInput` from `kiru` validation package (Zod, Valibot, Standard Schema)
+- `parseInput` with `Schema` (Zod, Valibot, Standard Schema)
 
 E2E: SSR Cypress search-schema tests.
 
@@ -173,7 +172,17 @@ Body: serialized LoaderContext JSON
 Header: x-kiru-token (signed context)
 ```
 
-Client stub: `__kiruEnsureLoaderDispatch()` in `routerHydrate.ts`.
+Client stub: `__kiruEnsureLoaderDispatch()` from `kiru/router/loaderClient` (installed on SSR/SSG hydrate and CSR bootstrap).
+
+## Link prefetch
+
+`<Link>` accepts `prefetch` as `false` or `{ trigger?: "hover" | "visible", chunks?: boolean, data?: boolean }`.
+
+- **chunks** (default `true`): dynamic-import route modules (layouts + page) when the context gate allows.
+- **data** (default `true` when `__kiru_loaders` RPC is present): validates search params, then warms loader cache via `/?loader=` or client loaders.
+- Prefetch does **not** run middleware, `resolveContext`, or full navigation — it only reduces latency for the next click.
+
+Protected routes with `contextStrategy: "block"` skip leaf module import until the gate is ready (same as `RouterView`).
 
 ## Use-case examples for docs site
 

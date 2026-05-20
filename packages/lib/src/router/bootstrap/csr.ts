@@ -5,6 +5,8 @@ import { createRouter, RouterProvider, RouterView } from "../csr.js"
 import type { InternationalizationConfig } from "../i18n/index.js"
 import { ensureClientI18nReady, I18nReactiveRoot } from "../i18nContext.js"
 import { markRouterBootstrap } from "../devWarnings.js"
+import { ensureLoaderClient } from "../loaderClient.js"
+import { getRouterRuntime } from "../routerRuntime.js"
 import type { RouterPathPolicy } from "../pathPolicy.js"
 import type { CreateRouterAppBaseOptions } from "./types.js"
 
@@ -50,6 +52,7 @@ export async function createRouterApp(
     routeMiddleware,
   } = options
   markRouterBootstrap("csr")
+  ensureLoaderClient()
   const router = createRouter({
     routes,
     pathPolicy,
@@ -63,9 +66,10 @@ export async function createRouterApp(
   })
   await ensureClientI18nReady(router)
   let outlet: JSX.Element = createElement(RouterView, {})
-  if (router.__i18n) {
+  const i18nRuntime = getRouterRuntime(router).i18n?.runtime
+  if (i18nRuntime) {
     outlet = createElement(I18nReactiveRoot, {
-      runtime: router.__i18n.runtime,
+      runtime: i18nRuntime,
       children: outlet,
     })
   }

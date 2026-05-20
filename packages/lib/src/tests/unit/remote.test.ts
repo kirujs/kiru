@@ -425,7 +425,7 @@ describe("remote / handler", () => {
     assert.strictEqual(res?.status, 499)
   })
 
-  it("validates action input via KiruValidator.safeParse", async () => {
+  it("validates action input via Schema.safeParse", async () => {
     const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
     const token = validToken()
     const routeId = "test/schema-guard"

@@ -2,10 +2,9 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import type { StandardJSONSchemaV1, StandardSchemaV1 } from "@standard-schema/spec"
 import {
-  assertValid,
+  parseInput,
   isStandardJSONSchemaV1,
   isStandardSchemaV1,
-  parseInput,
   toInputJsonSchema,
 } from "../../validation/index.js"
 
@@ -112,7 +111,7 @@ describe("Schema / parseInput", () => {
     )
   })
 
-  it("assertValid throws on failure", async () => {
+  it("parseInput throws on failure", async () => {
     const schema = {
       parse: (input: unknown) => {
         if (typeof input !== "string") {
@@ -121,7 +120,7 @@ describe("Schema / parseInput", () => {
         return input
       },
     }
-    await assert.rejects(() => assertValid(schema, 1))
-    assert.equal(await assertValid(schema, "x"), "x")
+    await assert.rejects(() => parseInput(schema, 1))
+    assert.equal(await parseInput(schema, "x"), "x")
   })
 })

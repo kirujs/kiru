@@ -40,7 +40,7 @@ export interface RouteLocation {
 ### `meta` is compiled but not wired through the navigation path
 
 - Shallow-merged at build time onto `CompiledRoute.meta` (scopes + route) in `manifest.ts`.
-- Exposed on **`router.matches`** for breadcrumbs/UI (`csr.tsx` → `buildMatchSegments`).
+- Exposed on **`router.matches`** for breadcrumbs/UI (`csr.ts` → `buildMatchSegments`).
 - **Not** passed to guards, **not** in `LoaderContext`, **not** typed via module augmentation (unlike `CustomRequestContext` / `Internationalization`).
 
 Example today (`sandbox/ssr/src/routes.ts`):

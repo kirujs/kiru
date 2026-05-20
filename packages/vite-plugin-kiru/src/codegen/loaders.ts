@@ -103,7 +103,7 @@ function clientFormatLoaders(
     const lines = [`const __$lr__ = ${JSON.stringify(routeId)};`]
     if (hasServer) {
       lines.unshift(
-        `import { __kiruEnsureLoaderDispatch } from "kiru/ssr/router";`,
+        `import { __kiruEnsureLoaderDispatch } from "kiru/router/loaderClient";`,
         `const __$loadDispatch = () => __kiruEnsureLoaderDispatch();`
       )
     }

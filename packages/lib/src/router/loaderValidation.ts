@@ -8,8 +8,7 @@ import { readPageLoadExport } from "./loaders.js"
 import type { RouterQuery } from "./requestUrl.js"
 import {
   canonicalQueryDiffersFromUrl,
-  defineSearchParams,
-  readValidateSearchExport,
+  createQueryValidation,
   serializeValidatedQuery,
   toRouteValidationFailure,
   type KiruSearchParams,
@@ -85,7 +84,7 @@ export function normalizeLoaderValidation(
   return {
     ...(config.query
       ? {
-          query: defineSearchParams(config.query, {
+          query: createQueryValidation(config.query, {
             onInvalid,
             defaults: config.queryDefaults,
             redirectToCanonical: config.redirectToCanonical,
@@ -111,13 +110,11 @@ export function readLoaderValidation(
 }
 
 export function resolveRouteValidation(
-  mod: unknown,
+  _mod: unknown,
   load: KiruLoader | undefined
 ): KiruLoaderValidation | undefined {
   const fromLoader = readLoaderValidation(load)
   if (fromLoader?.query || fromLoader?.params) return fromLoader
-  const legacySearch = readValidateSearchExport(mod)
-  if (legacySearch) return { query: legacySearch }
   return undefined
 }
 

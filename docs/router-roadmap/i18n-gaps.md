@@ -11,7 +11,7 @@
 | Config API | `packages/lib/src/router/i18n/createI18nConfig.ts` |
 | URL split / format | `packages/lib/src/router/i18n/routing.ts`, `i18n/localeRouting.ts` |
 | Detection / BCP47 | `packages/lib/src/router/i18n/detect.ts` |
-| Client router | `packages/lib/src/router/csr.tsx` |
+| Client router | `packages/lib/src/router/csr.ts` |
 | SSR renderer | `packages/lib/src/router/renderer.ts` |
 | HTML shell tokens | `packages/lib/src/router/htmlTemplate.ts` (`{{kiru_locale}}`) |
 | Context / hydration | `packages/lib/src/router/i18nContext.tsx` |

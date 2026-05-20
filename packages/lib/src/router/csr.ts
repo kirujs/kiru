@@ -37,19 +37,13 @@ import type {
 import { readHydratedRequestContext } from "./requestContext.js"
 import {
   canLoadProtectedLeaf,
-  resolvePendingOutletMatch,
-  shouldDeferProtectedOutlet,
   idleContextGate,
   initialContextState,
   resolveContextGateState,
 } from "./contextGate.js"
-import {
-  effectiveContextPendingFallback,
-  mergeRouteMeta,
-} from "./routeMeta.js"
+import { mergeRouteMeta } from "./routeMeta.js"
 import { runContextResolve } from "./contextResolve.js"
 import type { ContextGateOptions } from "./routeMeta.js"
-import { warnProtectedImportBeforeGate } from "./devWarnings.js"
 import {
   buildMatchSegments,
   buildQueryString,
@@ -67,21 +61,11 @@ import {
 import { compileRouteTree } from "./manifest.js"
 import { setup } from "../hooks/index.js"
 import { onMount } from "../hooks/onMount.js"
-import {
-  buildRoutedSubtree,
-  loadNotFoundRouteTree,
-  loadRouteTree,
-  type LeafRouteProps,
-} from "./routeTree.js"
-import type { KiruLoader, PageProps } from "./loaders.js"
+import { buildClientOutletSubtree } from "./clientRoutePrep.js"
+import { runLinkPrefetch, type LinkPrefetch } from "./prefetchRoute.js"
 import { buildLoaderContext } from "./runPageLoad.js"
-import { prepareRouteForNavigation } from "./prepareRoute.js"
-import {
-  buildScopeCacheKey,
-  createNavigationScope,
-  isScopeCurrent,
-  staticLoaderSignal,
-} from "./navigationScope.js"
+import { attachRouterRuntime, getRouterRuntime } from "./routerRuntime.js"
+import { staticLoaderSignal } from "./navigationScope.js"
 import {
   clearStreamedSsrClientState,
   resetHydratedPageData,
@@ -112,7 +96,6 @@ import {
 import {
   createI18nRuntime,
   readHydratedI18n,
-  type I18nContextValue,
 } from "./i18nContext.js"
 import { addLocale, type I18nLocaleRouting } from "./i18n/localeRouting.js"
 import type {
@@ -199,12 +182,6 @@ export interface RouterCore {
   resolveHref: (to: string, options?: { locale?: RouterLocaleParam }) => string
   /** Normalized URL routing when {@link createRouter} was given `i18n`. */
   localeRouting?: I18nLocaleRouting
-  /** @internal Hydrated + runtime i18n state. */
-  __i18n?: {
-    runtime: ReturnType<typeof createI18nRuntime<unknown>>
-    config: InternationalizationConfig<readonly string[], unknown>
-    value: () => I18nContextValue
-  }
   /** `"history"` = SPA navigation; `"static"` = prerender/SSR (native &lt;a&gt; only). */
   navigationMode: RouterNavigationMode
   requestContext: Kiru.Signal<CustomRequestContext>
@@ -214,17 +191,10 @@ export interface RouterCore {
   afterEach: (hook: AfterEachHook) => () => void
   /** Outlet UI while context gate is pending (`createRouter` default; scopes may override). */
   contextPendingFallback?: () => JSX.Element
-  /** @internal */
-  __gateOptions?: ContextGateOptions
-  /** @internal Active navigation generation for outlet commit gates. */
-  __getNavGeneration?: () => number
-  /** @internal AbortSignal for in-flight navigation / outlet work. */
-  __getNavSignal?: () => AbortSignal
   isNavigating: Kiru.Signal<boolean>
   currentNavigation: Kiru.Signal<CurrentNavigation | null>
   /** Bumps when {@link invalidate} requests a loader refetch. */
   loaderEpoch: Kiru.Signal<number>
-  /** @internal Skip hydrated page data on next outlet load. */
   forceLoaderReload: Kiru.Signal<boolean>
   /** True while the route outlet is reloading loader data. */
   isLoaderPending: Kiru.Signal<boolean>
@@ -247,19 +217,6 @@ export interface RouterCore {
   forward: () => void
   go: (delta: number) => void
   dispose: () => void
-
-  /** @internal */
-  __registerComponentGuard?: (
-    kind: "leave" | "update" | "enter",
-    guard: NavigationGuard,
-    routeId?: string
-  ) => () => void
-  /** @internal */
-  __lastNavigation?: {
-    to: RouteLocation
-    from: RouteLocation | null
-    failure?: NavigationFailure
-  }
 }
 
 /** CSR router instance; locale APIs are required when i18n is configured via module augmentation. */
@@ -444,7 +401,7 @@ export function createRouter({
         buildLoaderContext({
           params: initial.params,
           pathname: initial.pathname,
-          search: typeof window !== "undefined" ? window.location.search : "",
+          search: formatRouterSearch(query.peek()),
           hash: hash.peek(),
           query: query.peek(),
           context: requestContext.peek(),
@@ -590,7 +547,11 @@ export function createRouter({
   }
 
   const lastNavigationHolder: {
-    entry?: NonNullable<Router["__lastNavigation"]>
+    entry?: {
+      to: RouteLocation
+      from: RouteLocation | null
+      failure?: NavigationFailure
+    }
   } = {}
 
   const navigateInternal = createNavigateInternal(
@@ -751,10 +712,6 @@ export function createRouter({
     contextState,
     contextGate,
     contextPendingFallback,
-    __gateOptions: gateOptions,
-    __getNavGeneration: () => navToken.value,
-    __getNavSignal: () =>
-      navAbortController.current?.signal ?? staticLoaderSignal(),
     async refreshContext() {
       if (!resolveContextOption) return
       const m = match.peek()
@@ -943,7 +900,23 @@ export function createRouter({
       for (const fn of disposeCleanups) fn()
       disposeCleanups.length = 0
     },
-    __registerComponentGuard(kind, guard, routeId = "_") {
+  }
+
+  attachRouterRuntime(routerRef, {
+    gateOptions,
+    getNavGeneration: () => navToken.value,
+    getNavSignal: () =>
+      navAbortController.current?.signal ?? staticLoaderSignal(),
+    ...(i18n && i18nRuntime
+      ? {
+          i18n: {
+            config: i18n,
+            runtime: i18nRuntime,
+            value: i18nRuntime.value,
+          },
+        }
+      : {}),
+    registerComponentGuard(kind, guard, routeId = "_") {
       if (kind === "leave") {
         const list = getGuardBucket(leaveByRoute, routeId)
         list.push(guard)
@@ -957,19 +930,11 @@ export function createRouter({
       componentEnterGuards.push(guard)
       return () => removeArrayEntry(componentEnterGuards, guard)
     },
-    get __lastNavigation() {
-      return lastNavigationHolder.entry
+    getLastNavigation: () => lastNavigationHolder.entry,
+    setLastNavigation: (entry) => {
+      lastNavigationHolder.entry = entry
     },
-    ...(i18n && i18nRuntime
-      ? {
-          __i18n: {
-            config: i18n,
-            runtime: i18nRuntime,
-            value: i18nRuntime.value,
-          },
-        }
-      : {}),
-  }
+  })
 
   registerKiruRouter(routerRef)
   return routerRef
@@ -1007,7 +972,7 @@ export function createStaticRouter({
   const committed = (): Promise<NavigationResult> =>
     Promise.resolve({ status: "committed" })
 
-  return {
+  const routerRef: Router = {
     manifest,
     pathname: path,
     params,
@@ -1058,10 +1023,18 @@ export function createStaticRouter({
     forward() {},
     go() {},
     dispose() {},
-    __registerComponentGuard() {
+  }
+  attachRouterRuntime(routerRef, {
+    gateOptions: { contextGate: "off", hasResolveContext: false },
+    getNavGeneration: () => 0,
+    getNavSignal: () => staticLoaderSignal(),
+    registerComponentGuard() {
       return emptyUnsub
     },
-  }
+    getLastNavigation: () => undefined,
+    setLastNavigation: () => {},
+  })
+  return routerRef
 }
 
 const RouterContext = createContext<Router | null>(null)
@@ -1108,21 +1081,13 @@ export function useSearchParams<T = Record<string, unknown>>(): Kiru.Signal<
   return router.validatedQuery as Kiru.Signal<T | null>
 }
 
-function prefetchMatchedRoute(
-  manifest: RouteManifest,
-  href: string,
-  baseUrl: string
-) {
-  const match = matchRoute(manifest, stripBase(href, baseUrl))
-  if (!match) return
-  for (const scope of match.route.scopes) scope.layout?.()
-  void match.route.component()
-}
+export type { LinkPrefetch } from "./prefetchRoute.js"
 
 export type LinkProps = JSX.IntrinsicElements["a"] & {
   to: string
   replace?: boolean
-  prefetch?: "hover" | "visible" | "none"
+  /** @default `{ trigger: "hover", chunks: true, data: true }` when loader RPC exists */
+  prefetch?: LinkPrefetch
   /**
    * Prepends a locale path segment for `to`.
    * When i18n is configured (`declare module "kiru/router" { interface Internationalization … }`),
@@ -1147,19 +1112,39 @@ export const Link: Kiru.Component<LinkProps> = () => {
   ) => {
     $.props.onpointerenter?.(event)
     if (event.defaultPrevented) return
-    if (
-      $.props.prefetch === "none" ||
-      router.navigationMode !== "history" ||
-      $.props.prefetch === "visible"
-    ) {
-      return
-    }
-    prefetchMatchedRoute(router.manifest, href.peek(), router.baseUrl)
+    const p = $.props.prefetch
+    const resolved =
+      p === false
+        ? false
+        : { trigger: "hover" as const, chunks: true, data: true, ...p }
+    if (resolved === false || resolved.trigger === "visible") return
+    runLinkPrefetch(
+      router as import("./clientRoutePrep.js").ClientOutletRouter & {
+        manifest: typeof router.manifest
+        baseUrl: string
+        navigationMode: string
+      },
+      href.peek(),
+      resolved
+    )
   }
 
   onMount(() => {
-    if ($.props.prefetch === "visible" && router.navigationMode === "history") {
-      prefetchMatchedRoute(router.manifest, href.peek(), router.baseUrl)
+    const p = $.props.prefetch
+    const resolved =
+      p === false
+        ? false
+        : { trigger: "hover" as const, chunks: true, data: true, ...p }
+    if (resolved !== false && resolved.trigger === "visible") {
+      runLinkPrefetch(
+        router as import("./clientRoutePrep.js").ClientOutletRouter & {
+          manifest: typeof router.manifest
+          baseUrl: string
+          navigationMode: string
+        },
+        href.peek(),
+        resolved
+      )
     }
   })
 
@@ -1188,21 +1173,8 @@ export const Link: Kiru.Component<LinkProps> = () => {
  */
 export function RouterView() {
   const router = useRouter()
-  const {
-    match,
-    pathname,
-    manifest,
-    hash,
-    query,
-    loaderEpoch,
-    contextGate,
-    requestContext,
-  } = router
-  const gateOptions = router.__gateOptions ?? {
-    contextGate: "off" as const,
-    hasResolveContext: false,
-  }
-  const getNavGeneration = router.__getNavGeneration ?? (() => 0)
+  const { match, pathname, loaderEpoch, contextGate } = router
+  const { getNavGeneration } = getRouterRuntime(router)
   const children = resource(
     {
       match,
@@ -1215,150 +1187,21 @@ export function RouterView() {
     },
     async ({ match, pathname }, { signal }) => {
       router.isLoaderPending.value = true
-      const scope =
-        match !== null
-          ? createNavigationScope(
-              getNavGeneration(),
-              signal,
-              buildScopeCacheKey(
-                match.route.id,
-                match.pathname,
-                formatRouterSearch(query.peek())
-              )
-            )
-          : createNavigationScope(getNavGeneration(), signal)
-      const nav = router.currentNavigation.peek()
-      const deferOptions = {
-        ...gateOptions,
-        manifest,
-        isNavigating: router.isNavigating.peek(),
-        navigationToPathname: nav?.to.pathname,
-        contextState: router.contextState.peek(),
-      }
-      const outletMatch = resolvePendingOutletMatch(
-        match,
-        manifest,
-        deferOptions.isNavigating,
-        deferOptions.navigationToPathname
-      )
       try {
-        if (
-          match &&
-          shouldDeferProtectedOutlet(match, contextGate.peek(), deferOptions)
-        ) {
-          const pending = effectiveContextPendingFallback(
-            outletMatch,
-            router.contextPendingFallback
-          )
-          if (pending) return pending()
-          return null
-        }
-        const tree = match
-          ? await loadRouteTree(match)
-          : await loadNotFoundRouteTree(manifest, pathname)
-        if (!isScopeCurrent(scope, getNavGeneration) || signal.aborted) return null
-
-        let leafProps: LeafRouteProps = {}
-        let routeModule = tree?.routeModule
-        if (match && tree) {
-          if (
-            shouldDeferProtectedOutlet(match, contextGate.peek(), deferOptions)
-          ) {
-            warnProtectedImportBeforeGate(match.route.id)
-            const pending = effectiveContextPendingFallback(
-              outletMatch,
-              router.contextPendingFallback
-            )
-            if (pending) return pending()
-            return null
-          }
-          const pageMod = tree.routeModule
-          const pageHead = readPageHeadExport(pageMod)
-          const headCommit = { scope, getNavGeneration }
-          const loaderCtx = buildLoaderContext({
-            params:
-              router.validatedRouteParams.peek() ?? match.params,
-            pathname: match.pathname,
-            search: formatRouterSearch(query.peek()),
-            hash: hash.peek(),
-            query: query.peek(),
-            validatedQuery: router.validatedQuery.peek() as
-              | Record<string, unknown>
-              | undefined,
-            context: requestContext.peek(),
-            meta: mergeRouteMeta(match),
-            routeId: match.route.id,
-            signal,
-            ...(router.__i18n && router.locale
-              ? loaderI18nFields(
-                  router.__i18n.config,
-                  router.locale.peek()
-                )
-              : {}),
-          })
-          const headCanRunParallel =
-            isStaticPageHead(pageHead) || isSyncPageHead(pageHead)
-          const preparePromise = prepareRouteForNavigation({
-            pageMod,
-            routeModule: tree.routeModule,
-            loaderCtx,
-            options: {
-              useHydratedPageData: true,
-              forceReload: router.forceLoaderReload.peek(),
-              routeId: match.route.id,
-              scope,
-              getNavGeneration,
-              onCacheRefreshed: () => {
-                router.loaderEpoch.value += 1
-              },
-            },
-          })
-          const prepared = headCanRunParallel
-            ? (
-                await Promise.all([
-                  preparePromise,
-                  syncDocumentHeadForPage(
-                    match,
-                    loaderCtx,
-                    undefined,
-                    pageMod,
-                    headCommit
-                  ),
-                ])
-              )[0]
-            : await preparePromise
-          if (
-            prepared.discarded ||
-            !isScopeCurrent(scope, getNavGeneration) ||
-            signal.aborted
-          ) {
-            return null
-          }
-          router.forceLoaderReload.value = false
-          router.isLoaderStale.value = prepared.isLoaderStale === true
-          routeModule = prepared.routeModule
-          leafProps = prepared.leafProps
-          if (!prepared.usesLoadGate && !headCanRunParallel) {
-            await syncDocumentHeadForPage(
-              match,
-              loaderCtx,
-              leafProps as PageProps<KiruLoader<unknown>>,
-              pageMod,
-              headCommit
-            )
-          }
-        }
-
-        if (!isScopeCurrent(scope, getNavGeneration) || signal.aborted) return null
-
-        return tree && routeModule
-          ? buildRoutedSubtree(tree.layoutModules, routeModule, leafProps)
-          : null
+        return await buildClientOutletSubtree({
+          router: router as import("./clientRoutePrep.js").ClientOutletRouter,
+          match,
+          pathname,
+          signal,
+          getNavGeneration,
+          useHydratedPageData: true,
+          forceReload: router.forceLoaderReload.peek(),
+        })
       } catch (err) {
         if (signal.aborted) return null
         throw err
       } finally {
-        if (!signal.aborted && isScopeCurrent(scope, getNavGeneration)) {
+        if (!signal.aborted) {
           router.isLoaderPending.value = false
         }
       }

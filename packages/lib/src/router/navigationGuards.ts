@@ -1,5 +1,6 @@
 import { onCleanup } from "../hooks/onCleanup.js"
 import { useRouter } from "./csr.js"
+import { getRouterRuntime } from "./routerRuntime.js"
 import type { NavigationGuard } from "./types.js"
 
 function currentRouteId(router: ReturnType<typeof useRouter>): string {
@@ -8,17 +9,21 @@ function currentRouteId(router: ReturnType<typeof useRouter>): string {
 
 export function onBeforeRouteLeave(guard: NavigationGuard): void {
   const router = useRouter()
-  const register = router.__registerComponentGuard
-  if (!register) return
-  const unsub = register("leave", guard, currentRouteId(router))
+  const unsub = getRouterRuntime(router).registerComponentGuard(
+    "leave",
+    guard,
+    currentRouteId(router)
+  )
   onCleanup(unsub)
 }
 
 export function onBeforeRouteUpdate(guard: NavigationGuard): void {
   const router = useRouter()
-  const register = router.__registerComponentGuard
-  if (!register) return
-  const unsub = register("update", guard, currentRouteId(router))
+  const unsub = getRouterRuntime(router).registerComponentGuard(
+    "update",
+    guard,
+    currentRouteId(router)
+  )
   onCleanup(unsub)
 }
 
@@ -27,8 +32,6 @@ export function onBeforeRouteUpdate(guard: NavigationGuard): void {
  */
 export function onAfterRouteEnter(guard: NavigationGuard): void {
   const router = useRouter()
-  const register = router.__registerComponentGuard
-  if (!register) return
-  const unsub = register("enter", guard)
+  const unsub = getRouterRuntime(router).registerComponentGuard("enter", guard)
   onCleanup(unsub)
 }
