@@ -5,6 +5,9 @@ import { imageStrategy } from "./src/imageConfig.js"
 const useBuildImages = imageStrategy === "build"
 
 export default defineConfig({
+  server: {
+    hmr: { port: 8022 },
+  },
   /** One Node copy of `kiru` so the remote action registry matches `createRenderer({ actions })`. */
   ssr: {
     external: ["kiru"],

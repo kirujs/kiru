@@ -5,6 +5,9 @@ import { getCellConfig } from "./scripts/cells.mjs"
 const cell = getCellConfig(process.env.KIRU_MATRIX_CELL ?? "node-fetch")
 
 export default defineConfig({
+  server: {
+    hmr: { port: 8040 },
+  },
   ssr:
     cell.adapter === "cloudflare"
       ? {

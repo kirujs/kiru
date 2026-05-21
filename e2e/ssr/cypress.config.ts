@@ -11,6 +11,7 @@ async function startViteDevServer(): Promise<ViteDevServer> {
       host: "127.0.0.1",
       port,
       strictPort: true,
+      hmr: { port: 8022 },
     },
   })
   return await server.listen(port)

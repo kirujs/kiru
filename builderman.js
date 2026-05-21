@@ -249,7 +249,7 @@ const ssrMatrixTest = task({
 
 const e2e = pipeline([csrTest, ssgTest, ssrTest, fileRoutesTest, ssrMatrixTest]).toTask({
   name: "e2e",
-  maxConcurrency: 1,
+  maxConcurrency: process.env.GITHUB ? 1 : undefined,
   dependencies: adapterDeps,
 })
 
