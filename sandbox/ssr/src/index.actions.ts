@@ -17,12 +17,12 @@ export const getSandboxServerEcho = action.get(async ({ context }) => {
   return `Remote OK: ${name} ${test}`
 })
 
-export const getServerEcho = action.post(
-  { schema: mySchema },
-  async ({ input }) => {
-    return `Echo ${input.name}`
-  }
-)
+export const getServerEcho = action.post({
+  validation: { body: mySchema },
+  handler: async ({ body }) => {
+    return `Echo ${body.name}`
+  },
+})
 
 export interface TodoItem {
   id: string
@@ -66,17 +66,17 @@ export const getTodos = action.get(async () => {
   return todos
 })
 
-export const createTodo = action.post(
-  { schema: createTodoSchema },
-  ({ input }) => {
+export const createTodo = action.post({
+  validation: { body: createTodoSchema },
+  handler: ({ body }) => {
     const todo: TodoItem = {
       id: crypto.randomUUID(),
-      text: input.text,
+      text: body.text,
       completed: false,
     }
     return todos.push(todo), todo
-  }
-)
+  },
+})
 
 const demoUsers = new Map<string, { id: string; name: string }>([
   ["1", { id: "1", name: "Demo User" }],
@@ -89,36 +89,35 @@ export const users = {
   }),
   rename: action.patch(
     async ({
-      input,
+      body,
     }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
-      const u = demoUsers.get(input.id)
+      const u = demoUsers.get(body.id)
       if (!u) throw new Error("User not found")
-      u.name = input.name
+      u.name = body.name
       return u
     }
   ),
 }
 
 export const renameUserViaNamespace = action.post(
-  async ({ input }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
+  async ({ body }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
     const before = await users.get()
-    const updated = await users.rename({ input })
+    const updated = await users.rename({ body })
     return { before, updated }
   }
 )
 
-export const updateTodo = action.post(
-  { schema: updateTodoSchema },
-  async ({ input }) => {
-    //if (Math.random() > 0.5) throw new Error("Random error")
-    const todo = todos.find((t) => t.id === input.id)
+export const updateTodo = action.post({
+  validation: { body: updateTodoSchema },
+  handler: async ({ body }) => {
+    const todo = todos.find((t) => t.id === body.id)
     if (!todo) throw new Error("Todo not found")
-    if ("text" in input && typeof input.text === "string") {
-      todo.text = input.text
+    if ("text" in body && typeof body.text === "string") {
+      todo.text = body.text
     }
-    if ("completed" in input && typeof input.completed === "boolean") {
-      todo.completed = input.completed
+    if ("completed" in body && typeof body.completed === "boolean") {
+      todo.completed = body.completed
     }
     return todo
-  }
-)
+  },
+})

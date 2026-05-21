@@ -20,10 +20,10 @@ describe("action revalidate meta", () => {
     })
     setGlobalPrerenderCache(store)
 
-    const bump = action.post(
-      { revalidate: { paths: ["/a"], tags: ["blog"] } },
-      async () => ({ ok: true })
-    )
+    const bump = action.post({
+      revalidate: { paths: ["/a"], tags: ["blog"] },
+      handler: async () => ({ ok: true }),
+    })
 
     await applyServerRevalidate(bump.__kiruRevalidate)
     assert.equal(store.get("/a"), null)

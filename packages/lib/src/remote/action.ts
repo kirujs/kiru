@@ -1,6 +1,13 @@
 import type { CustomRequestContext } from "../router/types.js"
-import type { Schema } from "../validation/index.js"
+import { serializeValidatedQuery } from "../router/searchParams.js"
+import type { InferSchemaOutput, Schema } from "../validation/index.js"
 import { parseInput } from "../validation/index.js"
+import {
+  runActionMiddleware,
+  type ActionMiddleware,
+  type ActionMiddlewareContext,
+  type RemoteActionMethod,
+} from "./actionMiddleware.js"
 import { RemoteError } from "./errors.js"
 import {
   getActiveActionContext,
@@ -15,6 +22,7 @@ import {
 
 export type {
   ActionSchema,
+  InferSchemaOutput,
   Schema,
   StandardJSONSchema,
   StandardJSONSchemaV1,
@@ -31,6 +39,8 @@ export {
 } from "../validation/index.js"
 
 export { RemoteError, isRemoteError } from "./errors.js"
+export type { ActionMiddleware, ActionMiddlewareContext } from "./actionMiddleware.js"
+export { runActionMiddleware } from "./actionMiddleware.js"
 
 // ---------------------------------------------------------------------------
 // SSR request-context threading
@@ -57,45 +67,79 @@ export {
   listActionFrames,
 } from "./actionExecution.js"
 
+export type { RemoteActionMethod }
+
 /** Arguments passed to remote action handlers (and nested `__kiruInvoke`). */
-export type RemoteActionHandlerArgs<Input> = {
-  input: Input
+export type RemoteActionHandlerArgs<Body, Query = void> = {
+  body: Body
+  query: Query
   context: CustomRequestContext
   signal: AbortSignal
   /** Request runtime (frames, cache, tracing). Set during RPC and nested composition. */
   execution?: ActionExecution
 }
 
-/** Registry / HTTP entry invoke shape (input is unknown at the boundary). */
+/** Registry / HTTP entry invoke shape (unknown at the boundary). */
 export type RemoteActionInvokeArgs = {
-  input: unknown
+  body: unknown
+  query: Record<string, string | string[]>
   context: CustomRequestContext
   signal: AbortSignal
+  request: Request
   execution?: ActionExecution
 }
 
-export function buildRemoteActionHandlerArgs<Input>(
+export function buildRemoteActionHandlerArgs<Body, Query = void>(
   context: CustomRequestContext,
   signal: AbortSignal,
-  input: Input,
+  body: Body,
+  query: Query,
   execution?: ActionExecution
-): RemoteActionHandlerArgs<Input> {
-  return { input, context, signal, execution }
+): RemoteActionHandlerArgs<Body, Query> {
+  return { body, query, context, signal, execution }
+}
+
+/** Parse URL search params for an action RPC (excludes `action`). */
+export function parseActionQueryFromUrl(
+  url: URL
+): Record<string, string | string[]> {
+  const out: Record<string, string | string[]> = {}
+  for (const [key, value] of url.searchParams.entries()) {
+    if (key === "action") continue
+    const existing = out[key]
+    if (existing === undefined) {
+      out[key] = value
+    } else if (Array.isArray(existing)) {
+      existing.push(value)
+    } else {
+      out[key] = [existing, value]
+    }
+  }
+  return out
+}
+
+/** Serialize client `query` for appending to `/?action=…` (no leading `?`). */
+export function serializeActionCallQuery(
+  query: Record<string, unknown>
+): string {
+  return serializeValidatedQuery(query)
 }
 
 /** Active SSR handler args while inside a sync `runWithSsrRequestContext` scope. */
-export function __getSsrActionContext(): RemoteActionHandlerArgs<void> {
+export function __getSsrActionContext(): RemoteActionHandlerArgs<void, void> {
   const entry = getSsrActionScopeEntry()
   if (!entry) {
     return buildRemoteActionHandlerArgs(
       {},
       new AbortController().signal,
+      undefined,
       undefined
     )
   }
   return buildRemoteActionHandlerArgs(
     entry.context,
     entry.signal,
+    undefined,
     undefined
   )
 }
@@ -114,15 +158,23 @@ export function runWithSsrRequestContext<T>(
   return runWithSsrActionContext(ctx, signal, fn)
 }
 
-function resolveCallableHandlerArgs<Input>(
-  input: Input,
-  call?: RemoteActionCallOptions<Input>
-): RemoteActionHandlerArgs<Input> {
+export type RemoteActionCallOptions<Body = void, Query = void> = {
+  signal?: AbortSignal
+  body?: Body
+  query?: Query
+}
+
+function resolveCallableHandlerArgs<Body, Query>(
+  body: Body,
+  query: Query,
+  call?: RemoteActionCallOptions<Body, Query>
+): RemoteActionHandlerArgs<Body, Query> {
   const active = getActiveActionContext()
   if (active) {
     const signal = call?.signal ?? active.signal
     return {
-      input,
+      body,
+      query,
       context: active.context,
       signal,
       execution: active.execution,
@@ -131,33 +183,64 @@ function resolveCallableHandlerArgs<Input>(
   const ssr = getSsrActionScopeEntry()
   if (ssr) {
     const signal = call?.signal ?? ssr.signal
-    return buildRemoteActionHandlerArgs(ssr.context, signal, input)
+    return buildRemoteActionHandlerArgs(ssr.context, signal, body, query)
   }
   throw new Error(
     "Remote action called without request context. Use during SSR render, inside another action handler, or from the client (after hydration)."
   )
 }
 
-async function awaitActionValidation(
-  validate: (input: unknown) => void | Promise<void>,
-  input: unknown
-): Promise<void> {
-  const result = validate(input)
-  if (result != null && typeof (result as Promise<void>).then === "function") {
-    await result
-  }
+type ActionValidation<Body, Query> = {
+  bodySchema?: Schema<Body>
+  querySchema?: Schema<Query>
 }
 
-function dispatchCallableInvoke<Input, Output>(
-  runHandler: RemoteActionHandler<Input, Output>,
-  args: RemoteActionHandlerArgs<Input>,
+async function validateActionPayload<Body, Query>(
+  validation: ActionValidation<Body, Query>,
+  raw: { body: unknown; query: unknown }
+): Promise<{ body: Body; query: Query }> {
+  let body = raw.body as Body
+  let query = raw.query as Query
+
+  if (validation.bodySchema) {
+    try {
+      body = await parseInput(validation.bodySchema, raw.body)
+    } catch {
+      throw new RemoteError("Invalid remote action body", "INVALID_BODY", {
+        status: 400,
+      })
+    }
+  }
+
+  if (validation.querySchema) {
+    try {
+      query = await parseInput(validation.querySchema, raw.query)
+    } catch {
+      throw new RemoteError("Invalid remote action query", "INVALID_QUERY", {
+        status: 400,
+      })
+    }
+  }
+
+  return { body, query }
+}
+
+function dispatchCallableInvoke<Body, Query, Output>(
+  runHandler: RemoteActionHandler<Body, Query, Output>,
+  args: RemoteActionHandlerArgs<Body, Query>,
   actionId?: string
 ): Promise<Output> {
   const execution = getActiveActionExecution()
   if (execution && actionId) {
     return Promise.resolve(
       runWithActionFrame(actionId, () =>
-        runHandler(toRemoteActionHandlerArgs(execution, args.input))
+        runHandler(
+          toRemoteActionHandlerArgs(
+            execution,
+            args.body,
+            args.query
+          )
+        )
       )
     )
   }
@@ -167,13 +250,6 @@ function dispatchCallableInvoke<Input, Output>(
 // ---------------------------------------------------------------------------
 // Remote action (JSON)
 // ---------------------------------------------------------------------------
-
-export type RemoteActionMethod =
-  | "GET"
-  | "POST"
-  | "PUT"
-  | "PATCH"
-  | "DELETE"
 
 const BODY_METHODS = new Set<RemoteActionMethod>([
   "POST",
@@ -188,17 +264,13 @@ export function isRemoteActionBodyMethod(
   return BODY_METHODS.has(method)
 }
 
-export type RemoteActionHandler<Input, Output> = (
-  args: RemoteActionHandlerArgs<Input>
+export type RemoteActionHandler<Body, Query, Output> = (
+  args: RemoteActionHandlerArgs<Body, Query>
 ) => Promise<Output> | Output
 
-export type RemoteActionCallOptions<Input> = [Input] extends [void]
-  ? { signal?: AbortSignal }
-  : { input: Input; signal?: AbortSignal }
-
-type RemoteCallable<Input, Output> = [Input] extends [void]
-  ? (options?: RemoteActionCallOptions<void>) => Promise<Output>
-  : (options: RemoteActionCallOptions<Input>) => Promise<Output>
+type RemoteCallable<Body, Query, Output> = (
+  options?: RemoteActionCallOptions<Body, Query>
+) => Promise<Output>
 
 type RemoteActionBrand<Method extends RemoteActionMethod> = {
   __kiruRemoteAction: true
@@ -210,14 +282,19 @@ type RemoteActionBrand<Method extends RemoteActionMethod> = {
   __kiruRevalidate?: RemoteRevalidateMeta
 }
 
-export type RemoteGetAction<Output> = RemoteCallable<void, Output> &
+export type RemoteGetAction<Query = void, Output = unknown> = RemoteCallable<
+  void,
+  Query,
+  Output
+> &
   RemoteActionBrand<"GET">
 
 export type RemoteBodyAction<
   Method extends "POST" | "PUT" | "PATCH" | "DELETE",
-  Input,
+  Body,
+  Query,
   Output,
-> = RemoteCallable<Input, Output> & RemoteActionBrand<Method>
+> = RemoteCallable<Body, Query, Output> & RemoteActionBrand<Method>
 
 export type RemoteRevalidateMeta = {
   paths?: string[]
@@ -234,10 +311,54 @@ export type RemoteActionMeta = {
   revalidate?: RemoteRevalidateMeta
 }
 
-/** Config for JSON body actions (POST, PUT, PATCH, DELETE). */
-export type RemoteJsonActionConfig<Input = unknown> = {
-  schema?: Schema<Input>
+export type RemoteActionValidationConfig<Body = unknown, Query = unknown> = {
+  body?: Schema<Body>
+  query?: Schema<Query>
+}
+
+export type RemoteJsonActionConfig<
+  Body = unknown,
+  Query = void,
+  Output = unknown,
+> = {
+  validation?: RemoteActionValidationConfig<Body, Query>
+  middleware?: ActionMiddleware[]
+  handler: RemoteActionHandler<Body, Query, Output>
 } & RemoteActionMeta
+
+export type RemoteGetActionConfig<
+  Query = void,
+  Output = unknown,
+> = {
+  validation?: Pick<RemoteActionValidationConfig<void, Query>, "query">
+  middleware?: ActionMiddleware[]
+  handler: RemoteActionHandler<void, Query, Output>
+} & RemoteActionMeta
+
+/** Infer validated body type from an action config object's `validation.body` schema. */
+export type InferActionConfigBody<T> = T extends {
+  validation?: { body?: Schema<infer B> }
+}
+  ? B
+  : T extends { validation?: { body?: infer S } }
+    ? InferSchemaOutput<S>
+    : unknown
+
+/** Infer validated query type from an action config object's `validation.query` schema. */
+export type InferActionConfigQuery<T> = T extends {
+  validation?: { query?: Schema<infer Q> }
+}
+  ? Q
+  : T extends { validation?: { query?: infer S } }
+    ? InferSchemaOutput<S>
+    : void
+
+/** Infer handler return type from an action config object's `handler`. */
+export type InferActionConfigOutput<T> = T extends {
+  handler: (...args: never[]) => infer R
+}
+  ? Awaited<R>
+  : unknown
 
 /** Config for `action.post({ type: "form" }, …)` handlers. */
 export type RemoteFormActionConfig<Input = unknown> = {
@@ -245,87 +366,196 @@ export type RemoteFormActionConfig<Input = unknown> = {
   schema?: Schema<Input>
 } & RemoteActionMeta
 
-export type RemoteActionFunction<Input, Output> =
-  | RemoteGetAction<Output>
-  | RemoteBodyAction<"POST", Input, Output>
-  | RemoteBodyAction<"PUT", Input, Output>
-  | RemoteBodyAction<"PATCH", Input, Output>
-  | RemoteBodyAction<"DELETE", Input, Output>
+export type RemoteActionFunction<Body, Query, Output> =
+  | RemoteGetAction<Query, Output>
+  | RemoteBodyAction<"POST", Body, Query, Output>
+  | RemoteBodyAction<"PUT", Body, Query, Output>
+  | RemoteBodyAction<"PATCH", Body, Query, Output>
+  | RemoteBodyAction<"DELETE", Body, Query, Output>
 
-export function isRemoteGetAction(value: unknown): value is RemoteGetAction<unknown> {
+export function isRemoteGetAction(
+  value: unknown
+): value is RemoteGetAction<unknown, unknown> {
   return (
     !!value &&
     typeof value === "function" &&
     "__kiruRemoteAction" in value &&
-    (value as RemoteGetAction<unknown>).__kiruRemoteMethod === "GET"
+    (value as RemoteGetAction<unknown, unknown>).__kiruRemoteMethod === "GET"
   )
 }
 
 export function isRemoteBodyAction(
   value: unknown
-): value is RemoteBodyAction<"POST", unknown, unknown> {
+): value is RemoteBodyAction<"POST", unknown, unknown, unknown> {
   return (
     !!value &&
     typeof value === "function" &&
     "__kiruRemoteAction" in value &&
     isRemoteActionBodyMethod(
-      (value as RemoteBodyAction<"POST", unknown, unknown>).__kiruRemoteMethod
+      (value as RemoteBodyAction<"POST", unknown, unknown, unknown>)
+        .__kiruRemoteMethod
     )
   )
 }
 
-function createRemoteAction<Input, Output, Method extends RemoteActionMethod>(
-  method: Method,
-  runAction: RemoteActionHandler<Input, Output>,
-  validateActionInput: (input: unknown) => void | Promise<void>,
+function metaFromJsonConfig(config: {
+  invalidate?: string[]
+  revalidate?: RemoteRevalidateMeta
+}): RemoteActionMeta {
+  return {
+    invalidate: config.invalidate,
+    revalidate: config.revalidate,
+  }
+}
+
+function metaFromFormConfig(config: RemoteFormActionConfig<unknown>): RemoteActionMeta {
+  return {
+    invalidate: config.invalidate,
+    revalidate: config.revalidate,
+  }
+}
+
+function isConfiguredJsonActionConfig(
+  value: unknown
+): value is RemoteJsonActionConfig<unknown, void, unknown> {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "handler" in value &&
+    typeof (value as RemoteJsonActionConfig).handler === "function"
+  )
+}
+
+function isConfiguredGetActionConfig(
+  value: unknown
+): value is RemoteGetActionConfig<unknown> {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "handler" in value &&
+    typeof (value as RemoteGetActionConfig).handler === "function"
+  )
+}
+
+type CreateActionOptions<Body, Query, Output> = {
+  handler: RemoteActionHandler<Body, Query, Output>
+  validation?: ActionValidation<Body, Query>
+  middleware?: ActionMiddleware[]
   meta?: RemoteActionMeta
+}
+
+function createRemoteAction<Body, Query, Output, Method extends RemoteActionMethod>(
+  method: Method,
+  options: CreateActionOptions<Body, Query, Output>
 ): Method extends "GET"
-  ? RemoteGetAction<Output>
-  : RemoteBodyAction<Extract<Method, "POST" | "PUT" | "PATCH" | "DELETE">, Input, Output> {
-  const invoke = async (args: RemoteActionHandlerArgs<Input>) => {
-    await validateActionInput(args.input)
-    return runAction(args)
+  ? RemoteGetAction<Query, Output>
+  : RemoteBodyAction<
+      Extract<Method, "POST" | "PUT" | "PATCH" | "DELETE">,
+      Body,
+      Query,
+      Output
+    > {
+  const {
+    handler: runAction,
+    validation = {},
+    middleware = [],
+    meta,
+  } = options
+
+  const invoke = async (args: RemoteActionInvokeArgs) => {
+    const middlewareCtx: ActionMiddlewareContext = {
+      request: args.request,
+      method,
+      context: args.context,
+      signal: args.signal,
+      body: args.body,
+      query: args.query,
+    }
+    await runActionMiddleware(middleware, middlewareCtx)
+    const validated = await validateActionPayload(validation, {
+      body: args.body,
+      query: args.query,
+    })
+    return runAction({
+      body: validated.body,
+      query: validated.query,
+      context: args.context,
+      signal: args.signal,
+      execution: args.execution,
+    })
   }
 
   if (method === "GET") {
     const wrapped = (async (
-      options?: RemoteActionCallOptions<void>
+      options?: RemoteActionCallOptions<void, Query>
     ): Promise<Output> => {
       const call = options ?? {}
-      const args = resolveCallableHandlerArgs(undefined as void, call)
-      await awaitActionValidation(validateActionInput, undefined)
+      const query = (
+        "query" in (call as object)
+          ? (call as { query: Query }).query
+          : (undefined as Query)
+      ) as Query
+      const args = resolveCallableHandlerArgs(undefined as void, query, call)
+      const validated = await validateActionPayload(validation, {
+        body: undefined,
+        query: args.query,
+      })
       return dispatchCallableInvoke(
-        runAction as RemoteActionHandler<void, Output>,
-        args,
+        runAction,
+        {
+          ...args,
+          body: validated.body,
+          query: validated.query,
+        },
         wrapped.__kiruActionId
       )
-    }) as RemoteGetAction<Output>
+    }) as RemoteGetAction<Query, Output>
 
     wrapped.__kiruRemoteAction = true
     wrapped.__kiruRemoteMethod = "GET"
     wrapped.__kiruInvoke = invoke as RemoteActionBrand<"GET">["__kiruInvoke"]
     return wrapped as Method extends "GET"
-      ? RemoteGetAction<Output>
+      ? RemoteGetAction<Query, Output>
       : RemoteBodyAction<
           Extract<Method, "POST" | "PUT" | "PATCH" | "DELETE">,
-          Input,
+          Body,
+          Query,
           Output
         >
   }
 
   const wrapped = (async (
-    options?: RemoteActionCallOptions<Input>
+    options?: RemoteActionCallOptions<Body, Query>
   ): Promise<Output> => {
-    const call = (options ?? {}) as RemoteActionCallOptions<Input>
-    const input = (
-      "input" in (call as object) ? (call as { input: Input }).input : undefined
-    ) as Input
-    const args = resolveCallableHandlerArgs(input, call)
-    await awaitActionValidation(validateActionInput, args.input)
-    return dispatchCallableInvoke(runAction, args, wrapped.__kiruActionId)
+    const call = (options ?? {}) as RemoteActionCallOptions<Body, Query>
+    const body = (
+      "body" in (call as object)
+        ? (call as { body: Body }).body
+        : (undefined as Body)
+    ) as Body
+    const query = (
+      "query" in (call as object)
+        ? (call as { query: Query }).query
+        : (undefined as Query)
+    ) as Query
+    const args = resolveCallableHandlerArgs(body, query, call)
+    const validated = await validateActionPayload(validation, {
+      body: args.body,
+      query: args.query,
+    })
+    return dispatchCallableInvoke(
+      runAction,
+      {
+        ...args,
+        body: validated.body,
+        query: validated.query,
+      },
+      wrapped.__kiruActionId
+    )
   }) as RemoteBodyAction<
     Extract<Method, "POST" | "PUT" | "PATCH" | "DELETE">,
-    Input,
+    Body,
+    Query,
     Output
   >
 
@@ -344,56 +574,38 @@ function createRemoteAction<Input, Output, Method extends RemoteActionMethod>(
     Extract<Method, "POST" | "PUT" | "PATCH" | "DELETE">
   >["__kiruInvoke"]
   return wrapped as Method extends "GET"
-    ? RemoteGetAction<Output>
+    ? RemoteGetAction<Query, Output>
     : RemoteBodyAction<
         Extract<Method, "POST" | "PUT" | "PATCH" | "DELETE">,
-        Input,
+        Body,
+        Query,
         Output
       >
 }
 
-function metaFromConfig(config: RemoteJsonActionConfig<unknown>): RemoteActionMeta {
-  return {
-    invalidate: config.invalidate,
-    revalidate: config.revalidate,
-  }
-}
-
 function createJsonBodyAction<
   Method extends "POST" | "PUT" | "PATCH" | "DELETE",
-  Input,
+  Body,
+  Query,
   Output,
 >(
   method: Method,
-  runAction: RemoteActionHandler<Input, Output>,
-  schema?: Schema<Input>,
-  meta?: RemoteActionMeta
-): RemoteBodyAction<Method, Input, Output> {
-  const validateActionInput = (input: unknown): void | Promise<void> => {
-    if (!schema) return
-    return (async () => {
-      try {
-        await parseInput(schema, input)
-      } catch {
-        throw new RemoteError("Invalid remote action input", "INVALID_INPUT", {
-          status: 400,
-        })
-      }
-    })()
-  }
-  return createRemoteAction(
-    method,
-    runAction,
-    validateActionInput,
-    meta
-  ) as RemoteBodyAction<Method, Input, Output>
+  config: CreateActionOptions<Body, Query, Output>
+): RemoteBodyAction<Method, Body, Query, Output> {
+  return createRemoteAction(method, config) as RemoteBodyAction<
+    Method,
+    Body,
+    Query,
+    Output
+  >
 }
 
 function handlerArgsFromFormInvoke(
   args: RemoteFormActionHandlerArgs
-): RemoteActionHandlerArgs<void> {
+): RemoteActionHandlerArgs<void, void> {
   return {
-    input: undefined,
+    body: undefined,
+    query: undefined as void,
     context: args.context,
     signal: args.signal,
     execution: args.execution,
@@ -404,26 +616,27 @@ function createFormPostAction<Input, Output>(
   config: RemoteFormActionConfig<Input>,
   callback:
     | RemoteFormActionHandler<Output>
-    | RemoteActionHandler<Input, Output>
+    | RemoteActionHandler<Input, void, Output>
 ): RemoteFormActionFunction<Output> {
-  const meta = metaFromConfig(config)
+  const meta = metaFromFormConfig(config)
   const schema = config.schema
 
   const __kiruInvoke = schema
     ? async (args: RemoteFormActionHandlerArgs) => {
         const raw = formDataToInput(args.formData)
-        let input: Input
+        let body: Input
         try {
-          input = await parseInput(schema, raw)
+          body = await parseInput(schema, raw)
         } catch {
-          throw new RemoteError("Invalid remote action input", "INVALID_INPUT", {
+          throw new RemoteError("Invalid remote action body", "INVALID_BODY", {
             status: 400,
           })
         }
         return Promise.resolve(
-          (callback as RemoteActionHandler<Input, Output>)({
+          (callback as RemoteActionHandler<Input, void, Output>)({
             ...handlerArgsFromFormInvoke(args),
-            input,
+            body,
+            query: undefined as void,
           })
         )
       }
@@ -444,62 +657,140 @@ function createFormPostAction<Input, Output>(
 type JsonBodyMethod = "POST" | "PUT" | "PATCH" | "DELETE"
 
 function defineJsonBodyAction<Method extends JsonBodyMethod>(method: Method) {
-  function bodyAction<Input, Output>(
-    callback: RemoteActionHandler<Input, Output>
-  ): RemoteBodyAction<Method, Input, Output>
+  function bodyAction<Body, Query, Output>(
+    callback: RemoteActionHandler<Body, Query, Output>
+  ): RemoteBodyAction<Method, Body, Query, Output>
   function bodyAction<Output>(
     config: { type: "form"; schema?: undefined } & RemoteActionMeta,
     callback: RemoteFormActionHandler<Output>
   ): RemoteFormActionFunction<Output>
   function bodyAction<Input, Output>(
     config: { type: "form"; schema: Schema<Input> } & RemoteActionMeta,
-    callback: RemoteActionHandler<Input, Output>
+    callback: RemoteActionHandler<Input, void, Output>
   ): RemoteFormActionFunction<Output>
-  function bodyAction<Input, Output>(
-    config: RemoteJsonActionConfig<Input>,
-    callback: RemoteActionHandler<Input, Output>
-  ): RemoteBodyAction<Method, Input, Output>
-  function bodyAction<Input, Output>(
+  function bodyAction<
+    Config extends {
+      validation?: RemoteActionValidationConfig
+      middleware?: ActionMiddleware[]
+      handler: RemoteActionHandler<any, any, any>
+    } & RemoteActionMeta,
+  >(
+    config: Config
+  ): RemoteBodyAction<
+    Method,
+    InferActionConfigBody<Config>,
+    InferActionConfigQuery<Config>,
+    InferActionConfigOutput<Config>
+  >
+  function bodyAction<Body, Query, Output>(
     callbackOrConfig:
-      | RemoteActionHandler<Input, Output>
-      | RemoteJsonActionConfig<Input>
-      | RemoteFormActionConfig<Input>,
+      | RemoteActionHandler<Body, Query, Output>
+      | RemoteJsonActionConfig<Body, Query, Output>
+      | RemoteFormActionConfig<Body>,
     maybeCallback?:
       | RemoteFormActionHandler<Output>
-      | RemoteActionHandler<Input, Output>
-  ):
-    | RemoteBodyAction<Method, Input, Output>
-    | RemoteFormActionFunction<Output> {
+      | RemoteActionHandler<Body, Query, Output>
+  ): any {
     if (typeof callbackOrConfig === "function") {
-      return createJsonBodyAction(method, callbackOrConfig)
+      return createJsonBodyAction(method, { handler: callbackOrConfig })
     }
     const config = callbackOrConfig
-    const callback = maybeCallback
-    if (!callback) {
-      throw new Error(`action.${method.toLowerCase()}(config, callback) requires a handler`)
-    }
     if ("type" in config && config.type === "form") {
+      const callback = maybeCallback
+      if (!callback) {
+        throw new Error(
+          `action.${method.toLowerCase()}({ type: "form" }, handler) requires a handler`
+        )
+      }
       if (method !== "POST") {
         throw new Error(`action.${method.toLowerCase()} does not support form actions`)
       }
-      return createFormPostAction(config, callback)
+      return createFormPostAction(
+        config,
+        callback as
+          | RemoteFormActionHandler<Output>
+          | RemoteActionHandler<Body, void, Output>
+      )
     }
-    return createJsonBodyAction(
-      method,
-      callback as RemoteActionHandler<Input, Output>,
-      config.schema,
-      metaFromConfig(config)
-    )
+    if (!isConfiguredJsonActionConfig(config)) {
+      throw new Error(
+        `action.${method.toLowerCase()}(config) requires a config object with a handler`
+      )
+    }
+    return createJsonBodyAction(method, {
+      handler: config.handler as RemoteActionHandler<
+      InferActionConfigBody<typeof config>,
+      InferActionConfigQuery<typeof config>,
+      InferActionConfigOutput<typeof config>
+    >,
+      validation: {
+        bodySchema: config.validation?.body as
+          | Schema<InferActionConfigBody<typeof config>>
+          | undefined,
+        querySchema: config.validation?.query as
+          | Schema<InferActionConfigQuery<typeof config>>
+          | undefined,
+      },
+      middleware: config.middleware,
+      meta: metaFromJsonConfig(config),
+    }) as RemoteBodyAction<
+      Method,
+      InferActionConfigBody<typeof config>,
+      InferActionConfigQuery<typeof config>,
+      InferActionConfigOutput<typeof config>
+    >
   }
   return bodyAction
 }
 
+function getAction<Query, Output>(
+  callback: RemoteActionHandler<void, Query, Output>
+): RemoteGetAction<Query, Output>
+function getAction<
+  Config extends {
+    validation?: Pick<RemoteActionValidationConfig, "query">
+    middleware?: ActionMiddleware[]
+    handler: RemoteActionHandler<void, any, any>
+  } & RemoteActionMeta,
+>(
+  config: Config
+): RemoteGetAction<
+  InferActionConfigQuery<Config>,
+  InferActionConfigOutput<Config>
+>
+function getAction<Query, Output>(
+  callbackOrConfig:
+    | RemoteActionHandler<void, Query, Output>
+    | RemoteGetActionConfig<Query, Output>
+): any {
+  if (typeof callbackOrConfig === "function") {
+    return createRemoteAction("GET", { handler: callbackOrConfig })
+  }
+  if (!isConfiguredGetActionConfig(callbackOrConfig)) {
+    throw new Error("action.get(config) requires a config object with a handler")
+  }
+  const config = callbackOrConfig
+  return createRemoteAction("GET", {
+    handler: config.handler as RemoteActionHandler<
+      void,
+      InferActionConfigQuery<typeof config>,
+      InferActionConfigOutput<typeof config>
+    >,
+    validation: {
+      querySchema: config.validation?.query as
+        | Schema<InferActionConfigQuery<typeof config>>
+        | undefined,
+    },
+    middleware: config.middleware,
+    meta: metaFromJsonConfig(config),
+  }) as RemoteGetAction<
+    InferActionConfigQuery<typeof config>,
+    InferActionConfigOutput<typeof config>
+  >
+}
+
 export const action = {
-  get<Output>(
-    callback: RemoteActionHandler<void, Output>
-  ): RemoteGetAction<Output> {
-    return createRemoteAction("GET", callback, () => {}) as RemoteGetAction<Output>
-  },
+  get: getAction,
   post: defineJsonBodyAction("POST"),
   put: defineJsonBodyAction("PUT"),
   patch: defineJsonBodyAction("PATCH"),

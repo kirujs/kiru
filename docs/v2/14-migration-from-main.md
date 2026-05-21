@@ -98,20 +98,20 @@ Augment `RouteMeta` and `CustomRequestContext`.
 
 ## Remote action handler context
 
-Handlers use a single **`RemoteActionHandlerArgs<Input>`** envelope (`{ input, context, signal, execution? }`). Calls use **`RemoteActionCallOptions`** (`{ input, signal? }` or `{ signal? }` for void/GET — entire options arg may be omitted).
+Handlers use **`RemoteActionHandlerArgs<Body, Query>`** (`{ body, query, context, signal, execution? }`). Configured actions use a single config object with `handler`, `validation: { body?, query? }`, and optional `middleware` (failures via `throw new RemoteError(...)`). Calls use **`RemoteActionCallOptions`** (`{ body?, query?, signal? }`; omit options for void GET/POST).
 
 ```ts
-// Before
-action.post({ schema }, async (ctx, input) => { ... ctx.user ... })
-await createTodo({ title: "x" }, { signal })
-
-// After
-action.post({ schema }, async ({ context, input }) => { ... context.user ... })
-await createTodo({ input: { title: "x" }, signal })
+action.post({
+  validation: { body: schema, query: querySchema },
+  middleware: [requireAuth],
+  handler: async ({ context, body, query }) => { ... },
+})
+await createTodo({ body: { title: "x" }, signal })
+await search({ query: { q: "kiru" } })
 await runPipeline()  // void POST / GET — no `{}` required
 ```
 
-Form posts: `async ({ formData, context, signal }) =>`. Client abort: `action.get({ signal })`, `action.post({ input, signal })`.
+Form posts: `async ({ formData, context, signal }) =>`. Form + schema: parsed fields on `body`. Client abort: `action.get({ signal })`, `action.post({ body, signal })`.
 
 **SSR scope:** `runWithSsrRequestContext` wraps sync `headlessRender` only (single `current` slot, save/restore on nest). RPC uses the token, not that slot. Add `import "virtual:kiru:remote-registry"` to `serverEntry` for production action registration.
 
@@ -121,7 +121,7 @@ Form posts: `async ({ formData, context, signal }) =>`. Client abort: `action.ge
 
 - [ ] Replace `validateSearch` / `defineSearchParams` / `KiruValidator` with `load.validation` + `Schema` / `parseInput`
 - [ ] Update `<Link prefetch="hover">` to `prefetch={{ trigger: "hover" }}` or omit for defaults
-- [ ] Update `*.actions.ts` handlers to `{ input, context, signal }` envelope; calls to `{ input }` / `()` (not positional input)
+- [ ] Update `*.actions.ts` to `{ body, query, context, signal }` envelope; config with `handler` + `validation`; calls `{ body }` / `{ query }` / `()`
 - [ ] Delete `FileRouter` imports
 - [ ] Delete `+Page.tsx` / `+config.ts` Vike files
 - [ ] Remove `e2e/ssr-bun` / `e2e/ssr-worker` if referenced in CI — use `ssr-matrix`

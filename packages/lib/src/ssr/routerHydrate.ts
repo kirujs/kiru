@@ -30,9 +30,11 @@ import {
 } from "../router/devWarnings.js"
 import { applyInvalidateResponseHeader } from "../router/routerGlobal.js"
 import { guardRemoteActionOnClient } from "../router/devWarnings.js"
+import { serializeActionCallQuery } from "../remote/action.js"
 
 type RemoteActionCallEnvelope = {
-  input?: unknown
+  body?: unknown
+  query?: Record<string, unknown>
   signal?: AbortSignal
 }
 
@@ -66,10 +68,17 @@ function ensureServerActionsClient() {
       }
       if (method !== "GET") {
         headers["Content-Type"] = "application/json"
-        const input = envelope.input
-        init.body = JSON.stringify(input === undefined ? null : input)
+        const body = envelope.body
+        init.body = JSON.stringify(body === undefined ? null : body)
       }
-      const r = await fetch(`/?action=${id}`, init)
+      const queryString =
+        envelope.query && Object.keys(envelope.query).length > 0
+          ? serializeActionCallQuery(envelope.query)
+          : ""
+      const actionUrl = queryString
+        ? `/?action=${encodeURIComponent(id)}&${queryString}`
+        : `/?action=${encodeURIComponent(id)}`
+      const r = await fetch(actionUrl, init)
       if (!r.ok) {
         throw new Error("Action failed")
       }

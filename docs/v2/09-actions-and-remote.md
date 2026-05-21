@@ -4,13 +4,13 @@ Server mutations flow through **remote actions** (`packages/lib/src/remote/actio
 
 ## HTTP verbs
 
-| Factory | `fetch` method | Input |
-|---------|----------------|-------|
-| `action.get` | `GET` | none (options only) |
-| `action.post` | `POST` | JSON body |
-| `action.put` | `PUT` | JSON body |
-| `action.patch` | `PATCH` | JSON body |
-| `action.delete` | `DELETE` | JSON body (optional) |
+| Factory | `fetch` method | Wire format |
+|---------|----------------|-------------|
+| `action.get` | `GET` | query string on `/?action=…` |
+| `action.post` | `POST` | JSON body + optional query string |
+| `action.put` | `PUT` | JSON body + optional query string |
+| `action.patch` | `PATCH` | JSON body + optional query string |
+| `action.delete` | `DELETE` | JSON body (optional) + optional query string |
 
 Form actions use `action.post({ type: "form" }, …)` only (`POST` + multipart/urlencoded).
 
@@ -20,24 +20,30 @@ Form actions use `action.post({ type: "form" }, …)` only (`POST` + multipart/u
 import { action } from "kiru/remote"
 import { z } from "zod"
 
-const createTodo = action.post(
-  {
-    schema: z.object({ title: z.string() }),
-    invalidate: ["route:todos"],
-    revalidate: { tags: ["todos"] },
-  },
-  async ({ context, signal, input }) => {
+const createTodo = action.post({
+  validation: { body: z.object({ title: z.string() }) },
+  middleware: [requireAuth],
+  invalidate: ["route:todos"],
+  revalidate: { tags: ["todos"] },
+  handler: async ({ context, signal, body }) => {
     if (signal.aborted) throw new DOMException("Aborted", "AbortError")
-    await db.todos.create({ ...input, userId: context.user?.id })
+    await db.todos.create({ ...body, userId: context.user?.id })
     return { ok: true }
-  }
-)
+  },
+})
 
-// Simple JSON RPC (no config object)
-export const echo = action.post(async ({ input }) => ({ echo: input }))
+// GET with query validation
+export const search = action.get({
+  validation: { query: z.object({ q: z.string() }) },
+  handler: async ({ query }) => findAll(query.q),
+})
+
+// Simple JSON RPC (bare handler)
+export const echo = action.post(async ({ body }) => ({ echo: body }))
 ```
 
-- Validates with Standard Schema (`parseInput`)
+- Validates with Standard Schema (`parseInput`) on `validation.body` / `validation.query`
+- Middleware runs before validation; reject with `throw new RemoteError(...)` (e.g. `401` / `UNAUTHORIZED`)
 - SSR: `runWithSsrRequestContext` around sync render only (save/restore `current` scope)
 - Client: `resource(createTodo)` or generated stub → `fetch("/?action=...")`
 
@@ -107,11 +113,12 @@ Dev middleware loads the same modules via `loadRemoteRegistry`; without the impo
 
 ## Action handler args and call envelope
 
-Handlers receive a single **`RemoteActionHandlerArgs<Input>`** object:
+Handlers receive a single **`RemoteActionHandlerArgs<Body, Query>`** object:
 
 ```ts
-type RemoteActionHandlerArgs<Input> = {
-  input: Input
+type RemoteActionHandlerArgs<Body, Query = void> = {
+  body: Body
+  query: Query
   context: CustomRequestContext
   signal: AbortSignal
   execution?: ActionExecution
@@ -120,19 +127,20 @@ type RemoteActionHandlerArgs<Input> = {
 
 - **`context`** — your `CustomRequestContext` (session, auth, etc.)
 - **`signal`** — aborts when the HTTP request is cancelled (client disconnect, `fetch` abort, or SSR render abort)
-- **`input`** — validated JSON body (`void` for GET / no-input POST)
+- **`body`** — validated JSON body (`void` for GET / no-body POST)
+- **`query`** — validated query (`void` when no `validation.query`)
 - **`execution`** — request runtime (frames, cache, tracing) during RPC and nested composition
 
-**Client / server calls** use one options envelope (never positional `(input, opts)`):
+**Client / server calls** use one options envelope:
 
 ```ts
-await runPipeline()                        // void / GET — options may be omitted
+await runPipeline()                              // void body/query — options may be omitted
 await runPipeline({ signal: ac.signal })
-await api.removeLabel({ input: "demo" })   // body actions — `{ input }` required
-await api.getEcho({ signal })
+await api.removeLabel({ body: "demo" })          // body actions — `{ body }` when typed
+await search({ query: { q: "kiru" }, signal }) // GET with query schema
 ```
 
-Form handlers use **`RemoteFormActionHandlerArgs`**: `{ formData, context, signal, execution? }` (or `{ formData, … }` plus `input` when `{ type: "form", schema }` parses fields).
+Form handlers use **`RemoteFormActionHandlerArgs`**: `{ formData, context, signal, execution? }` (or `{ formData, … }` plus `body` when `{ type: "form", schema }` parses fields).
 
 ## Namespaced exports
 
@@ -141,12 +149,12 @@ Group related actions in objects; RPC ids use **dot paths** (file hash + path, n
 ```ts
 export const users = {
   get: action.get(async ({ context }) => { /* … */ }),
-  delete: action.delete(async ({ input: id }) => { /* … */ }),
+  delete: action.delete(async ({ body: id }) => { /* … */ }),
 }
 
 export const admin = {
   users: {
-    ban: action.post(async ({ context, input }) => { /* … */ }),
+    ban: action.post(async ({ context, body }) => { /* … */ }),
   },
 }
 ```
@@ -222,7 +230,7 @@ export const updateProfile = action.post(async () => {
 ```ts
 runWithSsrRequestContext(ctx, renderSignal, () => { /* sync headlessRender */ })
 __getSsrRequestContext()  // CustomRequestContext during that sync pass only
-__getSsrActionContext()   // RemoteActionHandlerArgs<void> ({ input: undefined, context, signal })
+__getSsrActionContext()   // RemoteActionHandlerArgs<void, void> ({ body/query undefined, context, signal })
 ```
 
 Context is set only for **synchronous** render (`headlessRender` / streaming shell). The renderer wraps each sync shell in `runWithSsrRequestContext`; nested calls save/restore a single module-level `current` slot (not a stack, not ALS).
@@ -251,25 +259,24 @@ Ensures inline `resource(action)` during SSR sees real session and the active re
 ### Todo create + list refresh
 
 ```ts
-action.post(
-  { schema, invalidate: ["route:todo-list"] },
-  handler
-)
+action.post({
+  validation: { body: schema },
+  invalidate: ["route:todo-list"],
+  handler,
+})
 ```
 
 ### On-demand ISR after CMS publish
 
 ```ts
-action.post(
-  {
-    schema,
-    revalidate: { paths: ["/blog"], tags: ["blog"] },
-  },
-  async ({ context, signal, input }) => {
+action.post({
+  validation: { body: schema },
+  revalidate: { paths: ["/blog"], tags: ["blog"] },
+  handler: async ({ context, signal, body }) => {
     if (signal.aborted) throw new DOMException("Aborted", "AbortError")
-    await save(input, { userId: context.user?.id })
-  }
-)
+    await save(body, { userId: context.user?.id })
+  },
+})
 ```
 
 ### Contact form with field errors

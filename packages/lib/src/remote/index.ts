@@ -7,11 +7,11 @@ import {
   isKiruRedirect,
   isRemoteActionBodyMethod,
   KIRU_FORM_TOKEN_FIELD,
+  parseActionQueryFromUrl,
 } from "./action.js"
 import {
   createActionExecutionForRequest,
   runInActionExecution,
-  toRemoteActionHandlerArgs,
 } from "./actionInvokeScope.js"
 import { isAbortError } from "../router/navigationScope.js"
 import { isRemoteError } from "./errors.js"
@@ -45,6 +45,16 @@ export {
   type RemoteActionHandlerArgs,
   type RemoteActionInvokeArgs,
   type RemoteActionCallOptions,
+  type RemoteActionValidationConfig,
+  type RemoteGetActionConfig,
+  type InferActionConfigBody,
+  type InferActionConfigQuery,
+  type InferActionConfigOutput,
+  type InferSchemaOutput,
+  type ActionMiddleware,
+  type ActionMiddlewareContext,
+  parseActionQueryFromUrl,
+  serializeActionCallQuery,
   type RemoteFormActionHandler,
   type RemoteFormActionHandlerArgs,
   type ActionSchema,
@@ -189,7 +199,8 @@ async function invokeJsonRemoteAction(
   handler: RegisteredRemoteAction,
   request: Request,
   context: import("../router/types.js").CustomRequestContext,
-  input: unknown,
+  body: unknown,
+  query: Record<string, string | string[]>,
   rpcActionId: string,
   options?: CreateRemoteActionHandlerOptions
 ): Promise<Response> {
@@ -199,7 +210,14 @@ async function invokeJsonRemoteAction(
     request,
     entryActionId: rpcActionId,
   })
-  const handlerArgs = toRemoteActionHandlerArgs(execution, input)
+  const handlerArgs: RemoteActionInvokeArgs = {
+    body,
+    query,
+    context: execution.request.context,
+    signal: execution.request.signal,
+    request,
+    execution,
+  }
   try {
     if (request.signal.aborted) {
       return new Response(null, { status: 499 })
@@ -397,10 +415,12 @@ export function createRemoteActionHandler(
         return null
       }
 
-      let input: unknown
+      const query = parseActionQueryFromUrl(url)
+
+      let body: unknown
       if (isRemoteActionBodyMethod(handler.__kiruRemoteMethod)) {
         try {
-          input = await request.json()
+          body = await request.json()
         } catch {
           return new Response(null, { status: 500 })
         }
@@ -411,7 +431,8 @@ export function createRemoteActionHandler(
         handler,
         request,
         context,
-        input,
+        body,
+        query,
         rpcActionId,
         options
       )

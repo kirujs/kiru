@@ -36,8 +36,17 @@ export type Schema<TInput> =
         | { success: false; error: unknown }
     }
 
-/** Alias for {@link Schema} on `action.post({ schema }, …)`. */
+/** Alias for {@link Schema} on `action.post({ validation: { body } }, …)`. */
 export type ActionSchema<TInput> = Schema<TInput>
+
+/** Output type inferred from a {@link Schema} (Standard Schema, `parse`, or `safeParse`). */
+export type InferSchemaOutput<S> = S extends StandardSchemaV1<unknown, infer O>
+  ? O
+  : S extends Schema<infer O>
+    ? O
+    : S extends { parse(input: unknown): infer O }
+      ? O
+      : unknown
 
 /**
  * Parse `input` with a {@link Schema}. Supports async Standard Schema `validate`.

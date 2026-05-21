@@ -129,19 +129,21 @@ describe("renderToReadableStream speculative Derive traversal", () => {
       return { id: "p1", name: "Streaming Product" }
     })
 
-    const getStreamingReviews = action.post<
-      { productId: string },
-      Review[]
-    >(async ({ input, context }) => {
+    const getStreamingReviews = action.post(async ({
+      body,
+      context,
+    }: import("../../remote/action.js").RemoteActionHandlerArgs<{
+      productId: string
+    }>) => {
       assert.equal((context as { user?: { name: string } }).user?.name, "Ada")
       await new Promise((r) => setTimeout(r, 50))
-      return [{ id: "r1", text: `Review for ${input.productId}` }]
+      return [{ id: "r1", text: `Review for ${body.productId}` }]
     })
 
     function ProductCard({ product }: { product: Product }) {
       const reviews = resource(({ signal }) =>
         getStreamingReviews({
-          input: { productId: product.id },
+          body: { productId: product.id },
           signal,
         })
       )

@@ -28,12 +28,12 @@ export interface StreamingReview {
   text: string
 }
 
-export const getPost = action.get<StreamingProduct>(async () => {
+export const getPost = action.get(async (): Promise<StreamingProduct> => {
   await new Promise((r) => setTimeout(r, 1000))
   return { id: "p1", name: "Streaming Product" }
 })
 
-export const getStreamingProduct = action.get<StreamingProduct>(async () => {
+export const getStreamingProduct = action.get(async (): Promise<StreamingProduct> => {
   console.log("action: get streaming product")
   await new Promise((r) => setTimeout(r, 1000))
   return { id: "p1", name: "Streaming Product" }
@@ -48,14 +48,11 @@ const streamingReviewsInputSchema: Schema<{ productId: string }> = {
   },
 }
 
-export const getStreamingReviews = action.post<
-  { productId: string },
-  StreamingReview[]
->(
-  { schema: streamingReviewsInputSchema },
-  async ({ input }) => {
+export const getStreamingReviews = action.post({
+  validation: { body: streamingReviewsInputSchema },
+  handler: async ({ body }): Promise<StreamingReview[]> => {
     console.log("action: get streaming reviews")
     await new Promise((r) => setTimeout(r, 1000))
-    return [{ id: "r1", text: `Review for ${input.productId}` }]
-  }
-)
+    return [{ id: "r1", text: `Review for ${body.productId}` }]
+  },
+})

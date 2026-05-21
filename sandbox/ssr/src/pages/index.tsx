@@ -23,7 +23,7 @@ export default function HomePage() {
                       checked={todo.completed}
                       onchange={(e) =>
                         updateTodo({
-                          input: {
+                          body: {
                             id: todo.id,
                             completed: e.currentTarget.checked,
                           },
@@ -46,7 +46,7 @@ export default function HomePage() {
                       value={todo.text}
                       oninput={(e) =>
                         updateTodo({
-                          input: {
+                          body: {
                             id: todo.id,
                             text: e.currentTarget.value,
                           },
@@ -70,7 +70,7 @@ export default function HomePage() {
           e.preventDefault()
           const formData = new FormData(e.currentTarget)
           createTodo({
-            input: { text: formData.get("text") as string },
+            body: { text: formData.get("text") as string },
           }).then(
             () => todosData.refetch()
             //(todo) => (todosData.value = [...todosData.value, todo])

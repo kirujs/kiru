@@ -6,7 +6,7 @@ export const api = {
   getEcho: action.get(async ({ context }) => {
     return `echo:${context.user?.name ?? "unknown"}`
   }),
-  removeLabel: action.delete(async ({ input: id }: RemoteActionHandlerArgs<string>) => {
+  removeLabel: action.delete(async ({ body: id }: RemoteActionHandlerArgs<string>) => {
     const had = labels.has(id)
     labels.delete(id)
     return { removed: id, had }
@@ -17,10 +17,7 @@ export const api = {
 }
 
 /** Single HTTP entry; calls nested namespaced actions in-process. */
-export const runPipeline = action.post<
-  void,
-  { echo: string; ping: { pong: boolean }; nested: boolean }
->(async () => {
+export const runPipeline = action.post(async () => {
   const echo = await api.getEcho()
   const ping = await api.metrics.ping()
   return { echo, ping, nested: true }

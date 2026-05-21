@@ -8,16 +8,21 @@ export function getActiveActionExecution(): ActionExecution | undefined {
   return undefined
 }
 
-export function getActiveActionContext(): RemoteActionHandlerArgs<void> | undefined {
+export function getActiveActionContext(): RemoteActionHandlerArgs<
+  void,
+  void
+> | undefined {
   return undefined
 }
 
-export function toRemoteActionHandlerArgs<Input>(
+export function toRemoteActionHandlerArgs<Body, Query = void>(
   execution: ActionExecution,
-  input: Input
-): RemoteActionHandlerArgs<Input> {
+  body: Body,
+  query: Query
+): RemoteActionHandlerArgs<Body, Query> {
   return {
-    input,
+    body,
+    query,
     context: execution.request.context,
     signal: execution.request.signal,
     execution,

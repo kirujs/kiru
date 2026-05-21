@@ -13,23 +13,28 @@ export function getActiveActionExecution(): ActionExecution | undefined {
   return actionExecutionAls.getStore()
 }
 
-export function toRemoteActionHandlerArgs<Input>(
+export function toRemoteActionHandlerArgs<Body, Query = void>(
   execution: ActionExecution,
-  input: Input
-): RemoteActionHandlerArgs<Input> {
+  body: Body,
+  query: Query
+): RemoteActionHandlerArgs<Body, Query> {
   return {
-    input,
+    body,
+    query,
     context: execution.request.context,
     signal: execution.request.signal,
     execution,
   }
 }
 
-/** Active handler args when inside RPC/composition (void `input`). */
-export function getActiveActionContext(): RemoteActionHandlerArgs<void> | undefined {
+/** Active handler args when inside RPC/composition. */
+export function getActiveActionContext(): RemoteActionHandlerArgs<
+  void,
+  void
+> | undefined {
   const execution = getActiveActionExecution()
   if (!execution) return undefined
-  return toRemoteActionHandlerArgs(execution, undefined)
+  return toRemoteActionHandlerArgs(execution, undefined, undefined)
 }
 
 export function createActionExecutionForRequest(

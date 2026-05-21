@@ -1,4 +1,3 @@
-import type { StandardSchemaV1 } from "@standard-schema/spec"
 import {
   parseInput,
   type Schema,
@@ -25,13 +24,7 @@ export type {
 } from "./validationInvalid.js"
 export { validationInvalid } from "./validationInvalid.js"
 
-export type InferSchemaOutput<S> = S extends StandardSchemaV1<unknown, infer O>
-  ? O
-  : S extends Schema<infer O>
-    ? O
-    : S extends { parse(input: unknown): infer O }
-      ? O
-      : unknown
+export type { InferSchemaOutput } from "../validation/index.js"
 
 /**
  * Validation for a route's `load` export (`loader`, `serverLoader`, `clientLoader`).

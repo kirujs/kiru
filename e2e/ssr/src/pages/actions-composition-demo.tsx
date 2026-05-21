@@ -36,7 +36,7 @@ export default function ActionsCompositionDemoPage() {
         data-testid="namespace-delete"
         type="button"
         onclick={async () => {
-          const out = await api.removeLabel({ input: "demo" })
+          const out = await api.removeLabel({ body: "demo" })
           deleteResult.value = JSON.stringify(out)
         }}
       >

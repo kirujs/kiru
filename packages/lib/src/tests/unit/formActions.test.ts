@@ -22,7 +22,7 @@ function makeFormInvokeArgs(
   signal: AbortSignal,
   formData: FormData
 ): RemoteFormActionHandlerArgs {
-  const base = buildRemoteActionHandlerArgs(context, signal, undefined)
+  const base = buildRemoteActionHandlerArgs(context, signal, undefined, undefined)
   return {
     formData,
     context: base.context,
@@ -305,8 +305,8 @@ describe("action.post (form + schema)", () => {
     let received: { message: string } | null = null
     const formRef = action.post(
       { type: "form", schema: messageSchema },
-      async ({ input }) => {
-        received = input
+      async ({ body }) => {
+        received = body
         return { ok: true }
       }
     )
@@ -323,10 +323,10 @@ describe("action.post (form + schema)", () => {
   it("passes optional File fields after schema validation", async () => {
     const formRef = action.post(
       { type: "form", schema: contactSchema },
-      async ({ input }) => ({
-        email: input.email,
-        hasAvatar: input.avatar instanceof File,
-        avatarName: input.avatar?.name,
+      async ({ body }) => ({
+        email: body.email,
+        hasAvatar: body.avatar instanceof File,
+        avatarName: body.avatar?.name,
       })
     )
 
@@ -346,13 +346,13 @@ describe("action.post (form + schema)", () => {
     })
   })
 
-  it("rejects invalid form input with INVALID_INPUT through the HTTP handler", async () => {
+  it("rejects invalid form body with INVALID_BODY through the HTTP handler", async () => {
     const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
     const routeId = "test/form-schema-invalid"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       submit: action.post(
         { type: "form", schema: messageSchema },
-        async ({ input }) => ({ message: input.message })
+        async ({ body }) => ({ message: body.message })
       ),
     })
 
@@ -362,7 +362,7 @@ describe("action.post (form + schema)", () => {
 
     assert.strictEqual(res?.status, 400)
     const body = (await res?.json()) as { error: { code: string } }
-    assert.strictEqual(body.error.code, "INVALID_INPUT")
+    assert.strictEqual(body.error.code, "INVALID_BODY")
   })
 
   it("accepts valid form fields through the HTTP handler (enhanced JSON)", async () => {
@@ -371,7 +371,7 @@ describe("action.post (form + schema)", () => {
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       submit: action.post(
         { type: "form", schema: messageSchema },
-        async ({ input }) => ({ message: input.message })
+        async ({ body }) => ({ message: body.message })
       ),
     })
 
@@ -391,10 +391,10 @@ describe("action.post (form + schema)", () => {
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       submit: action.post(
         { type: "form", schema: contactSchema },
-        async ({ input }) => ({
-          email: input.email,
-          hasAvatar: input.avatar instanceof File,
-          avatarName: input.avatar?.name,
+        async ({ body }) => ({
+          email: body.email,
+          hasAvatar: body.avatar instanceof File,
+          avatarName: body.avatar?.name,
         })
       ),
     })

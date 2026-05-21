@@ -38,9 +38,11 @@ function makePostRequest(
 function makeGetRequest(
   actionId: string,
   token: string,
-  overrides: RequestInit = {}
+  overrides: RequestInit = {},
+  query?: Record<string, string>
 ): Request {
-  return new Request(`http://localhost/?action=${actionId}`, {
+  const qs = query ? `&${new URLSearchParams(query).toString()}` : ""
+  return new Request(`http://localhost/?action=${actionId}${qs}`, {
     method: "GET",
     headers: {
       "x-kiru-token": token,
@@ -76,8 +78,7 @@ describe("remote / token", () => {
     // and does not change the decoded HMAC bytes.
     const sig = parts[2]!
     const i = Math.floor(sig.length / 2)
-    parts[2] =
-      sig.slice(0, i) + (sig[i] === "a" ? "b" : "a") + sig.slice(i + 1)
+    parts[2] = sig.slice(0, i) + (sig[i] === "a" ? "b" : "a") + sig.slice(i + 1)
     assert.strictEqual(unwrapKiruToken(parts.join("."), SECRET), null)
   })
 
@@ -192,7 +193,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/post-via-get"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action.post(async ({ input }) => input),
+      fn: action.post(async ({ body }) => body),
     })
     const req = makeGetRequest(`${routeId}:fn`, token)
     assert.strictEqual(await handler(req), null)
@@ -203,7 +204,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/wrong-content-type"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action.post(async ({ input }) => input),
+      fn: action.post(async ({ body }) => body),
     })
     const req = new Request(`http://localhost/?action=${routeId}:fn`, {
       method: "POST",
@@ -314,7 +315,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/dispatch"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      greet: action.post(async ({ input: name }) => `hello ${name}`),
+      greet: action.post(async ({ body: name }) => `hello ${name}`),
     })
     const req = makePostRequest(`${routeId}:greet`, token, "world")
     const res = await handler(req)
@@ -332,8 +333,8 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/tuple-input"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      add: action.post(async ({ input }) => {
-        const tuple = input as readonly [number, number]
+      add: action.post(async ({ body }) => {
+        const tuple = body as readonly [number, number]
         return tuple[0]! + tuple[1]!
       }),
     })
@@ -390,7 +391,8 @@ describe("remote / handler", () => {
     await handler(req)
     assert.ok(captured && typeof captured === "object")
     const handlerArgs = captured as {
-      input: undefined
+      body: undefined
+      query: undefined
       context: typeof ctx
       signal: AbortSignal
       execution?: unknown
@@ -431,34 +433,100 @@ describe("remote / handler", () => {
     assert.strictEqual(res?.status, 499)
   })
 
-  it("validates action input via Schema.safeParse", async () => {
+  it("validates action body via Schema.safeParse", async () => {
     const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
     const token = validToken()
     const routeId = "test/schema-guard"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      greet: action.post(
-        {
-          schema: {
-            safeParse: (input: unknown) => {
+      greet: action.post({
+        validation: {
+          body: {
+            safeParse: (body: unknown) => {
               const ok =
-                !!input &&
-                typeof input === "object" &&
-                "name" in input &&
-                typeof (input as { name?: unknown }).name === "string"
+                !!body &&
+                typeof body === "object" &&
+                "name" in body &&
+                typeof (body as { name?: unknown }).name === "string"
               return ok
-                ? { success: true as const, data: input as { name: string } }
+                ? { success: true as const, data: body as { name: string } }
                 : { success: false as const, error: null }
             },
           },
         },
-        async ({ input }) => `hello ${input.name}`
-      ),
+        handler: async ({ body }) => `hello ${body.name}`,
+      }),
     })
     const req = makePostRequest(`${routeId}:greet`, token, { wrong: true })
     const res = await handler(req)
     assert.strictEqual(res?.status, 400)
     const j = (await res?.json()) as { error: { code: string } }
-    assert.strictEqual(j.error.code, "INVALID_INPUT")
+    assert.strictEqual(j.error.code, "INVALID_BODY")
+  })
+
+  it("validates GET action query", async () => {
+    const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
+    const token = validToken()
+    const routeId = "test/query-get"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      search: action.get({
+        validation: {
+          query: {
+            parse: (q: unknown) => {
+              if (
+                typeof q !== "object" ||
+                q === null ||
+                !("q" in q) ||
+                typeof (q as { q?: unknown }).q !== "string"
+              ) {
+                throw new Error("bad query")
+              }
+              return (q as { q: string }).q
+            },
+          },
+        },
+        handler: async ({ query }) => ({ q: query }),
+      }),
+    })
+    const ok = await handler(
+      makeGetRequest(`${routeId}:search`, token, {}, { q: "kiru" })
+    )
+    assert.strictEqual(ok?.status, 200)
+    assert.deepStrictEqual(await ok?.json(), { q: "kiru" })
+
+    const bad = await handler(makeGetRequest(`${routeId}:search`, token))
+    assert.strictEqual(bad?.status, 400)
+    const j = (await bad?.json()) as { error: { code: string } }
+    assert.strictEqual(j.error.code, "INVALID_QUERY")
+  })
+
+  it("runs middleware before handler and surfaces RemoteError", async () => {
+    const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
+    const token = validToken()
+    const routeId = "test/mw-auth"
+    const requireAuth = ({ context }: { context: { user?: unknown } }) => {
+      if (!context.user) {
+        throw new RemoteError("Unauthorized", "UNAUTHORIZED", { status: 401 })
+      }
+    }
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      secret: action.get({
+        middleware: [requireAuth],
+        handler: async () => "ok",
+      }),
+    })
+    const denied = await handler(makeGetRequest(`${routeId}:secret`, token))
+    assert.strictEqual(denied?.status, 401)
+    const j = (await denied?.json()) as { error: { code: string } }
+    assert.strictEqual(j.error.code, "UNAUTHORIZED")
+
+    const allowed = await handler(
+      makeGetRequest(
+        `${routeId}:secret`,
+        makeKiruContextToken({ user: { id: "1" } }, SECRET)
+      )
+    )
+    assert.strictEqual(allowed?.status, 200)
+    assert.strictEqual(await allowed?.json(), "ok")
   })
 
   it("nested action call via callable shares active RPC context", async () => {
@@ -556,7 +624,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/delete-verb"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      remove: action.delete(async ({ input: id }) => ({ removed: id })),
+      remove: action.delete(async ({ body: id }) => ({ removed: id })),
     })
     const req = new Request(`http://localhost/?action=${routeId}:remove`, {
       method: "DELETE",
