@@ -15,6 +15,9 @@ import {
 } from "./config.js"
 import { writeGeneratedRoutes } from "./fileRoutesCodegen.js"
 import {
+  attachFileRoutesDevWatcher,
+} from "./fileRoutesDev.js"
+import {
   LOADER_MODULES_MANIFEST,
   mergeLoaderModules,
   readLoaderModuleManifest,
@@ -75,39 +78,6 @@ import type {
 
 const REMOTE_REGISTRY_VIRTUAL_ID = "virtual:kiru:remote-registry"
 const LOADER_REGISTRY_VIRTUAL_ID = "virtual:kiru:loader-registry"
-
-let fileRoutesDebounce: ReturnType<typeof setTimeout> | undefined
-
-async function regenerateFileRoutes(
-  state: PluginState,
-  server?: ViteDevServer,
-  log?: (msg: string) => void
-): Promise<void> {
-  const fr = state.router.fileRoutes
-  if (!fr) return
-  try {
-    const { written, outFileAbs } = await writeGeneratedRoutes(fr)
-    if (!written || !server) return
-    const viteId = toViteModuleId(outFileAbs, state.projectRoot)
-    const mod = server.moduleGraph.getModuleById(viteId)
-    if (mod) server.moduleGraph.invalidateModule(mod)
-    log?.(`${ANSI.green("✓")} routes regenerated (${path.relative(state.projectRoot, outFileAbs)})`)
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    throw new Error(`[vite-plugin-kiru]: file-routes codegen failed: ${msg}`)
-  }
-}
-
-function scheduleFileRoutesRegen(
-  state: PluginState,
-  server: ViteDevServer,
-  log?: (msg: string) => void
-): void {
-  if (fileRoutesDebounce) clearTimeout(fileRoutesDebounce)
-  fileRoutesDebounce = setTimeout(() => {
-    void regenerateFileRoutes(state, server, log)
-  }, 50)
-}
 
 function isSsrBundleBuild(userConfig: UserConfig): boolean {
   const ssr = userConfig.build?.ssr
@@ -335,20 +305,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         state
 
       if (router.fileRoutes) {
-        const fr = router.fileRoutes
-        void regenerateFileRoutes(state, server, log)
-        server.watcher.add(fr.pagesDirAbs)
-        server.watcher.on("all", (event, file) => {
-          if (event !== "add" && event !== "change" && event !== "unlink") return
-          const normalized = file.replace(/\\/g, "/")
-          if (
-            !normalized.startsWith(fr.pagesDirAbs) &&
-            fr.extendAbs !== normalized
-          ) {
-            return
-          }
-          scheduleFileRoutesRegen(state, server, log)
-        })
+        attachFileRoutesDevWatcher(state, server, log)
       }
 
       if (devtoolsEnabled) {

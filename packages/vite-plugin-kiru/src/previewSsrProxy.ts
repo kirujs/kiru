@@ -42,6 +42,7 @@ export async function createPreviewSsrProxy(
 ): Promise<PreviewSsrProxyHandle> {
   const port = await getFreePort()
   const baseUrl = `http://127.0.0.1:${port}`
+  const stderrChunks: Buffer[] = []
   const child: ChildProcess = spawn(
     process.execPath,
     [serverEntryAbs],
@@ -52,11 +53,25 @@ export async function createPreviewSsrProxy(
         PORT: String(port),
       },
       cwd: path.dirname(path.dirname(path.dirname(serverEntryAbs))),
-      stdio: "ignore",
+      stdio: ["ignore", "ignore", "pipe"],
     }
   )
+  child.stderr?.on("data", (chunk: Buffer) => {
+    if (stderrChunks.length < 8) stderrChunks.push(chunk)
+  })
 
-  await waitForHttpReady(baseUrl)
+  try {
+    await waitForHttpReady(baseUrl)
+  } catch (err) {
+    const detail = Buffer.concat(stderrChunks).toString("utf8").trim()
+    const exitHint =
+      child.exitCode != null ? ` (exit ${child.exitCode})` : ""
+    throw new Error(
+      detail
+        ? `${(err as Error).message}${exitHint}: ${detail}`
+        : `${(err as Error).message}${exitHint}`
+    )
+  }
 
   const middleware: Connect.NextHandleFunction = async (req, res, next) => {
     try {

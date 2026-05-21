@@ -69,7 +69,7 @@ import { createRouterApp } from "kiru/router/ssg"
 **Partial static tree example** (`e2e/ssg/src/routes.ts`):
 
 - Large `static: true` scope for marketing
-- `...contextRouteChildren(r)` includes `/context/admin` **without** `static: true` — reachable only via client navigation from prerendered `/context`
+- `...contextRouteChildren()` includes `/context/admin` **without** `static: true` — reachable only via client navigation from prerendered `/context`
 
 ## SSR
 

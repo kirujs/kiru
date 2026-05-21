@@ -43,7 +43,6 @@ describe("SSR server", () => {
       .first()
       .scrollIntoView()
       .trigger("pointerenter", { bubbles: true })
-      .trigger("mouseover", { bubbles: true })
 
     cy.get<LoaderInterception[]>("@loaderPost.all", { timeout: 10_000 }).should(
       (interceptions) => {

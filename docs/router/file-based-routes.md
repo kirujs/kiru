@@ -47,6 +47,16 @@ Import `routes` from `./routes.ts` or `./routes.gen` in `main.tsx` / `server.ts`
 
 **Commit `routes.gen.ts`** to git so CI and editors see the tree without running Vite. The plugin regenerates the file in dev (with HMR invalidation) and on `buildStart` when content changes.
 
+### Development regeneration
+
+On `vite dev`, the plugin:
+
+1. Writes `routes.gen.ts` on server start (`configResolved` and `configureServer`).
+2. Watches `pagesDir` (and `extend`, if configured) for `add` / `change` / `unlink`.
+3. Debounces rescans (~50ms), rewrites `routes.gen.ts` when the tree changes, and invalidates the module in Vite’s graph.
+
+Add or remove a `page.tsx` under `src/pages` and the route list updates without restarting the dev server. Covered by `packages/vite-plugin-kiru/src/fileRoutesDev.integration.test.ts`.
+
 ## Filesystem conventions
 
 | File | Role |

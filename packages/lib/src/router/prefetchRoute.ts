@@ -13,7 +13,12 @@ import { readPageLoadExport } from "./loaders.js"
 import type { Router } from "./csr.js"
 import type { ClientOutletRouter } from "./clientRoutePrep.js"
 import { getRouterRuntime } from "./routerRuntime.js"
-const prefetchAbortByHref = new Map<string, AbortController>()
+type PrefetchFlight = {
+  abort: AbortController
+  promise: Promise<void>
+}
+
+const prefetchFlightByHref = new Map<string, PrefetchFlight>()
 
 export type PrefetchRouteOptions = {
   manifest: RouteManifest
@@ -25,11 +30,14 @@ export type PrefetchRouteOptions = {
 }
 
 function cancelPrefetch(href: string): void {
-  prefetchAbortByHref.get(href)?.abort()
-  prefetchAbortByHref.delete(href)
+  prefetchFlightByHref.get(href)?.abort.abort()
+  prefetchFlightByHref.delete(href)
 }
 
-export async function prefetchRoute(options: PrefetchRouteOptions): Promise<void> {
+async function runPrefetchRoute(
+  options: PrefetchRouteOptions,
+  signal: AbortSignal
+): Promise<void> {
   const {
     manifest,
     href,
@@ -43,11 +51,6 @@ export async function prefetchRoute(options: PrefetchRouteOptions): Promise<void
   const pathname = stripBase(href, baseUrl)
   const match = matchRoute(manifest, pathname)
   if (!match) return
-
-  cancelPrefetch(href)
-  const abort = new AbortController()
-  prefetchAbortByHref.set(href, abort)
-  const signal = abort.signal
 
   const gateOptions = getRouterRuntime(router as Router).gateOptions
   const deferOptions = {
@@ -98,9 +101,25 @@ export async function prefetchRoute(options: PrefetchRouteOptions): Promise<void
     })
   } catch {
     if (!signal.aborted) return
+  }
+}
+
+export async function prefetchRoute(options: PrefetchRouteOptions): Promise<void> {
+  const { href } = options
+  const inFlight = prefetchFlightByHref.get(href)
+  if (inFlight && !inFlight.abort.signal.aborted) {
+    return inFlight.promise
+  }
+
+  cancelPrefetch(href)
+  const abort = new AbortController()
+  const promise = runPrefetchRoute(options, abort.signal)
+  prefetchFlightByHref.set(href, { abort, promise })
+  try {
+    await promise
   } finally {
-    if (prefetchAbortByHref.get(href) === abort) {
-      prefetchAbortByHref.delete(href)
+    if (prefetchFlightByHref.get(href)?.abort === abort) {
+      prefetchFlightByHref.delete(href)
     }
   }
 }

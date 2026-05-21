@@ -4,7 +4,11 @@ import * as kiru from "../../index.js"
 import { renderToString } from "../../renderToString.js"
 import { compileRouteTree, createRoute, createRouteTree } from "../../router/index.js"
 import { loader } from "../../router/loaders.js"
-import { renderClientErrorOutlet } from "../../router/routeTree.js"
+import {
+  buildRoutedSubtree,
+  loadRouteTree,
+  renderClientErrorOutlet,
+} from "../../router/routeTree.js"
 import type { RouteMatch } from "../../router/types.js"
 
 const { createElement } = kiru
@@ -40,5 +44,36 @@ describe("client error outlet", () => {
     const html = renderToString(el)
     assert.ok(html.includes('data-msg="loader-boom"'))
     assert.ok(html.includes("scope-err"))
+  })
+
+  it("onLeafRenderError captures sync throws from leaf render", async () => {
+    const manifest = compileRouteTree(
+      createRouteTree({
+        children: [
+          createRoute("/sync-boom", {
+            component: async () => ({
+              default: () => {
+                throw new Error("sync-boom")
+              },
+            }),
+          }),
+        ],
+      })
+    )
+    const route = manifest.routes.find((r) => r.path === "/sync-boom")
+    assert.ok(route)
+    const match: RouteMatch = {
+      route,
+      params: {},
+      pathname: "/sync-boom",
+    }
+    const tree = await loadRouteTree(match)
+    const captured: unknown[] = []
+    const el = buildRoutedSubtree(tree.layoutModules, tree.routeModule, {}, {
+      onLeafRenderError: (err) => captured.push(err),
+    })
+    renderToString(el!)
+    assert.equal(captured.length, 1)
+    assert.equal((captured[0] as Error).message, "sync-boom")
   })
 })

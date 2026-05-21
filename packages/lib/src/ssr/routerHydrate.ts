@@ -4,7 +4,9 @@ import { signal } from "../signals/index.js"
 import { hydrate } from "./client.js"
 import { buildClientOutletSubtree } from "../router/clientRoutePrep.js"
 import { createRouter } from "../router/csr.js"
+import { renderClientErrorOutlet } from "../router/routeTree.js"
 import { createSsrRouterShell } from "../router/routerShell.js"
+import { toRenderError } from "../router/types.js"
 import { registerKiruRouter } from "../router/routerGlobal.js"
 import { compileRouteTree } from "../router/manifest.js"
 import type {
@@ -159,8 +161,9 @@ type SsrClientRouter = ReturnType<typeof createRouter>
 async function buildSsrClientOutlet(
   committedMatch: RouteMatch | null,
   router: SsrClientRouter,
-  _manifest: RouteManifest,
+  manifest: RouteManifest,
   options: { useHydratedPageData: boolean; forceReload: boolean },
+  outlet: { value: JSX.Element | null },
   scope?: NavigationScope,
   getNavGeneration?: () => number
 ): Promise<JSX.Element | null> {
@@ -181,7 +184,26 @@ async function buildSsrClientOutlet(
     getNavGeneration: gen,
     useHydratedPageData: options.useHydratedPageData,
     forceReload: options.forceReload,
+    onLeafRenderError: (err) => {
+      router.outletRenderError.value = toRenderError(err)
+      void recoverSsrOutletFromRenderError(router, manifest, outlet)
+    },
   })
+}
+
+async function recoverSsrOutletFromRenderError(
+  router: SsrClientRouter,
+  manifest: RouteManifest,
+  outlet: { value: JSX.Element | null }
+): Promise<void> {
+  const err = router.outletRenderError.peek()
+  if (!err) return
+  const recovery = await renderClientErrorOutlet(
+    manifest,
+    router.match.peek(),
+    err
+  )
+  if (recovery) outlet.value = recovery
 }
 
 function subscribeSsrClientOutlet(
@@ -215,6 +237,7 @@ function subscribeSsrClientOutlet(
         router,
         manifest,
         { ...buildOptions, forceReload },
+        outlet,
         scope,
         getNavGeneration
       )
@@ -281,14 +304,16 @@ export async function bootstrapSsrClient(
   const requestContext = readHydratedRequestContext()
   const match = router.match.peek()
 
-  const outlet = signal<JSX.Element | null>(
-    match
-      ? await buildSsrClientOutlet(match, router, manifest, {
-          useHydratedPageData: true,
-          forceReload: false,
-        })
-      : null
-  )
+  const outlet = signal<JSX.Element | null>(null)
+  if (match) {
+    outlet.value = await buildSsrClientOutlet(
+      match,
+      router,
+      manifest,
+      { useHydratedPageData: true, forceReload: false },
+      outlet
+    )
+  }
 
   const app = hydrate(
     Fragment({
@@ -333,6 +358,7 @@ export async function bootstrapSsrClient(
         useHydratedPageData: false,
         forceReload: router.forceLoaderReload.peek(),
       },
+      outlet,
       scope,
       getNavGeneration
     )

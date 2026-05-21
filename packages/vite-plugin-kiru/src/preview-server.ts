@@ -55,7 +55,7 @@ export type SsgPreviewOptions = {
   requireFilledHtml?: boolean
 }
 
-type PreviewRequest = {
+export type PreviewRequest = {
   url?: string
   originalUrl?: string
   /** Set by {@link capturePreviewRequestUrl} before Vite SPA fallback rewrites `url`. */

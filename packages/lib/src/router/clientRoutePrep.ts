@@ -150,6 +150,8 @@ export type BuildClientOutletSubtreeInput = {
   getNavGeneration: () => number
   useHydratedPageData?: boolean
   forceReload?: boolean
+  /** SSR/SSG client outlet: sync render throws on leaf routes (see bootstrapSsrClient). */
+  onLeafRenderError?: (err: unknown) => void
 }
 
 export async function buildClientOutletSubtree(
@@ -163,6 +165,7 @@ export async function buildClientOutletSubtree(
     getNavGeneration,
     useHydratedPageData = true,
     forceReload,
+    onLeafRenderError,
   } = input
   const gateOptions = gateOptionsFor(router)
   const nav = router.currentNavigation.peek()
@@ -246,7 +249,9 @@ export async function buildClientOutletSubtree(
 
     if (!isScopeCurrent(scope, getNavGeneration) || signal.aborted) return null
     return tree && routeModule
-      ? buildRoutedSubtree(tree.layoutModules, routeModule, leafProps)
+      ? buildRoutedSubtree(tree.layoutModules, routeModule, leafProps, {
+          onLeafRenderError,
+        })
       : null
   } catch (err) {
     if (signal.aborted) return null

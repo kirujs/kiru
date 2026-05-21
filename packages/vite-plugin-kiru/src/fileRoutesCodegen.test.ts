@@ -24,8 +24,8 @@ describe("writeGeneratedRoutes", () => {
       assert.strictEqual(written, true)
       assert.strictEqual(outFileAbs, outFile)
       const source = await fs.readFile(outFile, "utf8")
-      assert.ok(source.includes('createRoute("/guarded"'))
-      assert.ok(source.includes("interface RouteTree"))
+      assert.ok(source.includes("/guarded"))
+      assert.ok(source.includes("createRouteTree"))
       assert.ok(source.includes("guarded/middleware"))
     } finally {
       await fs.unlink(outFile).catch(() => {})

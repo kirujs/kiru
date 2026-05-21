@@ -1,7 +1,11 @@
 import { createElement } from "../element.js"
 import { setup } from "../hooks/index.js"
 import { onMount } from "../hooks/onMount.js"
-import { runLinkPrefetch, type LinkPrefetch } from "./prefetchRoute.js"
+import {
+  resolveLinkPrefetch,
+  runLinkPrefetch,
+  type LinkPrefetch,
+} from "./prefetchRoute.js"
 import type { RouterLocaleParam } from "./i18n/augmentation.js"
 import {
   interpolateRoutePath,
@@ -59,71 +63,33 @@ export const Link: Kiru.Component<LinkProps> = () => {
     const { locale } = $.props
     return router.resolveHref(
       resolved,
-      locale === false
-        ? { locale: false }
-        : locale
-          ? { locale }
-          : undefined
+      locale === false ? { locale: false } : locale ? { locale } : undefined
     )
   })
-  const runHoverPrefetch = () => {
-    const p = $.props.prefetch
-    const resolved =
-      p === false
-        ? false
-        : { trigger: "hover" as const, chunks: true, data: true, ...p }
-    if (resolved === false || resolved.trigger === "visible") return
-    runLinkPrefetch(
-      router as import("./clientRoutePrep.js").ClientOutletRouter & {
-        manifest: typeof router.manifest
-        baseUrl: string
-        navigationMode: string
-      },
-      href.peek(),
-      resolved
-    )
+
+  const maybePrefetch = (trigger: "hover" | "visible") => {
+    const prefetch = $.props.prefetch
+    const resolved = resolveLinkPrefetch(prefetch)
+    if (resolved === false || resolved.trigger !== trigger) return
+    runLinkPrefetch(router, href.peek(), prefetch)
   }
 
-  const onpointerenter: Kiru.PointerEventHandler<HTMLAnchorElement> = (event) => {
+  onMount(() => maybePrefetch("visible"))
+
+  const onpointerenter: Kiru.PointerEventHandler<HTMLAnchorElement> = (
+    event
+  ) => {
     $.props.onpointerenter?.(event)
     if (event.defaultPrevented) return
-    runHoverPrefetch()
+    maybePrefetch("hover")
   }
-
-  const onmouseenter: Kiru.MouseEventHandler<HTMLAnchorElement> = (event) => {
-    $.props.onmouseenter?.(event)
-    if (event.defaultPrevented) return
-    runHoverPrefetch()
-  }
-
-  onMount(() => {
-    const p = $.props.prefetch
-    const resolved =
-      p === false
-        ? false
-        : { trigger: "hover" as const, chunks: true, data: true, ...p }
-    if (resolved !== false && resolved.trigger === "visible") {
-      runLinkPrefetch(
-        router as import("./clientRoutePrep.js").ClientOutletRouter & {
-          manifest: typeof router.manifest
-          baseUrl: string
-          navigationMode: string
-        },
-        href.peek(),
-        resolved
-      )
-    }
-  })
 
   const onclick: Kiru.MouseEventHandler<HTMLAnchorElement> = (event) => {
     $.props.onclick?.(event)
     if (event.defaultPrevented) return
     event.preventDefault()
     const { to, replace, locale: linkLocale, params } = $.props
-    const target = resolveLinkTo(
-      to as NavigatePath | string,
-      params as Record<string, string | undefined> | undefined
-    )
+    const target = resolveLinkTo(to, params)
     void router.navigate(
       target,
       linkLocale !== undefined ? { replace, locale: linkLocale } : replace
@@ -132,12 +98,11 @@ export const Link: Kiru.Component<LinkProps> = () => {
 
   return ({ to, replace, params, children, ...rest }) =>
     createElement("a", {
+      ...rest,
       children,
       href,
       onpointerenter,
-      onmouseenter,
       onclick,
-      ...rest,
     })
 }
 

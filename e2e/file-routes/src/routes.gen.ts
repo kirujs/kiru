@@ -14,20 +14,21 @@ const r0 = createRoute("/", () => import("./pages/page"))
 const r1 = createRoute("/pricing", () => import("./pages/(marketing)/pricing/page"))
 const r2 = createRoute("/about", () => import("./pages/about/page"))
 const r3 = createRoute("/blog/[slug]", () => import("./pages/blog/[slug]/page"))
-const r4 = createRoute("/guarded", () => import("./pages/guarded/page"))
-const r5 = createRouteScope({
+const r5 = createRoute("/guarded", () => import("./pages/guarded/page"))
+const r4 = createRouteScope({
   middleware: collectRouteMiddlewareModule(__mw_0),
-  children: [r4],
+  children: [r5],
 })
+const r6 = createRoute("/manual", () => import("./pages/manual/page"))
 
 export const routes = createRouteTree({
   layout: () => import("./pages/layout"),
   notFound: () => import("./pages/not-found"),
-  children: [r0, r1, r2, r3, r5, ...extendRoutes],
+  children: [r0, r1, r2, r3, r4, r6, ...extendRoutes],
 })
 
 declare module "kiru/router" {
   interface RouteTree {
-    routes: [typeof r0, typeof r1, typeof r2, typeof r3, typeof r4]
+    routes: [typeof r0, typeof r1, typeof r2, typeof r3, typeof r5, typeof r6]
   }
 }

@@ -56,6 +56,6 @@ export const routes = createRouteTree({
           }),
         ],
       }),
-      ...contextRouteChildren(r),
+      ...contextRouteChildren(),
     ],
   })

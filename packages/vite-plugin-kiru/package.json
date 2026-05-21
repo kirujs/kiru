@@ -6,7 +6,8 @@
   "type": "module",
   "types": "dist/index.d.ts",
   "scripts": {
-    "test": "tsx --test src/**/*.test.ts",
+    "test": "cross-env NODE_ENV=development tsx --test src/**/*.test.ts",
+    "pretest": "pnpm --filter @kirujs/file-routes run build",
     "build": "tsx ./src/build.ts",
     "dev": "tsx ./src/build.dev.ts"
   },

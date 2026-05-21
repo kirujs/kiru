@@ -1,13 +1,32 @@
 import assert from "node:assert/strict"
+import { execSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
-import { describe, it } from "node:test"
+import { before, describe, it } from "node:test"
 import { createSsgPreviewMiddleware } from "./preview-server.js"
 import { createPreviewSsrProxy } from "./previewSsrProxy.js"
 
 const repoRoot = path.resolve(import.meta.dirname, "../../..")
-const ssrClient = path.join(repoRoot, "e2e/ssr/dist/client")
-const ssrServer = path.join(repoRoot, "e2e/ssr/dist/server/index.js")
+const ssrRoot = path.join(repoRoot, "e2e/ssr")
+const ssrClient = path.join(ssrRoot, "dist/client")
+const ssrServer = path.join(ssrRoot, "dist/server/index.js")
+
+/** Rebuild when dist is missing or predates the createRouteTree route API. */
+async function ensureSsrPreviewFixture(): Promise<void> {
+  let stale = !fs.existsSync(ssrClient) || !fs.existsSync(ssrServer)
+  if (!stale) {
+    const serverSrc = await fs.promises.readFile(ssrServer, "utf8")
+    stale =
+      serverSrc.includes("defineRouteTree") ||
+      !serverSrc.includes("createRouteTree")
+  }
+  if (!stale) return
+  execSync("pnpm run build", {
+    cwd: ssrRoot,
+    stdio: "inherit",
+    env: { ...process.env, NODE_ENV: "production" },
+  })
+}
 
 function runMiddleware(
   middleware: ReturnType<typeof createSsgPreviewMiddleware>,
@@ -41,7 +60,11 @@ function runMiddleware(
   })
 }
 
-describe("preview integration", { skip: !fs.existsSync(ssrClient) }, () => {
+describe("preview integration", () => {
+  before(async () => {
+    await ensureSsrPreviewFixture()
+  })
+
   it("vite preview serves prerendered and SSR routes (e2e/ssr)", async () => {
     const { preview } = await import("vite")
     const configFile = path.join(repoRoot, "e2e/ssr/vite.config.ts")
