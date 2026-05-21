@@ -4,9 +4,3 @@ import { createRoute } from "kiru/router"
 export const extendRoutes = [
   createRoute("/manual", () => import("./pages/manual/page")),
 ] as const
-
-declare module "kiru/router" {
-  interface ExtendedRouteTree {
-    routes: typeof extendRoutes
-  }
-}

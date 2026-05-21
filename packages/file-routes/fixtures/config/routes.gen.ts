@@ -6,21 +6,19 @@ import {
   createRoute,
   createRouteScope,
   createRouteTree,
+  resolveRouteConfig,
 } from "kiru/router"
 import * as __cfg_0 from "./pages/about/page.config"
 import * as __cfg_1 from "./pages/admin/scope.config"
 
-const __cfg_0_export = __cfg_0.default ?? __cfg_0.config
-const __cfg_1_export = __cfg_1.default ?? __cfg_1.config
-
 const r0 = createRoute("/", () => import("./pages/page"))
 const r1 = createRoute("/about", {
-  ...__cfg_0_export,
+  ...resolveRouteConfig(__cfg_0),
   component: () => import("./pages/about/page"),
 })
 const r3 = createRoute("/admin", () => import("./pages/admin/page"))
 const r2 = createRouteScope({
-  ...__cfg_1_export,
+  ...resolveRouteConfig(__cfg_1),
   children: [r3],
 })
 

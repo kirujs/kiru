@@ -72,34 +72,13 @@ export type RouteTreeChild = CreatedRoute<string> | CreatedRouteScope
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface RouteTree {}
 
-/**
- * Optional second registry for `extend` hand-written routes (declare in the extend
- * module only — not in generated `routes.gen.ts`):
- *
- * ```ts
- * // routes.extend.ts
- * export const extendRoutes = [createRoute("/manual", ...)] as const
- * declare module "kiru/router" {
- *   interface ExtendedRouteTree { routes: typeof extendRoutes }
- * }
- * ```
- */
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface ExtendedRouteTree {}
-
 type RegisteredRoutes = RouteTree extends {
   routes: infer R extends readonly CreatedRoute<string>[]
 }
   ? R
   : readonly never[]
 
-type ExtendedRoutes = ExtendedRouteTree extends {
-  routes: infer R extends readonly CreatedRoute<string>[]
-}
-  ? R
-  : readonly never[]
-
-type AllRouteNodes = RegisteredRoutes[number] | ExtendedRoutes[number]
+type AllRouteNodes = RegisteredRoutes[number]
 
 /** Union of registered logical paths; `never` when no registry is augmented. */
 export type AppRoutePath = [AllRouteNodes] extends [never]

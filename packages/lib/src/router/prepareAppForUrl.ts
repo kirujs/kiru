@@ -20,7 +20,7 @@ import {
 import type { HydratedI18nPayload } from "./i18nContext.js"
 import {
   buildMatchSegments,
-  buildMiddlewareTo,
+  buildMiddlewareLocation,
 } from "./navigation.js"
 import { mergeRouteMeta } from "./routeMeta.js"
 import {
@@ -270,7 +270,7 @@ export async function prepareAppForUrl(
     const requestContext = (ctx?.context ?? {}) as CustomRequestContext
     const href = `${path}${requestUrl.search}${requestUrl.hash}`
     const segments = buildMatchSegments(routeMatch)
-    const mwTo = buildMiddlewareTo(
+    const mwTo = buildMiddlewareLocation(
       {
         pathname: routeMatch.pathname,
         hash: requestUrl.hash,
@@ -283,7 +283,6 @@ export async function prepareAppForUrl(
     const mw = await runRouteMiddleware({
       to: mwTo,
       from: null,
-      meta: mergeRouteMeta(routeMatch),
       context: requestContext,
       request,
       match: routeMatch,

@@ -6,9 +6,11 @@ import {
   createRouteScope,
   createRouteTree,
 } from "../../router/createRouteTree.js"
-import { buildMiddlewareTo } from "../../router/navigation.js"
+import {
+  buildMatchSegments,
+  buildMiddlewareLocation,
+} from "../../router/navigation.js"
 import { runRouteMiddleware } from "../../router/routeMiddleware.js"
-import { mergeRouteMeta } from "../../router/routeMeta.js"
 
 describe("runRouteMiddleware", () => {
   it("runs root scope then nested scope then route middleware in order", async () => {
@@ -21,14 +23,17 @@ describe("runRouteMiddleware", () => {
         ],
         children: [
           createRouteScope({
-            middleware: [
-              () => {
+            middleware: (inherited) => [
+              ...inherited,
+              (ctx) => {
+                assert.ok(ctx.to.meta)
                 order.push("scope")
               },
             ],
             children: [
               createRoute("/", {
-                middleware: [
+                middleware: (inherited) => [
+                  ...inherited,
                   () => {
                     order.push("route")
                   },
@@ -41,14 +46,14 @@ describe("runRouteMiddleware", () => {
       })
     const manifest = compileRouteTree(tree)
     const match = matchRoute(manifest, "/")!
+    const segments = buildMatchSegments(match)
     await runRouteMiddleware({
-      to: buildMiddlewareTo(
+      to: buildMiddlewareLocation(
         { pathname: "/", hash: "", query: {}, href: "/" },
         match,
-        []
+        segments
       ),
       from: null,
-      meta: mergeRouteMeta(match),
       context: {},
       match,
     })
@@ -68,13 +73,12 @@ describe("runRouteMiddleware", () => {
     )
     const match = matchRoute(manifest, "/")!
     const out = await runRouteMiddleware({
-      to: buildMiddlewareTo(
+      to: buildMiddlewareLocation(
         { pathname: "/", hash: "", query: {}, href: "/" },
         match,
-        []
+        buildMatchSegments(match)
       ),
       from: null,
-      meta: {},
       context: {},
       match,
     })

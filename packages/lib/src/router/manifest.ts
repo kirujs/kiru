@@ -1,4 +1,9 @@
-import { mergeRouteHead } from "./meta.js"
+import {
+  inheritedFromScopes,
+  resolveRouteHeadLayer,
+  resolveRouteMetaLayer,
+  resolveRouteMiddlewareLayer,
+} from "./routeLayers.js"
 import {
   formatPathname,
   pathnameForMatch,
@@ -18,19 +23,9 @@ import type {
   GenerateStaticParams,
   RouteManifest,
   RouteMatch,
-  RouteHeadMeta,
-  RouteMiddleware,
-  RouteMeta,
   RouteNodeDefinition,
   RouteTreeDefinition,
 } from "./types.js"
-
-function normalizeMiddleware(
-  value: RouteMiddleware | RouteMiddleware[] | undefined
-): RouteMiddleware[] | undefined {
-  if (!value) return undefined
-  return Array.isArray(value) ? value : [value]
-}
 
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -50,17 +45,6 @@ function commonPrefixLength(a: string[], b: string[]): number {
   let i = 0
   while (i < length && a[i] === b[i]) i++
   return i
-}
-
-function mergeShallowMeta(
-  ...layers: Array<Partial<RouteMeta> | undefined>
-): RouteMeta {
-  const out: RouteMeta = {}
-  for (const layer of layers) {
-    if (!layer) continue
-    Object.assign(out, layer)
-  }
-  return out
 }
 
 /** Score: higher wins on ambiguous matches (static > dynamic > optional > catch-all). */
@@ -145,14 +129,16 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
 
   const walk = (node: RouteNodeDefinition, parents: CompiledRouteScope[]) => {
     if (node.kind === "scope") {
+      const { meta: inheritedMeta, head: inheritedHead, middleware: inheritedMw } =
+        inheritedFromScopes(parents)
       const scope: CompiledRouteScope = {
         id: `scope:${scopeId++}`,
         static: node.static ?? false,
         layout: node.layout,
         notFound: node.notFound,
-        head: node.head,
-        meta: node.meta,
-        middleware: normalizeMiddleware(node.middleware),
+        head: resolveRouteHeadLayer(inheritedHead, node.head),
+        meta: resolveRouteMetaLayer(inheritedMeta, node.meta),
+        middleware: resolveRouteMiddlewareLayer(inheritedMw, node.middleware),
         error: node.error,
       }
       const nextParents = parents.concat(scope)
@@ -167,14 +153,11 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
     const isStatic =
       node.static === false ? false : (node.static ?? inheritedStatic)
 
-    let head: RouteHeadMeta = {}
-    let meta: RouteMeta = {}
-    for (const parentScope of parents) {
-      head = mergeRouteHead(head, parentScope.head)
-      meta = mergeShallowMeta(meta, parentScope.meta)
-    }
-    head = mergeRouteHead(head, node.head)
-    meta = mergeShallowMeta(meta, node.meta)
+    const { meta: inheritedMeta, head: inheritedHead, middleware: inheritedMw } =
+      inheritedFromScopes(parents)
+    const head = resolveRouteHeadLayer(inheritedHead, node.head)
+    const meta = resolveRouteMetaLayer(inheritedMeta, node.meta)
+    const middleware = resolveRouteMiddlewareLayer(inheritedMw, node.middleware)
 
     const scopeError = [...parents].reverse().find((s) => s.error)?.error
 
@@ -191,7 +174,7 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
       scopes: parents,
       head,
       meta,
-      middleware: normalizeMiddleware(node.middleware),
+      middleware,
       error: node.error ?? scopeError,
     })
   }

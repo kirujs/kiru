@@ -1,11 +1,24 @@
 import type {
   RouteDefinitionConfig,
   RouteLoader,
+  RouteMiddleware,
+  RouteMiddlewareInput,
+  RouteMiddlewareLayer,
   RouteNodeDefinition,
   RouteScopeDefinition,
+  RouteScopeConfig,
   RouteTreeDefinition,
 } from "./types.js"
 import type { CreatedRoute, CreatedRouteScope, RouteTreeChild } from "./routePaths.js"
+
+type RouteScopeConfigWithChildren = Omit<RouteScopeConfig, "middleware"> & {
+  children: readonly RouteTreeChild[]
+}
+
+type RouteDefinitionConfigWithMiddleware = Omit<
+  RouteDefinitionConfig,
+  "middleware"
+>
 
 function buildRoute<P extends string>(
   path: P,
@@ -37,15 +50,47 @@ function buildRoute<P extends string>(
 
 export function createRoute<const P extends string>(
   path: P,
+  value: RouteDefinitionConfigWithMiddleware & {
+    middleware?: RouteMiddleware[]
+  }
+): CreatedRoute<P>
+export function createRoute<const P extends string>(
+  path: P,
+  value: RouteDefinitionConfigWithMiddleware & {
+    middleware?: RouteMiddlewareLayer
+  }
+): CreatedRoute<P>
+export function createRoute<const P extends string>(
+  path: P,
+  value: RouteDefinitionConfigWithMiddleware & {
+    middleware?: RouteMiddleware
+  }
+): CreatedRoute<P>
+export function createRoute<const P extends string>(
+  path: P,
+  value: RouteLoader | RouteDefinitionConfig
+): CreatedRoute<P>
+export function createRoute<const P extends string>(
+  path: P,
   value: RouteLoader | RouteDefinitionConfig
 ): CreatedRoute<P> {
   return buildRoute(path, value)
 }
 
 export function createRouteScope(
-  config: import("./types.js").RouteScopeConfig & {
-    children: readonly RouteTreeChild[]
-  }
+  config: RouteScopeConfigWithChildren & { middleware?: RouteMiddleware[] }
+): CreatedRouteScope
+export function createRouteScope(
+  config: RouteScopeConfigWithChildren & { middleware?: RouteMiddlewareLayer }
+): CreatedRouteScope
+export function createRouteScope(
+  config: RouteScopeConfigWithChildren & { middleware?: RouteMiddleware }
+): CreatedRouteScope
+export function createRouteScope(
+  config: RouteScopeConfigWithChildren & { middleware?: RouteMiddlewareInput }
+): CreatedRouteScope
+export function createRouteScope(
+  config: RouteScopeConfigWithChildren & { middleware?: RouteMiddlewareInput }
 ): CreatedRouteScope {
   return {
     kind: "scope",
@@ -61,9 +106,19 @@ export function createRouteScope(
 }
 
 export function createRouteTree(
-  config: import("./types.js").RouteScopeConfig & {
-    children: readonly RouteTreeChild[]
-  }
+  config: RouteScopeConfigWithChildren & { middleware?: RouteMiddleware[] }
+): RouteTreeDefinition
+export function createRouteTree(
+  config: RouteScopeConfigWithChildren & { middleware?: RouteMiddlewareLayer }
+): RouteTreeDefinition
+export function createRouteTree(
+  config: RouteScopeConfigWithChildren & { middleware?: RouteMiddleware }
+): RouteTreeDefinition
+export function createRouteTree(
+  config: RouteScopeConfigWithChildren & { middleware?: RouteMiddlewareInput }
+): RouteTreeDefinition
+export function createRouteTree(
+  config: RouteScopeConfigWithChildren & { middleware?: RouteMiddlewareInput }
 ): RouteTreeDefinition {
   const root: RouteScopeDefinition = {
     kind: "scope",

@@ -10,18 +10,23 @@ Unified **policy pipeline** for SSR and CSR replaces the old Vue-style guard zoo
 import type { RouteMiddleware } from "kiru/router"
 
 export const requireAuth: RouteMiddleware = (ctx) => {
-  if (!ctx.meta.requiresAuth) return
+  if (!ctx.to.meta.requiresAuth) return
   if (ctx.context.user) return
-  const login = ctx.meta.unauthorizedRedirect ?? "/login"
+  const login = ctx.to.meta.unauthorizedRedirect ?? "/login"
   return { redirect: `${login}?next=${encodeURIComponent(ctx.to.href)}` }
 }
 ```
 
 Register app-wide on the **root scope** of `createRouteTree`, or per scope / page via `createRouteScope` / `createRoute` config. With file-based routes, use `middleware.ts` or `scope.config.ts` / `page.config.ts` — see [file-based-routes.md](../router/file-based-routes.md).
 
-### Execution order
+### Layer rules (route tree)
 
-`collectMiddlewareChain` (`routeMeta.ts`): scope middleware root → leaf, then page middleware.
+Resolved at compile time (same as `meta` / `head`):
+
+- **Array** (or a single handler): replaces the inherited chain from ancestor scopes.
+- **Function:** `(inherited) => middleware[]` — extend or replace explicitly.
+
+`collectMiddlewareChain(match)` returns the leaf’s compiled chain (root → leaf order preserved when using layer functions).
 
 ### Results
 
@@ -45,7 +50,7 @@ declare module "kiru/router" {
 }
 ```
 
-Shallow merge along the scope chain to the leaf. Use in middleware — not closure state from guards.
+Resolved along the scope chain at compile time (object vs function, same as `head`). Use `ctx.to.meta` for the target route and `ctx.from?.meta` for the previous route. Per-scope values are on `ctx.to.segments[].meta`. Use in middleware — not closure state from guards.
 
 ## Request context
 

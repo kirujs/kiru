@@ -22,10 +22,12 @@ r.page("/seo", {
 })
 ```
 
-### Merge rules
+### Layer rules (route tree)
 
-- Walk scope chain root → leaf
-- Child overrides parent fields (shallow merge)
+- Walk scope chain root → leaf at compile time
+- **Object:** replaces inherited head from ancestor scopes (no field-wise merge)
+- **Function:** `(inherited) => head` receives resolved ancestor head; return value is used as-is
+- Page `export const head` / `defineHeadContent` still merges at runtime via `mergeRouteHead` (see below)
 - **Sync** dynamic titles (params only, no loader) → `defineHeadContent((ctx) => ({ title: \`User ${ctx.params.id}\` }))` — does not block SSR shell streaming with `serverLoader`
 - **Async** dynamic titles (needs loader data) → `defineHeadContent(async (ctx) => { const { data } = await ctx.loader(); return { title: … } })` — awaits before non-streaming SSR; blocks early head flush when combined with streaming loads
 

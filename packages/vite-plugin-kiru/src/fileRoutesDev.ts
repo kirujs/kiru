@@ -64,15 +64,15 @@ export function scheduleFileRoutesRegen(
 }
 
 /** Dev server: initial codegen + watch `pagesDir` and optional `extend` module. */
-export function attachFileRoutesDevWatcher(
+export async function attachFileRoutesDevWatcher(
   state: PluginState,
   server: ViteDevServer,
   log?: (msg: string) => void
-): void {
+): Promise<void> {
   const fr = state.router.fileRoutes
   if (!fr) return
 
-  void regenerateFileRoutes(state, server, log)
+  await regenerateFileRoutes(state, server, log)
   server.watcher.add(fr.pagesDirAbs)
   if (fr.extendAbs) server.watcher.add(fr.extendAbs)
 

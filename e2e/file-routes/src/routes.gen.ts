@@ -6,13 +6,18 @@ import {
   createRoute,
   createRouteScope,
   createRouteTree,
+  resolveRouteConfig,
 } from "kiru/router"
+import * as __cfg_0 from "./pages/about/page.config"
 import * as __mw_0 from "./pages/guarded/middleware"
 import { extendRoutes } from "./routes.extend"
 
 const r0 = createRoute("/", () => import("./pages/page"))
 const r1 = createRoute("/pricing", () => import("./pages/(marketing)/pricing/page"))
-const r2 = createRoute("/about", () => import("./pages/about/page"))
+const r2 = createRoute("/about", {
+  ...resolveRouteConfig(__cfg_0),
+  component: () => import("./pages/about/page"),
+})
 const r3 = createRoute("/blog/[slug]", () => import("./pages/blog/[slug]/page"))
 const r5 = createRoute("/guarded", () => import("./pages/guarded/page"))
 const r4 = createRouteScope({
@@ -29,6 +34,6 @@ export const routes = createRouteTree({
 
 declare module "kiru/router" {
   interface RouteTree {
-    routes: [typeof r0, typeof r1, typeof r2, typeof r3, typeof r5, typeof r6]
+    routes: [typeof r0, typeof r1, typeof r2, typeof r3, typeof r5, typeof r6, ...(typeof extendRoutes)]
   }
 }

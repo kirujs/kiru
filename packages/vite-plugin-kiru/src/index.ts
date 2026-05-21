@@ -304,8 +304,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       const { devtoolsEnabled, dtHostScriptPath, fileLinkFormatter, router } =
         state
 
-      if (router.fileRoutes) {
-        attachFileRoutesDevWatcher(state, server, log)
+      const attachFileRoutesAfterListen = async () => {
+        if (router.fileRoutes) {
+          await attachFileRoutesDevWatcher(state, server, log)
+        }
       }
 
       if (devtoolsEnabled) {
@@ -424,11 +426,11 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             next(e)
           }
         })
-        return
+        return attachFileRoutesAfterListen
       }
 
       const routesModuleAbs = router.ssg?.routesModuleAbs
-      if (!routesModuleAbs) return
+      if (!routesModuleAbs) return attachFileRoutesAfterListen
 
       // SSG dev mode: register directly so this runs before Vite's
       // indexHtmlMiddleware. We render pages and inject CSS links into the
@@ -477,6 +479,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           next(e)
         }
       })
+
+      return attachFileRoutesAfterListen
     },
     resolveId(id) {
       if (id in virtualModules) {

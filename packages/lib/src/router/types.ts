@@ -52,6 +52,47 @@ export interface CustomRequestContext {}
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface RouteMeta {}
 
+/**
+ * `meta` on a scope or route in the route tree.
+ *
+ * - **Object:** replaces inherited meta (no shallow merge).
+ * - **Function:** `(inherited) => meta` — `inherited` is resolved from ancestor scopes.
+ */
+export type RouteMetaInput =
+  | Partial<RouteMeta>
+  | ((inherited: RouteMeta) => RouteMeta)
+
+/**
+ * `head` on a scope or route in the route tree.
+ *
+ * - **Object:** replaces inherited head (no `mergeRouteHead`).
+ * - **Function:** `(inherited) => head` — `inherited` is resolved from ancestor scopes.
+ */
+export type RouteHeadMetaInput =
+  | RouteHeadMeta
+  | ((inherited: RouteHeadMeta) => RouteHeadMeta)
+
+/**
+ * Extends the middleware chain from ancestor scopes.
+ *
+ * Named separately from {@link RouteMiddleware} so TypeScript can infer `inherited`
+ * (both are single-argument functions; a bare union would not contextualize).
+ */
+export type RouteMiddlewareLayer = (
+  inherited: RouteMiddleware[]
+) => RouteMiddleware[]
+
+/**
+ * `middleware` on a scope or route in the route tree.
+ *
+ * - **Array** (or a single {@link RouteMiddleware}): replaces inherited chain.
+ * - **{@link RouteMiddlewareLayer}:** `(inherited) => middleware[]`.
+ */
+export type RouteMiddlewareInput =
+  | RouteMiddleware
+  | RouteMiddleware[]
+  | RouteMiddlewareLayer
+
 /** Target for middleware or guard redirects. */
 export type RouteMiddlewareRedirect =
   | string
@@ -78,23 +119,23 @@ export type RouteTreeMatchSegment = {
   meta: RouteMeta
 }
 
-/** Destination (or source) location passed to route middleware. */
-export type RouteMiddlewareTo = {
+/** Destination or source location passed to route middleware. */
+export type RouteMiddlewareLocation = {
   pathname: string
   params: Record<string, string>
   query: Record<string, string[]>
   hash: string
   href: string
   routeId: string
+  /** Resolved {@link RouteMeta} for this location’s matched leaf. */
+  meta: RouteMeta
   segments: RouteTreeMatchSegment[]
 }
 
 /** Arguments to {@link RouteMiddleware}; runs before loaders for that navigation. */
 export type RouteMiddlewareContext = {
-  /** Merged {@link RouteMeta} for the target leaf. */
-  meta: RouteMeta
-  to: RouteMiddlewareTo
-  from: RouteMiddlewareTo | null
+  to: RouteMiddlewareLocation
+  from: RouteMiddlewareLocation | null
   /** Present on SSR first paint; usually undefined on CSR client navigations. */
   request?: Request
   context: CustomRequestContext
@@ -144,10 +185,10 @@ export type GenerateSitemapParams = (
 export type GenerateSitemapParamsContext = GenerateStaticParamsContext
 
 /**
- * Declarative SEO / document metadata on scopes and routes.
+ * Resolved SEO / document metadata (after route-tree layers are applied).
  *
- * Merged parent → child; leaf wins. Page `export const head` /
- * `defineHeadContent` merges again at runtime (loader-aware).
+ * Author with {@link RouteHeadMetaInput} on scopes/routes. Page `export const head` /
+ * `defineHeadContent` can still adjust at runtime (loader-aware).
  */
 export interface RouteHeadMeta {
   title?: string
@@ -251,9 +292,9 @@ export interface RouteDefinitionConfig {
    * Scope `static: true` applies to all descendant leaves unless overridden.
    */
   static?: boolean
-  head?: RouteHeadMeta
-  meta?: Partial<RouteMeta>
-  middleware?: RouteMiddleware | RouteMiddleware[]
+  head?: RouteHeadMetaInput
+  meta?: RouteMetaInput
+  middleware?: RouteMiddlewareInput
   /** Error boundary module for render failures on this leaf (and below in the outlet). */
   error?: RouteLoader
 }
@@ -273,16 +314,16 @@ export interface RouteDefinitionConfig {
  */
 export type RoutePageConfig = Omit<RouteDefinitionConfig, "component">
 
-/** Compiled leaf route node (`kind: "route"`). */
+/** Authoring-time leaf route node (`kind: "route"`). */
 export interface RouteDefinition {
   kind: "route"
   method: "GET"
   path: string
   component: RouteLoader
   static?: boolean
-  head?: RouteHeadMeta
-  meta?: Partial<RouteMeta>
-  middleware?: RouteMiddleware | RouteMiddleware[]
+  head?: RouteHeadMetaInput
+  meta?: RouteMetaInput
+  middleware?: RouteMiddlewareInput
   error?: RouteLoader
 }
 
@@ -296,9 +337,9 @@ export interface RouteScopeDefinition {
   static?: boolean
   layout?: RouteLoader
   notFound?: RouteLoader
-  head?: RouteHeadMeta
-  meta?: Partial<RouteMeta>
-  middleware?: RouteMiddleware | RouteMiddleware[]
+  head?: RouteHeadMetaInput
+  meta?: RouteMetaInput
+  middleware?: RouteMiddlewareInput
   error?: RouteLoader
   children: RouteNodeDefinition[]
 }
@@ -347,9 +388,12 @@ export interface CompiledRouteScope {
   static: boolean
   layout?: RouteLoader
   notFound?: RouteLoader
-  head?: RouteHeadMeta
-  meta?: Partial<RouteMeta>
-  middleware?: RouteMiddleware[]
+  /** Resolved head for this scope (ancestor chain + this layer). */
+  head: RouteHeadMeta
+  /** Resolved meta for this scope (ancestor chain + this layer). */
+  meta: RouteMeta
+  /** Resolved middleware chain for this scope (ancestor chain + this layer). */
+  middleware: RouteMiddleware[]
   error?: RouteLoader
 }
 
@@ -370,11 +414,12 @@ export interface CompiledRoute {
   component: RouteLoader
   /** Ancestor scopes from root to parent (inclusive). */
   scopes: CompiledRouteScope[]
-  /** Merged scope + leaf declarative head (before page export merge). */
+  /** Resolved scope + leaf declarative head (before page export merge). */
   head: RouteHeadMeta
-  /** Merged scope + leaf {@link RouteMeta}. */
+  /** Resolved scope + leaf {@link RouteMeta}. */
   meta: RouteMeta
-  middleware?: RouteMiddleware[]
+  /** Resolved middleware chain (ancestor scopes + leaf). */
+  middleware: RouteMiddleware[]
   error?: RouteLoader
 }
 

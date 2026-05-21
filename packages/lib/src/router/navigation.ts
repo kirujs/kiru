@@ -22,7 +22,7 @@ import type {
   RouteLocationSnapshot,
   RouteManifest,
   RouteMatch,
-  RouteMiddlewareTo,
+  RouteMiddlewareLocation,
   RouteTreeMatchSegment,
 } from "./types.js"
 import { runGuards, toRedirect } from "./runNavigationGuards.js"
@@ -40,22 +40,23 @@ export function buildMatchSegments(
     out.push({
       id: scope.id,
       kind: "scope",
-      meta: scope.meta ?? {},
+      meta: scope.meta,
     })
   }
   out.push({
     id: match.route.id,
     kind: "route",
-    meta: match.route.meta ?? {},
+    meta: match.route.meta,
   })
   return out
 }
 
-export function buildMiddlewareTo(
+export function buildMiddlewareLocation(
   resolved: RouteLocationParts & { href: string },
   match: RouteMatch,
   segments: RouteTreeMatchSegment[]
-): RouteMiddlewareTo {
+): RouteMiddlewareLocation {
+  const meta = mergeRouteMeta(match)
   return {
     pathname: match.pathname,
     params: match.params,
@@ -63,6 +64,7 @@ export function buildMiddlewareTo(
     hash: resolved.hash,
     href: resolved.href,
     routeId: match.route.id,
+    meta,
     segments,
   }
 }
@@ -395,7 +397,7 @@ export function createNavigateInternal(
       if (toMatch && collectMiddlewareChain(toMatch).length > 0) {
         const segments = toMatch ? buildMatchSegments(toMatch) : []
         const mwTo = toMatch
-          ? buildMiddlewareTo(resolved, toMatch, segments)
+          ? buildMiddlewareLocation(resolved, toMatch, segments)
           : {
               pathname: targetPath,
               params: {},
@@ -403,11 +405,12 @@ export function createNavigateInternal(
               hash: resolved.hash,
               href: resolved.href,
               routeId: "",
+              meta: {},
               segments: [],
             }
         const mwFrom =
           fromMatch && fromSnapshot
-            ? buildMiddlewareTo(
+            ? buildMiddlewareLocation(
                 {
                   pathname: fromParts.pathname,
                   hash: fromParts.hash,
@@ -424,7 +427,6 @@ export function createNavigateInternal(
         const mw = await runRouteMiddleware({
           to: mwTo,
           from: mwFrom,
-          meta: toMatch ? mergeRouteMeta(toMatch) : {},
           context: requestContext.value,
           match: toMatch,
         })

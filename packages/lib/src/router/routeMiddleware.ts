@@ -2,11 +2,10 @@ import { collectMiddlewareChain } from "./routeMeta.js"
 import type {
   CustomRequestContext,
   RouteMatch,
-  RouteMeta,
   RouteMiddleware,
   RouteMiddlewareContext,
+  RouteMiddlewareLocation,
   RouteMiddlewareRedirect,
-  RouteMiddlewareTo,
 } from "./types.js"
 
 export function toMiddlewareRedirect(value: RouteMiddlewareRedirect): {
@@ -18,9 +17,8 @@ export function toMiddlewareRedirect(value: RouteMiddlewareRedirect): {
 }
 
 export async function runRouteMiddleware(input: {
-  to: RouteMiddlewareTo
-  from: RouteMiddlewareTo | null
-  meta: RouteMeta
+  to: RouteMiddlewareLocation
+  from: RouteMiddlewareLocation | null
   context: CustomRequestContext
   request?: Request
   match: RouteMatch | null
@@ -31,7 +29,6 @@ export async function runRouteMiddleware(input: {
   | { type: "abort" }
 > {
   const ctx: RouteMiddlewareContext = {
-    meta: input.meta,
     to: input.to,
     from: input.from,
     request: input.request,

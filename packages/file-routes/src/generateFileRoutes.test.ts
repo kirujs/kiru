@@ -95,6 +95,7 @@ export const extendRoutes = [
     })
     assert.ok(source.includes("...extendRoutes"))
     assert.ok(source.includes("import { extendRoutes }"))
+    assert.ok(source.includes("...(typeof extendRoutes)"))
     assert.ok(!source.includes("interface ExtendedRouteTree"))
   })
 
@@ -104,6 +105,9 @@ export const extendRoutes = [
     const { source } = await generateFileRoutes({ pagesDir, outFile })
 
     assert.ok(source.includes("page.config"))
+    assert.ok(source.includes("...resolveRouteConfig(__cfg_"))
+    assert.ok(!source.includes("_export"))
+    assert.ok(!source.match(/__cfg_\d+\.config\b/))
     assert.ok(source.includes("scope.config"))
     assert.ok(source.includes("static: true") || source.includes("__cfg_"))
     assert.ok(source.includes("satisfies RoutePageConfig") === false)

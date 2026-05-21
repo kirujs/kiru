@@ -108,7 +108,10 @@ describe("file routes dev regeneration", () => {
 
   afterEach(async () => {
     resetFileRoutesDebounce()
-    if (server) await server.close()
+    if (server) {
+      await server.close()
+      await new Promise((r) => setTimeout(r, 50))
+    }
     server = undefined
     state = undefined
     await fs.rm(root, { recursive: true, force: true })
@@ -116,10 +119,14 @@ describe("file routes dev regeneration", () => {
 
   async function startWatcher() {
     const { createServer } = await import("vite")
-    server = await createServer({ root, logLevel: "error", plugins: [] })
+    server = await createServer({
+      root,
+      logLevel: "error",
+      plugins: [],
+      optimizeDeps: { disabled: true },
+    })
     await server.listen({ port: 0 })
-    attachFileRoutesDevWatcher(state!, server)
-    await regenerateFileRoutes(state!, server)
+    await attachFileRoutesDevWatcher(state!, server)
   }
 
   async function flushDebouncedRegen(): Promise<void> {

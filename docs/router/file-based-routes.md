@@ -135,7 +135,8 @@ createRoute("/about", {
 **Rules:**
 
 - Do not combine `middleware.ts` and `middleware` in a config file in the same directory (codegen error).
-- Page `export const head` / `defineHeadContent` still merges at runtime with route `head` from config.
+- Route-tree `head` / `meta` in config: object replaces inherited; function receives inherited from ancestors.
+- Page `export const head` / `defineHeadContent` still merges at runtime with compiled route `head` via `mergeRouteHead`.
 - `generateStaticParams`, `generateSitemapParams`, and `export const isr` stay on the **page module**.
 
 ## Middleware in tree
@@ -169,7 +170,7 @@ export default [requireAuth, logging]
 
 You can combine `export default` (function or array) with a named `export const middleware` (function or array); handlers run in that order.
 
-Order at runtime: ancestor scopes (root first) → leaf (see [route-middleware-and-context.md](./route-middleware-and-context.md)).
+Route-tree `middleware` in config: arrays replace inherited; functions receive inherited. Co-located `middleware.ts` supplies an array for that scope. See [route-middleware-and-context.md](./route-middleware-and-context.md).
 
 ## Extend hand-written routes
 
@@ -180,19 +181,13 @@ import { createRoute } from "kiru/router"
 export const extendRoutes = [
   createRoute("/manual", () => import("./manual.tsx")),
 ] as const
-
-declare module "kiru/router" {
-  interface ExtendedRouteTree {
-    routes: typeof extendRoutes
-  }
-}
 ```
 
 ```ts
 fileRoutes: { extend: "./src/routes.extend.ts" }
 ```
 
-Codegen spreads `...extendRoutes` into the generated tree `children` array. Register extended paths for type-safe `Link` / `navigate` **only** in the extend file (`ExtendedRouteTree`); `routes.gen.ts` imports `extendRoutes` and does not repeat that augmentation.
+Codegen spreads `...extendRoutes` into the generated tree `children` array and adds `...(typeof extendRoutes)` to the `RouteTree` registry in `routes.gen.ts` for type-safe `Link` / `navigate`.
 
 ## Package
 

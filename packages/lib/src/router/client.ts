@@ -4,6 +4,7 @@
  */
 export * from "./types.js"
 export * from "./createRouteTree.js"
+export * from "./resolveRouteConfig.js"
 export * from "./routePaths.js"
 export { useParams } from "./useParams.js"
 export * from "./manifest.js"

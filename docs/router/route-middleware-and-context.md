@@ -12,7 +12,7 @@ Kiru uses a single **route middleware** pipeline on SSR first paint and CSR navi
 import type { RouteMiddleware } from "kiru/router"
 
 export const requireAuth: RouteMiddleware = (ctx) => {
-  if (!ctx.meta.requiresAuth) return
+  if (!ctx.to.meta.requiresAuth) return
   if (ctx.context.user) return
   return { redirect: "/login" }
 }
@@ -22,7 +22,7 @@ Attach on `createRouteTree` / `createRouteScope` / `createRoute`, or via file-ba
 
 ### Order
 
-Ancestor scope middleware (root first) → leaf scope chain → page middleware. Runs **before** loaders for that navigation.
+Middleware is resolved at compile time: **arrays replace** the inherited chain from ancestor scopes; **functions** receive that chain and return the next one. The leaf’s compiled chain runs in order (root first when extended via layer functions). Runs **before** loaders for that navigation.
 
 ### Results
 
@@ -36,16 +36,26 @@ Ancestor scope middleware (root first) → leaf scope chain → page middleware.
 ### Context shape
 
 ```ts
+type RouteMiddlewareLocation = {
+  pathname: string
+  params: Record<string, string>
+  query: Record<string, string[]>
+  hash: string
+  href: string
+  routeId: string
+  meta: RouteMeta // resolved leaf meta for this location
+  segments: RouteTreeMatchSegment[]
+}
+
 type RouteMiddlewareContext = {
-  meta: RouteMeta
-  to: RouteMiddlewareTo
-  from: RouteMiddlewareTo | null
+  to: RouteMiddlewareLocation
+  from: RouteMiddlewareLocation | null // from.meta is the previous route’s leaf meta
   request?: Request
   context: CustomRequestContext
 }
 ```
 
-Augment `RouteMeta` via module declaration. Merge is shallow along scopes to the leaf.
+Augment `RouteMeta` via module declaration. Leaf meta is resolved at compile time (see route-tree layer rules).
 
 ## Request context
 

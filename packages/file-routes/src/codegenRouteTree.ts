@@ -32,10 +32,6 @@ function assertNoMiddlewareConfigConflict(
   }
 }
 
-function configExportExpr(moduleVar: string): string {
-  return `${moduleVar}.default ?? ${moduleVar}.config`
-}
-
 function dirNeedsScope(node: FileRouteDirNode): boolean {
   if (
     node.layout ||
@@ -74,7 +70,6 @@ export function codegenRouteTree(
   const configImports: ModuleImport[] = []
   const leafRouteVars: string[] = []
   const declLines: string[] = []
-  const configDeclLines: string[] = []
   let routeCounter = 0
   let mwCounter = 0
   let cfgCounter = 0
@@ -102,8 +97,7 @@ export function codegenRouteTree(
   const emitConfigSpread = (configFile: string | undefined): string[] => {
     if (!configFile) return []
     const mod = registerConfig(configFile)
-    configDeclLines.push(`const ${mod}_export = ${configExportExpr(mod)}`)
-    return [`...${mod}_export,`]
+    return [`...resolveRouteConfig(${mod}),`]
   }
 
   const emitPage = (node: FileRouteDirNode): string => {
@@ -237,12 +231,18 @@ export function codegenRouteTree(
   }
 
   const augmentParts: string[] = []
-  if (leafRouteVars.length > 0) {
+  if (leafRouteVars.length > 0 || extendImportPath) {
     const registryTypes = leafRouteVars.map((v) => `typeof ${v}`).join(", ")
+    const routesTuple =
+      registryTypes.length > 0 && extendImportPath
+        ? `[${registryTypes}, ...(typeof extendRoutes)]`
+        : registryTypes.length > 0
+          ? `[${registryTypes}]`
+          : "[...(typeof extendRoutes)]"
     augmentParts.push(
       'declare module "kiru/router" {',
       "  interface RouteTree {",
-      `    routes: [${registryTypes}]`,
+      `    routes: ${routesTuple}`,
       "  }",
       "}"
     )
@@ -255,11 +255,10 @@ export function codegenRouteTree(
     "  createRoute,",
     "  createRouteScope,",
     "  createRouteTree,",
+    ...(configImports.length > 0 ? ["  resolveRouteConfig,"] : []),
     '} from "kiru/router"',
     ...importLines,
     "",
-    ...configDeclLines,
-    ...(configDeclLines.length > 0 ? [""] : []),
     ...declLines,
     "",
     "export const routes = createRouteTree({",

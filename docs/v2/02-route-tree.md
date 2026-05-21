@@ -145,7 +145,7 @@ SSR catches render errors and renders the nearest `error` module on the matched 
 
 ## Document head (`head`)
 
-Declarative SEO on scope or page (merged child overrides parent):
+Declarative SEO on scope or page. Each layer is either a **plain object** (replaces inherited head from ancestors) or a **function** `(inherited) => head` (extend or replace explicitly):
 
 ```ts
 r.scope({
@@ -190,7 +190,16 @@ createRouteScope({
 })
 ```
 
-Merged **shallowly** along the scope chain to the leaf. See [04-middleware-meta-context.md](./04-middleware-meta-context.md).
+Resolved along the scope chain at compile time with the same object-vs-function rules as `head`. `mergeRouteMeta(match)` returns the leaf’s compiled meta. See [04-middleware-meta-context.md](./04-middleware-meta-context.md).
+
+## Route middleware
+
+Per scope or page:
+
+- **Array** (or a single handler): replaces inherited middleware from ancestors.
+- **Function:** `(inherited) => middleware[]` — extend or replace explicitly.
+
+`collectMiddlewareChain(match)` returns the compiled leaf chain. See [04-middleware-meta-context.md](./04-middleware-meta-context.md).
 
 ## Route middleware on a page
 
