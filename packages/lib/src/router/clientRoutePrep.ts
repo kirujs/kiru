@@ -1,13 +1,4 @@
 import type { KiruLoader, PageProps } from "./loaders.js"
-import {
-  resolvePendingOutletMatch,
-  shouldDeferProtectedOutlet,
-} from "./contextGate.js"
-import {
-  effectiveContextPendingFallback,
-  type ContextGateOptions,
-} from "./routeMeta.js"
-import { warnProtectedImportBeforeGate } from "./devWarnings.js"
 import { formatRouterSearch } from "./navigation.js"
 import {
   buildScopeCacheKey,
@@ -33,9 +24,9 @@ import {
   renderClientErrorOutlet,
   type LeafRouteProps,
 } from "./routeTree.js"
-import type { Router } from "./routerInstance.js"
-import { getRouterRuntime } from "./routerRuntime.js"
+import type { CurrentNavigation } from "./types.js"
 import type { RouteManifest, RouteMatch, RouteModule } from "./types.js"
+import type { Router } from "./routerInstance.js"
 
 export type ClientOutletRouter = LoaderContextRouterSlice & {
   manifest: RouteManifest
@@ -44,16 +35,23 @@ export type ClientOutletRouter = LoaderContextRouterSlice & {
   currentNavigation: {
     peek(): { to: { pathname: string } } | null
   }
-  contextGate: { peek(): import("./types.js").ContextGateState }
-  contextState: { peek(): import("./types.js").ContextState }
-  contextPendingFallback?: () => JSX.Element
   forceLoaderReload: { peek(): boolean; value: boolean }
   loaderEpoch: { value: number }
   isLoaderStale: { value: boolean }
 }
 
-function gateOptionsFor(router: ClientOutletRouter): ContextGateOptions {
-  return getRouterRuntime(router as Router).gateOptions
+/** Unwrapped deps passed to the `RouterView` outlet `resource()` loader. */
+export type RouterOutletResourceSnapshot = {
+  match: RouteMatch | null
+  pathname: string
+  loaderEpoch: number
+  outletRenderError: Error | null
+  isNavigating: boolean
+  currentNavigation: CurrentNavigation | null
+}
+
+export function asClientOutletRouter(router: Router): ClientOutletRouter {
+  return router
 }
 
 export type PrepareRouteWithDocumentHeadInput = {
@@ -167,31 +165,6 @@ export async function buildClientOutletSubtree(
     forceReload,
     onLeafRenderError,
   } = input
-  const gateOptions = gateOptionsFor(router)
-  const nav = router.currentNavigation.peek()
-  const deferOptions = {
-    ...gateOptions,
-    manifest: router.manifest,
-    isNavigating: router.isNavigating.peek(),
-    navigationToPathname: nav?.to.pathname,
-    contextState: router.contextState.peek(),
-  }
-  const outletMatch = resolvePendingOutletMatch(
-    match,
-    router.manifest,
-    deferOptions.isNavigating,
-    deferOptions.navigationToPathname
-  )
-  if (
-    match &&
-    shouldDeferProtectedOutlet(match, router.contextGate.peek(), deferOptions)
-  ) {
-    const pending = effectiveContextPendingFallback(
-      outletMatch,
-      router.contextPendingFallback
-    )
-    return pending ? pending() : null
-  }
   const scope =
     match !== null
       ? createNavigationScope(
@@ -213,16 +186,6 @@ export async function buildClientOutletSubtree(
     let leafProps: LeafRouteProps = {}
     let routeModule = tree?.routeModule
     if (match && tree) {
-      if (
-        shouldDeferProtectedOutlet(match, router.contextGate.peek(), deferOptions)
-      ) {
-        warnProtectedImportBeforeGate(match.route.id)
-        const pending = effectiveContextPendingFallback(
-          outletMatch,
-          router.contextPendingFallback
-        )
-        return pending ? pending() : null
-      }
       const prepared = await prepareRouteWithDocumentHead({
         router,
         match,

@@ -13,15 +13,11 @@ import { parseQuery, type RouterQuery } from "./requestUrl.js"
 import type { Signal } from "../signals/base.js"
 import type {
   AfterEachHook,
-  ContextGateMode,
-  ContextGateState,
-  ContextState,
   CurrentNavigation,
   CustomRequestContext,
   NavigationFailure,
   NavigationGuard,
   NavigationResult,
-  ResolveContextEvent,
   RouteLocation,
   RouteLocationSnapshot,
   RouteManifest,
@@ -33,11 +29,6 @@ import { runGuards, toRedirect } from "./runNavigationGuards.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { collectMiddlewareChain, mergeRouteMeta } from "./routeMeta.js"
 import { runRouteMiddleware, toMiddlewareRedirect } from "./routeMiddleware.js"
-import { runContextResolve, scheduleBackgroundContextResolve } from "./contextResolve.js"
-import {
-  resolveContextGateState,
-  type ContextGateOptions,
-} from "./contextGate.js"
 export type { RouteTreeMatchSegment }
 
 export function buildMatchSegments(
@@ -182,12 +173,7 @@ export type NavigationPipelineDeps = {
   matches: Signal<RouteTreeMatchSegment[]>
   isNavigating: Signal<boolean>
   currentNavigation: Signal<CurrentNavigation | null>
-  contextGateMode: ContextGateMode
-  stickyContext: boolean
-  resolveContext?: (event: ResolveContextEvent) => Promise<CustomRequestContext>
   requestContext: { value: CustomRequestContext }
-  contextState: { value: ContextState }
-  contextGate: { value: ContextGateState }
   afterEachHooks: AfterEachHook[]
   leaveByRoute: Map<string, NavigationGuard[]>
   updateByRoute: Map<string, NavigationGuard[]>
@@ -237,12 +223,7 @@ export function createNavigateInternal(
     match,
     isNavigating,
     currentNavigation,
-    contextGateMode,
-    stickyContext,
-    resolveContext,
     requestContext,
-    contextState,
-    contextGate,
     afterEachHooks,
     leaveByRoute,
     updateByRoute,
@@ -407,50 +388,9 @@ export function createNavigateInternal(
       const isEnteringNewRoute =
         !fromMatch || !toMatch || fromMatch.route.id !== toMatch.route.id
 
-      const toSnapshot = snapshotFromParts(
-        {
-          pathname: resolved.pathname,
-          hash: resolved.hash,
-          query: resolved.query,
-        },
-        toMatch?.params ?? {}
-      )
       const fromSnapshot = fromMatch
         ? snapshotFromParts(fromParts, fromMatch.params)
         : null
-
-      const gateOptions: ContextGateOptions = {
-        contextGate: contextGateMode,
-        hasResolveContext: !!resolveContext,
-      }
-
-      if (resolveContext && toMatch) {
-        const hadReady = contextState.value === "ready"
-        await runContextResolve({
-          match: toMatch,
-          to: toSnapshot,
-          from: fromSnapshot,
-          resolveContext,
-          gateOptions,
-          contextState,
-          requestContext,
-          navEpoch: token,
-          getNavEpoch: () => navToken.value,
-          stickyContext,
-          hadReadyContext: hadReady,
-          eventType: "navigation",
-        })
-        if (token !== navToken.value) {
-          abortNavigationWork()
-          return { status: "cancelled" }
-        }
-        contextGate.value = resolveContextGateState(
-          toMatch,
-          contextState.value,
-          requestContext.value,
-          gateOptions
-        )
-      }
 
       if (toMatch && collectMiddlewareChain(toMatch).length > 0) {
         const segments = toMatch ? buildMatchSegments(toMatch) : []
@@ -550,28 +490,6 @@ export function createNavigateInternal(
         enableTransition,
         navAbort.signal
       )
-
-      if (resolveContext && toMatch) {
-        scheduleBackgroundContextResolve({
-          match: toMatch,
-          to: toSnapshot,
-          from: fromSnapshot,
-          resolveContext,
-          gateOptions,
-          contextState,
-          requestContext,
-          navEpoch: token,
-          getNavEpoch: () => navToken.value,
-          stickyContext,
-          hadReadyContext: contextState.value === "ready",
-        })
-        contextGate.value = resolveContextGateState(
-          toMatch,
-          contextState.value,
-          requestContext.value,
-          gateOptions
-        )
-      }
 
       if (isEnteringNewRoute && componentEnterGuards.length) {
         await runGuards(componentEnterGuards, to, from)

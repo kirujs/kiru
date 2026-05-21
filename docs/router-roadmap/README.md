@@ -31,7 +31,7 @@ Actionable backlog for making `kiru/router` competitive with Next.js, SvelteKit,
 
 | Spec | Path | Status |
 |------|------|--------|
-| Route middleware, `meta`, `contextStrategy`, `resolveContext`, context gate | [route-middleware-and-context.md](../router/route-middleware-and-context.md) | Shipped (v2) |
+| Route middleware, `meta`, SSR request context | [route-middleware-and-context.md](../router/route-middleware-and-context.md) | Shipped (v2) |
 
 ## Related code areas
 

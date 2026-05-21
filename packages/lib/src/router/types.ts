@@ -1,4 +1,7 @@
+/** Default export or bare component from a route page module. */
 export type RouteModule = { default: Kiru.Component<any> } | Kiru.Component<any>
+
+/** Dynamic `import()` of a page, layout, error, or `notFound` module. */
 export type RouteLoader = () => Promise<RouteModule>
 
 /** Props passed to SSR `error` route modules after a thrown render failure. */
@@ -17,9 +20,8 @@ export function toRenderError(thrown: unknown): Error {
 /**
  * Per-request context for loaders, actions, and components.
  *
- * Defaults to `{}` on pure CSR/SSG. SSR injects per-request values via
- * `createRenderer({ context })` and hydrates them into `RequestContextProvider`.
- * There is no client API to push session changes into loader context after hydration.
+ * Defaults to `{}` on pure CSR/SSG. SSR injects per-request values via the
+ * adapter/renderer and hydrates them into `RequestContextProvider`.
  *
  * ```ts
  * declare module "kiru/router" {
@@ -33,7 +35,10 @@ export function toRenderError(thrown: unknown): Error {
 export interface CustomRequestContext {}
 
 /**
- * Augment with app-specific route metadata (auth policy, roles, etc.):
+ * Augment with app-specific route metadata (auth policy, roles, etc.).
+ *
+ * Merged shallowly along the scope chain to the leaf. Use in
+ * {@link RouteMiddleware}, not ad hoc closure state.
  *
  * ```ts
  * declare module "kiru/router" {
@@ -47,48 +52,33 @@ export interface CustomRequestContext {}
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface RouteMeta {}
 
-/** CSR context resolve / outlet block behavior (scope-level; nearest scope wins). */
-export type ContextStrategy = "inherit" | "none" | "background" | "block"
-
-/** Outlet UI while context gate is pending (app or scope). */
-export type ContextPendingFallback = () => JSX.Element
-
-/** App default when scope strategy is `inherit` (`off` = no gate; `block` = await context on every route). */
-export type ContextGateMode = "off" | "block"
-
-export type ContextState = "idle" | "pending" | "ready" | "denied"
-
-export type ContextGateState =
-  | { status: "idle" }
-  | { status: "pending"; reason: "auth" }
-  | { status: "ready"; context: CustomRequestContext }
-  | { status: "denied"; redirect: string }
-
-export type ResolveContextEvent =
-  | { type: "initial" }
-  | {
-      type: "navigation"
-      to: RouteLocationSnapshot
-      from: RouteLocationSnapshot | null
-    }
-  | { type: "refresh" }
-
+/** Target for middleware or guard redirects. */
 export type RouteMiddlewareRedirect =
   | string
   | { path: string; replace?: boolean }
 
+/**
+ * Return value from {@link RouteMiddleware}.
+ *
+ * - `void` — continue the navigation
+ * - `{ redirect }` — abort and navigate (CSR history or SSR 3xx)
+ * - `{ error, body? }` — HTML error response on SSR
+ * - `{ abort: true }` — silent cancel on CSR
+ */
 export type RouteMiddlewareResult =
   | void
   | { redirect: RouteMiddlewareRedirect }
   | { error: number; body?: string }
   | { abort: true }
 
+/** One segment in `useMatches()` — a scope or leaf on the matched branch. */
 export type RouteTreeMatchSegment = {
   id: string
   kind: "scope" | "route"
   meta: RouteMeta
 }
 
+/** Destination (or source) location passed to route middleware. */
 export type RouteMiddlewareTo = {
   pathname: string
   params: Record<string, string>
@@ -99,10 +89,13 @@ export type RouteMiddlewareTo = {
   segments: RouteTreeMatchSegment[]
 }
 
+/** Arguments to {@link RouteMiddleware}; runs before loaders for that navigation. */
 export type RouteMiddlewareContext = {
+  /** Merged {@link RouteMeta} for the target leaf. */
   meta: RouteMeta
   to: RouteMiddlewareTo
   from: RouteMiddlewareTo | null
+  /** Present on SSR first paint; usually undefined on CSR client navigations. */
   request?: Request
   context: CustomRequestContext
 }
@@ -125,22 +118,37 @@ export type RouteMiddleware = (
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface Internationalization {}
 
+/** Input to {@link GenerateStaticParams} and {@link GenerateSitemapParams}. */
 export interface GenerateStaticParamsContext {
   params: Record<string, string>
 }
 
-/** Used for static routes. */
+/**
+ * Build-time path list for dynamic **static** segments.
+ *
+ * Export from the **page module** (not `routes.ts` or `page.config.ts`).
+ */
 export type GenerateStaticParams = (
   ctx: GenerateStaticParamsContext
 ) => Promise<Array<Record<string, string>>> | Array<Record<string, string>>
 
-/** Used for `sitemap.include` routes. */
+/**
+ * Build-time path list for routes listed in `site.config` `sitemap.include`.
+ *
+ * Same shape as {@link GenerateStaticParams}; export from the page module.
+ */
 export type GenerateSitemapParams = (
   ctx: GenerateSitemapParamsContext
 ) => Promise<Array<Record<string, string>>> | Array<Record<string, string>>
+
 export type GenerateSitemapParamsContext = GenerateStaticParamsContext
 
-/** Declarative SEO / document metadata (layout + route merge; child overrides). */
+/**
+ * Declarative SEO / document metadata on scopes and routes.
+ *
+ * Merged parent → child; leaf wins. Page `export const head` /
+ * `defineHeadContent` merges again at runtime (loader-aware).
+ */
 export interface RouteHeadMeta {
   title?: string
   description?: string
@@ -161,10 +169,10 @@ export interface RouteHeadMeta {
     description?: string
     image?: string
   }
-  /** Raw &lt;meta&gt; attributes per row, e.g. `{ name: "theme-color", content: "#000" }` */
+  /** Raw `<meta>` attributes per row, e.g. `{ name: "theme-color", content: "#000" }` */
   extraMeta?: Array<Record<string, string>>
   /**
-   * &lt;link&gt; rows, e.g. `{ rel: "icon", href: "/favicon.ico" }`.
+   * `<link>` rows, e.g. `{ rel: "icon", href: "/favicon.ico" }`.
    * Font preload: `{ rel: "preload", as: "font", href, type: "font/woff2", crossOrigin: "anonymous" }`.
    * @see docs/router/tier-3-wave-1.md#assets
    */
@@ -175,12 +183,13 @@ export interface RouteHeadMeta {
 
 export type { RouterPathPolicy, TrailingSlashPolicy } from "./pathPolicy.js"
 
+/** Committed route location (`pathname` + dynamic `params`). */
 export interface RouteLocation {
   pathname: string
   params: Record<string, string>
 }
 
-/** Full location snapshot for in-flight navigation UI. */
+/** Full location snapshot for in-flight navigation UI and middleware `to` / `from`. */
 export interface RouteLocationSnapshot {
   pathname: string
   params: Record<string, string>
@@ -188,6 +197,7 @@ export interface RouteLocationSnapshot {
   hash: string
 }
 
+/** Active client navigation while `router.isNavigating` is true. */
 export interface CurrentNavigation {
   from: RouteLocationSnapshot | null
   to: RouteLocationSnapshot
@@ -207,6 +217,11 @@ export type NavigationGuardReturn =
   | NavigationRedirect
   | Promise<void | true | false | NavigationRedirect>
 
+/**
+ * CSR-only component guard (`onBeforeRouteLeave`, etc.).
+ *
+ * Not run on SSR. Prefer {@link RouteMiddleware} for auth and policy.
+ */
 export type NavigationGuard = (
   to: RouteLocation,
   from: RouteLocation | null
@@ -217,21 +232,48 @@ export type NavigationFailure =
   | { type: "redirect"; to: NavigationRedirect }
   | { type: "error"; error: unknown }
 
+/** Runs after each client navigation (including redirects and errors). */
 export type AfterEachHook = (
   to: RouteLocation,
   from: RouteLocation | null,
   failure?: NavigationFailure
 ) => void
 
+/**
+ * Full leaf route config for {@link createRoute}.
+ *
+ * Shorthand: pass a {@link RouteLoader} alone for `component` only.
+ */
 export interface RouteDefinitionConfig {
   component: RouteLoader
+  /**
+   * When true, route is eligible for SSG prerender and static path discovery.
+   * Scope `static: true` applies to all descendant leaves unless overridden.
+   */
   static?: boolean
   head?: RouteHeadMeta
   meta?: Partial<RouteMeta>
   middleware?: RouteMiddleware | RouteMiddleware[]
+  /** Error boundary module for render failures on this leaf (and below in the outlet). */
   error?: RouteLoader
 }
 
+/**
+ * Metadata for file-based `{page}.config.ts` / `index.config.ts`.
+ *
+ * The page file always supplies `component`. Export `default` or named `config`:
+ *
+ * ```ts
+ * import type { RoutePageConfig } from "kiru/router"
+ *
+ * export default { static: true, head: { title: "About" } } satisfies RoutePageConfig
+ * ```
+ *
+ * @see docs/router/file-based-routes.md
+ */
+export type RoutePageConfig = Omit<RouteDefinitionConfig, "component">
+
+/** Compiled leaf route node (`kind: "route"`). */
 export interface RouteDefinition {
   kind: "route"
   method: "GET"
@@ -244,6 +286,11 @@ export interface RouteDefinition {
   error?: RouteLoader
 }
 
+/**
+ * Nested layout branch in the route tree.
+ *
+ * Wraps `children` with optional layout, middleware, and shared `head` / `meta`.
+ */
 export interface RouteScopeDefinition {
   kind: "scope"
   static?: boolean
@@ -251,19 +298,50 @@ export interface RouteScopeDefinition {
   notFound?: RouteLoader
   head?: RouteHeadMeta
   meta?: Partial<RouteMeta>
-  contextStrategy?: ContextStrategy
-  contextPendingFallback?: ContextPendingFallback
   middleware?: RouteMiddleware | RouteMiddleware[]
   error?: RouteLoader
   children: RouteNodeDefinition[]
 }
 
+/**
+ * Metadata for file-based `scope.config.ts` per directory.
+ *
+ * `layout`, `notFound`, and `children` normally come from FBR conventions and
+ * codegen; you may set `layout` / `notFound` here when not using co-located files.
+ * Co-located `layout.tsx` / `not-found.tsx` override config when both exist.
+ *
+ * ```ts
+ * import type { RouteScopeConfig } from "kiru/router"
+ *
+ * export const config: RouteScopeConfig = {
+ *   static: true,
+ *   meta: { requiresAuth: true },
+ * }
+ * ```
+ *
+ * @see docs/router/file-based-routes.md
+ */
+export type RouteScopeConfig = Omit<
+  RouteScopeDefinition,
+  "kind" | "children" | "layout" | "notFound"
+> & {
+  layout?: RouteLoader
+  notFound?: RouteLoader
+}
+
 export type RouteNodeDefinition = RouteDefinition | RouteScopeDefinition
 
+/**
+ * Authoring-time route tree passed to {@link createRouteTree}.
+ *
+ * The root is always a scope; register leaf paths on `RouteTree` for typed
+ * `Link` / `navigate`.
+ */
 export interface RouteTreeDefinition {
   root: RouteScopeDefinition
 }
 
+/** One ancestor scope on a {@link CompiledRoute} (outer → inner). */
 export interface CompiledRouteScope {
   id: string
   static: boolean
@@ -271,12 +349,15 @@ export interface CompiledRouteScope {
   notFound?: RouteLoader
   head?: RouteHeadMeta
   meta?: Partial<RouteMeta>
-  contextStrategy?: ContextStrategy
-  contextPendingFallback?: ContextPendingFallback
   middleware?: RouteMiddleware[]
   error?: RouteLoader
 }
 
+/**
+ * Normalized leaf route after {@link compileRouteTree}.
+ *
+ * Used by `matchRoute`, CSR router, SSR renderer, and static path generation.
+ */
 export interface CompiledRoute {
   id: string
   method: "GET"
@@ -287,13 +368,19 @@ export interface CompiledRoute {
   params: string[]
   static: boolean
   component: RouteLoader
+  /** Ancestor scopes from root to parent (inclusive). */
   scopes: CompiledRouteScope[]
+  /** Merged scope + leaf declarative head (before page export merge). */
   head: RouteHeadMeta
+  /** Merged scope + leaf {@link RouteMeta}. */
   meta: RouteMeta
   middleware?: RouteMiddleware[]
   error?: RouteLoader
 }
 
+/**
+ * Output of {@link compileRouteTree} — the runtime routing table.
+ */
 export interface RouteManifest {
   routes: CompiledRoute[]
   /** True when the root scope defines `notFound` (used for SSG `404.html`). */
@@ -304,15 +391,17 @@ export interface RouteManifest {
   rootError?: RouteLoader
 }
 
+/** Result of matching a URL against a {@link RouteManifest}. */
 export interface RouteMatch {
   route: CompiledRoute
   params: Record<string, string>
+  /** Pathname used for the match (after `baseUrl` / locale stripping). */
   pathname: string
 }
 
 /** Resolved document metadata for SSR/SSG (after template params). */
 export interface DocumentHead {
-  /** HTML fragment safe to inject inside &lt;head&gt; (no wrapper). */
+  /** HTML fragment safe to inject inside `<head>` (no wrapper). */
   headHtml: string
   /** Plain title for quick access */
   title?: string
@@ -321,18 +410,21 @@ export interface DocumentHead {
   bodyEndHtml?: string
 }
 
+/** Streaming SSR response body. */
 export interface StreamRenderResult {
   status: number
   headers: Record<string, string>
   body: ReadableStream<string>
 }
 
+/** Buffered SSR/SSG HTML response. */
 export interface RenderResult {
   status: number
   headers: Record<string, string>
   body: string
 }
 
+/** Outcome of `router.navigate()` / `setQuery` / `setHash`. */
 export type NavigationResult =
   | { status: "committed" }
   | { status: "cancelled" }

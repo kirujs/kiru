@@ -42,18 +42,11 @@ export function createRoute<const P extends string>(
   return buildRoute(path, value)
 }
 
-export function createRouteScope(config: {
-  static?: boolean
-  layout?: RouteLoader
-  notFound?: RouteLoader
-  head?: import("./types.js").RouteHeadMeta
-  meta?: Partial<import("./types.js").RouteMeta>
-  contextStrategy?: import("./types.js").ContextStrategy
-  contextPendingFallback?: import("./types.js").ContextPendingFallback
-  middleware?: import("./types.js").RouteMiddleware | import("./types.js").RouteMiddleware[]
-  error?: RouteLoader
-  children: readonly RouteTreeChild[]
-}): CreatedRouteScope {
+export function createRouteScope(
+  config: import("./types.js").RouteScopeConfig & {
+    children: readonly RouteTreeChild[]
+  }
+): CreatedRouteScope {
   return {
     kind: "scope",
     static: config.static,
@@ -61,26 +54,17 @@ export function createRouteScope(config: {
     notFound: config.notFound,
     head: config.head,
     meta: config.meta,
-    contextStrategy: config.contextStrategy,
-    contextPendingFallback: config.contextPendingFallback,
     middleware: config.middleware,
     error: config.error,
     children: config.children as RouteNodeDefinition[],
   }
 }
 
-export function createRouteTree(config: {
-  static?: boolean
-  layout?: RouteLoader
-  notFound?: RouteLoader
-  head?: import("./types.js").RouteHeadMeta
-  meta?: Partial<import("./types.js").RouteMeta>
-  contextStrategy?: import("./types.js").ContextStrategy
-  contextPendingFallback?: import("./types.js").ContextPendingFallback
-  middleware?: import("./types.js").RouteMiddleware | import("./types.js").RouteMiddleware[]
-  error?: RouteLoader
-  children: readonly RouteTreeChild[]
-}): RouteTreeDefinition {
+export function createRouteTree(
+  config: import("./types.js").RouteScopeConfig & {
+    children: readonly RouteTreeChild[]
+  }
+): RouteTreeDefinition {
   const root: RouteScopeDefinition = {
     kind: "scope",
     static: config.static,
@@ -88,8 +72,6 @@ export function createRouteTree(config: {
     notFound: config.notFound,
     head: config.head,
     meta: config.meta,
-    contextStrategy: config.contextStrategy,
-    contextPendingFallback: config.contextPendingFallback,
     middleware: config.middleware,
     error: config.error,
     children: config.children as RouteNodeDefinition[],

@@ -14,7 +14,6 @@ import type {
   RouteMatch,
   RouteTreeDefinition,
 } from "../router/types.js"
-import type { CreateRouterOptions } from "../router/csr.js"
 import { ensureClientI18nReady } from "../router/i18nContext.js"
 import { readHydratedRequestContext } from "../router/requestContext.js"
 import {
@@ -107,17 +106,6 @@ export type BootstrapSsrClientOptions = {
   routes: RouteTreeDefinition | RouteManifest
   /** DOM element that receives the hydrated router outlet. */
   container: HTMLElement
-  /**
-   * Loads {@link CustomRequestContext} after hydration and on client navigations.
-   * Hydrated HTML may already include context via `k-request-context` / render `context`.
-   */
-  resolveContext?: CreateRouterOptions["resolveContext"]
-  /** App default when scope `contextStrategy` is `inherit`. @default "off" */
-  contextGate?: CreateRouterOptions["contextGate"]
-  /** Outlet UI while a blocked route waits for context. */
-  contextPendingFallback?: CreateRouterOptions["contextPendingFallback"]
-  /** @default true */
-  stickyContext?: CreateRouterOptions["stickyContext"]
   /**
    * Options for {@link mount}. `hydrationMode`: `"static"` (SSG) or `"dynamic"` (SSR).
    * `kiru/router/ssr` sets `"dynamic"`; `kiru/router/ssg` sets `"static"`.
@@ -257,8 +245,6 @@ function subscribeSsrClientOutlet(
   }
   router.match.subscribe(() => refresh(false))
   router.isNavigating.subscribe(() => refresh(false))
-  router.contextState.subscribe(() => refresh(false))
-  router.contextGate.subscribe(() => refresh(false))
   router.currentNavigation.subscribe(() => refresh(false))
 }
 
@@ -274,22 +260,10 @@ export async function bootstrapSsrClient(
     "routes" in options.routes
       ? options.routes
       : compileRouteTree(options.routes)
-  const {
-    container,
-    hydrateOptions,
-    i18n,
-    resolveContext,
-    contextGate,
-    contextPendingFallback,
-    stickyContext,
-  } = options
+  const { container, hydrateOptions, i18n } = options
   const router = createRouter({
     routes: manifest,
     i18n,
-    resolveContext,
-    contextGate,
-    contextPendingFallback,
-    stickyContext,
   })
   registerKiruRouter(router)
   ensureLoaderClient()

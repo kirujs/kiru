@@ -152,8 +152,6 @@ export function compileRouteTree(tree: RouteTreeDefinition): RouteManifest {
         notFound: node.notFound,
         head: node.head,
         meta: node.meta,
-        contextStrategy: node.contextStrategy,
-        contextPendingFallback: node.contextPendingFallback,
         middleware: normalizeMiddleware(node.middleware),
         error: node.error,
       }

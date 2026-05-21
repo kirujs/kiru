@@ -67,6 +67,8 @@ Add or remove a `page.tsx` under `src/pages` and the route list updates without 
 | `middleware.ts` | Scope middleware (static import in generated file) |
 | `error.{tsx,...}` | Scope error boundary |
 | `not-found.{tsx,...}` | Scope `notFound` |
+| `scope.config.{ts,js}` | Scope metadata (`static`, `head`, `meta`, …) |
+| `{page}.config.{ts,js}` | Leaf metadata paired with `page.tsx` / `index.tsx` |
 | `(group)/` | Route group — no URL segment |
 | `[id]/`, `[...slug]/`, `[[id]]/`, `[[...slug]]/` | Dynamic URL segments |
 | `_private/` | Ignored (no routes under `_` segments) |
@@ -86,6 +88,55 @@ src/pages/
 ```
 
 Path rules match [02-route-tree.md](../v2/02-route-tree.md#dynamic-segments) (`manifest.ts` scoring).
+
+## Route config files
+
+Use typed config modules beside pages instead of inlining everything in generated `routes.gen.ts`.
+
+### `scope.config.ts`
+
+Per directory (including `src/pages/` root). Export **`default`** or named **`config`**:
+
+```ts
+// src/pages/admin/scope.config.ts
+import type { RouteScopeConfig } from "kiru/router"
+
+export default {
+  static: true,
+  meta: { requiresAuth: true },
+} satisfies RouteScopeConfig
+```
+
+Codegen spreads config first; co-located `layout.tsx`, `middleware.ts`, `error.tsx`, and `not-found.tsx` **override** the same fields when present.
+
+### `{page}.config.ts`
+
+Paired by basename: `page.tsx` → `page.config.ts`, `index.tsx` → `index.config.ts`.
+
+```ts
+// src/pages/about/page.config.ts
+import type { RoutePageConfig } from "kiru/router"
+
+export const config: RoutePageConfig = {
+  static: true,
+  head: { title: "About" },
+}
+```
+
+Generated leaf:
+
+```ts
+createRoute("/about", {
+  ...__pageCfg_export,
+  component: () => import("./pages/about/page.tsx"),
+})
+```
+
+**Rules:**
+
+- Do not combine `middleware.ts` and `middleware` in a config file in the same directory (codegen error).
+- Page `export const head` / `defineHeadContent` still merges at runtime with route `head` from config.
+- `generateStaticParams`, `generateSitemapParams`, and `export const isr` stay on the **page module**.
 
 ## Middleware in tree
 

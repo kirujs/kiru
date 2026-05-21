@@ -2,12 +2,14 @@ import { resource } from "../resource.js"
 import { createElement } from "../element.js"
 import { onMount } from "../hooks/onMount.js"
 import { ErrorBoundary } from "../components/errorBoundary.js"
-import { buildClientOutletSubtree } from "./clientRoutePrep.js"
+import {
+  asClientOutletRouter,
+  buildClientOutletSubtree,
+} from "./clientRoutePrep.js"
 import { renderClientErrorOutlet } from "./routeTree.js"
 import { warnRouterViewWithoutSsrBootstrap } from "./devWarnings.js"
 import { getRouterRuntime } from "./routerRuntime.js"
 import { useRouter } from "./routerContext.js"
-import type { RouteMatch } from "./types.js"
 
 /**
  * CSR route outlet: loads the matched route tree on navigation.
@@ -19,45 +21,22 @@ import type { RouteMatch } from "./types.js"
  */
 export function RouterView() {
   const router = useRouter()
-  const {
-    match,
-    pathname,
-    loaderEpoch,
-    contextGate,
-    outletRenderError,
-  } = router
+  const { match, pathname, loaderEpoch, outletRenderError } = router
   const { getNavGeneration } = getRouterRuntime(router)
   const children = resource(
     {
       match,
       pathname,
       loaderEpoch,
-      contextGate,
       outletRenderError,
       isNavigating: router.isNavigating,
-      contextState: router.contextState,
       currentNavigation: router.currentNavigation,
     },
-    async (
-      {
-        match,
-        pathname,
-        outletRenderError: renderErr,
-      }: {
-        match: RouteMatch | null
-        pathname: string
-        outletRenderError: Error | null
-      },
-      { signal }
-    ) => {
-      if (renderErr) {
+    async ({ match, pathname, outletRenderError: err }, { signal }) => {
+      if (err) {
         router.isLoaderPending.value = true
         try {
-          return await renderClientErrorOutlet(
-            router.manifest,
-            match,
-            renderErr
-          )
+          return await renderClientErrorOutlet(router.manifest, match, err)
         } finally {
           if (!signal.aborted) router.isLoaderPending.value = false
         }
@@ -65,7 +44,7 @@ export function RouterView() {
       router.isLoaderPending.value = true
       try {
         return await buildClientOutletSubtree({
-          router: router as import("./clientRoutePrep.js").ClientOutletRouter,
+          router: asClientOutletRouter(router),
           match,
           pathname,
           signal,

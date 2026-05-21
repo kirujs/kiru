@@ -24,6 +24,10 @@ export type FileRouteDirNode = {
   error?: string
   notFound?: string
   page?: string
+  /** Absolute path to `scope.config.ts` / `scope.config.js`. */
+  scopeConfig?: string
+  /** Absolute path to `{page}.config.ts` paired with {@link page}. */
+  pageConfig?: string
   children: Map<string, FileRouteDirNode>
 }
 

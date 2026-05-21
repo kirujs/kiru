@@ -98,6 +98,29 @@ export const extendRoutes = [
     assert.ok(!source.includes("interface ExtendedRouteTree"))
   })
 
+  it("generates route and scope config spreads", async () => {
+    const pagesDir = path.join(fixtures, "config", "pages")
+    const outFile = path.join(fixtures, "config", "routes.gen.ts")
+    const { source } = await generateFileRoutes({ pagesDir, outFile })
+
+    assert.ok(source.includes("page.config"))
+    assert.ok(source.includes("scope.config"))
+    assert.ok(source.includes("static: true") || source.includes("__cfg_"))
+    assert.ok(source.includes("satisfies RoutePageConfig") === false)
+    assert.ok(source.includes("createRoute(\"/about\", {"))
+    assert.ok(source.includes("createRouteScope({"))
+
+    const { writeFile } = await import("node:fs/promises")
+    await writeFile(outFile, source, "utf8")
+    const loaded = await import(pathToFileUrl(outFile))
+    const manifest = compileRouteTree(loaded.routes)
+    const about = matchRoute(manifest, "/about")!
+    assert.equal(about.route.static, true)
+    assert.equal(about.route.head.title, "About (config)")
+    const admin = matchRoute(manifest, "/admin")!
+    assert.equal(admin.route.meta.requiresAuth, true)
+  })
+
   it("rejects catch-all not at end of filesystem path", async () => {
     const { mkdtemp, writeFile, mkdir } = await import("node:fs/promises")
     const { tmpdir } = await import("node:os")

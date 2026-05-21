@@ -92,7 +92,7 @@ Add `PageProps<typeof load>` to page components.
 |-----|-----|
 | Guard reading global store | `RouteMiddleware` + `ctx.context` |
 | SSR without guards | Same middleware on `createRenderer` |
-| Client-only session | `resolveContext` + `contextStrategy: "block"` |
+| Client-only session | SSR `getRequestContext` + hydration; client session API planned |
 
 Augment `RouteMeta` and `CustomRequestContext`.
 

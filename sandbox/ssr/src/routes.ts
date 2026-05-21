@@ -48,17 +48,11 @@ export const routes = createRouteTree({
         },
       },
     }),
-    createRouteScope({
-      contextStrategy: "block",
-      meta: { requiresAuth: true },
-      children: [
-        createRoute("/users/[id]", {
-          component: () => import("./pages/user.tsx"),
-          head: {
-            description: "Dynamic user profile (SSR).",
-          },
-        }),
-      ],
+    createRoute("/users/[id]", {
+      component: () => import("./pages/user.tsx"),
+      head: {
+        description: "Dynamic user profile (SSR).",
+      },
     }),
     createRoute("/demo-loader", {
       component: () => import("./pages/demo-loader.tsx"),

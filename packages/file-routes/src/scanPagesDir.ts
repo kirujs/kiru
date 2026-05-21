@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import path from "node:path"
 import { glob } from "tinyglobby"
 import {
@@ -14,6 +15,24 @@ const LAYOUT_RE = /^layout\.(tsx|ts|jsx|js|mdx)$/
 const MIDDLEWARE_RE = /^middleware\.ts$/
 const ERROR_RE = /^error\.(tsx|ts|jsx|js|mdx)$/
 const NOT_FOUND_RE = /^not-found\.(tsx|ts|jsx|js|mdx)$/
+const SCOPE_CONFIG_RE = /^scope\.config\.(ts|js)$/
+const PAGE_CONFIG_RE = /^(.+)\.config\.(ts|js)$/
+
+function attachPageConfigs(node: FileRouteDirNode): void {
+  if (node.page) {
+    const base = path.basename(node.page).replace(/\.(tsx|ts|jsx|js|mdx)$/, "")
+    for (const ext of ["ts", "js"] as const) {
+      const cfg = path.posix.join(node.dirPath, `${base}.config.${ext}`)
+      if (existsSync(cfg)) {
+        node.pageConfig = cfg.replace(/\\/g, "/")
+        break
+      }
+    }
+  }
+  for (const child of node.children.values()) {
+    attachPageConfigs(child)
+  }
+}
 
 function createDirNode(
   name: string,
@@ -128,8 +147,25 @@ export async function scanPagesDir(
         throw new Error(`[file-routes] Multiple not-found files in ${node.dirPath}`)
       }
       node.notFound = absFile.replace(/\\/g, "/")
+      continue
+    }
+
+    if (SCOPE_CONFIG_RE.test(fileName)) {
+      if (node.scopeConfig) {
+        throw new Error(
+          `[file-routes] Multiple scope config files in ${node.dirPath}`
+        )
+      }
+      node.scopeConfig = absFile.replace(/\\/g, "/")
+      continue
+    }
+
+    if (PAGE_CONFIG_RE.test(fileName)) {
+      continue
     }
   }
+
+  attachPageConfigs(root)
 
   return { root, routes }
 }

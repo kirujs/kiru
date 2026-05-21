@@ -1,5 +1,4 @@
 import type { InternationalizationConfig } from "./i18n/createI18nConfig.js"
-import type { ContextGateOptions } from "./routeMeta.js"
 import type {
   NavigationFailure,
   NavigationGuard,
@@ -15,7 +14,6 @@ export type RouterI18nRuntime = {
 }
 
 export type RouterRuntime = {
-  gateOptions: ContextGateOptions
   getNavGeneration: () => number
   getNavSignal: () => AbortSignal
   i18n?: RouterI18nRuntime

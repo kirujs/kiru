@@ -178,16 +178,16 @@ declare module "kiru/router" {
 }
 ```
 
-Attach to scope or page:
+Attach to scope or page (or `scope.config.ts` / `page.config.ts` with file-based routes):
 
 ```ts
-r.scope({
-  contextStrategy: "block",
+createRouteScope({
   meta: { requiresAuth: true },
+  middleware: [requireAuth],
   children: [
-    r.page("/users/[id]", { component: () => import("./pages/user.tsx") }),
+    createRoute("/users/[id]", () => import("./pages/user.tsx")),
   ],
-}),
+})
 ```
 
 Merged **shallowly** along the scope chain to the leaf. See [04-middleware-meta-context.md](./04-middleware-meta-context.md).
@@ -205,52 +205,18 @@ r.page("/guarded", {
 }),
 ```
 
-## Context strategies on scopes
+## Config types for file-based routes
 
-| `contextStrategy` | Behavior |
-|-------------------|----------|
-| `inherit` | Use app `contextGate` default (`off` or `block`) |
-| `none` | No context fetch for this subtree |
-| `background` | Resolve context without blocking outlet |
-| `block` | Await `resolveContext` before leaf + loaders |
-
-**E2E routes** (`e2e/csr/src/context/defineContextRoutes.tsx`) — copy for docs:
+Export route metadata from co-located config modules:
 
 ```ts
-r.scope({
-  contextStrategy: "none",
-  static: true,
-  children: [r.page("/context", () => import("./pages/home.tsx"))],
-}),
-r.scope({
-  contextStrategy: "background",
-  static: true,
-  children: [r.page("/context/profile", () => import("./pages/profile.tsx"))],
-}),
-r.scope({
-  contextStrategy: "block",
-  contextPendingFallback: () => <ScopeContextPending />,
-  meta: { requiresAuth: true, unauthorizedRedirect: "/context/login" },
-  middleware: [requireAuth],
-  children: [r.page("/context/admin", () => import("./pages/admin.tsx"))],
-}),
+import type { RoutePageConfig, RouteScopeConfig } from "kiru/router"
+
+export default { static: true, head: { title: "About" } } satisfies RoutePageConfig
+// scope.config.ts — same with RouteScopeConfig
 ```
 
-## Merging routes from shared modules
-
-`e2e/ssg` and `e2e/csr` share context demos:
-
-```ts
-import { contextRouteChildren } from "../../csr/src/context/defineContextRoutes.js"
-
-export const routes = createRouteTree({
-  layout: () => import("./pages/layout.tsx"),
-  children: [
-    /* static pages... */
-    ...contextRouteChildren(),
-  ],
-})
-```
+See [file-based-routes.md](../router/file-based-routes.md).
 
 ## `routeLinks` (E2E only pattern)
 
@@ -269,7 +235,7 @@ export const routes = createRouteTree({
 |------|-----------------|
 | Marketing site fully static | `createRouteTree({ static: true, children: [...] })` |
 | One static docs page in SSR app | `createRoute("/docs", { static: true, ... })` + hybrid vite config |
-| Auth-gated area | `meta` + `middleware` + `contextStrategy: "block"` |
+| Auth-gated area | `meta` + `middleware` (SSR: populate `ctx.context` via `getRequestContext`) |
 | SEO landing | `head` + `static: true` or SSR with `defineISR` |
 | Optional blog index | `r.page("/blog/[[page]]", ...)` + `generateStaticParams` |
 | Redirect route | `middleware: [() => ({ redirect: "/login" })]` |

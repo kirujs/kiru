@@ -32,10 +32,6 @@ export function createRouterApp(
     routes: options.routes,
     container: options.container,
     i18n: options.i18n,
-    resolveContext: options.resolveContext,
-    contextGate: options.contextGate,
-    contextPendingFallback: options.contextPendingFallback,
-    stickyContext: options.stickyContext,
     hydrateOptions: {
       ...options.hydrateOptions,
       hydrationMode: "dynamic",

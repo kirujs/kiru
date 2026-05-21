@@ -82,7 +82,7 @@ interface LoaderContext {
   params: Record<string, string>
   url: { pathname: string; search: string; hash: string }
   query: RouterQuery
-  context: CustomRequestContext  // {} on CSR until resolveContext fills client state
+  context: CustomRequestContext  // SSR/hydrated; {} on pure CSR
   meta: RouteMeta               // merged route meta
   route: { id: string }
   request?: Request              // SSR first paint
@@ -184,11 +184,9 @@ Client stub: `__kiruEnsureLoaderDispatch()` from `kiru/router/loaderClient` (ins
 
 Hover prefetch runs on **`pointerenter` and `mouseenter`** (synthetic `mouseenter` in tests still triggers prefetch).
 
-- **chunks** (default `true`): dynamic-import route modules (layouts + page) when the context gate allows.
+- **chunks** (default `true`): dynamic-import route modules (layouts + page).
 - **data** (default `true` when `__kiru_loaders` RPC is present): validates search params, then warms loader cache via `/?loader=` or client/universal loaders. **`serverLoader`** results are cached like other kinds when `staleTime: 0`; the next navigation to that pathname reuses the cache (one RPC for hover + click).
-- Prefetch does **not** run middleware, `resolveContext`, or full navigation — it only reduces latency for the next click.
-
-Protected routes with `contextStrategy: "block"` skip leaf module import until the gate is ready (same as `RouterView`).
+- Prefetch does **not** run middleware or full navigation — it only reduces latency for the next click.
 
 E2E: `e2e/ssr/cypress/e2e/ssr.cy.ts` — hover on `/loaders/server` link, assert a single `POST /?loader=` before and after click.
 
@@ -238,4 +236,4 @@ const params = useSearchParams<typeof load>()
 | `serverLoader` in CSR-only app | `loader` or `clientLoader` |
 | `staticLoader` for live counters | `loader` + `staleTime` or SSR |
 | `kiru/router/csr` on prerendered HTML | `kiru/router/ssg` or `ssr` |
-| Expect loader on protected route before auth | Middleware + `contextStrategy: "block"` first |
+| Expect loader on protected route before auth | Run auth in **middleware** first; use SSR `getRequestContext` for `ctx.context` |

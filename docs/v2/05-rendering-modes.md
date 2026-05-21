@@ -31,7 +31,6 @@ void createRouterApp({
   routes, // createRouteTree root scope: middleware: [requireAuth]
   container: document.getElementById("app")!,
   i18n,
-  resolveContext,
 })
 ```
 
@@ -68,8 +67,7 @@ import { createRouterApp } from "kiru/router/ssg"
 
 **Partial static tree example** (`e2e/ssg/src/routes.ts`):
 
-- Large `static: true` scope for marketing
-- `...contextRouteChildren()` includes `/context/admin` **without** `static: true` — reachable only via client navigation from prerendered `/context`
+- Large `static: true` scope for marketing pages
 
 ## SSR
 

@@ -15,10 +15,9 @@ Copy-paste sources for the public docs site. Each fixture is a runnable referenc
 | `/loaders/client` | `pages/loaders/client.tsx` | `clientLoader` |
 | `/loaders/universal` | `pages/loaders/universal.tsx` | Universal `loader` |
 | `/image-demo` | `pages/image-demo/` | `<Image>` build pipeline |
-| `/context/*` | `context/` tree | `resolveContext`, gate, middleware |
 | i18n | `i18n.ts`, `cypress/e2e/i18n.cy.ts` | Locale switch, `Link locale` |
 
-**Bootstrap:** `src/main.tsx` → `kiru/router/csr` + `createContextAppOptions`.
+**Bootstrap:** `src/main.tsx` → `kiru/router/csr`.
 
 **Vite:** `vite.config.ts` — images only, no ssg/serverEntry.
 
@@ -30,23 +29,13 @@ Copy-paste sources for the public docs site. Each fixture is a runnable referenc
 | `/posts/[slug]` | `generateStaticParams` |
 | `/loaders/static` | `staticLoader` + baked payload |
 | `/image-demo` | Images in SSG output |
-| `/context/*` | Hydrate + client nav to non-static admin |
 | i18n | Locale path expansion at build |
 
 **Bootstrap:** `kiru/router/ssg`.
 
 **Vite:** `router.ssg: true`.
 
-**Cypress:** `ssg.cy.ts`, `context.cy.ts`, `i18n.cy.ts`, `image.cy.ts`.
-
-### Context tests worth quoting in docs
-
-From `cypress/e2e/context.cy.ts`:
-
-- Guest on `/context` — no pending UI
-- Click admin → redirect `/context/login`
-- Slow auth → scope `contextPendingFallback`
-- Signed-in → admin loader marker visible
+**Cypress:** `ssg.cy.ts`, `i18n.cy.ts`, `image.cy.ts`.
 
 ## `e2e/ssr` — server render + hybrid
 
@@ -140,7 +129,6 @@ Implementation: `e2e/csr/src/context/e2eAuth.ts`.
 |------|-----------|
 | Routing | `manifest-routing.test.ts` |
 | Middleware | `routeMiddleware.test.ts` |
-| Context gate | `contextGate.test.ts` |
 | ISR | `routeRevalidate.test.ts`, `rendererPprDynamic.test.ts` |
 | Loader cache | `loaderStale.test.ts` |
 | i18n | `i18n.test.ts` |

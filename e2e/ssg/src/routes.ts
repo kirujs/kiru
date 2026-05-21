@@ -1,5 +1,4 @@
 import { createRoute, createRouteScope, createRouteTree } from "kiru/router"
-import { contextRouteChildren } from "../../csr/src/context/defineContextRoutes.js"
 import i18n from "./i18n.js"
 
 export { i18n }
@@ -56,6 +55,5 @@ export const routes = createRouteTree({
           }),
         ],
       }),
-      ...contextRouteChildren(),
     ],
   })

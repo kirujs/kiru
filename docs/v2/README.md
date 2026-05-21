@@ -12,7 +12,7 @@ Deep-dive knowledge base for the v2 router work on this branch (diverged from `m
 | [01-architecture.md](./01-architecture.md) | Mental model, request lifecycle, module layout |
 | [02-route-tree.md](./02-route-tree.md) | `createRouteTree`, scopes, matching, `static`, path patterns |
 | [03-loaders-and-data.md](./03-loaders-and-data.md) | `loader`, `serverLoader`, `clientLoader`, `staticLoader`, validation, cache |
-| [04-middleware-meta-context.md](./04-middleware-meta-context.md) | Route middleware, `meta`, `resolveContext`, context gate |
+| [04-middleware-meta-context.md](./04-middleware-meta-context.md) | Route middleware, `meta`, SSR request context |
 | [05-rendering-modes.md](./05-rendering-modes.md) | CSR / SSG / SSR / hybrid / partial SSG deploy patterns |
 | [06-renderer-and-hydration.md](./06-renderer-and-hydration.md) | `createRenderer`, HTML shell, bootstrap imports, hydration |
 | [07-isr-prerender-cache.md](./07-isr-prerender-cache.md) | `defineISR`, disk cache, revalidation, PPR-lite |

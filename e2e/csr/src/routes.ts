@@ -1,5 +1,4 @@
 import { createRoute, createRouteTree } from "kiru/router"
-import { contextRouteChildren } from "./context/defineContextRoutes.js"
 
 export const routes = createRouteTree({
   layout: () => import("./pages/layout.tsx"),
@@ -37,7 +36,6 @@ export const routes = createRouteTree({
       () => import("./pages/loaders/universal.tsx")
     ),
     createRoute("/image-demo", () => import("./pages/image-demo/index.tsx")),
-    ...contextRouteChildren(),
   ],
 })
 
@@ -57,8 +55,4 @@ export const routeLinks = [
   { path: "/csr-break-loader", displayName: "csr-break-loader" },
   { path: "/loaders/client", displayName: "loaders-client" },
   { path: "/loaders/universal", displayName: "loaders-universal" },
-  { path: "/context", displayName: "context-home" },
-  { path: "/context/profile", displayName: "context-profile" },
-  { path: "/context/admin", displayName: "context-admin" },
-  { path: "/context/login", displayName: "context-login" },
 ]

@@ -14,16 +14,11 @@ import {
 } from "./requestUrl.js"
 import type {
   AfterEachHook,
-  ContextGateMode,
-  ContextGateState,
-  ContextPendingFallback,
-  ContextState,
   CurrentNavigation,
   CustomRequestContext,
   NavigationFailure,
   NavigationGuard,
   NavigationResult,
-  ResolveContextEvent,
   RouteLocation,
   RouteLocationSnapshot,
   RouteManifest,
@@ -31,15 +26,7 @@ import type {
   RouteTreeDefinition,
 } from "./types.js"
 import { readHydratedRequestContext } from "./requestContext.js"
-import {
-  canLoadProtectedLeaf,
-  idleContextGate,
-  initialContextState,
-  resolveContextGateState,
-} from "./contextGate.js"
 import { mergeRouteMeta } from "./routeMeta.js"
-import { runContextResolve } from "./contextResolve.js"
-import type { ContextGateOptions } from "./routeMeta.js"
 import {
   buildMatchSegments,
   buildQueryString,
@@ -189,9 +176,8 @@ function pathFromLocation(location: Location, baseUrl: string): string {
 /**
  * Options for {@link createRouter} (CSR / hydrated client).
  *
- * Request context and auth gating use {@link resolveContext} plus scope
- * `contextStrategy` / {@link contextGate}.
- * @see docs/router/route-middleware-and-context.md
+ * Request context on the client comes from SSR hydration (`k-request-context`)
+ * when present; pure CSR defaults to `{}`.
  */
 export type CreateRouterOptions = {
   /** Route tree from {@link createRouteTree} or a precompiled {@link RouteManifest}. */
@@ -209,29 +195,6 @@ export type CreateRouterOptions = {
    * See {@link createRenderer} `i18n` and `createI18nConfig`.
    */
   i18n?: InternationalizationConfig<readonly string[], unknown>
-  /**
-   * Loads {@link CustomRequestContext} on the client (session, tenant, etc.).
-   * Required for `contextStrategy: "block"` scopes; pairs with
-   * {@link RequestContextProvider} / {@link useRequestContext}.
-   */
-  resolveContext?: (event: ResolveContextEvent) => Promise<CustomRequestContext>
-  /**
-   * App default when scope `contextStrategy` is `inherit`.
-   * `"off"` (default): only explicit scope strategies gate the outlet.
-   * `"block"`: treat inherit routes like `block` (await context before leaf).
-   */
-  contextGate?: ContextGateMode
-  /**
-   * Outlet UI while a blocked route waits for context (app default; scopes may
-   * override via `contextPendingFallback` on `r.scope()`).
-   */
-  contextPendingFallback?: ContextPendingFallback
-  /**
-   * When true (default), reuse the last resolved context on navigations that do
-   * not await context (`background` / non-block inherit). Set false to refetch on
-   * every navigation.
-   */
-  stickyContext?: boolean
 }
 
 export function createRouter({
@@ -241,10 +204,6 @@ export function createRouter({
   pathPolicy,
   transition = false,
   i18n,
-  resolveContext: resolveContextOption,
-  contextGate: contextGateMode = "off",
-  contextPendingFallback,
-  stickyContext = true,
 }: CreateRouterOptions): Router {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
   const resolvedPathPolicy = resolvePathPolicy(pathPolicy)
@@ -296,19 +255,6 @@ export function createRouter({
   const hydratedCtx =
     typeof document !== "undefined" ? readHydratedRequestContext() : {}
   const requestContext = signal<CustomRequestContext>(hydratedCtx)
-  const contextState = signal<ContextState>(initialContextState(hydratedCtx))
-  const gateOptions: ContextGateOptions = {
-    contextGate: contextGateMode,
-    hasResolveContext: !!resolveContextOption,
-  }
-  const contextGate = signal<ContextGateState>(
-    resolveContextGateState(
-      match.peek(),
-      contextState.peek(),
-      requestContext.peek(),
-      gateOptions
-    )
-  )
 
   const toBrowserPath = (logical: string) =>
     localeRouting && locale
@@ -331,7 +277,6 @@ export function createRouter({
   async function syncInitialDocumentHead() {
     const initial = match.peek()
     if (!initial) return
-    if (!canLoadProtectedLeaf(initial, contextGate.peek(), gateOptions)) return
     const pageHead = readPageHeadExport(await initial.route.component())
     if (isStaticPageHead(pageHead) || isSyncPageHead(pageHead)) {
       await syncDocumentHeadForPage(
@@ -354,37 +299,6 @@ export function createRouter({
 
   if (typeof document !== "undefined") {
     void syncInitialDocumentHead()
-    if (resolveContextOption) {
-      const initial = match.peek()
-      if (initial) {
-        void runContextResolve({
-          match: initial,
-          to: {
-            pathname: initial.pathname,
-            params: initial.params,
-            query: query.peek(),
-            hash: hash.peek(),
-          },
-          from: null,
-          resolveContext: resolveContextOption,
-          gateOptions,
-          contextState,
-          requestContext,
-          navEpoch: 0,
-          getNavEpoch: () => 0,
-          stickyContext,
-          hadReadyContext: contextState.peek() === "ready",
-          eventType: "initial",
-        }).then(() => {
-          contextGate.value = resolveContextGateState(
-            initial,
-            contextState.peek(),
-            requestContext.peek(),
-            gateOptions
-          )
-        })
-      }
-    }
   }
 
   const syncWindowNavigationProbe = () => {
@@ -444,9 +358,6 @@ export function createRouter({
     routeMatch: NonNullable<RouteMatch>,
     loc: RouteLocationParts
   ) {
-    if (!canLoadProtectedLeaf(routeMatch, contextGate.peek(), gateOptions)) {
-      return
-    }
     const pageHead = readPageHeadExport(await routeMatch.route.component())
     if (isStaticPageHead(pageHead) || isSyncPageHead(pageHead)) {
       await syncDocumentHeadForPage(
@@ -511,12 +422,7 @@ export function createRouter({
       matches,
       isNavigating,
       currentNavigation,
-      contextGateMode,
-      stickyContext,
-      resolveContext: resolveContextOption,
       requestContext,
-      contextState,
-      contextGate,
       afterEachHooks,
       leaveByRoute,
       updateByRoute,
@@ -652,40 +558,6 @@ export function createRouter({
     },
     navigationMode: "history",
     requestContext,
-    contextState,
-    contextGate,
-    contextPendingFallback,
-    async refreshContext() {
-      if (!resolveContextOption) return
-      const m = match.peek()
-      if (!m) return
-      await runContextResolve({
-        match: m,
-        to: {
-          pathname: m.pathname,
-          params: m.params,
-          query: query.peek(),
-          hash: hash.peek(),
-        },
-        from: null,
-        resolveContext: resolveContextOption,
-        gateOptions,
-        contextState,
-        requestContext,
-        navEpoch: navToken.value,
-        getNavEpoch: () => navToken.value,
-        stickyContext: false,
-        hadReadyContext: false,
-        eventType: "refresh",
-      })
-      contextGate.value = resolveContextGateState(
-        m,
-        contextState.peek(),
-        requestContext.peek(),
-        gateOptions
-      )
-      loaderEpoch.value += 1
-    },
     navigate(to, replaceOrOptions = false) {
       const options: import("./routePaths.js").RouterNavigateCallOptions =
         typeof replaceOrOptions === "boolean"
@@ -850,7 +722,6 @@ export function createRouter({
   }
 
   attachRouterRuntime(routerRef, {
-    gateOptions,
     getNavGeneration: () => navToken.value,
     getNavSignal: () =>
       navAbortController.current?.signal ?? staticLoaderSignal(),
@@ -961,9 +832,6 @@ export function createStaticRouter({
       )
     },
     requestContext: signal({}),
-    contextState: signal<ContextState>("idle"),
-    contextGate: signal<ContextGateState>(idleContextGate()),
-    async refreshContext() {},
     afterEach() {
       return emptyUnsub
     },
@@ -973,7 +841,6 @@ export function createStaticRouter({
     dispose() {},
   }
   attachRouterRuntime(routerRef, {
-    gateOptions: { contextGate: "off", hasResolveContext: false },
     getNavGeneration: () => 0,
     getNavSignal: () => staticLoaderSignal(),
     registerComponentGuard() {

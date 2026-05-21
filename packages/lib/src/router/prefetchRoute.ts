@@ -1,6 +1,5 @@
 import { stripBase } from "./pathPolicy.js"
 import { matchRoute } from "./manifest.js"
-import { shouldDeferProtectedOutlet } from "./contextGate.js"
 import { loadRouteTree } from "./routeTree.js"
 import type { RouteManifest } from "./types.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
@@ -10,9 +9,7 @@ import {
 } from "./runPageLoad.js"
 import { isLoaderRpcAvailable } from "./loaderClient.js"
 import { readPageLoadExport } from "./loaders.js"
-import type { Router } from "./csr.js"
 import type { ClientOutletRouter } from "./clientRoutePrep.js"
-import { getRouterRuntime } from "./routerRuntime.js"
 type PrefetchFlight = {
   abort: AbortController
   promise: Promise<void>
@@ -52,28 +49,10 @@ async function runPrefetchRoute(
   const match = matchRoute(manifest, pathname)
   if (!match) return
 
-  const gateOptions = getRouterRuntime(router as Router).gateOptions
-  const deferOptions = {
-    ...gateOptions,
-    manifest,
-    isNavigating: router.isNavigating.peek(),
-    navigationToPathname: router.currentNavigation.peek()?.to.pathname,
-    contextState: router.contextState.peek(),
-  }
-
-  if (shouldDeferProtectedOutlet(match, router.contextGate.peek(), deferOptions)) {
-    return
-  }
-
   if (chunks) {
     for (const scope of match.route.scopes) {
       if (signal.aborted) return
       void scope.layout?.()
-    }
-    if (
-      shouldDeferProtectedOutlet(match, router.contextGate.peek(), deferOptions)
-    ) {
-      return
     }
     void match.route.component()
   }

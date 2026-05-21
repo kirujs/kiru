@@ -1,8 +1,6 @@
 import type { Signal } from "../signals/base.js"
 import type {
   AfterEachHook,
-  ContextGateState,
-  ContextState,
   CurrentNavigation,
   CustomRequestContext,
   NavigationResult,
@@ -52,11 +50,7 @@ export interface RouterCore {
   localeRouting?: import("./i18n/localeRouting.js").I18nLocaleRouting
   navigationMode: RouterNavigationMode
   requestContext: Signal<CustomRequestContext>
-  contextState: Signal<ContextState>
-  contextGate: Signal<ContextGateState>
-  refreshContext: () => Promise<void>
   afterEach: (hook: AfterEachHook) => () => void
-  contextPendingFallback?: () => JSX.Element
   isNavigating: Signal<boolean>
   currentNavigation: Signal<CurrentNavigation | null>
   loaderEpoch: Signal<number>

@@ -28,11 +28,10 @@ Kiru v2 treats routing as a **compiled manifest** plus **environment-specific ru
 Client navigations funnel through `packages/lib/src/router/navigation.ts`:
 
 1. Match URL → `matchRoute(manifest, pathname, pathPolicy)`
-2. **Context gate** — `resolveContext` if scope requires (`contextGate.ts`, `contextResolve.ts`)
-3. **Route middleware** — global + per-scope/page chain (`runRouteMiddleware`)
-4. Commit URL / history
-5. **Prepare route** — loaders, `pageHead`, streaming gate (`prepareRoute.ts`, `runPageLoad.ts`)
-6. Update outlet (`RouterView` / SSR shell subscription)
+2. **Route middleware** — global + per-scope/page chain (`runRouteMiddleware`)
+3. Commit URL / history
+4. **Prepare route** — loaders, `pageHead`, streaming gate (`prepareRoute.ts`, `runPageLoad.ts`)
+5. Update outlet (`RouterView` / SSR shell subscription)
 
 SSR first paint runs the same middleware + loader ordering inside `createRenderer` → `prepareAppForUrl.ts`.
 
@@ -98,11 +97,10 @@ Kiru adapters intentionally do not register HTTP middleware.
 | `prefetchRoute.ts` | Link hover/visible prefetch |
 | `loaderClient.ts` | Client `/?loader=` dispatch |
 | `loaderRegistry.ts` | Server loader RPC registry (internal import path) |
-| `routerRuntime.ts` | Internal router state (gate, nav generation) |
+| `routerRuntime.ts` | Internal router state (nav generation) |
 | `navigation.ts` | Client navigation orchestration |
 | `routeMiddleware.ts` | Middleware runner |
-| `routeMeta.ts` | Meta merge, middleware chain, context strategy |
-| `contextGate.ts` | Outlet block / pending UI |
+| `routeMeta.ts` | Meta merge, middleware chain |
 | `runPageLoad.ts` | Loader dispatch, validation, cache |
 | `loaderCache.ts` | staleTime / gcTime client cache |
 | `prerenderServe.ts` | Production disk HTML serve + SWR regen |
@@ -139,13 +137,11 @@ sequenceDiagram
 sequenceDiagram
   participant User
   participant Router as createRouter
-  participant Ctx as resolveContext
   participant MW as Middleware
   participant Load as clientLoader/loader
 
   User->>Router: Link click / navigate()
   Note over Router: Previous nav AbortController aborted; navToken bumped
-  Router->>Ctx: optional await (block strategy)
   Router->>MW: runRouteMiddleware
   MW-->>Router: redirect?
   Router->>Load: prepareRouteForNavigation (LoaderContext.signal)

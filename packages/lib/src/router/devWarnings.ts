@@ -62,14 +62,6 @@ export function guardServerLoaderOnClient(): void {
   }
 }
 
-export function warnProtectedImportBeforeGate(routeId: string): void {
-  if (!__DEV__) return
-  warnOnce(
-    `protected-import-${routeId}`,
-    `Protected route "${routeId}" module loaded before context gate was ready. Auth flash or data leak possible.`
-  )
-}
-
 export function warnStaticLoaderOnClientNavigation(): void {
   if (!isBrowser || !__DEV__) return
   warnOnce(

@@ -38,18 +38,7 @@ export type CreateRouterAppOptions = CreateRouterAppBaseOptions & {
 export async function createRouterApp(
   options: CreateRouterAppOptions
 ): Promise<AppHandle> {
-  const {
-    routes,
-    container,
-    pathPolicy,
-    transition,
-    i18n,
-    appOptions,
-    resolveContext,
-    contextGate,
-    contextPendingFallback,
-    stickyContext,
-  } = options
+  const { routes, container, pathPolicy, transition, i18n, appOptions } = options
   markRouterBootstrap("csr")
   ensureLoaderClient()
   const router = createRouter({
@@ -57,10 +46,6 @@ export async function createRouterApp(
     pathPolicy,
     transition,
     i18n,
-    resolveContext,
-    contextGate,
-    contextPendingFallback,
-    stickyContext,
   })
   await ensureClientI18nReady(router)
   let outlet: JSX.Element = createElement(RouterView, {})
