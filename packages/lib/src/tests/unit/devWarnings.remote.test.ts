@@ -13,7 +13,7 @@ describe("guardRemoteActionOnClient", () => {
     g.window = {}
     try {
       markRouterBootstrap("csr")
-      assert.throws(() => guardRemoteActionOnClient(), /Remote `action`/)
+      assert.throws(() => guardRemoteActionOnClient(), /Remote action requires SSR/)
       assert.equal(getRouterBootstrapMode(), "csr")
     } finally {
       g.window = prev

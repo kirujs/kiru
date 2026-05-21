@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Bundle hygiene
+
+- **`kiru`:** `DevTools` moved to `kiru/devtools` (no longer on the main barrel).
+- **`kiru` router:** dev-only warnings split into `devWarnings.dev.ts`; production client bundles use shorter guard errors and call-site `if (__DEV__)` for hints.
+- **`vite-plugin-kiru`:** injects `__KIRU_ROUTER_BOOTSTRAP__` (`csr` | `ssr` | `ssg`) on client builds for compile-time guard DCE.
+
 ### Deploy adapters
 
 - **`@kirujs/runtime`:** `KiruDeployTarget`, `getRuntimeCapabilities`, `assertISRAllowed` — shared contract for adapters and `vite-plugin-kiru`.
@@ -11,7 +17,7 @@ All notable changes to this project will be documented in this file.
 - **`@kirujs/adapter-node`:** `createKiruResponder` / `createKiruHandler` (`handle` + `fetch`), `toNodeListener`, hybrid ISR, static assets; `nodeRequestToFetch` → `{ request, abort }`, `bindClientDisconnectAbort`, abort-aware `writeNodeResponse`.
 - **`@kirujs/adapter-cloudflare`:** `createKiruWorkerHandle` (`Response | null`) and `createKiruWorkerHandler` (Web `fetch`).
 - **HTTP frameworks:** no separate packages — mix runtime adapter + explicit catch-all in your app ([`deploy-runtimes.md`](docs/router/deploy-runtimes.md)).
-- **`@kirujs/adapter-bun`:** `createKiruBunServer`, `serveKiruBun` — same `fetch` handler as Node via `Bun.serve` (no Hono dependency).
+- **`@kirujs/adapter-bun`:** `createKiruBunServer` — same `fetch` handler as Node with `deployTarget: "bun"`; use `Bun.serve({ fetch: kiru.fetch })` in your entry (removed `serveKiruBun` wrapper).
 - **`@kirujs/adapter-cloudflare`:** `createKiruWorkerHandler` — SSR + **immutable** prerender from Assets; **no ISR** on edge (Next.js-style).
 - **`createRenderer({ deployTarget })`:** edge target ignores disk ISR; Web Crypto action tokens on Cloudflare.
 - **`vite-plugin-kiru` `router.adapter`:** `node` | `bun` | `cloudflare` — worker SSR bundle, `wrangler.toml.generated`, ISR warnings for edge.

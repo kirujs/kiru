@@ -7,7 +7,8 @@ import {
   buildClientOutletSubtree,
 } from "./clientRoutePrep.js"
 import { renderClientErrorOutlet } from "./routeTree.js"
-import { warnRouterViewWithoutSsrBootstrap } from "./devWarnings.js"
+import { __DEV__ } from "../env.js"
+import { warnRouterViewWithoutSsrBootstrap } from "./devWarnings.dev.js"
 import { getRouterRuntime } from "./routerRuntime.js"
 import { useRouter } from "./routerContext.js"
 
@@ -61,7 +62,7 @@ export function RouterView() {
   )
 
   onMount(() => {
-    warnRouterViewWithoutSsrBootstrap()
+    if (__DEV__) warnRouterViewWithoutSsrBootstrap()
     const canEndNavigation = () => {
       const nav = router.currentNavigation.peek()
       if (!nav?.to) return true

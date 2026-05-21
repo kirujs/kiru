@@ -38,7 +38,12 @@ export type SsgRouteBuildMeta = {
 }
 
 export type SsgPrerenderOutput = {
+  /** Public URL path (for static route matching). */
   path: string
+  /** Filesystem path under client output (when domain i18n collides on public paths). */
+  diskPath?: string
+  /** Prerender cache index key (`locale::publicPath`). */
+  storageKey?: string
   body: string
   document: { headHtml: string; title?: string }
   html?: string

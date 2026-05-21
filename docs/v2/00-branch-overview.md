@@ -25,7 +25,7 @@ Approximate diff vs `main` merge-base: **533 files**, **+33k / −6k** lines.
 | `@kirujs/runtime` | `KiruDeployTarget`, `getRuntimeCapabilities`, ISR guard for edge |
 | `@kirujs/adapter-contract` | `KiruHandle` (`Response \| null`), `toFetchHandler`, `composeRespond` |
 | `@kirujs/adapter-node` | `createKiruResponder`, `resolveStatic`, Node HTTP bridge |
-| `@kirujs/adapter-bun` | `createKiruBunServer`, `serveKiruBun` |
+| `@kirujs/adapter-bun` | `createKiruBunServer` |
 | `@kirujs/adapter-cloudflare` | `createKiruWorkerHandle`, immutable prerender from Assets |
 
 ## Router API surface (`kiru/router`)

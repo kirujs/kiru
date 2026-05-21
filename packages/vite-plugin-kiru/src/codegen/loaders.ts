@@ -1,6 +1,7 @@
 import path from "node:path"
 import { createHash } from "node:crypto"
 import * as AST from "./ast.js"
+import { isAstExpression } from "./ast.js"
 import { MagicString, TransformCTX, createAliasHandler } from "./shared.js"
 
 type AstNode = AST.AstNode
@@ -135,9 +136,11 @@ function clientFormatLoaders(
           (p: AstNode) =>
             p.type === "Property" &&
             !p.shorthand &&
-            (p.key?.name === "fallback" || p.key?.value === "fallback")
+            (p.key?.name === "fallback" ||
+              (p.key?.type === "Literal" && p.key.value === "fallback"))
         )
-        const fbValue = fbProp?.value as AstNode | undefined
+        const rawFb = fbProp?.value
+        const fbValue = isAstExpression(rawFb) ? rawFb : undefined
         const fbExpr =
           fbValue != null ? code.slice(fbValue.start, fbValue.end) : ""
         code.overwrite(

@@ -29,6 +29,12 @@ const types = [
   "Property",
 ] as const
 
+export function isAstExpression(
+  node: AstNode | string | number | boolean | null | undefined
+): node is AstNode {
+  return node != null && typeof node === "object" && "type" in node
+}
+
 export interface AstNode {
   start: number
   end: number
@@ -57,7 +63,10 @@ export interface AstNode {
   imported?: AstNode & { name: string }
   source?: AstNode & { value: string }
   key?: AstNode
-  value?: unknown
+  /** `Property` expression child, or `Literal` primitive payload. */
+  value?: AstNode | string | number | boolean | null
+  /** ESTree `Property` — method shorthand in object literals. */
+  method?: boolean
   shorthand?: boolean
   left?: AstNode
   right?: AstNode
@@ -179,8 +188,9 @@ function walk_impl(node: AstNode, visitor: AstVisitor, ctx: VisitorCTX) {
   // only walk 'value' of Property nodes
   if (
     node.type === "Property" &&
-    node.value &&
-    typeof node.value === "object"
+    node.value != null &&
+    typeof node.value === "object" &&
+    "type" in node.value
   ) {
     walk_impl(node.value as AstNode, visitor, ctx)
   }

@@ -1,4 +1,5 @@
-import { warnOnce } from "./devWarnings.js"
+import { __DEV__ } from "../env.js"
+import { warnOnce } from "./devWarnings.dev.js"
 
 export const LOCALE_TOKEN = "{{kiru_locale}}"
 const HEAD_TOKEN = "{{kiru_head}}"
@@ -39,6 +40,8 @@ export function validateRouteHtmlTemplate(
 ): void {
   const hasToken = templateUsesLocaleToken(template)
   const staticLang = templateHasStaticHtmlLang(template)
+
+  if (!__DEV__) return
 
   if (options.i18n) {
     if (!hasToken) {

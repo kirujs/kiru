@@ -10,7 +10,7 @@ export default function ContextConcurrencyPage({
   const ctx = useRequestContext()
   return () => (
     <>
-      <p data-testid="ctx-loader-user">{data.loaderUser}</p>
+      <p data-testid="ctx-loader-user">{data?.loaderUser}</p>
       <p data-testid="ctx-hook-user">{ctx.user?.name ?? "none"}</p>
     </>
   )

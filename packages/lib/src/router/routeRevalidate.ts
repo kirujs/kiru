@@ -4,7 +4,8 @@
  * @see docs/router/tier-3-wave-1.md
  */
 
-import { warnOnce } from "./devWarnings.js"
+import { __DEV__ } from "../env.js"
+import { warnOnce } from "./devWarnings.dev.js"
 import type { RouteRevalidate } from "./isr.js"
 
 export type { ForceDynamicISRConfig, HybridISRConfig, ISRConfig, KiruISRConfig, RouteRevalidate } from "./isr.js"
@@ -60,10 +61,12 @@ function warnIgnoredISRFields(
   if (ignored.revalidate !== undefined) parts.push("`revalidate`")
   if (ignored.tags !== undefined) parts.push("`tags`")
   if (parts.length === 0) return
-  warnOnce(
-    "isr-force-dynamic-ignored",
-    `export const isr with dynamic: "${dynamic}" ignores ${parts.join(" and ")}; use hybrid ISR (omit dynamic) for prerender cache and on-demand revalidation.`
-  )
+  if (__DEV__) {
+    warnOnce(
+      "isr-force-dynamic-ignored",
+      `export const isr with dynamic: "${dynamic}" ignores ${parts.join(" and ")}; use hybrid ISR (omit dynamic) for prerender cache and on-demand revalidation.`
+    )
+  }
 }
 
 function normalizeISRConfig(raw: unknown): ResolvedISRConfig | undefined {

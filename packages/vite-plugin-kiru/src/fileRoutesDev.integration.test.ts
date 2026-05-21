@@ -125,7 +125,7 @@ describe("file routes dev regeneration", () => {
       plugins: [],
       optimizeDeps: { disabled: true },
     })
-    await server.listen({ port: 0 })
+    await server.listen(0)
     await attachFileRoutesDevWatcher(state!, server)
   }
 

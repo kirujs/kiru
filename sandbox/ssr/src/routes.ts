@@ -1,4 +1,4 @@
-import { createRoute, createRouteScope, createRouteTree } from "kiru/router"
+import { createRoute, createRouteTree } from "kiru/router"
 import { blockUserZero, requireAuth } from "./routeMiddleware.js"
 
 export const routes = createRouteTree({

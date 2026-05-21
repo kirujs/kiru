@@ -132,8 +132,10 @@ Docs: [docs/router/e2e-ssr-matrix.md](../router/e2e-ssr-matrix.md).
 ### Bun native
 
 ```ts
-import { createKiruBunServer, serveKiruBun } from "@kirujs/adapter-bun"
-serveKiruBun(kiru, { port: 3000 })
+import { createKiruBunServer } from "@kirujs/adapter-bun"
+
+const kiru = createKiruBunServer({ importMetaUrl: import.meta.url, routes })
+Bun.serve({ fetch: kiru.fetch, port: 3000 })
 ```
 
 ### Workers + Assets

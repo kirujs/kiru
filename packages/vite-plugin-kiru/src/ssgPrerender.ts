@@ -166,7 +166,7 @@ export async function runSsgPrerender(input: {
 
     const buildAbort = new AbortController()
     let sigintHook: (() => void) | undefined
-    if (typeof process !== "undefined" && process.on) {
+    if (typeof process !== "undefined" && typeof process.once === "function") {
       sigintHook = () => {
         buildAbort.abort()
       }

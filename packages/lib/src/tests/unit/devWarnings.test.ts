@@ -1,10 +1,8 @@
 import { describe, it, beforeEach, afterEach } from "node:test"
 import assert from "node:assert"
-import {
-  guardServerLoaderOnClient,
-  markRouterBootstrap,
-  warnOnce,
-} from "../../router/devWarnings.js"
+import { guardServerLoaderOnClient } from "../../router/devWarnings.js"
+import { markRouterBootstrap } from "../../router/bootstrapMode.js"
+import { warnOnce } from "../../router/devWarnings.dev.js"
 
 describe("devWarnings", () => {
   const originalWarn = console.warn
@@ -43,12 +41,12 @@ describe("guardServerLoaderOnClient", () => {
 
   it("throws for pure CSR bootstrap", () => {
     markRouterBootstrap("csr")
-    assert.throws(() => guardServerLoaderOnClient(), /kiru\/router\/csr/)
+    assert.throws(() => guardServerLoaderOnClient(), /serverLoader is not supported/)
   })
 
   it("throws for pure SSG bootstrap", () => {
     markRouterBootstrap("ssg")
-    assert.throws(() => guardServerLoaderOnClient(), /kiru\/router\/ssg/)
+    assert.throws(() => guardServerLoaderOnClient(), /serverLoader is not supported/)
   })
 
   it("does not throw for SSR bootstrap without RPC (warn only)", () => {

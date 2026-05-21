@@ -68,7 +68,7 @@ if (isProd) {
 }
 ```
 
-Bun: `createKiruBunServer` from `@kirujs/adapter-bun` (same `KiruResponder`, `deployTarget: "bun"`). Use `Bun.serve({ fetch: kiru.fetch })` or `serveKiruBun(kiru)` instead of `createServer` when you prefer Bun's server.
+Bun: `createKiruBunServer` from `@kirujs/adapter-bun` (same `KiruResponder`, `deployTarget: "bun"`). Use `Bun.serve({ fetch: kiru.fetch, port })` instead of `createServer` when you prefer Bun's server.
 
 ### Route middleware (auth, redirects)
 

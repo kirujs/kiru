@@ -5,7 +5,6 @@ import {
 import type { IncomingMessage, ServerResponse } from "node:http"
 import type { ViteDevServer, ModuleNode } from "vite"
 import { resolveDefaultFetch } from "./fetchResponse.js"
-import { isPreviewAssetPath, toPreviewPathname } from "./preview-server.js"
 
 // ─── CSS helpers ────────────────────────────────────────────────────────────
 

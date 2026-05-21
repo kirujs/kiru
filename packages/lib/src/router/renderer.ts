@@ -1,3 +1,4 @@
+import { __DEV__ } from "../env.js"
 import { renderToString } from "../renderToString.js"
 import { runWithImagePreloadRegistry } from "../image/preloadRegistry.js"
 import {
@@ -611,7 +612,7 @@ function prepareRenderer(options: CreateRendererOptions) {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
   const compiledTemplate =
     htmlTemplate !== undefined ? compileRouteHtmlTemplate(htmlTemplate) : null
-  if (htmlTemplate !== undefined) {
+  if (__DEV__ && htmlTemplate !== undefined) {
     validateRouteHtmlTemplate(htmlTemplate, { i18n: !!options.i18n })
   }
   if (options.stream && htmlTemplate !== undefined) {

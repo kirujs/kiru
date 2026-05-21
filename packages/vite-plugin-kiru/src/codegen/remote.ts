@@ -1,6 +1,7 @@
 import path from "node:path"
 import { createHash } from "node:crypto"
 import * as AST from "./ast.js"
+import { isAstExpression } from "./ast.js"
 import { MagicString, TransformCTX, createAliasHandler } from "./shared.js"
 
 type AstNode = AST.AstNode
@@ -230,7 +231,7 @@ function collectActionsFromObject(
     if (!keyName) continue
     const path = prefix ? `${prefix}.${keyName}` : keyName
     const value = prop.value
-    if (!value) continue
+    if (!isAstExpression(value)) continue
 
     if (value.type === "ObjectExpression") {
       collectActionsFromObject(value, exportNode, path, actionAliases, matches)
@@ -351,7 +352,8 @@ function isPostFormConfig(node: AstNode): boolean {
     if (keyName !== "type") continue
     const value = prop.value
     if (
-      value?.type === "Literal" &&
+      isAstExpression(value) &&
+      value.type === "Literal" &&
       typeof value.value === "string" &&
       value.value === "form"
     ) {

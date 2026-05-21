@@ -73,7 +73,6 @@ import type {
   PluginOption,
   ResolvedConfig,
   UserConfig,
-  ViteDevServer,
 } from "vite"
 
 const REMOTE_REGISTRY_VIRTUAL_ID = "virtual:kiru:remote-registry"
@@ -82,6 +81,15 @@ const LOADER_REGISTRY_VIRTUAL_ID = "virtual:kiru:loader-registry"
 function isSsrBundleBuild(userConfig: UserConfig): boolean {
   const ssr = userConfig.build?.ssr
   return ssr === true || typeof ssr === "string"
+}
+
+/** Client bundle bootstrap mode for `kiru` compile-time guards (hybrid → `ssr`). */
+function resolveRouterBootstrapDefine(
+  opts: KiruPluginOptions
+): "csr" | "ssr" | "ssg" {
+  if (opts.router?.serverEntry) return "ssr"
+  if (opts.router?.ssg) return "ssg"
+  return "csr"
 }
 
 async function ensureSsgPrerenderCache(input: {
@@ -202,6 +210,14 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           ...config.build,
           ...partial.build,
           manifest: true,
+        }
+      }
+      if (!isSsrBundleBuild(config)) {
+        partial.define = {
+          ...config.define,
+          __KIRU_ROUTER_BOOTSTRAP__: JSON.stringify(
+            resolveRouterBootstrapDefine(opts)
+          ),
         }
       }
       return partial

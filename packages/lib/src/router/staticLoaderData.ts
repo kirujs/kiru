@@ -1,6 +1,7 @@
 import type { LoaderContext } from "./loaders.js"
 import { isKiruLoader, readPageLoadExport } from "./loaders.js"
-import { warnOnce } from "./devWarnings.js"
+import { __DEV__ } from "../env.js"
+import { warnOnce } from "./devWarnings.dev.js"
 
 /** Per-path loader data baked into a page module at SSG build time. */
 export type StaticLoaderPayloadByPath = Record<string, unknown>
@@ -58,15 +59,17 @@ export function resolveStaticLoaderDataFromModule(
 ): unknown {
   const payload = readPageStaticLoaderPayload(mod)
   if (!payload) {
-    warnOnce(
-      "static-loader-missing-payload-export",
-      `[kiru/router] Page module is missing \`export const ${STATIC_LOADER_PAYLOAD_EXPORT}\`. Rebuild the SSG app.`
-    )
+    if (__DEV__) {
+      warnOnce(
+        "static-loader-missing-payload-export",
+        `[kiru/router] Page module is missing \`export const ${STATIC_LOADER_PAYLOAD_EXPORT}\`. Rebuild the SSG app.`
+      )
+    }
     return undefined
   }
   const key = buildStaticLoaderLookupKey(ctx)
   const data = payload[key]
-  if (data === undefined) {
+  if (data === undefined && __DEV__) {
     warnOnce(
       `static-loader-missing-path-${key}`,
       `[kiru/router] No static loader data for "${key}" in this page module.`

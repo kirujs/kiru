@@ -37,6 +37,10 @@
       "types": "./dist/utils/index.d.ts",
       "default": "./dist/utils/index.js"
     },
+    "./devtools": {
+      "types": "./dist/devtools.d.ts",
+      "default": "./dist/devtools.js"
+    },
     "./ssr/client": {
       "types": "./dist/ssr/client.d.ts",
       "default": "./dist/ssr/client.js"
