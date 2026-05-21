@@ -3,12 +3,19 @@ import { setup } from "../hooks/index.js"
 import { onMount } from "../hooks/onMount.js"
 import { runLinkPrefetch, type LinkPrefetch } from "./prefetchRoute.js"
 import type { RouterLocaleParam } from "./i18n/augmentation.js"
+import {
+  interpolateRoutePath,
+  type HasRouteParams,
+  type IsRouteRegistryConfigured,
+  type NavigatePath,
+  type NavigateParamsOption,
+  type RouteParams,
+} from "./routePaths.js"
 import { useRouter } from "./routerContext.js"
 
 export type { LinkPrefetch } from "./prefetchRoute.js"
 
-export type LinkProps = JSX.IntrinsicElements["a"] & {
-  to: string
+type LinkBase = Omit<JSX.IntrinsicElements["a"], "href"> & {
   replace?: boolean
   /** @default `{ trigger: "hover", chunks: true, data: true }` when loader RPC exists */
   prefetch?: LinkPrefetch
@@ -21,16 +28,44 @@ export type LinkProps = JSX.IntrinsicElements["a"] & {
   children?: JSX.Children
 }
 
+export type LinkProps = IsRouteRegistryConfigured extends true
+  ? {
+      [P in NavigatePath]: LinkBase & { to: P } & NavigateParamsOption<P>
+    }[NavigatePath]
+  : LinkBase & {
+      to: string
+      params?: Record<string, string | undefined>
+    }
+
+function resolveLinkTo(
+  to: NavigatePath | string,
+  params?: Record<string, string | undefined>
+): string {
+  if (params && Object.keys(params).length > 0) {
+    return interpolateRoutePath(String(to), params)
+  }
+  return String(to)
+}
+
 export const Link: Kiru.Component<LinkProps> = () => {
   const $ = setup<typeof Link>()
   const router = useRouter()
 
-  const href = $.derive(({ to, locale }) =>
-    router.resolveHref(
-      to,
-      locale === false ? { locale: false } : locale ? { locale } : undefined
+  const href = $.derive(({ to, params }) => {
+    const resolved = resolveLinkTo(
+      to as NavigatePath | string,
+      params as Record<string, string | undefined> | undefined
     )
-  )
+    const { locale } = $.props
+    return router.resolveHref(
+      resolved,
+      locale === false
+        ? { locale: false }
+        : locale
+          ? { locale }
+          : undefined
+    )
+  })
   const runHoverPrefetch = () => {
     const p = $.props.prefetch
     const resolved =
@@ -84,14 +119,18 @@ export const Link: Kiru.Component<LinkProps> = () => {
     $.props.onclick?.(event)
     if (event.defaultPrevented) return
     event.preventDefault()
-    const { to, replace, locale: linkLocale } = $.props
+    const { to, replace, locale: linkLocale, params } = $.props
+    const target = resolveLinkTo(
+      to as NavigatePath | string,
+      params as Record<string, string | undefined> | undefined
+    )
     void router.navigate(
-      to,
+      target,
       linkLocale !== undefined ? { replace, locale: linkLocale } : replace
     )
   }
 
-  return ({ to, replace, children, ...rest }) =>
+  return ({ to, replace, params, children, ...rest }) =>
     createElement("a", {
       children,
       href,
@@ -101,3 +140,5 @@ export const Link: Kiru.Component<LinkProps> = () => {
       ...rest,
     })
 }
+
+export type { RouteParams, NavigatePath, HasRouteParams }

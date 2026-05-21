@@ -23,7 +23,6 @@ export async function runRouteMiddleware(input: {
   meta: RouteMeta
   context: CustomRequestContext
   request?: Request
-  globalMiddleware: RouteMiddleware[]
   match: RouteMatch | null
 }): Promise<
   | { type: "continue" }
@@ -38,10 +37,7 @@ export async function runRouteMiddleware(input: {
     request: input.request,
     context: input.context,
   }
-  const chain = [
-    ...input.globalMiddleware,
-    ...collectMiddlewareChain(input.match),
-  ]
+  const chain = collectMiddlewareChain(input.match)
   for (const mw of chain) {
     const out = await mw(ctx)
     if (!out) continue
@@ -53,6 +49,18 @@ export async function runRouteMiddleware(input: {
   return { type: "continue" }
 }
 
-export function defineRouteMiddleware<T extends RouteMiddleware>(fn: T): T {
-  return fn
+/** Normalize `middleware.ts` namespace imports from file-based route codegen. */
+export function collectRouteMiddlewareModule(module: {
+  default?: RouteMiddleware | RouteMiddleware[]
+  middleware?: RouteMiddleware | RouteMiddleware[]
+}): RouteMiddleware[] {
+  const chain: RouteMiddleware[] = []
+  const add = (value: RouteMiddleware | RouteMiddleware[] | undefined) => {
+    if (value == null) return
+    if (Array.isArray(value)) chain.push(...value)
+    else chain.push(value)
+  }
+  add(module.default)
+  add(module.middleware)
+  return chain
 }

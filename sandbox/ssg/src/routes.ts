@@ -1,7 +1,6 @@
-import { defineRouteTree } from "kiru/router"
+import { createRoute, createRouteScope, createRouteTree } from "kiru/router"
 
-export const routes = defineRouteTree((r) =>
-  r.scope({
+export const routes = createRouteTree({
     static: true,
     head: {
       title: "Kiru SSG Sandbox",
@@ -9,7 +8,7 @@ export const routes = defineRouteTree((r) =>
     },
     layout: () => import("./pages/layout.tsx"),
     children: [
-      r.page("/", {
+      createRoute("/", {
         component: () => import("./pages/index.tsx"),
         head: {
           title: "Home — Kiru SSG",
@@ -22,7 +21,7 @@ export const routes = defineRouteTree((r) =>
           },
         },
       }),
-      r.page("/seo", {
+      createRoute("/seo", {
         component: () => import("./pages/seo.tsx"),
         head: {
           title: "SEO — Kiru SSG",
@@ -34,23 +33,23 @@ export const routes = defineRouteTree((r) =>
           },
         },
       }),
-      r.page("/about", {
+      createRoute("/about", {
         component: () => import("./pages/about.tsx"),
         head: {
           title: "About — Kiru SSG",
           description: "About this static site.",
         },
       }),
-      r.page("/loaders/static", () => import("./pages/loadersStatic.tsx")),
-      r.page("/blog", () => import("./pages/blog.tsx")),
-      r.page("/blog/[slug]", {
+      createRoute("/loaders/static", () => import("./pages/loadersStatic.tsx")),
+      createRoute("/blog", () => import("./pages/blog.tsx")),
+      createRoute("/blog/[slug]", {
         component: () => import("./pages/blogSlug.tsx"),
         head: {
           title: "Blog — Kiru SSG",
           description: "A statically generated blog post.",
         },
       }),
-      r.page("/blog/[slug]/comments/[id]", {
+      createRoute("/blog/[slug]/comments/[id]", {
         component: () => import("./pages/blogComment.tsx"),
         head: {
           title: "Blog comment — Kiru SSG",
@@ -60,4 +59,3 @@ export const routes = defineRouteTree((r) =>
       }),
     ],
   })
-)

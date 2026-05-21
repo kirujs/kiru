@@ -1,4 +1,4 @@
-# Route tree — `defineRouteTree`
+# Route tree — `createRouteTree`
 
 The route tree is the **single source of truth** for URLs, layouts, static prerender, SEO head, middleware, and error boundaries.
 
@@ -7,39 +7,45 @@ The route tree is the **single source of truth** for URLs, layouts, static prere
 Every app exports a tree from `src/routes.ts`:
 
 ```ts
-import { defineRouteTree } from "kiru/router"
+import { createRoute, createRouteTree } from "kiru/router"
 
-export const routes = defineRouteTree((r) =>
-  r.scope({
-    layout: () => import("./pages/layout.tsx"),
-    notFound: () => import("./pages/not-found.tsx"),
-    children: [
-      r.page("/", () => import("./pages/index.tsx")),
-      r.page("/about", () => import("./pages/about.tsx")),
-    ],
-  })
-)
+const r0 = createRoute("/", () => import("./pages/index.tsx"))
+const r1 = createRoute("/about", () => import("./pages/about.tsx"))
+
+export const routes = createRouteTree({
+  layout: () => import("./pages/layout.tsx"),
+  notFound: () => import("./pages/not-found.tsx"),
+  children: [r0, r1],
+})
+
+declare module "kiru/router" {
+  interface RouteTree {
+    routes: [typeof r0, typeof r1]
+  }
+}
 ```
 
-`defineRouteTree` requires the builder to return a **scope root** (`r.scope(...)`), not a bare page.
+`createRouteTree` builds a **scope root** internally. Register leaf routes in `RouteTree` so `Link`, `navigate`, and `useParams` infer path params.
 
-Implementation: `packages/lib/src/router/defineRouteTree.ts` → `compileRouteTree` in `manifest.ts`.
+Implementation: `packages/lib/src/router/createRouteTree.ts` → `compileRouteTree` in `manifest.ts`.
+
+Optional **file-based routing** generates this tree from `src/pages` — see [file-based-routes.md](../router/file-based-routes.md).
 
 ## Scopes vs pages
 
-| Node | `kind` | Purpose |
-|------|--------|---------|
-| `r.scope({ ... })` | `scope` | Layout wrapper, shared `meta`, `middleware`, `static`, context policy |
-| `r.page(path, ...)` | `route` | Leaf URL + page component |
+| API | `kind` | Purpose |
+|-----|--------|---------|
+| `createRouteScope({ ... })` | `scope` | Layout wrapper, shared `meta`, `middleware`, `static`, context policy |
+| `createRoute(path, ...)` | `route` | Leaf URL + page component |
 
 ### Page shorthand
 
 ```ts
 // Shorthand: component loader only
-r.page("/about", () => import("./pages/about.tsx"))
+createRoute("/about", () => import("./pages/about.tsx"))
 
 // Full config object
-r.page("/about", {
+createRoute("/about", {
   component: () => import("./pages/about.tsx"),
   static: true,
   head: { title: "About" },
@@ -56,7 +62,7 @@ r.page("/about", {
 **Example — hybrid docs slice** (`sandbox/ssr/src/routes.ts`):
 
 ```ts
-r.page("/docs", {
+createRoute("/docs", {
   static: true,
   component: () => import("./pages/docs.tsx"),
   head: {
@@ -71,13 +77,13 @@ With `router.ssg` + `router.serverEntry`, `/docs` is written to `dist/client/doc
 **Example — full static site** (`e2e/ssg/src/routes.ts`):
 
 ```ts
-r.scope({
+createRouteTree({
   static: true,
   children: [
-    r.page("/", { component: () => import("./pages/index.tsx"), ... }),
-    r.page("/posts/[slug]", { component: () => import("./pages/post.tsx"), ... }),
+    createRoute("/", { component: () => import("./pages/index.tsx"), ... }),
+    createRoute("/posts/[slug]", { component: () => import("./pages/post.tsx"), ... }),
   ],
-}),
+})
 ```
 
 Dynamic static segments need `generateStaticParams` on the **page module** (see below).
@@ -237,15 +243,13 @@ r.scope({
 ```ts
 import { contextRouteChildren } from "../../csr/src/context/defineContextRoutes.js"
 
-export const routes = defineRouteTree((r) =>
-  r.scope({
-    layout: () => import("./pages/layout.tsx"),
-    children: [
-      /* static pages... */
-      ...contextRouteChildren(r),
-    ],
-  })
-)
+export const routes = createRouteTree({
+  layout: () => import("./pages/layout.tsx"),
+  children: [
+    /* static pages... */
+    ...contextRouteChildren(),
+  ],
+})
 ```
 
 ## `routeLinks` (E2E only pattern)
@@ -263,8 +267,8 @@ export const routes = defineRouteTree((r) =>
 
 | Goal | Route tree knob |
 |------|-----------------|
-| Marketing site fully static | `r.scope({ static: true, children: [...] })` |
-| One static docs page in SSR app | `r.page("/docs", { static: true, ... })` + hybrid vite config |
+| Marketing site fully static | `createRouteTree({ static: true, children: [...] })` |
+| One static docs page in SSR app | `createRoute("/docs", { static: true, ... })` + hybrid vite config |
 | Auth-gated area | `meta` + `middleware` + `contextStrategy: "block"` |
 | SEO landing | `head` + `static: true` or SSR with `defineISR` |
 | Optional blog index | `r.page("/blog/[[page]]", ...)` + `generateStaticParams` |

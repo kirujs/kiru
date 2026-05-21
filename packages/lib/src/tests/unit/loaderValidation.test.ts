@@ -14,7 +14,12 @@ import {
   validateRouteInput,
 } from "../../router/loaderValidation.js"
 import { validateSearchForMatch } from "../../router/validateSearchForMatch.js"
-import { compileRouteTree, defineRouteTree, matchRoute } from "../../router/index.js"
+import {
+  compileRouteTree,
+  createRoute,
+  createRouteTree,
+  matchRoute,
+} from "../../router/index.js"
 
 describe("loader validation", () => {
   it("stores validation on KiruLoader from loader config", () => {
@@ -132,10 +137,9 @@ describe("loader validation", () => {
       },
       load: async ({ query }) => query,
     })
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/search", {
+          createRoute("/search", {
             component: async () => ({
               default: () => null,
               load: pageLoad,
@@ -143,7 +147,6 @@ describe("loader validation", () => {
           }),
         ],
       })
-    )
     const manifest = compileRouteTree(routes)
     const match = matchRoute(manifest, "/search")!
     const check = await validateSearchForMatch(match, { q: ["ok"] })

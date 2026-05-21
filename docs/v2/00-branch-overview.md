@@ -8,7 +8,7 @@ Approximate diff vs `main` merge-base: **533 files**, **+33k / −6k** lines.
 
 | Removed | Replacement |
 |---------|-------------|
-| `FileRouter`, `fileRouterController` | `defineRouteTree` + `compileRouteTree` → `RouteManifest` |
+| `FileRouter`, `fileRouterController` | `createRouteTree` + `compileRouteTree` → `RouteManifest` |
 | `packages/lib/src/router/link.ts` (old) | `Link`, `navigate` from `kiru/router` (`navigation.ts`) |
 | `beforeEach` / `beforeResolve` / `beforeEnter` / `beforeActivate` | `routeMiddleware` + optional `navigationGuards` (component hooks, CSR-only) |
 | `pageConfig.ts` | Route `head`, page `load`, `export const isr` |
@@ -32,12 +32,12 @@ Approximate diff vs `main` merge-base: **533 files**, **+33k / −6k** lines.
 
 New or reworked exports (see `packages/lib/src/router/index.ts`):
 
-- **Tree:** `defineRouteTree`, `compileRouteTree`, `matchRoute`, `generateStaticPaths`
+- **Tree:** `createRouteTree`, `compileRouteTree`, `matchRoute`, `generateStaticPaths`
 - **CSR:** `createRouter`, `createRouterApp` (`bootstrap/csr.ts`), `RouterProvider`, `RouterView`, `Link`
 - **SSR:** `createRenderer`, `fillRouteHtmlTemplate`, `bootstrapSsrClient`
 - **SSG:** `prerenderStaticRoutes`, `bootstrapSsgClient`
 - **Loaders:** `loader`, `serverLoader`, `clientLoader`, `staticLoader`, `PageProps`, `usePageData`
-- **Policy:** `defineRouteMiddleware`, `runRouteMiddleware`, `RouteMeta` augmentation
+- **Policy:** `RouteMiddleware`, `runRouteMiddleware`, `RouteMeta` augmentation
 - **Context:** `resolveContext` (CSR), `contextStrategy`, `contextGate`, `RequestContextProvider`
 - **Cache / ISR:** `defineISR`, `revalidatePath`, `revalidateTag`, `diskPrerenderCache`
 - **Prefetch / RPC:** `prefetchRoute`, `kiru/router/loaderClient`, `kiru/router/loaderRegistry` (codegen only)

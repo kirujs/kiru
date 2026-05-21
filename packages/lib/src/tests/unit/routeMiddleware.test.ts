@@ -1,33 +1,44 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { compileRouteTree, matchRoute } from "../../router/manifest.js"
-import { defineRouteTree } from "../../router/defineRouteTree.js"
+import {
+  createRoute,
+  createRouteScope,
+  createRouteTree,
+} from "../../router/createRouteTree.js"
 import { buildMiddlewareTo } from "../../router/navigation.js"
 import { runRouteMiddleware } from "../../router/routeMiddleware.js"
 import { mergeRouteMeta } from "../../router/routeMeta.js"
 
 describe("runRouteMiddleware", () => {
-  it("runs global then scope then route middleware in order", async () => {
+  it("runs root scope then nested scope then route middleware in order", async () => {
     const order: string[] = []
-    const tree = defineRouteTree((r) =>
-      r.scope({
+    const tree = createRouteTree({
         middleware: [
           () => {
-            order.push("scope")
+            order.push("root")
           },
         ],
         children: [
-          r.page("/", {
+          createRouteScope({
             middleware: [
               () => {
-                order.push("route")
+                order.push("scope")
               },
             ],
-            component: async () => ({ default: () => null }),
+            children: [
+              createRoute("/", {
+                middleware: [
+                  () => {
+                    order.push("route")
+                  },
+                ],
+                component: async () => ({ default: () => null }),
+              }),
+            ],
           }),
         ],
       })
-    )
     const manifest = compileRouteTree(tree)
     const match = matchRoute(manifest, "/")!
     await runRouteMiddleware({
@@ -39,27 +50,21 @@ describe("runRouteMiddleware", () => {
       from: null,
       meta: mergeRouteMeta(match),
       context: {},
-      globalMiddleware: [
-        () => {
-          order.push("global")
-        },
-      ],
       match,
     })
-    assert.deepEqual(order, ["global", "scope", "route"])
+    assert.deepEqual(order, ["root", "scope", "route"])
   })
 
   it("returns redirect when middleware redirects", async () => {
     const manifest = compileRouteTree(
-      defineRouteTree((r) =>
-        r.scope({
+      createRouteTree({
+          middleware: [() => ({ redirect: "/login" })],
           children: [
-            r.page("/", {
+            createRoute("/", {
               component: async () => ({ default: () => null }),
             }),
           ],
         })
-      )
     )
     const match = matchRoute(manifest, "/")!
     const out = await runRouteMiddleware({
@@ -71,7 +76,6 @@ describe("runRouteMiddleware", () => {
       from: null,
       meta: {},
       context: {},
-      globalMiddleware: [() => ({ redirect: "/login" })],
       match,
     })
     assert.equal(out.type, "redirect")

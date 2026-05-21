@@ -62,7 +62,6 @@ import {
   createRemoteActionHandler,
 } from "../remote/index.js"
 import { runWithSsrRequestContext } from "../remote/action.js"
-import type { RouteMiddleware } from "./types.js"
 import { toPathname } from "./requestUrl.js"
 
 export {
@@ -170,8 +169,6 @@ export type CreateRendererOptions = {
    * @see docs/router/deploy-runtimes.md
    */
   deployTarget?: KiruDeployTarget
-  /** Global route middleware (SSR + CSR). */
-  routeMiddleware?: RouteMiddleware[]
 }
 
 function engine(options: CreateRendererOptions & { stream: boolean }) {
@@ -180,7 +177,6 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     compiledTemplate,
     actionsSecret,
     handleRemoteAction,
-    globalMiddleware,
   } = prepareRenderer(options)
   const pathPolicy = resolvePathPolicy(options.pathPolicy)
   const i18nConfig = options.i18n
@@ -330,7 +326,6 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         pathPolicy,
         i18nConfig,
         typeof requestOrUrl === "object" ? requestOrUrl : undefined,
-        globalMiddleware,
         { enableStreamingLoad: options.stream }
       )
       if (!prepared) return null
@@ -646,7 +641,6 @@ function prepareRenderer(options: CreateRendererOptions) {
     compiledTemplate,
     actionsSecret,
     handleRemoteAction: handlePost,
-    globalMiddleware: options.routeMiddleware ?? [],
   }
 }
 

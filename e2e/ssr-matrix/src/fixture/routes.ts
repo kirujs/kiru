@@ -1,17 +1,15 @@
-import { defineRouteTree } from "kiru/router"
+import { createRoute, createRouteScope, createRouteTree } from "kiru/router"
 
-export const routes = defineRouteTree((r) =>
-  r.scope({
+export const routes = createRouteTree({
     layout: () => import("./pages/layout.tsx"),
     children: [
-      r.page("/", {
+      createRoute("/", {
         component: () => import("./pages/index.tsx"),
         head: { title: "Matrix home" },
       }),
-      r.page("/hello", {
+      createRoute("/hello", {
         component: () => import("./pages/hello.tsx"),
         head: { title: "Matrix hello" },
       }),
     ],
   })
-)

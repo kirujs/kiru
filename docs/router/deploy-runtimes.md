@@ -72,7 +72,7 @@ Bun: `createKiruBunServer` from `@kirujs/adapter-bun` (same `KiruResponder`, `de
 
 ### Route middleware (auth, redirects)
 
-Pass **`routeMiddleware`** on `createKiruResponder` / `createRenderer` (same as CSR `createRouter`). See [route-middleware-and-context.md](./route-middleware-and-context.md). CORS, logging, and other HTTP concerns belong in your server framework, not the Kiru handler.
+Register app-wide middleware on the **`createRouteTree` root scope** (same for CSR, SSR, and adapters). See [route-middleware-and-context.md](./route-middleware-and-context.md). CORS, logging, and other HTTP concerns belong in your server framework, not the Kiru handler.
 
 To wrap `kiru.handle` yourself (e.g. logging), use `composeRespond` from `@kirujs/adapter-contract` around the returned `handle`.
 

@@ -49,7 +49,6 @@ export async function createRouterApp(
     contextGate,
     contextPendingFallback,
     stickyContext,
-    routeMiddleware,
   } = options
   markRouterBootstrap("csr")
   ensureLoaderClient()
@@ -62,7 +61,6 @@ export async function createRouterApp(
     contextGate,
     contextPendingFallback,
     stickyContext,
-    routeMiddleware,
   })
   await ensureClientI18nReady(router)
   let outlet: JSX.Element = createElement(RouterView, {})

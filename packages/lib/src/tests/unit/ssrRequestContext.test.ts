@@ -9,7 +9,8 @@ import { staticLoaderSignal } from "../../router/navigationScope.js"
 import {
   compileRouteTree,
   createRenderer,
-  defineRouteTree,
+  createRoute,
+  createRouteTree,
 } from "../../router/index.js"
 import { __INTERNAL_REMOTE_REGISTRY } from "../../remote/index.js"
 
@@ -30,15 +31,13 @@ describe("SSR request context scope", () => {
   })
 
   it("clears SSR action context after renderer.render completes", async () => {
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/", async () => ({
+          createRoute("/", async () => ({
             default: () => null,
           })),
         ],
       })
-    )
     const renderer = createRenderer({
       routes,
       htmlTemplate: MINIMAL_TPL,
@@ -55,10 +54,9 @@ describe("SSR request context scope", () => {
     })
     __INTERNAL_REMOTE_REGISTRY.register("test/ssr-probe", { probe })
 
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/", async () => ({
+          createRoute("/", async () => ({
             default: () => {
               void probe()
               return null
@@ -66,7 +64,6 @@ describe("SSR request context scope", () => {
           })),
         ],
       })
-    )
     compileRouteTree(routes)
     const renderer = createRenderer({
       routes,
@@ -95,16 +92,15 @@ describe("SSR request context scope", () => {
       probeB,
     })
 
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/a", async () => ({
+          createRoute("/a", async () => ({
             default: () => {
               void probeA()
               return null
             },
           })),
-          r.page("/b", async () => ({
+          createRoute("/b", async () => ({
             default: () => {
               void probeB()
               return null
@@ -112,7 +108,6 @@ describe("SSR request context scope", () => {
           })),
         ],
       })
-    )
     const renderer = createRenderer({
       routes,
       htmlTemplate: MINIMAL_TPL,

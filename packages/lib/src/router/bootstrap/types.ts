@@ -3,12 +3,13 @@ import type { CreateRouterOptions } from "../csr.js"
 /**
  * Shared options for {@link createRouterApp} from `kiru/router/csr`, `kiru/router/ssg`,
  * and `kiru/router/ssr`. Same context and middleware fields as {@link CreateRouterOptions},
- * plus a DOM mount target. Mode-specific wrappers add hydration, i18n, or CSR-only flags.
+ * plus a DOM mount target. Register app-wide middleware on the route tree root scope.
+ * Mode-specific wrappers add hydration, i18n, or CSR-only flags.
  *
  * @see docs/router/route-middleware-and-context.md
  */
 export type CreateRouterAppBaseOptions = {
-  /** Route tree from {@link defineRouteTree} or a precompiled {@link RouteManifest}. */
+  /** Route tree from {@link createRouteTree} or a precompiled {@link RouteManifest}. */
   routes: CreateRouterOptions["routes"]
   /** DOM element that receives the mounted or hydrated router outlet. */
   container: HTMLElement
@@ -31,9 +32,4 @@ export type CreateRouterAppBaseOptions = {
    * @default true
    */
   stickyContext?: CreateRouterOptions["stickyContext"]
-  /**
-   * Global route middleware (after context resolve, before URL commit).
-   * Same pipeline as {@link createRenderer} `routeMiddleware`.
-   */
-  routeMiddleware?: CreateRouterOptions["routeMiddleware"]
 }

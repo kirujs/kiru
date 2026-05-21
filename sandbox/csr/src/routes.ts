@@ -1,17 +1,15 @@
-import { defineRouteTree } from "kiru/router"
+import { createRoute, createRouteScope, createRouteTree } from "kiru/router"
 
-export const routes = defineRouteTree((r) =>
-  r.scope({
+export const routes = createRouteTree({
     layout: () => import("./pages/layout.tsx"),
     children: [
-      r.page("/", () => import("./pages/home.tsx")),
-      r.page("/about", () => import("./pages/about.tsx")),
-      r.page("/navigation", () => import("./pages/navigation.tsx")),
-      r.page("/loaders/client", () => import("./pages/loaders-client.tsx")),
-      r.page(
+      createRoute("/", () => import("./pages/home.tsx")),
+      createRoute("/about", () => import("./pages/about.tsx")),
+      createRoute("/navigation", () => import("./pages/navigation.tsx")),
+      createRoute("/loaders/client", () => import("./pages/loaders-client.tsx")),
+      createRoute(
         "/loaders/universal",
         () => import("./pages/loaders-universal.tsx")
       ),
     ],
   })
-)

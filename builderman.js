@@ -62,6 +62,24 @@ const devtoolsHost = task({
   },
 })
 
+const fileRoutes = task({
+  name: "file-routes",
+  cwd: "packages/file-routes",
+  commands: {
+    build: {
+      run: "pnpm build",
+      cache: pkgCache("packages/file-routes"),
+      dependencies: [lib],
+    },
+    test: {
+      run: "pnpm test",
+      cache: pkgCache("packages/file-routes"),
+      dependencies: [lib],
+      env: { NODE_ENV: "development" },
+    },
+  },
+})
+
 const adapterContract = task({
   name: "adapter-contract",
   cwd: "packages/adapter-contract",
@@ -122,6 +140,7 @@ const vitePluginCacheConfig = {
   inputs: [
     "src",
     lib.artifact("build"),
+    fileRoutes.artifact("build"),
     devtoolsHost.artifact("build"),
     runtime.artifact("build"),
     adapterCloudflare.artifact("build"),
@@ -137,7 +156,7 @@ const vitePlugin = task({
     build: {
       run: "pnpm build",
       cache: vitePluginCacheConfig,
-      dependencies: [lib, devtoolsHost, runtime, adapterCloudflare],
+      dependencies: [lib, fileRoutes, devtoolsHost, runtime, adapterCloudflare],
     },
     test: {
       run: "pnpm test",
@@ -152,6 +171,7 @@ const vitePlugin = task({
 
 const adapterDeps = [
   lib,
+  fileRoutes,
   vitePlugin,
   runtime,
   adapterContract,
@@ -201,6 +221,12 @@ const ssrTest = task({
   cwd: "e2e/ssr",
 })
 
+const fileRoutesTest = task({
+  ...sharedE2EConfig,
+  name: "e2e:file-routes",
+  cwd: "e2e/file-routes",
+})
+
 const ssrMatrixTest = task({
   name: "e2e:ssr-matrix",
   cwd: "e2e/ssr-matrix",
@@ -221,7 +247,7 @@ const ssrMatrixTest = task({
   env: { NODE_ENV: "development" },
 })
 
-const e2e = pipeline([csrTest, ssgTest, ssrTest, ssrMatrixTest]).toTask({
+const e2e = pipeline([csrTest, ssgTest, ssrTest, fileRoutesTest, ssrMatrixTest]).toTask({
   name: "e2e",
   maxConcurrency: 1,
   dependencies: adapterDeps,
@@ -236,6 +262,7 @@ if (!["build", "dev", "test"].includes(command)) {
 const result = await pipeline([
   runtime,
   lib,
+  fileRoutes,
   adapterContract,
   adapterNode,
   adapterBun,

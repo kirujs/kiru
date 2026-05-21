@@ -1,6 +1,12 @@
 import path from "node:path"
 import type { ESBuildOptions, ResolvedConfig } from "vite"
 import type { KiruPluginOptions, FileLinkFormatter } from "./types.js"
+import {
+  defaultRoutesModuleForFileRoutes,
+  resolveFileRoutesOption,
+  resolveFileRoutesPaths,
+  type ResolvedFileRoutes,
+} from "./fileRoutesConfig.js"
 import type { SsgPrerenderCache } from "./ssgPrerender.js"
 import {
   resolveModulePattern,
@@ -70,6 +76,7 @@ export interface PluginState {
     serverEntryAbs: string | null
     remote: string | null
     adapter: "node" | "bun" | "cloudflare"
+    fileRoutes: ResolvedFileRoutes | null
   }
 }
 
@@ -77,6 +84,9 @@ export async function resolveRouterModulePaths(
   state: PluginState,
   projectRoot: string
 ): Promise<void> {
+  if (state.router.fileRoutes) {
+    await resolveFileRoutesPaths(state.router.fileRoutes, projectRoot)
+  }
   if (state.router.ssg) {
     state.router.ssg.routesModuleAbs = await resolveSingleModulePattern(
       state.router.ssg.routesModule,
@@ -124,13 +134,22 @@ export function createPluginState(
     )
   }
 
+  const fileRoutes = resolveFileRoutesOption(
+    opts.router?.fileRoutes,
+    process.cwd().replace(/\\/g, "/")
+  )
   const ssg = opts.router?.ssg
-  const routesModule =
+  let routesModule =
     ssg === true
       ? "./src/routes.ts"
       : typeof ssg === "object"
         ? ssg.routes
         : null
+  if (fileRoutes && ssg) {
+    if (!routesModule || ssg === true) {
+      routesModule = defaultRoutesModuleForFileRoutes(fileRoutes)
+    }
+  }
   const siteModule = typeof ssg === "object" ? (ssg.siteModule ?? null) : null
   const maxConcurrentRenders = resolveMaxConcurrentRenders(
     typeof ssg === "object" ? ssg.build?.maxConcurrentRenders : undefined
@@ -165,6 +184,7 @@ export function createPluginState(
       serverEntryAbs: null,
       remote: opts.router?.remote ?? null,
       adapter: opts.router?.adapter ?? "node",
+      fileRoutes,
     },
   }
 }
@@ -221,6 +241,7 @@ export function updatePluginState(
       serverEntryAbs: state.router?.serverEntryAbs ?? null,
       remote: state.router?.remote ?? null,
       adapter: state.router?.adapter ?? "node",
+      fileRoutes: state.router?.fileRoutes ?? null,
     },
   } satisfies PluginState
 }

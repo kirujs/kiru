@@ -3,7 +3,9 @@
  * server-only SSR/SSG APIs that depend on Node crypto (see {@link ./renderer.js}).
  */
 export * from "./types.js"
-export * from "./defineRouteTree.js"
+export * from "./createRouteTree.js"
+export * from "./routePaths.js"
+export { useParams } from "./useParams.js"
 export * from "./manifest.js"
 export * from "./meta.js"
 export * from "./htmlTemplate.js"

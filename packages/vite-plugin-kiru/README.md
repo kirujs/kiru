@@ -75,6 +75,19 @@ Your source `index.html` should include `{{kiru_head}}` in `<head>` and `{{kiru_
 
 You do **not** need a separate `prerender.ts` script.
 
+### File-based routing (`router.fileRoutes`)
+
+Scans `src/pages` and writes **`src/routes.gen.ts`** (regenerated in dev via Vite’s file watcher). Re-export from `src/routes.ts` for a stable import path.
+
+```ts
+router: {
+  fileRoutes: true,
+  // or { dir: "./src/pages", pageFiles: ["page.{tsx,mdx}"], extend: "./src/routes.extend.ts" }
+}
+```
+
+When combined with `ssg: true` and no explicit `routes`, the SSG routes module defaults to `./src/routes.gen.ts`. See [docs/router/file-based-routes.md](../../docs/router/file-based-routes.md).
+
 ### Site config (`src/site.config.ts`)
 
 Add **`src/site.config.ts`** (or use a glob like **`router.ssg.siteModule: "./src/site.config.{ts,js}"`**). Export `site` from `defineSiteConfig()` to generate `sitemap.xml` and optional `robots.txt` after prerender.

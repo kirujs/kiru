@@ -4,7 +4,7 @@ For teams on `main` with **FileRouter** / Vike-style sandbox code. This branch d
 
 ## High-level steps
 
-1. Add `src/routes.ts` with `defineRouteTree`.
+1. Add `src/routes.ts` with `createRouteTree`.
 2. Move pages from `pages/**/+Page.tsx` to normal modules referenced by `r.page`.
 3. Replace guard exports with `routeMiddleware` + `meta`.
 4. Pick bootstrap: `kiru/router/csr` | `ssg` | `ssr`.
@@ -16,9 +16,9 @@ For teams on `main` with **FileRouter** / Vike-style sandbox code. This branch d
 
 | v1 / main pattern | v2 replacement |
 |-------------------|----------------|
-| FileRouter | `defineRouteTree` + `compileRouteTree` |
-| `pages/foo/+Page.tsx` | `r.page("/foo", () => import("./pages/foo.tsx"))` |
-| `+layout.tsx` | `r.scope({ layout: () => import(...) })` |
+| FileRouter | `createRouteTree` + `compileRouteTree` |
+| `pages/foo/+Page.tsx` | `createRoute("/foo", () => import("./pages/foo.tsx"))` |
+| `+layout.tsx` | `createRouteScope({ layout: () => import(...) })` |
 | `+route.ts` config | `static`, `head`, `meta` on `r.page` / scope |
 | `beforeEach` / `beforeEnter` | `routeMiddleware` |
 | `beforeActivate` | Remove or use middleware (ran too late) |
@@ -90,7 +90,7 @@ Add `PageProps<typeof load>` to page components.
 
 | Old | v2 |
 |-----|-----|
-| Guard reading global store | `defineRouteMiddleware` + `ctx.context` |
+| Guard reading global store | `RouteMiddleware` + `ctx.context` |
 | SSR without guards | Same middleware on `createRenderer` |
 | Client-only session | `resolveContext` + `contextStrategy: "block"` |
 

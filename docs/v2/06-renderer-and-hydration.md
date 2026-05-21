@@ -17,7 +17,7 @@ const renderer = createRenderer({
   i18n,
   deployTarget: "node",    // node | bun | cloudflare
   actions: { secret, allowedOrigins },
-  routeMiddleware: [...],
+  // App-wide middleware: routes root r.scope({ middleware: [...] })
 })
 ```
 

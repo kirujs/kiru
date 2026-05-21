@@ -111,6 +111,22 @@ export interface KiruPluginOptions {
           }
         }
     /**
+     * Generate `src/routes.gen.ts` from a filesystem pages directory.
+     * When combined with `ssg: true` and no explicit `routes`, defaults SSG to `./src/routes.gen.ts`.
+     */
+    fileRoutes?:
+      | boolean
+      | {
+          /** @default "./src/pages" */
+          dir?: string
+          /** @default "./src/routes.gen.ts" */
+          outFile?: string
+          /** @default ["page.{tsx,ts,jsx,js}", "index.{tsx,ts,jsx,js}"] */
+          pageFiles?: string[]
+          /** Module exporting `extendRoutes` (see file-based-routes docs). */
+          extend?: string
+        }
+    /**
      * Deploy adapter target — affects SSR bundle platform and ISR build checks.
      * @default "node"
      */

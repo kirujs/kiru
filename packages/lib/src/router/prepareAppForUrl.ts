@@ -32,7 +32,6 @@ import type {
   RouteHeadMeta,
   RouteManifest,
   RouteMatch,
-  RouteMiddleware,
 } from "./types.js"
 import { loadNotFoundRouteTree, loadRouteTree } from "./routeTree.js"
 import type { LeafRouteProps } from "./routeTree.js"
@@ -195,7 +194,6 @@ export async function prepareAppForUrl(
   pathPolicy: ReturnType<typeof resolvePathPolicy>,
   i18n?: InternationalizationConfig<readonly string[], unknown>,
   request?: Request,
-  globalMiddleware: RouteMiddleware[] = [],
   renderOpts: { enableStreamingLoad?: boolean } = {}
 ): Promise<PrepareAppResult> {
   const requestUrl = parseRequestUrl(url)
@@ -288,7 +286,6 @@ export async function prepareAppForUrl(
       meta: mergeRouteMeta(routeMatch),
       context: requestContext,
       request,
-      globalMiddleware,
       match: routeMatch,
     })
     if (mw.type === "redirect") {

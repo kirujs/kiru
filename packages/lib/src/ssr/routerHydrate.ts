@@ -101,7 +101,7 @@ export {
  * @see docs/router/route-middleware-and-context.md
  */
 export type BootstrapSsrClientOptions = {
-  /** Route tree from {@link defineRouteTree} or a precompiled {@link RouteManifest}. */
+  /** Route tree from {@link createRouteTree} or a precompiled {@link RouteManifest}. */
   routes: RouteTreeDefinition | RouteManifest
   /** DOM element that receives the hydrated router outlet. */
   container: HTMLElement
@@ -116,8 +116,6 @@ export type BootstrapSsrClientOptions = {
   contextPendingFallback?: CreateRouterOptions["contextPendingFallback"]
   /** @default true */
   stickyContext?: CreateRouterOptions["stickyContext"]
-  /** Global route middleware (client navigations after first paint). */
-  routeMiddleware?: CreateRouterOptions["routeMiddleware"]
   /**
    * Options for {@link mount}. `hydrationMode`: `"static"` (SSG) or `"dynamic"` (SSR).
    * `kiru/router/ssr` sets `"dynamic"`; `kiru/router/ssg` sets `"static"`.
@@ -261,7 +259,6 @@ export async function bootstrapSsrClient(
     contextGate,
     contextPendingFallback,
     stickyContext,
-    routeMiddleware,
   } = options
   const router = createRouter({
     routes: manifest,
@@ -270,7 +267,6 @@ export async function bootstrapSsrClient(
     contextGate,
     contextPendingFallback,
     stickyContext,
-    routeMiddleware,
   })
   registerKiruRouter(router)
   ensureLoaderClient()

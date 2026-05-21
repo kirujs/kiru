@@ -28,11 +28,10 @@ kiru({
 import { createRouterApp } from "kiru/router/csr"
 
 void createRouterApp({
-  routes,
+  routes, // createRouteTree root scope: middleware: [requireAuth]
   container: document.getElementById("app")!,
   i18n,
   resolveContext,
-  routeMiddleware: [requireAuth],
 })
 ```
 
@@ -92,10 +91,9 @@ import { createKiruResponder } from "@kirujs/adapter-node"
 
 const kiru = createKiruResponder({
   importMetaUrl: import.meta.url,
-  routes,
+  routes, // root scope middleware: [requireAuth]
   stream: true,
   actions: { secret: process.env.KIRU_ACTIONS_SECRET! },
-  routeMiddleware: [requireAuth],
 })
 export default { fetch: kiru.fetch }
 ```
@@ -122,7 +120,7 @@ import { createRouterApp } from "kiru/router/ssr"
 **Static route example** (`sandbox/ssr/src/routes.ts`):
 
 ```ts
-r.page("/docs", {
+createRoute("/docs", {
   static: true,
   component: () => import("./pages/docs.tsx"),
 }),

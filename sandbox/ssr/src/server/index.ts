@@ -1,7 +1,6 @@
 import { createServer } from "node:http"
 import { createKiruHandler, toNodeListener } from "@kirujs/adapter-node"
 import { routes } from "../routes.js"
-import { routeMiddleware } from "../routeMiddleware.js"
 
 const isProd = process.env.NODE_ENV === "production"
 
@@ -21,7 +20,6 @@ const kiru = createKiruHandler({
   dev: !isProd,
   stream: true,
   routes,
-  routeMiddleware,
   actions: {
     secret: "sandbox-ssr-remote-secret",
     /** Wildcard keeps `pnpm dev` working regardless of host/port; tighten in production. */

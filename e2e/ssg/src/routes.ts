@@ -1,19 +1,18 @@
-import { defineRouteTree } from "kiru/router"
+import { createRoute, createRouteScope, createRouteTree } from "kiru/router"
 import { contextRouteChildren } from "../../csr/src/context/defineContextRoutes.js"
 import i18n from "./i18n.js"
 
 export { i18n }
 
-export const routes = defineRouteTree((r) =>
-  r.scope({
+export const routes = createRouteTree({
     head: { description: "E2E SSG app." },
     layout: () => import("./pages/layout.tsx"),
     notFound: () => import("./pages/not-found"),
     children: [
-      r.scope({
+      createRouteScope({
         static: true,
         children: [
-          r.page("/", {
+          createRoute("/", {
             component: () => import("./pages/index.tsx"),
             head: {
               title: "E2E SSG Home",
@@ -24,7 +23,7 @@ export const routes = defineRouteTree((r) =>
               },
             },
           }),
-          r.page("/seo", {
+          createRoute("/seo", {
             component: () => import("./pages/seo"),
             head: {
               title: "E2E SSG SEO",
@@ -35,23 +34,23 @@ export const routes = defineRouteTree((r) =>
               },
             },
           }),
-          r.page("/about", {
+          createRoute("/about", {
             component: () => import("./pages/about"),
             head: { title: "E2E SSG About" },
           }),
-          r.page("/image-demo", {
+          createRoute("/image-demo", {
             component: () => import("./pages/image-demo"),
             head: { title: "E2E SSG Image" },
           }),
-          r.page("/loaders/static", {
+          createRoute("/loaders/static", {
             component: () => import("./pages/loaders-static"),
             head: { title: "E2E SSG static loader" },
           }),
-          r.page("/posts/[slug]", {
+          createRoute("/posts/[slug]", {
             component: () => import("./pages/post"),
             head: { title: "E2E SSG Post" },
           }),
-          r.page("/posts/[slug]/comments/[id]", {
+          createRoute("/posts/[slug]/comments/[id]", {
             component: () => import("./pages/comment"),
             head: { title: "E2E SSG Comment" },
           }),
@@ -60,4 +59,3 @@ export const routes = defineRouteTree((r) =>
       ...contextRouteChildren(r),
     ],
   })
-)

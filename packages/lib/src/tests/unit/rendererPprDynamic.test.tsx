@@ -7,7 +7,8 @@ import * as kiru from "../../index.js"
 import {
   createRenderer,
   defineISR,
-  defineRouteTree,
+  createRoute,
+  createRouteTree,
 } from "../../router/index.js"
 
 const MINIMAL_TPL =
@@ -19,16 +20,14 @@ describe("renderer PPR-lite dynamic modes", () => {
     process.env.NODE_ENV = "production"
     try {
       const clientDir = await mkdtemp(join(tmpdir(), "kiru-ppr-static-"))
-      const routes = defineRouteTree((r) =>
-        r.scope({
+      const routes = createRouteTree({
           children: [
-            r.page("/only-static", async () => ({
+            createRoute("/only-static", async () => ({
               default: () => <p data-testid="only-static">nope</p>,
               isr: defineISR({ dynamic: "force-static" }),
             })),
           ],
         })
-      )
       const renderer = createRenderer({
         routes,
         htmlTemplate: MINIMAL_TPL,
@@ -66,10 +65,9 @@ describe("renderer PPR-lite dynamic modes", () => {
       })
 
       let hits = 0
-      const routes = defineRouteTree((r) =>
-        r.scope({
+      const routes = createRouteTree({
           children: [
-            r.page("/live", async () => ({
+            createRoute("/live", async () => ({
               default: () => {
                 hits += 1
                 return <p data-testid="live-hit">{hits}</p>
@@ -78,7 +76,6 @@ describe("renderer PPR-lite dynamic modes", () => {
             })),
           ],
         })
-      )
       const renderer = createRenderer({
         routes,
         htmlTemplate: MINIMAL_TPL,

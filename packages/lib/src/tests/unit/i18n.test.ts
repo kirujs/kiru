@@ -6,7 +6,8 @@ import {
   createRenderer,
   createRouter,
   createStaticRouter,
-  defineRouteTree,
+  createRoute,
+  createRouteTree,
   generatePublicStaticPaths,
   serverLoader,
   type PageProps,
@@ -199,15 +200,13 @@ describe("i18n", () => {
       hash: "",
       origin: "http://localhost",
     } as any as Location
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/about", async () => ({
+          createRoute("/about", async () => ({
             default: () => createElement("p", null, "about"),
           })),
         ],
       })
-    )
     const router = createRouter({
       routes,
       i18n,
@@ -221,15 +220,13 @@ describe("i18n", () => {
 
   it("createStaticRouter resolveHref applies Link locale at prerender", () => {
     const manifest = compileRouteTree(
-      defineRouteTree((r) =>
-        r.scope({
+      createRouteTree({
           children: [
-            r.page("/about", async () => ({
+            createRoute("/about", async () => ({
               default: () => createElement("p", null, "about"),
             })),
           ],
         })
-      )
     )
     const localeRouting = getI18nLocaleRouting(i18n)
     const router = createStaticRouter({
@@ -243,16 +240,14 @@ describe("i18n", () => {
   })
 
   it("generatePublicStaticPaths expands logical paths per locale", async () => {
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         static: true,
         children: [
-          r.page("/about", async () => ({
+          createRoute("/about", async () => ({
             default: () => createElement("p", null, "about"),
           })),
         ],
       })
-    )
     const manifest = compileRouteTree(routes)
     const localeRouting = getI18nLocaleRouting(i18n)
     const paths = await generatePublicStaticPaths(
@@ -266,15 +261,13 @@ describe("i18n", () => {
   })
 
   it("createRenderer redirects / using Accept-Language when localeDetection enabled", async () => {
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/", async () => ({
+          createRoute("/", async () => ({
             default: () => createElement("p", null, "home"),
           })),
         ],
       })
-    )
     const renderer = createRenderer({
       routes,
       i18n,
@@ -300,16 +293,14 @@ describe("i18n", () => {
         fr: async () => ({ default: messages.fr }),
       },
     })
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/about", async () => ({
+          createRoute("/about", async () => ({
             default: () =>
               createElement("p", { "data-testid": "about" }, "about"),
           })),
         ],
       })
-    )
     const renderer = createRenderer({
       routes,
       i18n: i18nNotFound,
@@ -326,10 +317,9 @@ describe("i18n", () => {
       load: async (ctx) => ({ locale: ctx.locale ?? "" }),
       fallback: () => createElement("p", null, "loading"),
     })
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/about", {
+          createRoute("/about", {
             component: async () => ({
               load,
               default: ({ data }: PageProps<typeof load>) =>
@@ -342,7 +332,6 @@ describe("i18n", () => {
           }),
         ],
       })
-    )
     const renderer = createRenderer({
       routes,
       i18n,

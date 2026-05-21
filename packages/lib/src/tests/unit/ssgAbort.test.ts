@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { defineRouteTree } from "../../router/defineRouteTree.js"
+import { createRoute, createRouteTree } from "../../router/createRouteTree.js"
 import { prerenderStaticRoutes } from "../../router/ssg.js"
 import { isAbortError } from "../../router/navigationScope.js"
 
@@ -8,15 +8,13 @@ describe("prerenderStaticRoutes abort", () => {
   it("throws AbortError when signal is already aborted", async () => {
     const ctrl = new AbortController()
     ctrl.abort()
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/", async () => ({
+          createRoute("/", async () => ({
             default: () => null,
           })),
         ],
       })
-    )
     await assert.rejects(
       () =>
         prerenderStaticRoutes({

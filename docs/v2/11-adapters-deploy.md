@@ -22,10 +22,9 @@ import { routes } from "./routes"
 
 const kiru = createKiruResponder({
   importMetaUrl: import.meta.url,
-  routes,
+  routes, // root scope middleware: [requireAuth]
   stream: true,
   prerenderedHtmlDir: undefined, // default: resolved clientDir in prod
-  routeMiddleware: [requireAuth],
   getRequestContext: async (req) => ({ user: await loadUser(req) }),
   actions: { secret: process.env.KIRU_ACTIONS_SECRET!, allowedOrigins: ["*"] },
   image: { config: imageConfig, sharp },

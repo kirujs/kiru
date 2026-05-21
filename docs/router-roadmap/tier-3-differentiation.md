@@ -44,7 +44,7 @@
 
 - [ ] **Named parallel outlets** — multiple `RouterView` slots (large effort; evaluate demand)
 - [ ] **Intercepting routes / modal URLs** — URL reflects modal, background route unchanged
-- [ ] **Route groups** — compile-time only path prefixes without URL segment (generator feature)
+- [x] **Route groups** — `(folder)` in file-based routing (see [file-based-routes.md](../router/file-based-routes.md))
 - [ ] **REST / API route handlers in tree** — `r.api('/api/users', { POST })` sharing manifest (if not “bring your own server” forever)
 
 ## Middleware & edge
@@ -62,7 +62,7 @@
 ## Developer experience extras
 
 - [ ] **Route manifest dev overlay** — list routes, static vs dynamic, last prerender time (devtools)
-- [ ] **Type-safe route paths** — codegen `RoutePath` union from manifest for `Link to={}`
+- [x] **Type-safe route paths** — `createRoute` + `declare module "kiru/router" { interface RouteTree }` for `Link` / `navigate` / `useParams`
 - [ ] **OpenAPI from actions** — experimental; generate from `*.actions.ts` exports
 
 ## Ecosystem & enterprise

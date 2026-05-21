@@ -39,7 +39,7 @@ Phased roadmap (docs, adapters, parity, optional differentiation): [docs/router-
 
 Kiru now exposes `kiru/router` primitives for route trees and rendering strategies:
 
-- `defineRouteTree` for route declarations
+- `createRouteTree` for route declarations
 - CSR runtime via `createRouter`, `RouterProvider`, `RouterView`, `Link`
 - SSR rendering via `createRenderer`
 - SSG prerender helpers via `prerenderStaticRoutes`

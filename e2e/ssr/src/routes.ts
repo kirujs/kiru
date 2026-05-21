@@ -1,13 +1,12 @@
-import { defineRouteTree } from "kiru/router"
+import { createRoute, createRouteScope, createRouteTree } from "kiru/router"
 
-export const routes = defineRouteTree((r) =>
-  r.scope({
+export const routes = createRouteTree({
     head: { description: "E2E SSR app." },
     layout: () => import("./pages/layout.tsx"),
     notFound: () => import("./pages/not-found"),
     error: () => import("./pages/error-page"),
     children: [
-      r.page("/", {
+      createRoute("/", {
         component: () => import("./pages/index.tsx"),
         head: {
           title: "E2E SSR Home",
@@ -18,117 +17,116 @@ export const routes = defineRouteTree((r) =>
           },
         },
       }),
-      r.page("/seo", {
+      createRoute("/seo", {
         component: () => import("./pages/seo"),
         head: {
           title: "E2E SSR SEO",
           jsonLd: { "@type": "WebPage", name: "E2E SSR SEO" },
         },
       }),
-      r.page("/head-override", {
+      createRoute("/head-override", {
         component: () => import("./pages/head-override"),
         head: { title: "E2E SSR From route definition" },
       }),
-      r.page("/hello", {
+      createRoute("/hello", {
         component: () => import("./pages/hello.tsx"),
         head: { title: "E2E SSR Hello" },
       }),
-      r.page("/forms/demo", {
+      createRoute("/forms/demo", {
         component: () => import("./pages/forms-demo.tsx"),
         head: { title: "E2E SSR Form action" },
       }),
-      r.page("/loaders/server", {
+      createRoute("/loaders/server", {
         component: () => import("./pages/loaders-server"),
         head: { title: "E2E SSR server loader" },
       }),
-      r.page(
+      createRoute(
         "/loaders/server-immediate-shell",
         () => import("./pages/loaders-server-immediate-shell")
       ),
-      r.page("/about", {
+      createRoute("/about", {
         component: () => import("./pages/about.tsx"),
         head: { title: "E2E SSR About" },
       }),
-      r.page("/docs", {
+      createRoute("/docs", {
         static: true,
         component: () => import("./pages/docs"),
         head: { title: "E2E SSR Docs (static)" },
       }),
-      r.page("/users/[id]", {
+      createRoute("/users/[id]", {
         component: () => import("./pages/user"),
       }),
-      r.page("/url-state/[id]", {
+      createRoute("/url-state/[id]", {
         component: () => import("./pages/url-state"),
         head: { title: "E2E SSR URL state" },
       }),
-      r.page("/search-schema", {
+      createRoute("/search-schema", {
         component: () => import("./pages/search-schema"),
         head: { title: "E2E SSR search schema" },
       }),
-      r.page("/invalidate-demo", {
+      createRoute("/invalidate-demo", {
         component: () => import("./pages/invalidate-demo"),
         head: { title: "E2E SSR invalidate" },
       }),
-      r.page("/loader-cache-demo", {
+      createRoute("/loader-cache-demo", {
         component: () => import("./pages/loader-cache-demo"),
         head: { title: "E2E SSR loader cache" },
       }),
-      r.page("/revalidate-demo", {
+      createRoute("/revalidate-demo", {
         static: true,
         component: () => import("./pages/revalidate-demo"),
         head: { title: "E2E SSR revalidate" },
       }),
-      r.page("/ppr/force-dynamic", {
+      createRoute("/ppr/force-dynamic", {
         static: true,
         component: () => import("./pages/ppr-force-dynamic-demo"),
         head: { title: "E2E PPR force-dynamic" },
       }),
-      r.page("/ppr/force-static", {
+      createRoute("/ppr/force-static", {
         component: () => import("./pages/ppr-force-static-demo"),
         head: { title: "E2E PPR force-static" },
       }),
-      r.page("/image-demo", {
+      createRoute("/image-demo", {
         component: () => import("./pages/image-demo"),
         head: { title: "E2E Image" },
       }),
-      r.page("/streaming-test", {
+      createRoute("/streaming-test", {
         component: () => import("./pages/streaming-test"),
         head: { title: "E2E SSR Streaming test" },
       }),
-      r.page("/nested-streaming-test", {
+      createRoute("/nested-streaming-test", {
         component: () => import("./pages/nested-streaming-test"),
         head: { title: "E2E SSR Nested streaming test" },
       }),
-      r.page("/guarded", {
+      createRoute("/guarded", {
         component: async () => ({
           default: () => "This page should be redirected away.",
         }),
         middleware: [() => ({ redirect: "/" })],
         head: { title: "Guarded Route" },
       }),
-      r.page("/blocked", {
+      createRoute("/blocked", {
         component: async () => ({
           default: () => "If you see this, leave guard failed.",
         }),
         head: { title: "Blocked Route" },
       }),
-      r.page("/ssr-break", {
+      createRoute("/ssr-break", {
         component: () => import("./pages/ssr-break"),
         head: { title: "SSR error (scope)" },
       }),
-      r.page("/ssr-break-leaf", {
+      createRoute("/ssr-break-leaf", {
         component: () => import("./pages/ssr-break-leaf"),
         error: () => import("./pages/leaf-error-page"),
         head: { title: "SSR error (leaf)" },
       }),
-      r.page("/nav-break", {
+      createRoute("/nav-break", {
         component: () => import("./pages/nav-break"),
         head: { title: "SSR nav error recovery" },
       }),
-      r.page("/context-concurrency", {
+      createRoute("/context-concurrency", {
         component: () => import("./pages/context-concurrency"),
         head: { title: "E2E SSR context concurrency" },
       }),
     ],
   })
-)

@@ -36,7 +36,6 @@ export function createRouterApp(
     contextGate: options.contextGate,
     contextPendingFallback: options.contextPendingFallback,
     stickyContext: options.stickyContext,
-    routeMiddleware: options.routeMiddleware,
     hydrateOptions: options.hydrateOptions,
   })
 }

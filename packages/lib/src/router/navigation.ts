@@ -26,7 +26,6 @@ import type {
   RouteLocationSnapshot,
   RouteManifest,
   RouteMatch,
-  RouteMiddleware,
   RouteMiddlewareTo,
   RouteTreeMatchSegment,
 } from "./types.js"
@@ -183,7 +182,6 @@ export type NavigationPipelineDeps = {
   matches: Signal<RouteTreeMatchSegment[]>
   isNavigating: Signal<boolean>
   currentNavigation: Signal<CurrentNavigation | null>
-  globalMiddleware: RouteMiddleware[]
   contextGateMode: ContextGateMode
   stickyContext: boolean
   resolveContext?: (event: ResolveContextEvent) => Promise<CustomRequestContext>
@@ -239,7 +237,6 @@ export function createNavigateInternal(
     match,
     isNavigating,
     currentNavigation,
-    globalMiddleware,
     contextGateMode,
     stickyContext,
     resolveContext,
@@ -455,10 +452,7 @@ export function createNavigateInternal(
         )
       }
 
-      if (
-        globalMiddleware.length ||
-        (toMatch && collectMiddlewareChain(toMatch).length > 0)
-      ) {
+      if (toMatch && collectMiddlewareChain(toMatch).length > 0) {
         const segments = toMatch ? buildMatchSegments(toMatch) : []
         const mwTo = toMatch
           ? buildMiddlewareTo(resolved, toMatch, segments)
@@ -492,7 +486,6 @@ export function createNavigateInternal(
           from: mwFrom,
           meta: toMatch ? mergeRouteMeta(toMatch) : {},
           context: requestContext.value,
-          globalMiddleware,
           match: toMatch,
         })
         if (mw.type === "redirect") {

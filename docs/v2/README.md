@@ -2,7 +2,7 @@
 
 Deep-dive knowledge base for the v2 router work on this branch (diverged from `main`). Use this when onboarding, writing the public docs site, or debugging behavior across CSR / SSG / SSR / hybrid.
 
-**Scope:** ~530 files changed since merge-base with `main` — FileRouter removed, declarative `defineRouteTree`, unified loaders, route middleware, runtime adapters, Tier 3 wave 1 (ISR, loader cache, i18n, images).
+**Scope:** ~530 files changed since merge-base with `main` — FileRouter removed, declarative `createRouteTree`, unified loaders, route middleware, runtime adapters, Tier 3 wave 1 (ISR, loader cache, i18n, images).
 
 ## How to read these docs
 
@@ -10,7 +10,7 @@ Deep-dive knowledge base for the v2 router work on this branch (diverged from `m
 |-----|----------|
 | [00-branch-overview.md](./00-branch-overview.md) | What changed vs `main`, breaking removals, package map |
 | [01-architecture.md](./01-architecture.md) | Mental model, request lifecycle, module layout |
-| [02-route-tree.md](./02-route-tree.md) | `defineRouteTree`, scopes, matching, `static`, path patterns |
+| [02-route-tree.md](./02-route-tree.md) | `createRouteTree`, scopes, matching, `static`, path patterns |
 | [03-loaders-and-data.md](./03-loaders-and-data.md) | `loader`, `serverLoader`, `clientLoader`, `staticLoader`, validation, cache |
 | [04-middleware-meta-context.md](./04-middleware-meta-context.md) | Route middleware, `meta`, `resolveContext`, context gate |
 | [05-rendering-modes.md](./05-rendering-modes.md) | CSR / SSG / SSR / hybrid / partial SSG deploy patterns |

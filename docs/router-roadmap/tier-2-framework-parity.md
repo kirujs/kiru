@@ -63,9 +63,9 @@ Per-request context is **SSR-only** via `createRenderer({ context })` and hydrat
 
 ## File-based routing (optional generator)
 
-- [ ] **Spec: `src/pages` → `routes.ts` codegen** — layouts, `[param]`, `[...rest]`, `+page.tsx` naming (pick one convention)
-- [ ] **vite-plugin-kiru hook** — `router.fileRoutes: true` generates/virtualizes routes module
-- [ ] **Keep `defineRouteTree` as source of truth** — generator is optional; hand-written routes remain supported
+- [x] **Spec: `src/pages` → `routes.gen.ts` codegen** — layouts, `[param]`, `[...rest]`, `page.{tsx,...}` (see [file-based-routes.md](../router/file-based-routes.md))
+- [x] **vite-plugin-kiru hook** — `router.fileRoutes: true` writes `routes.gen.ts` + dev watcher
+- [x] **Keep `createRouteTree` as source of truth** — generator optional; hand-written `routes.ts` re-exports or `extend`
 - [ ] **create-kiru flag** — `--file-routes` vs manual `routes.ts`
 
 ## Forms & actions (SvelteKit-adjacent)

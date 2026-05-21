@@ -1,6 +1,11 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { compileRouteTree, createRouter, defineRouteTree } from "../../router/index.js"
+import {
+  compileRouteTree,
+  createRouter,
+  createRoute,
+  createRouteTree,
+} from "../../router/index.js"
 import {
   buildLoaderCacheKey,
   clearLoaderCacheForTests,
@@ -39,14 +44,12 @@ function delayUntilAborted(signal: AbortSignal, ms: number): Promise<void> {
 
 describe("navigation abort integration", () => {
   it("aborts the prior navigation signal when navigate is called again", async () => {
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/page-a", async () => ({ default: () => null })),
-          r.page("/page-b", async () => ({ default: () => null })),
+          createRoute("/page-a", async () => ({ default: () => null })),
+          createRoute("/page-b", async () => ({ default: () => null })),
         ],
       })
-    )
     const manifest = compileRouteTree(routes)
     const history = {
       pushState() {},

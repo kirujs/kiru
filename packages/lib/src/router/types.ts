@@ -260,25 +260,6 @@ export interface RouteScopeDefinition {
 
 export type RouteNodeDefinition = RouteDefinition | RouteScopeDefinition
 
-export interface RouteBuilder {
-  page(
-    path: string,
-    value: RouteLoader | RouteDefinitionConfig
-  ): RouteDefinition
-  scope(config: {
-    static?: boolean
-    layout?: RouteLoader
-    notFound?: RouteLoader
-    head?: RouteHeadMeta
-    meta?: Partial<RouteMeta>
-    contextStrategy?: ContextStrategy
-    contextPendingFallback?: ContextPendingFallback
-    middleware?: RouteMiddleware | RouteMiddleware[]
-    error?: RouteLoader
-    children: RouteNodeDefinition[]
-  }): RouteScopeDefinition
-}
-
 export interface RouteTreeDefinition {
   root: RouteScopeDefinition
 }

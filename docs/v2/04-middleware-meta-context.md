@@ -7,7 +7,7 @@ Unified **policy pipeline** for SSR and CSR replaces the old Vue-style guard zoo
 ### Definition
 
 ```ts
-import { defineRouteMiddleware, type RouteMiddleware } from "kiru/router"
+import type { RouteMiddleware } from "kiru/router"
 
 export const requireAuth: RouteMiddleware = (ctx) => {
   if (!ctx.meta.requiresAuth) return
@@ -17,29 +17,22 @@ export const requireAuth: RouteMiddleware = (ctx) => {
 }
 ```
 
-Register globally:
+Register app-wide on the **root scope** of `createRouteTree`:
 
 ```ts
-// CSR
-createRouterApp({
-  routes,
-  routeMiddleware: [requireAuth],
-  resolveContext: fetchSession,
-  ...
-})
-
-// SSR
-createRenderer({
-  routes,
-  routeMiddleware: [requireAuth],
-  ...
-})
+export const routes = createRouteTree((r) =>
+  createRouteScope({
+    middleware: [requireAuth, blockUserZero],
+    layout: () => import("./layout.tsx"),
+    children: [...],
+  })
+)
 ```
 
-Per-route / per-scope:
+Per-route / nested scope:
 
 ```ts
-r.scope({
+createRouteScope({
   middleware: [requireAuth],
   meta: { requiresAuth: true },
   children: [...],
@@ -48,10 +41,9 @@ r.scope({
 
 ### Execution order
 
-`runRouteMiddleware` (`routeMiddleware.ts`):
+`runRouteMiddleware` (`routeMiddleware.ts`) uses `collectMiddlewareChain` (`routeMeta.ts`):
 
-1. `globalMiddleware` from router/renderer options
-2. Scope middleware outer → inner, then page middleware (`collectMiddlewareChain` in `routeMeta.ts`)
+1. Scope middleware outer → inner (root scope first), then page middleware
 
 ### Results
 
@@ -170,12 +162,12 @@ App-level options (`createRouterApp` / `CreateRouterOptions`):
 Scope override example (`e2e/csr/src/context/defineContextRoutes.tsx`):
 
 ```ts
-r.scope({
+createRouteScope({
   contextStrategy: "block",
   contextPendingFallback: () => <ScopeContextPending />,
   meta: { requiresAuth: true, unauthorizedRedirect: "/context/login" },
   middleware: [requireAuth],
-  children: [r.page("/context/admin", () => import("./pages/admin.tsx"))],
+  children: [createRoute("/context/admin", () => import("./pages/admin.tsx"))],
 }),
 ```
 

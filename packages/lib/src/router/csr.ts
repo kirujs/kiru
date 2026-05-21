@@ -28,7 +28,6 @@ import type {
   RouteLocationSnapshot,
   RouteManifest,
   RouteMatch,
-  RouteMiddleware,
   RouteTreeDefinition,
 } from "./types.js"
 import { readHydratedRequestContext } from "./requestContext.js"
@@ -56,12 +55,29 @@ import {
   type ScrollStackState,
 } from "./navigation.js"
 import { compileRouteTree } from "./manifest.js"
+import { resolveNavigateTarget } from "./routePaths.js"
 import type { Router } from "./routerInstance.js"
 export type { Router, RouterCore, RouterNavigationMode } from "./routerInstance.js"
 export { RouterProvider, useRouter } from "./routerContext.js"
 export type { RouterProviderProps } from "./routerContext.js"
 export { Link } from "./link.js"
 export type { LinkProps, LinkPrefetch } from "./link.js"
+export { useParams } from "./useParams.js"
+export type {
+  AppRoutePath,
+  CreatedRoute,
+  HasRouteParams,
+  NavigatePath,
+  ParamsForPath,
+  RouteParams,
+  RouteTree,
+} from "./routePaths.js"
+export {
+  createRoute,
+  createRouteScope,
+  createRouteTree,
+  mergeRouteTree,
+} from "./createRouteTree.js"
 export { RouterView } from "./routerView.js"
 import { useRouter } from "./routerContext.js"
 import { buildLoaderContext } from "./runPageLoad.js"
@@ -178,7 +194,7 @@ function pathFromLocation(location: Location, baseUrl: string): string {
  * @see docs/router/route-middleware-and-context.md
  */
 export type CreateRouterOptions = {
-  /** Route tree from {@link defineRouteTree} or a precompiled {@link RouteManifest}. */
+  /** Route tree from {@link createRouteTree} or a precompiled {@link RouteManifest}. */
   routes: RouteTreeDefinition | RouteManifest
   /** Browser history API (defaults to `window.history`). */
   history?: History
@@ -216,11 +232,6 @@ export type CreateRouterOptions = {
    * every navigation.
    */
   stickyContext?: boolean
-  /**
-   * Global route middleware (runs after context resolve, before URL commit).
-   * Same pipeline as {@link createRenderer} `routeMiddleware`.
-   */
-  routeMiddleware?: RouteMiddleware[]
 }
 
 export function createRouter({
@@ -234,7 +245,6 @@ export function createRouter({
   contextGate: contextGateMode = "off",
   contextPendingFallback,
   stickyContext = true,
-  routeMiddleware: globalMiddleware = [],
 }: CreateRouterOptions): Router {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
   const resolvedPathPolicy = resolvePathPolicy(pathPolicy)
@@ -501,7 +511,6 @@ export function createRouter({
       matches,
       isNavigating,
       currentNavigation,
-      globalMiddleware,
       contextGateMode,
       stickyContext,
       resolveContext: resolveContextOption,
@@ -678,23 +687,26 @@ export function createRouter({
       loaderEpoch.value += 1
     },
     navigate(to, replaceOrOptions = false) {
-      const options =
+      const options: import("./routePaths.js").RouterNavigateCallOptions =
         typeof replaceOrOptions === "boolean"
           ? { replace: replaceOrOptions }
           : (replaceOrOptions ?? {})
+      const { params: routeParams, replace, transition, locale } = options
+      const resolvedTo = resolveNavigateTarget(to, routeParams)
       const prevHash = hash.peek()
-      const { pathname: pathPart, search, hash: targetHash } = splitRouterTo(to)
+      const { pathname: pathPart, search, hash: targetHash } =
+        splitRouterTo(resolvedTo)
       const logical =
         pathPart === ""
           ? pathname.peek()
           : joinPath(pathname.peek(), pathPart)
       const href =
-        options.locale !== undefined && localeRouting && locale
-          ? options.locale === false
+        locale !== undefined && localeRouting
+          ? locale === false
             ? formatPathname(logical, resolvedPathPolicy)
             : formatPublicPathname(
                 logical,
-                options.locale,
+                locale,
                 localeRouting,
                 resolvedPathPolicy
               )
@@ -708,9 +720,9 @@ export function createRouter({
         currentHref
       )
       return navigateInternal(url, {
-        replace: !!options.replace,
+        replace: !!replace,
         fromPopstate: false,
-        enableTransition: options.transition,
+        enableTransition: transition,
       }).then((result) => {
         if (result.status !== "committed") return result
         const nextHash = parseResolvedLocation(url, normalizedBaseUrl).hash
@@ -724,7 +736,7 @@ export function createRouter({
             return result
           }
         }
-        if (typeof window !== "undefined" && !options.replace) {
+        if (typeof window !== "undefined" && !replace) {
           window.scrollTo(0, 0)
         }
         return result
@@ -776,9 +788,10 @@ export function createRouter({
     locale,
     defaultLocale: i18n?.default,
     resolveHref(to, hrefOpts) {
+      const resolved = resolveNavigateTarget(to, hrefOpts?.params)
       return resolveRouterHref(
         pathname.value,
-        to,
+        resolved,
         hrefOpts,
         localeRouting,
         locale ? locale.peek() : undefined,

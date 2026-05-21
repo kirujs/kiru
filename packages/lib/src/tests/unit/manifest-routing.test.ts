@@ -9,7 +9,8 @@ import { describe, it } from "node:test"
 import assert from "node:assert"
 import {
   compileRouteTree,
-  defineRouteTree,
+  createRoute,
+  createRouteTree,
   defineSiteConfig,
   generateSitemapPaths,
   generateStaticPaths,
@@ -25,11 +26,10 @@ import {
 const noopPage = async () => ({ default: () => null })
 
 describe("manifest routing / catch-all", () => {
-  const catchAllRoutes = defineRouteTree((r) =>
-    r.scope({
+  const catchAllRoutes = createRouteTree({
       static: true,
       children: [
-        r.page("/docs/[...slug]", {
+        createRoute("/docs/[...slug]", {
           component: async () => ({
             default: () => null,
             generateStaticParams: () => [
@@ -40,8 +40,6 @@ describe("manifest routing / catch-all", () => {
         }),
       ],
     })
-  )
-
   it("matches catch-all params with slash-separated values", () => {
     const manifest = compileRouteTree(catchAllRoutes)
     const match = matchRoute(manifest, "/docs/a/b")
@@ -61,13 +59,11 @@ describe("manifest routing / catch-all", () => {
     assert.throws(
       () =>
         compileRouteTree(
-          defineRouteTree((r) =>
-            r.scope({
+          createRouteTree({
               children: [
-                r.page("/[...slug]/extra", noopPage),
+                createRoute("/[...slug]/extra", noopPage),
               ],
             })
-          )
         ),
       /must be the last segment/
     )
@@ -84,11 +80,10 @@ describe("manifest routing / catch-all", () => {
 })
 
 describe("manifest routing / optional catch-all [[...segment]]", () => {
-  const optionalCatchAllRoutes = defineRouteTree((r) =>
-    r.scope({
+  const optionalCatchAllRoutes = createRouteTree({
       static: true,
       children: [
-        r.page("/docs/[[...slug]]", {
+        createRoute("/docs/[[...slug]]", {
           component: async () => ({
             default: () => null,
             generateStaticParams: () => [
@@ -100,8 +95,6 @@ describe("manifest routing / optional catch-all [[...segment]]", () => {
         }),
       ],
     })
-  )
-
   it("matches with and without trailing path", () => {
     const manifest = compileRouteTree(optionalCatchAllRoutes)
     const index = matchRoute(manifest, "/docs")
@@ -117,11 +110,9 @@ describe("manifest routing / optional catch-all [[...segment]]", () => {
     assert.throws(
       () =>
         compileRouteTree(
-          defineRouteTree((r) =>
-            r.scope({
-              children: [r.page("/[[...slug]]/extra", noopPage)],
+          createRouteTree({
+              children: [createRoute("/[[...slug]]/extra", noopPage)],
             })
-          )
         ),
       /must be the last segment/
     )
@@ -134,14 +125,12 @@ describe("manifest routing / optional catch-all [[...segment]]", () => {
   })
 
   it("prefers required [...slug] over [[...slug]] when path has segments", () => {
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/files/[[...path]]", noopPage),
-          r.page("/files/[...path]", noopPage),
+          createRoute("/files/[[...path]]", noopPage),
+          createRoute("/files/[...path]", noopPage),
         ],
       })
-    )
     const manifest = compileRouteTree(routes)
     const index = matchRoute(manifest, "/files")
     assert.ok(index)
@@ -153,14 +142,11 @@ describe("manifest routing / optional catch-all [[...segment]]", () => {
 })
 
 describe("manifest routing / optional [[segment]]", () => {
-  const optionalRoutes = defineRouteTree((r) =>
-    r.scope({
+  const optionalRoutes = createRouteTree({
       children: [
-        r.page("/blog/[[page]]", noopPage),
+        createRoute("/blog/[[page]]", noopPage),
       ],
     })
-  )
-
   it("matches with and without the optional segment", () => {
     const manifest = compileRouteTree(optionalRoutes)
     const root = matchRoute(manifest, "/blog")
@@ -174,14 +160,12 @@ describe("manifest routing / optional [[segment]]", () => {
 
 describe("manifest routing / ambiguous scoring", () => {
   it("prefers static /users/new over /users/[id]", () => {
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/users/[id]", noopPage),
-          r.page("/users/new", noopPage),
+          createRoute("/users/[id]", noopPage),
+          createRoute("/users/new", noopPage),
         ],
       })
-    )
     const manifest = compileRouteTree(routes)
     const match = matchRoute(manifest, "/users/new")
     assert.ok(match)
@@ -189,14 +173,12 @@ describe("manifest routing / ambiguous scoring", () => {
   })
 
   it("prefers dynamic /posts/[page] over optional /posts/[[page]] when segment present", () => {
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/posts/[[page]]", noopPage),
-          r.page("/posts/[page]", noopPage),
+          createRoute("/posts/[[page]]", noopPage),
+          createRoute("/posts/[page]", noopPage),
         ],
       })
-    )
     const manifest = compileRouteTree(routes)
     const withPage = matchRoute(manifest, "/posts/2")
     assert.ok(withPage)
@@ -208,12 +190,11 @@ describe("manifest routing / ambiguous scoring", () => {
 })
 
 describe("manifest routing / baseUrl and trailingSlash", () => {
-  const appRoutes = defineRouteTree((r) =>
-    r.scope({
+  const appRoutes = createRouteTree({
       children: [
-        r.page("/", noopPage),
-        r.page("/about", noopPage),
-        r.page("/users/[id]", {
+        createRoute("/", noopPage),
+        createRoute("/about", noopPage),
+        createRoute("/users/[id]", {
           static: true,
           component: async () => ({
             default: () => null,
@@ -222,8 +203,6 @@ describe("manifest routing / baseUrl and trailingSlash", () => {
         }),
       ],
     })
-  )
-
   const policy = { baseUrl: "/app", trailingSlash: "always" as const }
 
   it("matchRoute strips baseUrl and honors trailingSlash always", () => {

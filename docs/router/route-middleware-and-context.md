@@ -46,7 +46,7 @@ export interface RouteLocation {
 Example today (`sandbox/ssr/src/routes.ts`):
 
 ```ts
-r.page("/users/[id]", {
+createRoute("/users/[id]", {
   meta: { requiresAuthentication: true },
   beforeEnter: (to) => { /* imperative; meta unused */ },
 })
@@ -162,13 +162,13 @@ Prefer **return-value** style (matches existing `runGuards`) over mandatory `nex
 
 ```ts
 export const routeMiddleware = [requireAuth, blockUserZero]
-export const routes = defineRouteTree(...)
+export const routes = createRouteTree(...)
 ```
 
 **B. Scope inheritance:**
 
 ```ts
-r.scope({
+createRouteScope({
   meta: { requiresAuth: true },
   middleware: [requireAuth],
   children: [...],
@@ -300,10 +300,10 @@ Split **three** concerns (do not conflate them):
 
 ## Scope `contextStrategy` (developer control)
 
-Declared on **`r.scope()`**; stored on `CompiledRouteScope`. **Nearest scope on the match chain wins** (walk leaf → root; first defined value), else app default (`contextGate` + `inherit`).
+Declared on **`createRouteScope()`**; stored on `CompiledRouteScope`. **Nearest scope on the match chain wins** (walk leaf → root; first defined value), else app default (`contextGate` + `inherit`).
 
 ```ts
-r.scope({
+createRouteScope({
   contextStrategy?: "inherit" | "none" | "background" | "block"
   contextPendingFallback?: () => JSX.Element
   meta?: Partial<RouteMeta>
@@ -322,19 +322,19 @@ r.scope({
 **Example — public landing + protected admin (CSR):**
 
 ```ts
-r.scope({
+createRouteScope({
   layout: () => import("./layout.tsx"),
   children: [
-    r.scope({
+    createRouteScope({
       contextStrategy: "none",
-      children: [r.page("/", { component: () => import("./home.tsx") })],
+      children: [createRoute("/", { component: () => import("./home.tsx") })],
     }),
-    r.scope({
+    createRouteScope({
       contextStrategy: "block",
       contextPendingFallback: () => <p>Checking session…</p>,
       meta: { requiresAuth: true },
       middleware: [requireAuth],
-      children: [r.page("/admin", { component: () => import("./admin.tsx") })],
+      children: [createRoute("/admin", { component: () => import("./admin.tsx") })],
     }),
   ],
 })
@@ -465,19 +465,19 @@ export const blockUserZero: RouteMiddleware = (ctx) => {
 // routeMiddleware.ts
 export const routeMiddleware = [requireAuth, blockUserZero]
 
-export const routes = defineRouteTree((r) =>
-  r.scope({
+export const routes = createRouteTree((r) =>
+  createRouteScope({
     layout: () => import("./pages/layout.tsx"),
     children: [
-      r.scope({
+      createRouteScope({
         contextStrategy: "none",
-        children: [r.page("/", { component: () => import("./pages/index.tsx") })],
+        children: [createRoute("/", { component: () => import("./pages/index.tsx") })],
       }),
-      r.scope({
+      createRouteScope({
         contextStrategy: "block",
         meta: { requiresAuth: true },
         children: [
-          r.page("/users/[id]", {
+          createRoute("/users/[id]", {
             component: () => import("./pages/user.tsx"),
           }),
         ],
@@ -549,7 +549,7 @@ function runRouteMiddleware(
 
 ### Phase 3 — DX and migration
 
-- `defineRouteMiddleware`, `defineMetaPolicies`
+- `defineMetaPolicies` (optional)
 - Deprecation path for `beforeEach` / `beforeEnter`
 - Docs + sandbox/e2e examples
 - `router.refreshContext()`, dev warnings

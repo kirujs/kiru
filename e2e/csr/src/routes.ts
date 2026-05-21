@@ -1,47 +1,45 @@
-import { defineRouteTree } from "kiru/router"
+import { createRoute, createRouteTree } from "kiru/router"
 import { contextRouteChildren } from "./context/defineContextRoutes.js"
 
-export const routes = defineRouteTree((r) =>
-  r.scope({
-    layout: () => import("./pages/layout.tsx"),
-    notFound: () => import("./pages/not-found/index.tsx"),
-    error: () => import("./pages/csr-error-page.tsx"),
-    children: [
-      r.page("/", () => import("./pages/index.tsx")),
-      r.page("/about", () => import("./pages/about/index.tsx")),
-      r.page("/users/[id]", () => import("./pages/users/[id]/index.tsx")),
-      r.page("/guarded", {
-        component: async () => ({
-          default: () => "Guarded should redirect",
-        }),
-        middleware: [() => ({ redirect: "/about" })],
+export const routes = createRouteTree({
+  layout: () => import("./pages/layout.tsx"),
+  notFound: () => import("./pages/not-found/index.tsx"),
+  error: () => import("./pages/csr-error-page.tsx"),
+  children: [
+    createRoute("/", () => import("./pages/index.tsx")),
+    createRoute("/about", () => import("./pages/about/index.tsx")),
+    createRoute("/users/[id]", () => import("./pages/users/[id]/index.tsx")),
+    createRoute("/guarded", {
+      component: async () => ({
+        default: () => "Guarded should redirect",
       }),
-      r.page("/counter", () => import("./pages/counter/index.tsx")),
-      r.page("/effects", () => import("./pages/effects/index.tsx")),
-      r.page("/keyed-list", () => import("./pages/keyed-list/index.tsx")),
-      r.page("/signals", () => import("./pages/signals/index.tsx")),
-      r.page("/style", () => import("./pages/style/index.tsx")),
-      r.page("/todos", () => import("./pages/todos/index.tsx")),
-      r.page("/navigation", () => import("./pages/navigation/index.tsx")),
-      r.page("/csr-break", () => import("./pages/csr-break.tsx")),
-      r.page("/csr-break-loader", () => import("./pages/csr-break-loader.tsx")),
-      r.page("/view-transitions", () => import("./pages/view-transitions/index.tsx")),
-      r.page("/slow-target", {
-        component: async () => {
-          await new Promise((resolve) => setTimeout(resolve, 400))
-          return import("./pages/slow-target/index.tsx")
-        },
-      }),
-      r.page("/loaders/client", () => import("./pages/loaders/client.tsx")),
-      r.page(
-        "/loaders/universal",
-        () => import("./pages/loaders/universal.tsx")
-      ),
-      r.page("/image-demo", () => import("./pages/image-demo/index.tsx")),
-      ...contextRouteChildren(r),
-    ],
-  })
-)
+      middleware: [() => ({ redirect: "/about" })],
+    }),
+    createRoute("/counter", () => import("./pages/counter/index.tsx")),
+    createRoute("/effects", () => import("./pages/effects/index.tsx")),
+    createRoute("/keyed-list", () => import("./pages/keyed-list/index.tsx")),
+    createRoute("/signals", () => import("./pages/signals/index.tsx")),
+    createRoute("/style", () => import("./pages/style/index.tsx")),
+    createRoute("/todos", () => import("./pages/todos/index.tsx")),
+    createRoute("/navigation", () => import("./pages/navigation/index.tsx")),
+    createRoute("/csr-break", () => import("./pages/csr-break.tsx")),
+    createRoute("/csr-break-loader", () => import("./pages/csr-break-loader.tsx")),
+    createRoute("/view-transitions", () => import("./pages/view-transitions/index.tsx")),
+    createRoute("/slow-target", {
+      component: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 400))
+        return import("./pages/slow-target/index.tsx")
+      },
+    }),
+    createRoute("/loaders/client", () => import("./pages/loaders/client.tsx")),
+    createRoute(
+      "/loaders/universal",
+      () => import("./pages/loaders/universal.tsx")
+    ),
+    createRoute("/image-demo", () => import("./pages/image-demo/index.tsx")),
+    ...contextRouteChildren(),
+  ],
+})
 
 export const routeLinks = [
   { path: "/", displayName: "home" },

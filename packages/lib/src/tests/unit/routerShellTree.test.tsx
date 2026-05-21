@@ -8,7 +8,10 @@ import { hydrate } from "../../ssr/client.js"
 import { createSsrRouterShell } from "../../router/routerShell.js"
 import { createRouter, createStaticRouter } from "../../router/csr.js"
 import { buildRoutedSubtree } from "../../router/routeTree.js"
-import { defineRouteTree } from "../../router/defineRouteTree.js"
+import {
+  createRoute,
+  createRouteTree,
+} from "../../router/createRouteTree.js"
 import { compileRouteTree, matchRoute } from "../../router/manifest.js"
 import { createI18nConfig } from "../../router/i18n/index.js"
 import { createI18nRuntime } from "../../router/i18nContext.js"
@@ -39,13 +42,10 @@ function TestPage() {
   return createElement(SetupIdProbe, { name: "leaf" })
 }
 
-const routes = defineRouteTree((r) =>
-  r.scope({
+const routes = createRouteTree({
     layout: async () => ({ default: TestLayout }),
-    children: [r.page("/", async () => ({ default: TestPage }))],
+    children: [createRoute("/", async () => ({ default: TestPage }))],
   })
-)
-
 const manifest = compileRouteTree(routes)
 
 function buildShellSubtree() {

@@ -1,30 +1,30 @@
-import type { RouteBuilder } from "kiru/router"
+import { createRoute, createRouteScope, type RouteTreeChild } from "kiru/router"
 import { requireAuth } from "./e2eRouteMiddleware.js"
 import ScopeContextPending from "./ScopeContextPending.tsx"
 
-/** Context-gate demo route nodes (merge into an existing `defineRouteTree` scope). */
-export function contextRouteChildren(r: RouteBuilder) {
+/** Context-gate demo route nodes (merge into `createRouteTree` children). */
+export function contextRouteChildren(): RouteTreeChild[] {
   return [
-    r.scope({
+    createRouteScope({
       contextStrategy: "none",
       static: true,
-      children: [r.page("/context", () => import("./pages/home.tsx"))],
+      children: [createRoute("/context", () => import("./pages/home.tsx"))],
     }),
-    r.scope({
+    createRouteScope({
       contextStrategy: "background",
       static: true,
       children: [
-        r.page("/context/profile", () => import("./pages/profile.tsx")),
+        createRoute("/context/profile", () => import("./pages/profile.tsx")),
       ],
     }),
-    r.scope({
+    createRouteScope({
       contextStrategy: "block",
       contextPendingFallback: () => <ScopeContextPending />,
       meta: { requiresAuth: true, unauthorizedRedirect: "/context/login" },
       middleware: [requireAuth],
-      children: [r.page("/context/admin", () => import("./pages/admin.tsx"))],
+      children: [createRoute("/context/admin", () => import("./pages/admin.tsx"))],
     }),
-    r.page("/context/login", {
+    createRoute("/context/login", {
       static: true,
       component: () => import("./pages/login.tsx"),
     }),

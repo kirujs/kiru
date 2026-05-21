@@ -6,7 +6,7 @@ Kiru v2 treats routing as a **compiled manifest** plus **environment-specific ru
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  App: routes.ts (defineRouteTree) + pages + site.config    │
+│  App: routes.ts (createRouteTree) + pages + site.config    │
 └───────────────────────────┬─────────────────────────────────┘
                             │ compileRouteTree
 ┌───────────────────────────▼─────────────────────────────────┐
@@ -84,7 +84,7 @@ Kiru adapters intentionally do not register HTTP middleware.
 
 | File | Responsibility |
 |------|----------------|
-| `defineRouteTree.ts` | Authoring API |
+| `createRouteTree.ts` | Authoring API |
 | `manifest.ts` | Compile tree, match, static path generation |
 | `csr.ts` | `createRouter`, signals, navigations |
 | `renderer.ts` | `createRenderer` orchestration, actions, re-exports |

@@ -2,7 +2,8 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
   createRenderer,
-  defineRouteTree,
+  createRoute,
+  createRouteTree,
   serverLoader,
 } from "../../router/index.js"
 const MINIMAL_TPL =
@@ -32,10 +33,9 @@ describe("SSR request abort", () => {
       await delayUntilAborted(ctx.signal, 500)
       return { label: "done" }
     })
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/slow", {
+          createRoute("/slow", {
             component: async () => ({
               load,
               default: () => null,
@@ -43,7 +43,6 @@ describe("SSR request abort", () => {
           }),
         ],
       })
-    )
     const renderer = createRenderer({
       routes,
       htmlTemplate: MINIMAL_TPL,
@@ -64,10 +63,9 @@ describe("SSR request abort", () => {
 
   it("returns null when the request is already aborted", async () => {
     const load = serverLoader(async () => ({ ok: true }))
-    const routes = defineRouteTree((r) =>
-      r.scope({
+    const routes = createRouteTree({
         children: [
-          r.page("/", {
+          createRoute("/", {
             component: async () => ({
               load,
               default: () => null,
@@ -75,8 +73,6 @@ describe("SSR request abort", () => {
           }),
         ],
       })
-    )
-
     const renderer = createRenderer({
       routes,
       htmlTemplate: MINIMAL_TPL,

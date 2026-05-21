@@ -1,31 +1,33 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { compileRouteTree, matchRoute } from "../../router/manifest.js"
-import { defineRouteTree } from "../../router/defineRouteTree.js"
+import {
+  createRoute,
+  createRouteScope,
+  createRouteTree,
+} from "../../router/createRouteTree.js"
 import {
   resolvePendingOutletMatch,
   shouldDeferProtectedOutlet,
 } from "../../router/contextGate.js"
 
 describe("contextGate outlet defer", () => {
-  const tree = defineRouteTree((r) =>
-    r.scope({
+  const tree = createRouteTree({
       contextStrategy: "none",
       children: [
-        r.scope({
+        createRouteScope({
           contextStrategy: "block",
           children: [
-            r.page("/admin", {
+            createRoute("/admin", {
               component: async () => ({ default: () => null }),
             }),
           ],
         }),
-        r.page("/home", {
+        createRoute("/home", {
           component: async () => ({ default: () => null }),
         }),
       ],
     })
-  )
   const manifest = compileRouteTree(tree)
 
   it("resolvePendingOutletMatch uses navigation target while in flight", () => {

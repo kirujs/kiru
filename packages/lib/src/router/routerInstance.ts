@@ -12,6 +12,10 @@ import type {
 import type { RouterI18nFields } from "./i18n/augmentation.js"
 import type { RouteTreeMatchSegment } from "./navigation.js"
 import type { RouterQuery } from "./requestUrl.js"
+import type {
+  RouterNavigateCallOptions,
+  RouterNavigateInput,
+} from "./routePaths.js"
 
 export type RouterNavigationMode = "history" | "static"
 
@@ -27,8 +31,8 @@ export interface RouterCore {
   match: Signal<RouteMatch | null>
   matches: Signal<RouteTreeMatchSegment[]>
   navigate: (
-    to: string,
-    replaceOrOptions?: boolean | import("./i18n/augmentation.js").RouterNavigateOptions
+    to: RouterNavigateInput,
+    replaceOrOptions?: boolean | RouterNavigateCallOptions
   ) => Promise<NavigationResult>
   setQuery: (
     query: RouterQuery,
@@ -39,8 +43,11 @@ export interface RouterCore {
     options?: { replace?: boolean }
   ) => Promise<NavigationResult>
   resolveHref: (
-    to: string,
-    options?: { locale?: import("./i18n/augmentation.js").RouterLocaleParam }
+    to: RouterNavigateInput,
+    options?: {
+      locale?: import("./i18n/augmentation.js").RouterLocaleParam
+      params?: Record<string, string | undefined>
+    }
   ) => string
   localeRouting?: import("./i18n/localeRouting.js").I18nLocaleRouting
   navigationMode: RouterNavigationMode

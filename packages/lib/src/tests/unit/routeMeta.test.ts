@@ -1,7 +1,11 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { compileRouteTree, matchRoute } from "../../router/manifest.js"
-import { defineRouteTree } from "../../router/defineRouteTree.js"
+import {
+  createRoute,
+  createRouteScope,
+  createRouteTree,
+} from "../../router/createRouteTree.js"
 import {
   effectiveContextPendingFallback,
   effectiveContextStrategy,
@@ -18,28 +22,25 @@ declare module "kiru/router" {
 }
 
 describe("routeMeta", () => {
-  const tree = defineRouteTree((r) =>
-    r.scope({
+  const tree = createRouteTree({
       meta: { appFlag: true },
       contextStrategy: "none",
       children: [
-        r.scope({
+        createRouteScope({
           contextStrategy: "block",
           meta: { appFlag: false },
           children: [
-            r.page("/child", {
+            createRoute("/child", {
               component: async () => ({ default: () => null }),
             }),
           ],
         }),
-        r.page("/leaf", {
+        createRoute("/leaf", {
           meta: { appFlag: true },
           component: async () => ({ default: () => null }),
         }),
       ],
     })
-  )
-
   it("mergeRouteMeta shallow-merges scopes and route", () => {
     const manifest = compileRouteTree(tree)
     const match = matchRoute(manifest, "/leaf")!
@@ -57,23 +58,21 @@ describe("routeMeta", () => {
   it("effectiveContextPendingFallback uses nearest scope then app default", () => {
     const appFb = () => "app"
     const scopeFb = () => "scope"
-    const tree = defineRouteTree((r) =>
-      r.scope({
+    const tree = createRouteTree({
         children: [
-          r.scope({
+          createRouteScope({
             contextPendingFallback: scopeFb,
             children: [
-              r.page("/scoped", {
+              createRoute("/scoped", {
                 component: async () => ({ default: () => null }),
               }),
             ],
           }),
-          r.page("/plain", {
+          createRoute("/plain", {
             component: async () => ({ default: () => null }),
           }),
         ],
       })
-    )
     const manifest = compileRouteTree(tree)
     assert.equal(
       effectiveContextPendingFallback(
@@ -100,16 +99,13 @@ describe("routeMeta", () => {
   })
 
   describe("contextGate block", () => {
-    const inheritOnly = defineRouteTree((r) =>
-      r.scope({
+    const inheritOnly = createRouteTree({
         children: [
-          r.page("/plain", {
+          createRoute("/plain", {
             component: async () => ({ default: () => null }),
           }),
         ],
       })
-    )
-
     it("treats inherit routes as block for outlet, resolve, and await", () => {
       const match = matchRoute(compileRouteTree(inheritOnly), "/plain")!
       const opts = { contextGate: "block" as const, hasResolveContext: true }
