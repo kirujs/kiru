@@ -87,6 +87,7 @@ import {
   formatPublicHref,
   formatPublicPathname,
   getI18nLocaleRouting,
+  type I18nLocaleRouting,
   loaderI18nFields,
   loadI18nMessages,
   resolveInvalidLocaleRedirect,
@@ -99,12 +100,11 @@ import {
   createI18nRuntime,
   readHydratedI18n,
 } from "./i18nContext.js"
-import { addLocale, type I18nLocaleRouting } from "./i18n/localeRouting.js"
 
 export {
   createI18nConfig,
   type InternationalizationConfig,
-  type I18nOptions,
+  type CreateI18nConfigInput,
 } from "./i18n/index.js"
 export { useI18n, I18nProvider } from "./i18nContext.js"
 
@@ -124,28 +124,33 @@ function resolveRouterHref(
   localeRouting: I18nLocaleRouting | undefined,
   activeLocale: string | undefined,
   policy: RouterPathPolicy,
-  baseUrl: string
+  baseUrl: string,
+  host?: string | null,
+  protocol?: string
 ): string {
   const { pathname: pathPart, search, hash } = splitRouterTo(to)
   const relative =
     pathPart === ""
       ? formatPathname(logicalPathname, policy)
       : formatPathname(joinPath(logicalPathname, pathPart), policy)
-  let href: string
   if (hrefOpts?.locale === false && localeRouting) {
-    href = addBase(relative, baseUrl)
-  } else {
-    const targetLocale =
-      hrefOpts?.locale === false
-        ? undefined
-        : (hrefOpts?.locale ?? activeLocale)
-    if (targetLocale && localeRouting) {
-      href = addBase(addLocale(relative, targetLocale, localeRouting), baseUrl)
-    } else {
-      href = addBase(stripBase(relative, baseUrl), baseUrl)
-    }
+    return `${addBase(relative, baseUrl)}${search}${hash}`
   }
-  return `${href}${search}${hash}`
+  const targetLocale =
+    hrefOpts?.locale === false ? undefined : (hrefOpts?.locale ?? activeLocale)
+  if (targetLocale && localeRouting) {
+    return formatPublicHref(
+      relative,
+      targetLocale,
+      localeRouting,
+      policy,
+      baseUrl,
+      search,
+      hash,
+      { host, protocol }
+    )
+  }
+  return `${addBase(stripBase(relative, baseUrl), baseUrl)}${search}${hash}`
 }
 
 export type { RouterQuery } from "./requestUrl.js"
@@ -210,14 +215,15 @@ export function createRouter({
   const normalizedBaseUrl = resolvedPathPolicy.baseUrl
   const localeRouting = i18n ? getI18nLocaleRouting(i18n) : undefined
   const rawInitialPath = pathFromLocation(location, normalizedBaseUrl)
+  const requestHost = (location as Location).host
   const initialSplit = localeRouting
-    ? splitAppPathname(rawInitialPath, localeRouting)
+    ? splitAppPathname(rawInitialPath, localeRouting, { host: requestHost })
     : { locale: null as string | null, pathname: rawInitialPath }
   const hydratedI18n = readHydratedI18n()
   const initialLocale =
     initialSplit.locale ??
     hydratedI18n?.locale ??
-    (i18n ? i18n.default : "en")
+    (i18n ? i18n.defaultLocale : "en")
   const origin =
     (location as Location & { origin?: string }).origin || "http://localhost"
   const pathname = signal(initialSplit.pathname)
@@ -227,7 +233,7 @@ export function createRouter({
         initialLocale,
         initialData: hydratedI18n?.data ?? {},
         locales: hydratedI18n?.locales ?? i18n.locales,
-        defaultLocale: hydratedI18n?.defaultLocale ?? i18n.default,
+        defaultLocale: hydratedI18n?.defaultLocale ?? i18n.defaultLocale,
       })
     : undefined
   const loaderI18nExtras = () =>
@@ -258,7 +264,13 @@ export function createRouter({
 
   const toBrowserPath = (logical: string) =>
     localeRouting && locale
-      ? formatPublicPathname(logical, locale.peek(), localeRouting, resolvedPathPolicy)
+      ? formatPublicPathname(
+          logical,
+          locale.peek(),
+          localeRouting,
+          resolvedPathPolicy,
+          requestHost
+        )
       : logical
 
   async function validateInitialSearch() {
@@ -465,25 +477,39 @@ export function createRouter({
   )
 
   if (typeof window !== "undefined" && localeRouting) {
-    const initialDetailed = splitAppPathnameDetailed(rawInitialPath, localeRouting)
-    if (
+    const initialDetailed = splitAppPathnameDetailed(rawInitialPath, localeRouting, {
+      host: requestHost,
+      protocol: (location as Location).protocol,
+      baseUrl: normalizedBaseUrl,
+    })
+    if (initialDetailed.kind === "wrong-domain") {
+      void navigateInternal(new URL(initialDetailed.location), {
+        replace: true,
+        fromPopstate: false,
+      })
+    } else if (
       initialDetailed.kind === "invalid-locale" &&
       !shouldRejectInvalidLocale(localeRouting)
     ) {
       const redirectPath = resolveInvalidLocaleRedirect(
         initialDetailed,
         localeRouting,
-        resolvedPathPolicy
+        resolvedPathPolicy,
+        {
+          host: requestHost,
+          protocol: (location as Location).protocol,
+          baseUrl: normalizedBaseUrl,
+        }
       )
-      void navigateInternal(
-        new URL(
-          addBase(redirectPath, normalizedBaseUrl) +
-            location.search +
-            location.hash,
-          origin
-        ),
-        { replace: true, fromPopstate: false }
-      )
+      const target = redirectPath.startsWith("http")
+        ? redirectPath
+        : addBase(redirectPath, normalizedBaseUrl) +
+          location.search +
+          location.hash
+      void navigateInternal(new URL(target, origin), {
+        replace: true,
+        fromPopstate: false,
+      })
     }
   }
 
@@ -572,25 +598,35 @@ export function createRouter({
         pathPart === ""
           ? pathname.peek()
           : joinPath(pathname.peek(), pathPart)
-      const href =
-        locale !== undefined && localeRouting
-          ? locale === false
+      let url: URL
+      if (locale !== undefined && localeRouting && locale !== false) {
+        const fullHref = formatPublicHref(
+          logical,
+          locale,
+          localeRouting,
+          resolvedPathPolicy,
+          normalizedBaseUrl,
+          search,
+          targetHash,
+          { host: requestHost, protocol: (location as Location).protocol }
+        )
+        url = new URL(
+          fullHref.startsWith("http") ? fullHref : `${origin}${addBase(fullHref, normalizedBaseUrl)}`
+        )
+      } else {
+        const href =
+          locale === false && localeRouting
             ? formatPathname(logical, resolvedPathPolicy)
-            : formatPublicPathname(
-                logical,
-                locale,
-                localeRouting,
-                resolvedPathPolicy
-              )
-          : toBrowserPath(logical)
-      const currentHref = `${origin}${addBase(
-        toBrowserPath(pathname.peek()),
-        normalizedBaseUrl
-      )}`
-      const url = new URL(
-        addBase(href, normalizedBaseUrl) + search + targetHash,
-        currentHref
-      )
+            : toBrowserPath(logical)
+        const currentHref = `${origin}${addBase(
+          toBrowserPath(pathname.peek()),
+          normalizedBaseUrl
+        )}`
+        url = new URL(
+          addBase(href, normalizedBaseUrl) + search + targetHash,
+          currentHref
+        )
+      }
       return navigateInternal(url, {
         replace: !!replace,
         fromPopstate: false,
@@ -658,7 +694,7 @@ export function createRouter({
     },
     localeRouting,
     locale,
-    defaultLocale: i18n?.default,
+    defaultLocale: i18n?.defaultLocale,
     resolveHref(to, hrefOpts) {
       const resolved = resolveNavigateTarget(to, hrefOpts?.params)
       return resolveRouterHref(
@@ -668,7 +704,9 @@ export function createRouter({
         localeRouting,
         locale ? locale.peek() : undefined,
         resolvedPathPolicy,
-        normalizedBaseUrl
+        normalizedBaseUrl,
+        requestHost,
+        (location as Location).protocol
       )
     },
     ...(i18n && localeRouting && locale && i18nRuntime
@@ -692,7 +730,8 @@ export function createRouter({
               resolvedPathPolicy,
               normalizedBaseUrl,
               search,
-              hash.peek()
+              hash.peek(),
+              { host: requestHost, protocol: (location as Location).protocol }
             )
             const url = new URL(href, origin)
             return navigateInternal(url, {

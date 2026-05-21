@@ -117,7 +117,7 @@ Compared to Next.js (routing layer only — Next does **not** ship message catal
 |---------|------------|------|
 | Sub-path routing | Yes | Yes |
 | Default locale unprefixed | Yes | Yes (`as-needed`) |
-| Domain routing | Yes | No (out of scope) |
+| Domain routing | Yes | Yes (hybrid + `domains[]`) |
 | `Accept-Language` on `/` | Yes | Yes |
 | `localeDetection: false` | Yes | Yes |
 | Preference cookie | `NEXT_LOCALE` | `KIRU_LOCALE` (configurable) |
@@ -137,7 +137,7 @@ Compared to Next.js (routing layer only — Next does **not** ship message catal
 ## Intentional differences (not gaps)
 
 - **No bundled ICU / react-intl** — apps use JSON/modules via `createI18nConfig`.
-- **Domain routing** — deferred.
+- **Domain routing** — implemented; see [08-i18n.md](../v2/08-i18n.md#domain-routing-nextjs-style-hybrid).
 - **Optional `typesafe-i18n` example** — not in wave 1 ([tier-3-differentiation.md](./tier-3-differentiation.md)).
 
 ---

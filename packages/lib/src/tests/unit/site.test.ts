@@ -54,10 +54,13 @@ describe("site", () => {
       sitemap: true,
     })
     const xml = buildSitemapXml(["/about"], site, undefined, {
-      default: "en",
+      defaultLocale: "en",
       prefixes: ["en", "fr"],
       localePrefix: "as-needed",
       invalidLocale: "redirect",
+      domains: [],
+      localeDomain: new Map(),
+      pathOnlyLocales: ["en", "fr"],
     })
     assert.ok(xml.includes('xmlns:xhtml="http://www.w3.org/1999/xhtml"'))
     assert.ok(xml.includes('hreflang="fr"'))

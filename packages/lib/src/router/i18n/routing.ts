@@ -6,6 +6,12 @@ import {
   type I18nLocaleRouting,
 } from "./localeRouting.js"
 import {
+  localeOrigin,
+  localeOwnsHost,
+  matchDomainEntry,
+  resolveProtocolForBinding,
+} from "./domains.js"
+import {
   addBase,
   formatPathname,
   normalizePathname,
@@ -30,13 +36,110 @@ export type AppPathSplitResult =
       pathname: string
       locale: string
     }
+  | {
+      kind: "wrong-domain"
+      locale: string
+      pathname: string
+      location: string
+    }
+
+export type SplitAppPathnameOptions = {
+  host?: string | null
+  protocol?: string
+  baseUrl?: string
+}
+
+function resolveLocaleFromHost(
+  host: string | null | undefined,
+  routing: I18nLocaleRouting
+): string | null {
+  if (!host || !routing.domains.length) return null
+  const entry = matchDomainEntry(host, routing.domains)
+  return entry?.defaultLocale ?? null
+}
+
+export function localePublicPath(
+  logicalPath: string,
+  locale: string,
+  routing: I18nLocaleRouting,
+  host?: string | null,
+  policy?: RouterPathPolicy
+): string {
+  const targetHost =
+    host ?? routing.localeDomain.get(locale)?.host ?? null
+  return formatPathname(
+    addLocale(logicalPath, locale, routing, targetHost),
+    policy
+  )
+}
+
+export function localeHomeUrl(
+  logicalPath: string,
+  locale: string,
+  routing: I18nLocaleRouting,
+  opts?: {
+    protocol?: string
+    baseUrl?: string
+    pathPolicy?: RouterPathPolicy
+    search?: string
+    hash?: string
+  }
+): string {
+  const binding = routing.localeDomain.get(locale)
+  const protocol = resolveProtocolForBinding(binding, opts?.protocol)
+  const publicPath = localePublicPath(
+    logicalPath,
+    locale,
+    routing,
+    binding?.host,
+    opts?.pathPolicy
+  )
+  const search = opts?.search ?? ""
+  const hash = opts?.hash ?? ""
+
+  if (binding) {
+    const origin = localeOrigin(binding, protocol)
+    return `${origin}${publicPath}${search}${hash}`
+  }
+
+  const base = opts?.baseUrl ?? ""
+  return `${addBase(publicPath, base)}${search}${hash}`
+}
+
+export function wrongDomainRedirect(
+  locale: string,
+  logicalPath: string,
+  routing: I18nLocaleRouting,
+  opts?: SplitAppPathnameOptions & {
+    pathPolicy?: RouterPathPolicy
+    search?: string
+    hash?: string
+  }
+): string | null {
+  const binding = routing.localeDomain.get(locale)
+  if (!binding) return null
+  if (localeOwnsHost(locale, opts?.host, routing.localeDomain, routing.domains)) {
+    return null
+  }
+  return localeHomeUrl(logicalPath, locale, routing, {
+    protocol: opts?.protocol,
+    baseUrl: opts?.baseUrl,
+    pathPolicy: opts?.pathPolicy,
+    search: opts?.search,
+    hash: opts?.hash,
+  })
+}
 
 export function splitAppPathname(
   pathname: string,
-  routing: I18nLocaleRouting
+  routing: I18nLocaleRouting,
+  opts?: SplitAppPathnameOptions
 ): AppPathSplit {
-  const result = splitAppPathnameDetailed(pathname, routing)
+  const result = splitAppPathnameDetailed(pathname, routing, opts)
   if (result.kind === "invalid-locale") {
+    return { locale: result.locale, pathname: result.pathname }
+  }
+  if (result.kind === "wrong-domain") {
     return { locale: result.locale, pathname: result.pathname }
   }
   return { locale: result.locale, pathname: result.pathname }
@@ -44,18 +147,32 @@ export function splitAppPathname(
 
 export function splitAppPathnameDetailed(
   pathname: string,
-  routing: I18nLocaleRouting
+  routing: I18nLocaleRouting,
+  opts?: SplitAppPathnameOptions
 ): AppPathSplitResult {
   const normalized = pathnameForMatch(pathname)
   const segments = normalized === "/" ? [] : normalized.slice(1).split("/")
   const first = segments[0]
+  const host = opts?.host
+
+  const domainDefault = resolveLocaleFromHost(host, routing)
 
   if (first && routing.prefixes.includes(first)) {
     const rest = segments.slice(1)
+    const logical = rest.length ? `/${rest.join("/")}` : "/"
+    const redirect = wrongDomainRedirect(first, logical, routing, opts)
+    if (redirect) {
+      return {
+        kind: "wrong-domain",
+        locale: first,
+        pathname: logical,
+        location: redirect,
+      }
+    }
     return {
       kind: "ok",
       locale: first,
-      pathname: rest.length ? `/${rest.join("/")}` : "/",
+      pathname: logical,
     }
   }
 
@@ -65,17 +182,35 @@ export function splitAppPathnameDetailed(
     !routing.prefixes.includes(first)
   ) {
     const rest = segments.slice(1)
+    const logical = rest.length ? `/${rest.join("/")}` : "/"
+    const redirect = wrongDomainRedirect(first, logical, routing, opts)
+    if (redirect) {
+      return {
+        kind: "wrong-domain",
+        locale: first,
+        pathname: logical,
+        location: redirect,
+      }
+    }
     return {
       kind: "invalid-locale",
       segment: first,
-      pathname: rest.length ? `/${rest.join("/")}` : "/",
-      locale: routing.default,
+      pathname: logical,
+      locale: routing.defaultLocale,
+    }
+  }
+
+  if (domainDefault) {
+    return {
+      kind: "ok",
+      locale: domainDefault,
+      pathname: normalized,
     }
   }
 
   const { locale, pathname: logical } = stripLocale(normalized, routing)
   const resolved =
-    locale && routing.prefixes.includes(locale) ? locale : routing.default
+    locale && routing.prefixes.includes(locale) ? locale : routing.defaultLocale
   return { kind: "ok", locale: resolved, pathname: logical }
 }
 
@@ -83,9 +218,10 @@ export function formatPublicPathname(
   logicalPath: string,
   locale: string,
   routing: I18nLocaleRouting,
-  policy?: RouterPathPolicy
+  policy?: RouterPathPolicy,
+  host?: string | null
 ): string {
-  return formatPathname(addLocale(logicalPath, locale, routing), policy)
+  return localePublicPath(logicalPath, locale, routing, host, policy)
 }
 
 export function formatPublicHref(
@@ -95,18 +231,62 @@ export function formatPublicHref(
   policy: RouterPathPolicy | undefined,
   baseUrl: string,
   search: string,
-  hash: string
+  hash: string,
+  opts?: {
+    host?: string | null
+    protocol?: string
+    /** When set, skip cross-domain absolute URLs (e.g. prerender). */
+    sameOriginOnly?: boolean
+  }
 ): string {
-  const publicPath = formatPublicPathname(logicalPath, locale, routing, policy)
+  const currentHost = opts?.host ?? null
+  const binding = routing.localeDomain.get(locale)
+  const publicPath = localePublicPath(
+    logicalPath,
+    locale,
+    routing,
+    binding?.host ?? currentHost,
+    policy
+  )
+
+  if (
+    !opts?.sameOriginOnly &&
+    binding &&
+    currentHost &&
+    !localeOwnsHost(locale, currentHost, routing.localeDomain, routing.domains)
+  ) {
+    const protocol = resolveProtocolForBinding(binding, opts?.protocol)
+    return `${localeOrigin(binding, protocol)}${publicPath}${search}${hash}`
+  }
+
+  if (!opts?.sameOriginOnly && binding && !currentHost) {
+    const protocol = resolveProtocolForBinding(binding, opts?.protocol)
+    return `${localeOrigin(binding, protocol)}${publicPath}${search}${hash}`
+  }
+
   return `${addBase(publicPath, baseUrl)}${search}${hash}`
 }
 
 export function resolveInvalidLocaleRedirect(
   split: Extract<AppPathSplitResult, { kind: "invalid-locale" }>,
   routing: I18nLocaleRouting,
-  pathPolicy?: RouterPathPolicy
+  pathPolicy?: RouterPathPolicy,
+  opts?: SplitAppPathnameOptions
 ): string {
-  return formatPublicPathname(split.pathname, split.locale, routing, pathPolicy)
+  const redirect = wrongDomainRedirect(
+    split.segment,
+    split.pathname,
+    routing,
+    { ...opts, pathPolicy }
+  )
+  if (redirect) return redirect
+  return formatPublicPathname(
+    split.pathname,
+    split.locale,
+    routing,
+    pathPolicy,
+    opts?.host
+  )
 }
 
 export function shouldRejectInvalidLocale(routing: I18nLocaleRouting): boolean {
@@ -143,10 +323,14 @@ export function parseAppLocation(
   query: RouterQuery
   href: string
   invalidLocale?: Extract<AppPathSplitResult, { kind: "invalid-locale" }>
+  wrongDomain?: Extract<AppPathSplitResult, { kind: "wrong-domain" }>
 } {
   const rawPath = stripBase(url.pathname, baseUrl)
   const search = url.search
   const hash = url.hash
+  const host = url.host
+  const protocol = url.protocol
+
   if (!routing) {
     const pathname = pathnameForMatch(url.pathname, policy)
     return {
@@ -157,18 +341,42 @@ export function parseAppLocation(
       href: `${addBase(pathname, baseUrl)}${search}${hash}`,
     }
   }
-  const detailed = splitAppPathnameDetailed(rawPath, routing)
-  if (detailed.kind === "invalid-locale") {
-    const redirectPath = resolveInvalidLocaleRedirect(detailed, routing, policy)
+
+  const detailed = splitAppPathnameDetailed(rawPath, routing, {
+    host,
+    protocol,
+    baseUrl,
+  })
+
+  if (detailed.kind === "wrong-domain") {
     return {
       pathname: detailed.pathname,
       locale: detailed.locale,
       hash,
       query: parseQuery(search),
-      href: `${addBase(redirectPath, baseUrl)}${search}${hash}`,
+      href: detailed.location,
+      wrongDomain: detailed,
+    }
+  }
+
+  if (detailed.kind === "invalid-locale") {
+    const redirectPath = resolveInvalidLocaleRedirect(detailed, routing, policy, {
+      host,
+      protocol,
+      baseUrl,
+    })
+    return {
+      pathname: detailed.pathname,
+      locale: detailed.locale,
+      hash,
+      query: parseQuery(search),
+      href: redirectPath.startsWith("http")
+        ? `${redirectPath}${search}${hash}`
+        : `${addBase(redirectPath, baseUrl)}${search}${hash}`,
       invalidLocale: detailed,
     }
   }
+
   return {
     pathname: detailed.pathname,
     locale: detailed.locale,
@@ -181,7 +389,12 @@ export function parseAppLocation(
       policy,
       baseUrl,
       search,
-      hash
+      hash,
+      { host, protocol }
     ),
   }
+}
+
+export function prerenderStorageKey(locale: string, publicPath: string): string {
+  return `${locale}::${publicPath}`
 }

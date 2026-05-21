@@ -115,11 +115,12 @@ Define locales once, load JSON (or any module) per locale, and use type-safe `us
 // src/i18n.ts
 import { createI18nConfig } from "kiru/router"
 
-const i18n = createI18nConfig(["en", "fr"])({
-  default: "en",
+const i18n = createI18nConfig({
+  locales: ["en", "fr"],
+  defaultLocale: "en",
   load: {
-    en: () => import("./i18n/en.json"),
-    fr: () => import("./i18n/fr.json"),
+    en: () => import("./i18n/en.json").then((m) => m.default),
+    fr: () => import("./i18n/fr.json").then((m) => m.default),
   },
 })
 

@@ -238,7 +238,8 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         rawPath,
         requestOrUrl,
         i18nConfig,
-        pathPolicy
+        pathPolicy,
+        url
       )
       if (localeRedirect) {
         return localeDetectionRedirectRenderHit(
@@ -278,6 +279,9 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
               prerenderCache,
               stream: options.stream,
               pathPolicy,
+              localeRouting: i18nConfig
+                ? getI18nLocaleRouting(i18nConfig)
+                : undefined,
               getStaticPathSet: getPrerenderPathSet,
               actionsSecret: actionsSecret ?? "",
               onRegenerate: createIsrRegenerateHandler({

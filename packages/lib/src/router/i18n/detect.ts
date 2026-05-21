@@ -8,7 +8,7 @@ export function resolveLocale<
   Data,
 >(config: InternationalizationConfig<Locales, Data>, input: string): Locales[number] {
   const normalized = input.trim()
-  if (!normalized) return config.default
+  if (!normalized) return config.defaultLocale
 
   if (config.locales.includes(normalized as Locales[number])) {
     return normalized as Locales[number]
@@ -25,7 +25,7 @@ export function resolveLocale<
     if (match) return match
   }
 
-  return config.default
+  return config.defaultLocale
 }
 
 function parseAcceptLanguage(header: string | null | undefined): string[] {
@@ -81,7 +81,7 @@ export function detectLocaleFromRequest<
     if (config.locales.includes(resolved)) return resolved
   }
 
-  return config.default
+  return config.defaultLocale
 }
 
 export function shouldRunLocaleDetection(

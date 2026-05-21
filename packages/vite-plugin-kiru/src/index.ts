@@ -634,9 +634,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
               { file?: string; css?: string[] }
             >
           )
-          const seg = output.path.replace(/^\//, "")
+          const writePath = output.diskPath ?? output.path
+          const seg = writePath.replace(/^\//, "")
           const relativePath =
-            output.path === "/" || hasChildren(output.path)
+            writePath === "/" || hasChildren(output.path)
               ? `${seg ? seg + "/" : ""}index.html`
               : `${seg}.html`
 
@@ -652,7 +653,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             const metaEntry = getRouteBuildMetaEntry(routeMatch.route, buildMeta)
             persistPrerenderBuildOutput({
               clientDir: state.outDir,
-              pathname: output.path,
+              pathname: output.storageKey ?? output.path,
               htmlAbsolutePath: target,
               revalidate: metaEntry?.revalidate,
               tags: metaEntry?.tags,

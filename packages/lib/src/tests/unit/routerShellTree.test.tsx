@@ -93,9 +93,10 @@ function clientShell() {
 }
 
 function clientShellWithI18n() {
-  const i18n = createI18nConfig(["en"])({
-    default: "en",
-    load: { en: async () => ({ default: { title: "Home" } }) },
+  const i18n = createI18nConfig({
+    locales: ["en"],
+    defaultLocale: "en",
+    load: { en: async () => ({ title: "Home" }) },
   })
   const router = createRouter({ routes, i18n })
   return createSsrRouterShell(

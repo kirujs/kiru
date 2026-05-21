@@ -14,10 +14,14 @@ import {
 } from "../../router/index.js"
 import {
   createI18nConfig,
+  expandPrerenderTargets,
   getI18nLocaleRouting,
   loaderI18nFields,
   loadI18nMessages,
+  localeHomeUrl,
+  matchDomainEntry,
   resolveInvalidLocaleRedirect,
+  shouldPrefixLocale,
   splitAppPathname,
   splitAppPathnameDetailed,
   stripLocalePrefixFromPath,
@@ -40,26 +44,31 @@ import {
 
 const I18N_TPL = `<!doctype html><html lang="${LOCALE_TOKEN}"><head>{{kiru_head}}</head><body>{{kiru_body}}</body></html>`
 
-describe("i18n", () => {
+function makeI18n() {
   const messages = {
     en: { title: "About", home: { greeting: "Hello" } },
     fr: { title: "À propos", home: { greeting: "Bonjour" } },
   }
-
-  const i18n = createI18nConfig(["en", "fr"])({
-    default: "en",
+  return createI18nConfig({
+    locales: ["en", "fr"],
+    defaultLocale: "en",
     load: {
-      en: async () => ({ default: messages.en }),
-      fr: async () => ({ default: messages.fr }),
+      en: async () => messages.en,
+      fr: async () => messages.fr,
     },
   })
+}
+
+describe("i18n", () => {
+  const i18n = makeI18n()
 
   it("createI18nConfig preserves locales list and routing defaults", () => {
     assert.deepEqual(i18n.locales, ["en", "fr"])
-    assert.equal(i18n.default, "en")
+    assert.equal(i18n.defaultLocale, "en")
     assert.equal(i18n.localePrefix, "as-needed")
     assert.equal(i18n.invalidLocale, "redirect")
     assert.equal(i18n.localeDetection, true)
+    assert.deepEqual(i18n.domains, [])
   })
 
   it("loadI18nMessages loads locale bundle", async () => {
@@ -69,12 +78,15 @@ describe("i18n", () => {
   })
 
   it("getByPath resolves nested message keys", () => {
-    assert.equal(getByPath(messages.en, "home.greeting"), "Hello")
-    assert.equal(getByPath(messages.en, "missing"), undefined)
+    assert.equal(getByPath(i18n, "home.greeting"), undefined)
+    const en = { title: "About", home: { greeting: "Hello" } }
+    assert.equal(getByPath(en, "home.greeting"), "Hello")
+    assert.equal(getByPath(en, "missing"), undefined)
   })
 
   it("createI18nTranslator resolves dot-path keys only", () => {
-    const t = createI18nTranslator(messages.en)
+    const en = { title: "About", home: { greeting: "Hello" } }
+    const t = createI18nTranslator(en)
     assert.equal(t("title"), "About")
     assert.equal(t("home.greeting"), "Hello")
     assert.throws(
@@ -115,11 +127,12 @@ describe("i18n", () => {
   })
 
   it("resolveLocale falls back from nl-BE to nl", () => {
-    const nlConfig = createI18nConfig(["en", "nl"])({
-      default: "en",
+    const nlConfig = createI18nConfig({
+      locales: ["en", "nl"],
+      defaultLocale: "en",
       load: {
-        en: async () => ({ default: {} }),
-        nl: async () => ({ default: {} }),
+        en: async () => ({}),
+        nl: async () => ({}),
       },
     })
     assert.equal(resolveLocale(nlConfig, "nl-BE"), "nl")
@@ -199,6 +212,8 @@ describe("i18n", () => {
       search: "",
       hash: "",
       origin: "http://localhost",
+      host: "localhost",
+      protocol: "http:",
     } as any as Location
     const routes = createRouteTree({
         children: [
@@ -284,13 +299,13 @@ describe("i18n", () => {
   })
 
   it("createRenderer serves logical route when invalidLocale is not-found", async () => {
-    const i18nNotFound = createI18nConfig(["en", "fr"], {
+    const i18nNotFound = createI18nConfig({
+      locales: ["en", "fr"],
+      defaultLocale: "en",
       invalidLocale: "not-found",
-    })({
-      default: "en",
       load: {
-        en: async () => ({ default: messages.en }),
-        fr: async () => ({ default: messages.fr }),
+        en: async () => ({ title: "About", home: { greeting: "Hello" } }),
+        fr: async () => ({ title: "À propos", home: { greeting: "Bonjour" } }),
       },
     })
     const routes = createRouteTree({
@@ -341,5 +356,141 @@ describe("i18n", () => {
     assert.ok(response)
     assert.equal(response.status, 200)
     assert.ok((response.body as string).includes('data-testid="loader-locale">fr'))
+  })
+})
+
+describe("i18n domain routing", () => {
+  const hybridI18n = createI18nConfig({
+    locales: ["en-US", "fr", "nl-NL", "nl-BE", "de"],
+    defaultLocale: "en-US",
+    localePrefix: "as-needed",
+    domains: [
+      { domain: "example.com", defaultLocale: "en-US" },
+      { domain: "example.fr", defaultLocale: "fr" },
+      { domain: "example.nl", defaultLocale: "nl-NL", locales: ["nl-BE"] },
+    ],
+    load: {
+      "en-US": async () => ({}),
+      fr: async () => ({}),
+      "nl-NL": async () => ({}),
+      "nl-BE": async () => ({}),
+      de: async () => ({}),
+    },
+  })
+
+  const routing = getI18nLocaleRouting(hybridI18n)
+
+  it("matchDomainEntry matches apex and www", () => {
+    assert.equal(
+      matchDomainEntry("example.com", routing.domains)?.defaultLocale,
+      "en-US"
+    )
+    assert.equal(
+      matchDomainEntry("www.example.com", routing.domains)?.defaultLocale,
+      "en-US"
+    )
+    assert.equal(
+      matchDomainEntry("example.fr", routing.domains)?.defaultLocale,
+      "fr"
+    )
+  })
+
+  it("splitAppPathnameDetailed uses domain default locale without prefix", () => {
+    const split = splitAppPathnameDetailed("/blog", routing, {
+      host: "example.fr",
+    })
+    assert.equal(split.kind, "ok")
+    if (split.kind === "ok") {
+      assert.equal(split.locale, "fr")
+      assert.equal(split.pathname, "/blog")
+    }
+  })
+
+  it("secondary domain locale uses path prefix on that host", () => {
+    const split = splitAppPathnameDetailed("/nl-BE/blog", routing, {
+      host: "example.nl",
+    })
+    assert.equal(split.kind, "ok")
+    if (split.kind === "ok") {
+      assert.equal(split.locale, "nl-BE")
+      assert.equal(split.pathname, "/blog")
+    }
+    assert.equal(shouldPrefixLocale("nl-BE", routing, "example.nl"), true)
+    assert.equal(shouldPrefixLocale("nl-NL", routing, "example.nl"), false)
+  })
+
+  it("wrong-domain redirect for locale on another host", () => {
+    const split = splitAppPathnameDetailed("/fr/blog", routing, {
+      host: "example.com",
+      protocol: "https:",
+    })
+    assert.equal(split.kind, "wrong-domain")
+    if (split.kind === "wrong-domain") {
+      assert.equal(split.location, "https://example.fr/blog")
+    }
+  })
+
+  it("wrong-domain redirect for secondary locale", () => {
+    const split = splitAppPathnameDetailed("/nl-BE/blog", routing, {
+      host: "example.com",
+      protocol: "https:",
+    })
+    assert.equal(split.kind, "wrong-domain")
+    if (split.kind === "wrong-domain") {
+      assert.equal(split.location, "https://example.nl/nl-BE/blog")
+    }
+  })
+
+  it("localeHomeUrl targets locale domain", () => {
+    assert.equal(
+      localeHomeUrl("/blog", "fr", routing, { protocol: "https:" }),
+      "https://example.fr/blog"
+    )
+    assert.equal(
+      localeHomeUrl("/blog", "nl-BE", routing, { protocol: "https:" }),
+      "https://example.nl/nl-BE/blog"
+    )
+    assert.equal(
+      localeHomeUrl("/blog", "de", routing, {
+        protocol: "https:",
+        baseUrl: "",
+      }),
+      "/de/blog"
+    )
+  })
+
+  it("locale detection redirects to locale domain", async () => {
+    const routes = createRouteTree({
+      children: [
+        createRoute("/", async () => ({
+          default: () => createElement("p", null, "home"),
+        })),
+      ],
+    })
+    const renderer = createRenderer({
+      routes,
+      i18n: hybridI18n,
+      htmlTemplate: I18N_TPL,
+    })
+    const response = await renderer.render(
+      new Request("https://example.com/", {
+        headers: { "accept-language": "fr,en;q=0.9" },
+      })
+    )
+    assert.ok(response)
+    assert.equal(response.status, 302)
+    assert.equal(response.headers.location, "https://example.fr/")
+  })
+
+  it("expandPrerenderTargets includes disk paths for domain locales", () => {
+    const targets = expandPrerenderTargets(["/about"], routing)
+    const enTarget = targets.find((t) => t.locale === "en-US")
+    const frTarget = targets.find((t) => t.locale === "fr")
+    const deTarget = targets.find((t) => t.locale === "de")
+    assert.equal(enTarget?.publicPath, "/about")
+    assert.equal(enTarget?.diskPath, "/.kiru-i18n/en-US/about")
+    assert.equal(frTarget?.diskPath, "/.kiru-i18n/fr/about")
+    assert.equal(deTarget?.publicPath, "/de/about")
+    assert.equal(deTarget?.diskPath, "/de/about")
   })
 })

@@ -2,15 +2,20 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
   addLocale,
+  buildLocaleDomainMap,
+  pathOnlyLocales,
   shouldPrefixLocale,
   stripLocale,
 } from "../../router/i18n/localeRouting.js"
 
 const routing = {
-  default: "en",
+  defaultLocale: "en",
   prefixes: ["en", "fr"],
   localePrefix: "as-needed" as const,
   invalidLocale: "redirect" as const,
+  domains: [],
+  localeDomain: buildLocaleDomainMap([]),
+  pathOnlyLocales: pathOnlyLocales(["en", "fr"], buildLocaleDomainMap([])),
 }
 
 describe("i18n localeRouting", () => {

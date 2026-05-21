@@ -23,7 +23,7 @@ export {
   createI18nConfig,
   createI18nTranslator,
   type InternationalizationConfig,
-  type I18nOptions,
+  type CreateI18nConfigInput,
   type DotPath,
 } from "./i18n/index.js"
 export { useI18n, I18nProvider } from "./i18nContext.js"

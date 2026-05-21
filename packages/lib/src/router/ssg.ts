@@ -1,11 +1,11 @@
 import {
   compileRouteTree,
-  generatePublicStaticPaths,
+  generateStaticPaths,
   matchRoute,
 } from "./manifest.js"
-import { splitAppPathname } from "./i18n/routing.js"
 import type { InternationalizationConfig } from "./i18n/createI18nConfig.js"
 import { getI18nLocaleRouting } from "./i18n/localeRouting.js"
+import { expandPrerenderTargets } from "./i18n/expandPaths.js"
 import type { RouterPathPolicy } from "./pathPolicy.js"
 import { createRenderer, renderMatchToStaticHtml } from "./renderer.js"
 import {
@@ -20,7 +20,12 @@ import type {
 } from "./types.js"
 
 export interface StaticRouteOutput {
+  /** Public URL path (for static route matching). */
   path: string
+  /** Filesystem path under client output (when domain i18n collides on public paths). */
+  diskPath?: string
+  /** Prerender cache index key (`locale::publicPath`). */
+  storageKey?: string
   /** App HTML only (mount target inner HTML). */
   body: string
   /** Full HTML document when `htmlTemplate` is provided. */
@@ -101,12 +106,17 @@ export async function prerenderStaticRoutes({
     throwIfAborted(signal)
     const manifest = "routes" in routes ? routes : compileRouteTree(routes)
     const localeRouting = i18n ? getI18nLocaleRouting(i18n) : undefined
-    const paths = await generatePublicStaticPaths(
-      manifest,
-      pathPolicy,
-      undefined,
-      localeRouting
-    )
+    const logicalPaths = await generateStaticPaths(manifest, pathPolicy)
+    const targets = localeRouting
+      ? expandPrerenderTargets(logicalPaths, localeRouting, pathPolicy)
+      : logicalPaths.map((publicPath) => ({
+          locale: "",
+          logicalPath: publicPath,
+          publicPath,
+          storageKey: publicPath,
+          diskPath: publicPath,
+        }))
+    const paths = targets.map((t) => t.publicPath)
     const renderer =
       htmlTemplate !== undefined
         ? createRenderer({
@@ -123,16 +133,13 @@ export async function prerenderStaticRoutes({
       paths,
       maxConcurrentRenders,
       signal,
-      async (publicPath) => {
-        const logicalPath = localeRouting
-          ? splitAppPathname(publicPath, localeRouting).pathname
-          : publicPath
+      async (publicPath): Promise<StaticRouteOutput | null> => {
+        const target = targets.find((t) => t.publicPath === publicPath)
+        const logicalPath = target?.logicalPath ?? publicPath
         const routeMatch = matchRoute(manifest, logicalPath, pathPolicy)
         if (!routeMatch) return null
 
-        const locale = localeRouting
-          ? splitAppPathname(publicPath, localeRouting).locale
-          : null
+        const locale = target?.locale || null
         const staticRenderOpts =
           i18n && locale
             ? { i18n, locale, signal }
@@ -150,6 +157,8 @@ export async function prerenderStaticRoutes({
           )
           return {
             path: publicPath,
+            diskPath: target?.diskPath,
+            storageKey: target?.storageKey,
             body,
             document,
             html: rendered.body,
@@ -166,6 +175,8 @@ export async function prerenderStaticRoutes({
         )
         return {
           path: publicPath,
+          diskPath: target?.diskPath,
+          storageKey: target?.storageKey,
           body,
           document,
           routeId: routeMatch.route.id,

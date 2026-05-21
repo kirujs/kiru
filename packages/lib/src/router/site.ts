@@ -1,12 +1,12 @@
 import { writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import {
-  absoluteRouteUrl,
   normalizePathname,
   resolvePathPolicy,
   type RouterPathPolicy,
 } from "./pathPolicy.js"
-import { addLocale, type I18nLocaleRouting } from "./i18n/localeRouting.js"
+import { localePublicPath, type I18nLocaleRouting } from "./i18n/index.js"
+import { localeOrigin } from "./i18n/domains.js"
 
 export type ChangeFrequency =
   | "always"
@@ -183,7 +183,7 @@ interface ResolvedSitemapUrl {
 
 function resolveSitemapUrl(
   path: string,
-  site: SiteConfig,
+  _site: SiteConfig,
   opts: SitemapOptions,
   buildDate?: string,
   localeRouting?: I18nLocaleRouting
@@ -199,28 +199,56 @@ function resolveSitemapUrl(
   const alternates: SitemapHreflangAlternate[] = []
   if (localeRouting) {
     for (const prefix of localeRouting.prefixes) {
-      const localizedPath = addLocale(routePath, prefix, localeRouting)
+      const binding = localeRouting.localeDomain.get(prefix)
+      const localizedPath = localePublicPath(
+        routePath,
+        prefix,
+        localeRouting,
+        binding?.host
+      )
+      const origin = binding
+        ? localeOrigin(binding, "https:")
+        : opts.domain
       alternates.push({
         hreflang: prefix,
-        href: absoluteRouteUrl(opts.domain, localizedPath, site.pathPolicy),
+        href: `${origin}${localizedPath}`,
       })
     }
+    const defaultBinding = localeRouting.localeDomain.get(
+      localeRouting.defaultLocale
+    )
+    const xDefaultPath = localePublicPath(
+      routePath,
+      localeRouting.defaultLocale,
+      localeRouting,
+      defaultBinding?.host
+    )
+    const xDefaultOrigin = defaultBinding
+      ? localeOrigin(defaultBinding, "https:")
+      : opts.domain
     alternates.push({
       hreflang: "x-default",
-      href: absoluteRouteUrl(
-        opts.domain,
-        addLocale(routePath, localeRouting.default, localeRouting),
-        site.pathPolicy
-      ),
+      href: `${xDefaultOrigin}${xDefaultPath}`,
     })
   }
 
+  const canonicalBinding = localeRouting
+    ? localeRouting.localeDomain.get(localeRouting.defaultLocale)
+    : undefined
   const canonicalPath = localeRouting
-    ? addLocale(routePath, localeRouting.default, localeRouting)
+    ? localePublicPath(
+        routePath,
+        localeRouting.defaultLocale,
+        localeRouting,
+        canonicalBinding?.host
+      )
     : routePath
+  const canonicalOrigin = canonicalBinding
+    ? localeOrigin(canonicalBinding, "https:")
+    : opts.domain
 
   return {
-    loc: absoluteRouteUrl(opts.domain, canonicalPath, site.pathPolicy),
+    loc: `${canonicalOrigin}${canonicalPath}`,
     lastmod,
     changefreq: override?.changefreq ?? opts.changefreq,
     priority: override?.priority ?? opts.priority,

@@ -100,7 +100,7 @@ export async function ensureClientI18nReady(router: {
   const bag = tryGetRouterRuntime(router as Router)?.i18n
   if (!bag) return
   if (hasLoadedI18nBundle(bag.runtime.data.peek())) return
-  const locale = router.locale?.peek() ?? bag.config.default
+  const locale = router.locale?.peek() ?? bag.config.defaultLocale
   const data = await loadI18nMessages(bag.config, locale)
   bag.runtime.setLocale(locale, data)
 }

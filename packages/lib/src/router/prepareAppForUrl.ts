@@ -7,8 +7,8 @@ import {
 import { parseRequestUrl, toPathname } from "./requestUrl.js"
 import {
   detectLocaleFromRequest,
-  formatPublicPathname,
   getI18nLocaleRouting,
+  localeHomeUrl,
   loaderI18nFields,
   loadI18nMessages,
   resolveInvalidLocaleRedirect,
@@ -139,14 +139,26 @@ export function tryLocaleDetectionRedirect(
   rawPath: string,
   request: Request | undefined,
   i18n: InternationalizationConfig<readonly string[], unknown>,
-  pathPolicy: ReturnType<typeof resolvePathPolicy>
+  pathPolicy: ReturnType<typeof resolvePathPolicy>,
+  requestUrl?: string
 ): { location: string; headers: Record<string, string> } | null {
   if (!request || !shouldRunLocaleDetection(rawPath, i18n)) return null
   const localeRouting = getI18nLocaleRouting(i18n)
   const detected = detectLocaleFromRequest(request, i18n)
-  const target = formatPublicPathname("/", detected, localeRouting, pathPolicy)
-  const current = formatPathname(rawPath, pathPolicy)
-  if (target === current) return null
+  const parsed = requestUrl ? new URL(requestUrl) : new URL(request.url)
+  const target = localeHomeUrl("/", detected, localeRouting, {
+    protocol: parsed.protocol,
+    baseUrl: pathPolicy.baseUrl,
+    pathPolicy,
+  })
+  const currentPath = formatPathname(rawPath, pathPolicy)
+  const current =
+    parsed.origin && target.startsWith("http")
+      ? `${parsed.origin}${currentPath}`
+      : currentPath
+  if (target === current || target === `${parsed.origin}${currentPath}`) {
+    return null
+  }
   return {
     location: target,
     headers: { "set-cookie": localePreferenceCookie(i18n, detected) },
@@ -197,10 +209,12 @@ export async function prepareAppForUrl(
   renderOpts: { enableStreamingLoad?: boolean } = {}
 ): Promise<PrepareAppResult> {
   const requestUrl = parseRequestUrl(url)
+  const parsedUrl = new URL(url, "http://localhost")
   const rawPath = pathnameForMatch(toPathname(url), pathPolicy)
 
   const localeRedirect =
-    i18n && tryLocaleDetectionRedirect(rawPath, request, i18n, pathPolicy)
+    i18n &&
+    tryLocaleDetectionRedirect(rawPath, request, i18n, pathPolicy, url)
   if (localeRedirect) {
     return {
       kind: "redirect",
@@ -213,7 +227,14 @@ export async function prepareAppForUrl(
   let logicalPath = rawPath
   if (i18n) {
     const localeRouting = getI18nLocaleRouting(i18n)
-    const split = splitAppPathnameDetailed(rawPath, localeRouting)
+    const split = splitAppPathnameDetailed(rawPath, localeRouting, {
+      host: parsedUrl.host,
+      protocol: parsedUrl.protocol,
+      baseUrl: pathPolicy.baseUrl,
+    })
+    if (split.kind === "wrong-domain") {
+      return { kind: "redirect", location: split.location }
+    }
     if (split.kind === "invalid-locale") {
       if (shouldRejectInvalidLocale(localeRouting)) {
         logicalPath = split.pathname
@@ -222,7 +243,12 @@ export async function prepareAppForUrl(
         const location = resolveInvalidLocaleRedirect(
           split,
           localeRouting,
-          pathPolicy
+          pathPolicy,
+          {
+            host: parsedUrl.host,
+            protocol: parsedUrl.protocol,
+            baseUrl: pathPolicy.baseUrl,
+          }
         )
         return { kind: "redirect", location }
       }
@@ -375,7 +401,7 @@ export async function prepareAppForUrl(
             locale,
             data: i18nMessages,
             locales: i18n.locales,
-            defaultLocale: i18n.default,
+            defaultLocale: i18n.defaultLocale,
           }
         : undefined
     const localeRouting =

@@ -275,20 +275,48 @@ export function createNavigateInternal(
               AppPathSplitResult,
               { kind: "invalid-locale" }
             >
+            wrongDomain?: Extract<
+              AppPathSplitResult,
+              { kind: "wrong-domain" }
+            >
           }
         ).invalidLocale
       : undefined
+    const wrongDomain = localeRouting
+      ? (
+          resolved as {
+            wrongDomain?: Extract<
+              AppPathSplitResult,
+              { kind: "wrong-domain" }
+            >
+          }
+        ).wrongDomain
+      : undefined
+    if (localeRouting && wrongDomain) {
+      return navigateInternal(new URL(wrongDomain.location), {
+        replace: true,
+        fromPopstate: false,
+      })
+    }
     if (localeRouting && invalidLocale) {
       if (!shouldRejectInvalidLocale(localeRouting)) {
         const location = resolveInvalidLocaleRedirect(
           invalidLocale,
           localeRouting,
-          resolvedPathPolicy
+          resolvedPathPolicy,
+          {
+            host: targetUrl.host,
+            protocol: targetUrl.protocol,
+            baseUrl: normalizedBaseUrl,
+          }
         )
-        return navigateInternal(
-          new URL(addBase(location, normalizedBaseUrl) + targetUrl.search + targetUrl.hash, origin),
-          { replace: true, fromPopstate: false }
-        )
+        const target = location.startsWith("http")
+          ? location
+          : addBase(location, normalizedBaseUrl) + targetUrl.search + targetUrl.hash
+        return navigateInternal(new URL(target, origin), {
+          replace: true,
+          fromPopstate: false,
+        })
       }
     }
     if (localeRouting && locale && resolved.locale) {

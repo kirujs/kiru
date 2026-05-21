@@ -91,7 +91,7 @@ async function renderMatchToStaticHtmlInner(
           locale,
           data: await loadI18nMessages(options.i18n, locale),
           locales: options.i18n.locales,
-          defaultLocale: options.i18n.default,
+          defaultLocale: options.i18n.defaultLocale,
         }
       : undefined
   throwIfAborted(renderSignal)
