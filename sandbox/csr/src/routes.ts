@@ -1,4 +1,4 @@
-import { createRoute, createRouteScope, createRouteTree } from "kiru/router"
+import { createRoute, createRouteTree } from "kiru/router"
 
 export const routes = createRouteTree({
     layout: () => import("./pages/layout.tsx"),
