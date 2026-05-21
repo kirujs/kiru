@@ -102,13 +102,13 @@ Handlers no longer receive `CustomRequestContext` as the first argument. Use **`
 
 ```ts
 // Before
-action.post(schema, async (ctx, input) => { ... ctx.user ... })
+action.post({ schema }, async (ctx, input) => { ... ctx.user ... })
 
 // After
-action.post(schema, async ({ context, signal }, input) => { ... context.user ... })
+action.post({ schema }, async ({ context, signal }, input) => { ... context.user ... })
 ```
 
-`action.get` / `formAction` follow the same shape. Zero-arg callbacks are unchanged. Client `fetch` abort: `action.post(input, { signal })` / `action.get({ signal })`.
+`action.get` / `action.post` follow the same shape. Form posts use `action.post({ type: "form" }, handler)`. Zero-arg callbacks are unchanged. Client `fetch` abort: `action.post(input, { signal })` / `action.get({ signal })`.
 
 **SSR scope:** `runWithSsrRequestContext` wraps sync `headlessRender` only (single `current` slot, save/restore on nest). RPC uses the token, not that slot. Add `import "virtual:kiru:remote-registry"` to `serverEntry` for production action registration.
 

@@ -96,7 +96,7 @@ Not exhaustive — use `git log cabe32db..HEAD` for full history:
 From `CHANGELOG.md` and `devWarnings.ts`:
 
 - `serverLoader` on client navigations needs SSR + `/?loader=` RPC (`__kiru_loaders`)
-- Remote `action` / `formAction` require SSR + `actions.secret`
+- Remote `action` (including `action.post({ type: "form" }, …)`) require SSR + `actions.secret`
 - `staticLoader` does not run on client navigations (first paint / prerender only)
 - Cloudflare Workers: no time-based ISR; immutable prerender + `force-dynamic` only
 - Do not mount SSR/SSG HTML with `kiru/router/csr` — use `ssr` or `ssg` bootstrap

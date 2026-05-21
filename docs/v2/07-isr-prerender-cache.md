@@ -58,9 +58,10 @@ await revalidateTag("blog")
 Trigger from `action.post` metadata:
 
 ```ts
-action.post(schema, handler, {
-  revalidate: { paths: ["/docs"], tags: ["blog"] },
-})
+action.post(
+  { schema, revalidate: { paths: ["/docs"], tags: ["blog"] } },
+  handler
+)
 ```
 
 ## Cache-Control
@@ -146,10 +147,13 @@ export const isr = defineISR({ revalidate: 3600, tags: ["blog"] })
 ```
 
 ```ts
-action.post(schema, async ({ context, signal }, input) => {
-  if (signal.aborted) throw new DOMException("Aborted", "AbortError")
-  await savePost(input, { authorId: context.user?.id })
-}, { revalidate: { tags: ["blog"] } })
+action.post(
+  { schema, revalidate: { tags: ["blog"] } },
+  async ({ context, signal }, input) => {
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError")
+    await savePost(input, { authorId: context.user?.id })
+  }
+)
 ```
 
 ### CDN immutable + SSR API

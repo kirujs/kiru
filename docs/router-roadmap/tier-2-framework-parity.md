@@ -70,7 +70,7 @@ Per-request context is **SSR-only** via `createRenderer({ context })` and hydrat
 
 ## Forms & actions (SvelteKit-adjacent)
 
-- [x] **Validation errors from `formAction`** — structured `{ fieldErrors }` JSON; `createFormController` surfaces on `result`
+- [x] **Validation errors from form `action.post`** — structured `{ fieldErrors }` JSON; `createFormController` surfaces on `result`
 - [ ] **Doc: progressive enhancement** — no-JS submit still works; enhanced path uses fetch (e2e covers SSR forms)
 - [ ] **Multiple forms per page** — action id disambiguation (verify current behavior, document)
 

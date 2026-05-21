@@ -1,19 +1,27 @@
-import { formAction, redirect, RemoteError } from "kiru/remote"
+import { action, redirect, RemoteError } from "kiru/remote"
 
-export const submitValidation = formAction(async (_, formData) => {
-  const message = String(formData.get("message") ?? "").trim()
-  if (!message) {
-    throw new RemoteError("Message required", "VALIDATION_ERROR", {
-      status: 422,
-      details: { fieldErrors: { message: "Required" } },
-    })
+export const submitValidation = action.post(
+  { type: "form" },
+  async (_, formData) => {
+    const message = String(formData.get("message") ?? "").trim()
+    if (!message) {
+      throw new RemoteError("Message required", "VALIDATION_ERROR", {
+        status: 422,
+        details: { fieldErrors: { message: "Required" } },
+      })
+    }
+    return { message }
   }
-  return { message }
-})
+)
 
-export const submitMessage = formAction(async (_, formData) => {
-  const message = String(formData.get("message") ?? "").trim()
-  return { message: message || "empty" }
-})
+export const submitMessage = action.post(
+  { type: "form" },
+  async (_, formData) => {
+    const message = String(formData.get("message") ?? "").trim()
+    return { message: message || "empty" }
+  }
+)
 
-export const submitRedirect = formAction(async () => redirect(303, "/hello"))
+export const submitRedirect = action.post({ type: "form" }, async () =>
+  redirect(303, "/hello")
+)

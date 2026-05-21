@@ -19,7 +19,6 @@ export type { TokenHeader, TokenPayload } from "./token.js"
 
 export {
   action,
-  formAction,
   redirect,
   isKiruRedirect,
   KIRU_FORM_TOKEN_FIELD,
@@ -47,7 +46,9 @@ export {
   type KiruRedirect,
   type RemoteRevalidateMeta,
   type RemoteActionMeta,
+  type RemotePostConfig,
   type RemoteActionContext,
+  formDataToInput,
   buildRemoteActionContext,
 } from "./action.js"
 

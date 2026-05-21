@@ -101,6 +101,13 @@ export type RemoteActionMeta = {
   revalidate?: RemoteRevalidateMeta
 }
 
+/** First argument to {@link action.post} when schema, meta, or form encoding is needed. */
+export type RemotePostConfig<Input = unknown> = {
+  /** `"form"` for native / progressive-enhancement forms; default `"json"`. */
+  type?: "json" | "form"
+  schema?: Schema<Input>
+} & RemoteActionMeta
+
 export type RemotePostAction<Input, Output> = ((
   input: Input,
   options?: RemoteActionOptions
@@ -175,26 +182,18 @@ function createRemoteAction<Input, Output>(
   return wrapped
 }
 
-function createPostAction<Input, Output>(
-  callbackOrValidator: Schema<Input> | RemoteActionCallback<Input, Output>,
-  callbackOrMeta?:
-    | RemoteActionCallback<Input, Output>
-    | RemoteActionMeta,
+function metaFromConfig(config: RemotePostConfig<unknown>): RemoteActionMeta {
+  return {
+    invalidate: config.invalidate,
+    revalidate: config.revalidate,
+  }
+}
+
+function createJsonPostAction<Input, Output>(
+  runAction: RemoteActionCallback<Input, Output>,
+  schema?: Schema<Input>,
   meta?: RemoteActionMeta
 ): RemotePostAction<Input, Output> {
-  let schema: Schema<Input> | undefined
-  let runAction: RemoteActionCallback<Input, Output>
-  let actionMeta: RemoteActionMeta | undefined
-
-  if (typeof callbackOrMeta === "function") {
-    schema = callbackOrValidator as Schema<Input>
-    runAction = callbackOrMeta
-    actionMeta = meta
-  } else {
-    runAction = callbackOrValidator as RemoteActionCallback<Input, Output>
-    actionMeta = callbackOrMeta
-  }
-
   const validateActionInput = async (input: unknown) => {
     if (!schema) return
     try {
@@ -209,30 +208,89 @@ function createPostAction<Input, Output>(
     "POST",
     runAction,
     validateActionInput,
-    actionMeta
+    meta
   ) as RemotePostAction<Input, Output>
+}
+
+function createFormPostAction<Input, Output>(
+  config: RemotePostConfig<Input>,
+  callback:
+    | RemoteFormActionCallback<Output>
+    | RemoteActionCallback<Input, Output>
+): RemoteFormActionFunction<Output> {
+  const meta = metaFromConfig(config)
+  const schema = config.schema
+
+  const __kiruInvoke = schema
+    ? async (ctx: RemoteActionContext, formData: FormData) => {
+        const raw = formDataToInput(formData)
+        let input: Input
+        try {
+          input = await parseInput(schema, raw)
+        } catch {
+          throw new RemoteError("Invalid remote action input", "INVALID_INPUT", {
+            status: 400,
+          })
+        }
+        return Promise.resolve(
+          (callback as RemoteActionCallback<Input, Output>)(ctx, input)
+        )
+      }
+    : (ctx: RemoteActionContext, formData: FormData) =>
+        Promise.resolve(
+          (callback as RemoteFormActionCallback<Output>)(ctx, formData)
+        )
+
+  return {
+    __kiruFormAction: true,
+    __kiruFormActionId: "",
+    __kiruInvalidateRoutes: meta.invalidate,
+    __kiruRevalidate: meta.revalidate,
+    __kiruInvoke,
+  }
 }
 
 function post<Input, Output>(
   callback: RemoteActionCallback<Input, Output>
 ): RemotePostAction<Input, Output>
+function post<Output>(
+  config: { type: "form"; schema?: undefined } & RemoteActionMeta,
+  callback: RemoteFormActionCallback<Output>
+): RemoteFormActionFunction<Output>
 function post<Input, Output>(
-  schema: Schema<Input>,
-  callback: RemoteActionCallback<Input, Output>,
-  meta?: RemoteActionMeta
+  config: { type: "form"; schema: Schema<Input> } & RemoteActionMeta,
+  callback: RemoteActionCallback<Input, Output>
+): RemoteFormActionFunction<Output>
+function post<Input, Output>(
+  config: RemotePostConfig<Input>,
+  callback: RemoteActionCallback<Input, Output>
 ): RemotePostAction<Input, Output>
 function post<Input, Output>(
-  callback: RemoteActionCallback<Input, Output>,
-  meta?: RemoteActionMeta
-): RemotePostAction<Input, Output>
-function post<Input, Output>(
-  callbackOrValidator:
-    | Schema<Input>
-    | RemoteActionCallback<Input, Output>,
-  callbackOrMeta?: RemoteActionCallback<Input, Output> | RemoteActionMeta,
-  meta?: RemoteActionMeta
-): RemotePostAction<Input, Output> {
-  return createPostAction(callbackOrValidator, callbackOrMeta, meta)
+  callbackOrConfig:
+    | RemoteActionCallback<Input, Output>
+    | RemotePostConfig<Input>,
+  maybeCallback?:
+    | RemoteFormActionCallback<Output>
+    | RemoteActionCallback<Input, Output>
+):
+  | RemotePostAction<Input, Output>
+  | RemoteFormActionFunction<Output> {
+  if (typeof callbackOrConfig === "function") {
+    return createJsonPostAction(callbackOrConfig)
+  }
+  const config = callbackOrConfig
+  const callback = maybeCallback
+  if (!callback) {
+    throw new Error("action.post(config, callback) requires a handler")
+  }
+  if (config.type === "form") {
+    return createFormPostAction(config, callback)
+  }
+  return createJsonPostAction(
+    callback as RemoteActionCallback<Input, Output>,
+    config.schema,
+    metaFromConfig(config)
+  )
 }
 
 export const action = {
@@ -259,7 +317,7 @@ export type KiruRedirect = {
   readonly location: string
 }
 
-/** Create a redirect response from inside a {@link formAction} callback. */
+/** Create a redirect response from inside an `action.post({ type: "form" }, …)` callback. */
 export function redirect(status: number, location: string): KiruRedirect {
   return { __kiruRedirect: true, status, location }
 }
@@ -297,15 +355,19 @@ export type RemoteFormActionFunction<Output> = {
   ) => Promise<Output>
 }
 
-export function formAction<Output>(
-  callback: RemoteFormActionCallback<Output>,
-  meta?: RemoteActionMeta
-): RemoteFormActionFunction<Output> {
-  return {
-    __kiruFormAction: true,
-    __kiruFormActionId: "",
-    __kiruInvalidateRoutes: meta?.invalidate,
-    __kiruRevalidate: meta?.revalidate,
-    __kiruInvoke: (ctx, formData) => Promise.resolve(callback(ctx, formData)),
+/** Convert {@link FormData} to a plain object for schema validation (preserves File/Blob). */
+export function formDataToInput(formData: FormData): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+  for (const [key, value] of formData.entries()) {
+    if (key === KIRU_FORM_TOKEN_FIELD) continue
+    const existing = result[key]
+    if (existing === undefined) {
+      result[key] = value
+    } else if (Array.isArray(existing)) {
+      existing.push(value)
+    } else {
+      result[key] = [existing, value]
+    }
   }
+  return result
 }

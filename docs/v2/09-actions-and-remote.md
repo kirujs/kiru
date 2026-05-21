@@ -9,17 +9,20 @@ import { action } from "kiru/remote"
 import { z } from "zod"
 
 const createTodo = action.post(
-  z.object({ title: z.string() }),
+  {
+    schema: z.object({ title: z.string() }),
+    invalidate: ["route:todos"],
+    revalidate: { tags: ["todos"] },
+  },
   async ({ context, signal }, input) => {
     if (signal.aborted) throw new DOMException("Aborted", "AbortError")
     await db.todos.create({ ...input, userId: context.user?.id })
     return { ok: true }
-  },
-  {
-    invalidate: ["route:todos"],
-    revalidate: { tags: ["todos"] },
   }
 )
+
+// Simple JSON RPC (no config object)
+export const echo = action.post(async (_ctx, input: string) => ({ echo: input }))
 ```
 
 - Validates with Standard Schema (`parseInput`)
@@ -33,10 +36,15 @@ Successful responses may include `x-kiru-invalidate` header → client `router.l
 ## Form actions
 
 ```ts
-export const submitContact = action.post(schema, handler)
+import { action, createFormController } from "kiru/remote"
+
+export const submitContact = action.post({ type: "form" }, async (_ctx, formData) => {
+  // or { schema, type: "form" } for parsed input (File fields supported)
+  return { ok: true }
+})
 
 // Page:
-import { createFormController, formAction } from "kiru/forms"
+const form = createFormController(submitContact)
 ```
 
 **Progressive enhancement:**
@@ -130,22 +138,31 @@ Ensures inline `resource(action)` during SSR sees real session and the active re
 ### Todo create + list refresh
 
 ```ts
-action.post(schema, handler, { invalidate: ["route:todo-list"] })
+action.post(
+  { schema, invalidate: ["route:todo-list"] },
+  handler
+)
 ```
 
 ### On-demand ISR after CMS publish
 
 ```ts
-action.post(schema, async ({ context, signal }, body) => {
-  if (signal.aborted) throw new DOMException("Aborted", "AbortError")
-  await save(body, { userId: context.user?.id })
-}, { revalidate: { paths: ["/blog"], tags: ["blog"] } })
+action.post(
+  {
+    schema,
+    revalidate: { paths: ["/blog"], tags: ["blog"] },
+  },
+  async ({ context, signal }, body) => {
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError")
+    await save(body, { userId: context.user?.id })
+  }
+)
 ```
 
 ### Contact form with field errors
 
 ```tsx
-const form = createFormController(submitContact, { defaultValues: { email: "" } })
+const form = createFormController(submitContact)
 // Render field errors from JSON response
 ```
 

@@ -36,7 +36,7 @@ export type Schema<TInput> =
         | { success: false; error: unknown }
     }
 
-/** Alias for {@link Schema} on `action()` / `formAction()`. */
+/** Alias for {@link Schema} on `action.post({ schema }, …)`. */
 export type ActionSchema<TInput> = Schema<TInput>
 
 /**

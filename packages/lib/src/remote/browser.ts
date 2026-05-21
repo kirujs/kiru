@@ -5,7 +5,6 @@
 export { RemoteError, isRemoteError } from "./errors.js"
 export {
   action,
-  formAction,
   redirect,
   isKiruRedirect,
   KIRU_FORM_TOKEN_FIELD,
@@ -31,7 +30,9 @@ export {
   type RemoteActionSchema,
   type RemoteFormActionFunction,
   type RemoteFormActionCallback,
+  type RemotePostConfig,
   type KiruRedirect,
+  formDataToInput,
 } from "./action.js"
 export {
   createFormController,

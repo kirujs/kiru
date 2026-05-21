@@ -1,15 +1,16 @@
-import { formAction } from "kiru/remote"
+import { action } from "kiru/remote"
 import { bumpRevalidateGeneration } from "./revalidate-demo.state.js"
 
-export const bump = formAction(
-  async () => {
-    bumpRevalidateGeneration()
-    return { ok: true }
-  },
+export const bump = action.post(
   {
+    type: "form",
     revalidate: {
       paths: ["/revalidate-demo"],
       tags: ["revalidate-demo"],
     },
+  },
+  async () => {
+    bumpRevalidateGeneration()
+    return { ok: true }
   }
 )

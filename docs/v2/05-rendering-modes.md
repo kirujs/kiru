@@ -108,7 +108,7 @@ import { createRouterApp } from "kiru/router/ssr"
 
 - Every request can be rendered on server
 - `serverLoader` RPC on client navigations
-- Remote actions + `formAction` with `actions.secret`
+- Remote actions + `action.post({ type: "form" }, …)` with `actions.secret`
 - `vite preview` proxies unknown paths to `dist/server` child process
 
 ## SSR + SSG hybrid

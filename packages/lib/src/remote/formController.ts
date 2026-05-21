@@ -28,7 +28,7 @@ export type CreateFormControllerResult<Output> = {
 }
 
 /**
- * Wire a {@link formAction} ref to a native `<form>` plus optional
+ * Wire an `action.post({ type: "form" }, …)` ref to a native `<form>` plus optional
  * `fetch`-based progressive enhancement.
  *
  * When the same page also calls JSON {@link action} stubs, construct the

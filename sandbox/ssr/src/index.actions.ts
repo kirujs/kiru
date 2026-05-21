@@ -17,9 +17,12 @@ export const getSandboxServerEcho = action.get(async ({ context }) => {
   return `Remote OK: ${name} ${test}`
 })
 
-export const getServerEcho = action.post(mySchema, async (_, input) => {
-  return `Echo ${input.name}`
-})
+export const getServerEcho = action.post(
+  { schema: mySchema },
+  async (_, input) => {
+    return `Echo ${input.name}`
+  }
+)
 
 export interface TodoItem {
   id: string
@@ -63,24 +66,30 @@ export const getTodos = action.get(async () => {
   return todos
 })
 
-export const createTodo = action.post(createTodoSchema, (_, input) => {
-  const todo: TodoItem = {
-    id: crypto.randomUUID(),
-    text: input.text,
-    completed: false,
+export const createTodo = action.post(
+  { schema: createTodoSchema },
+  (_, input) => {
+    const todo: TodoItem = {
+      id: crypto.randomUUID(),
+      text: input.text,
+      completed: false,
+    }
+    return todos.push(todo), todo
   }
-  return (todos.push(todo), todo)
-})
+)
 
-export const updateTodo = action.post(updateTodoSchema, async (_, input) => {
-  //if (Math.random() > 0.5) throw new Error("Random error")
-  const todo = todos.find((t) => t.id === input.id)
-  if (!todo) throw new Error("Todo not found")
-  if ("text" in input && typeof input.text === "string") {
-    todo.text = input.text
+export const updateTodo = action.post(
+  { schema: updateTodoSchema },
+  async (_, input) => {
+    //if (Math.random() > 0.5) throw new Error("Random error")
+    const todo = todos.find((t) => t.id === input.id)
+    if (!todo) throw new Error("Todo not found")
+    if ("text" in input && typeof input.text === "string") {
+      todo.text = input.text
+    }
+    if ("completed" in input && typeof input.completed === "boolean") {
+      todo.completed = input.completed
+    }
+    return todo
   }
-  if ("completed" in input && typeof input.completed === "boolean") {
-    todo.completed = input.completed
-  }
-  return todo
-})
+)

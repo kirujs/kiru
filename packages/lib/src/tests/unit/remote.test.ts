@@ -432,15 +432,17 @@ describe("remote / handler", () => {
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       greet: action.post(
         {
-          safeParse: (input: unknown) => {
-            const ok =
-              !!input &&
-              typeof input === "object" &&
-              "name" in input &&
-              typeof (input as { name?: unknown }).name === "string"
-            return ok
-              ? { success: true as const, data: input as { name: string } }
-              : { success: false as const, error: null }
+          schema: {
+            safeParse: (input: unknown) => {
+              const ok =
+                !!input &&
+                typeof input === "object" &&
+                "name" in input &&
+                typeof (input as { name?: unknown }).name === "string"
+              return ok
+                ? { success: true as const, data: input as { name: string } }
+                : { success: false as const, error: null }
+            },
           },
         },
         async (_, input) => `hello ${input.name}`

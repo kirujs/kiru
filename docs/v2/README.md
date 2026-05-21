@@ -17,7 +17,7 @@ Deep-dive knowledge base for the v2 router work on this branch (diverged from `m
 | [06-renderer-and-hydration.md](./06-renderer-and-hydration.md) | `createRenderer`, HTML shell, bootstrap imports, hydration |
 | [07-isr-prerender-cache.md](./07-isr-prerender-cache.md) | `defineISR`, disk cache, revalidation, PPR-lite |
 | [08-i18n.md](./08-i18n.md) | Locale prefixes, `useI18n`, sitemap hreflang |
-| [09-actions-and-remote.md](./09-actions-and-remote.md) | `action.post`, `formAction`, remote registry, invalidation |
+| [09-actions-and-remote.md](./09-actions-and-remote.md) | `action.post`, `action.post({ type: "form" })`, remote registry, invalidation |
 | [10-vite-plugin-build.md](./10-vite-plugin-build.md) | `vite-plugin-kiru` options, build/preview pipelines |
 | [11-adapters-deploy.md](./11-adapters-deploy.md) | Node / Bun / Cloudflare, `Response \| null`, capabilities |
 | [12-head-seo-sitemap-images.md](./12-head-seo-sitemap-images.md) | `head`, `defineSiteConfig`, `Image`, fonts |

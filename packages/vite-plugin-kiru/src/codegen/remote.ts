@@ -8,7 +8,7 @@ type AstNode = AST.AstNode
 interface ActionMatch {
   node: AstNode
   name: string
-  kind: "action" | "formAction"
+  kind: "action" | "form"
   method?: "GET" | "POST"
 }
 
@@ -57,7 +57,7 @@ function clientFormatRemoteFunctions(
       return
     }
 
-    if (match.kind === "formAction") {
+    if (match.kind === "form") {
       code.overwrite(
         node.start,
         node.end,
@@ -94,13 +94,11 @@ function serverRegisterRemoteFunctions(
 
 function findExportedActionCalls(bodyNodes: AstNode[]): ActionMatch[] {
   const actionAliasHandler = createAliasHandler("action", "kiru/remote")
-  const formActionAliasHandler = createAliasHandler("formAction", "kiru/remote")
   const matches: ActionMatch[] = []
 
   for (const node of bodyNodes) {
     if (node.type === "ImportDeclaration") {
       actionAliasHandler.addAliases(node)
-      formActionAliasHandler.addAliases(node)
       continue
     }
     if (
@@ -118,18 +116,55 @@ function findExportedActionCalls(bodyNodes: AstNode[]): ActionMatch[] {
     if (!init) continue
 
     const remoteMethod = getActionMemberMethod(init, actionAliasHandler.aliases)
-    if (remoteMethod) {
+    if (remoteMethod === "GET") {
       matches.push({
         node,
         name: declaration.id.name,
         kind: "action",
-        method: remoteMethod,
+        method: "GET",
       })
-    } else if (formActionAliasHandler.isMatchingCallExpression(init)) {
-      matches.push({ node, name: declaration.id.name, kind: "formAction" })
+    } else if (remoteMethod === "POST") {
+      if (isPostFormConfig(init)) {
+        matches.push({ node, name: declaration.id.name, kind: "form" })
+      } else {
+        matches.push({
+          node,
+          name: declaration.id.name,
+          kind: "action",
+          method: "POST",
+        })
+      }
     }
   }
   return matches
+}
+
+function isPostFormConfig(node: AstNode): boolean {
+  if (node.type !== "CallExpression") return false
+  const args = node.arguments ?? []
+  const first = args[0]
+  if (!first || first.type !== "ObjectExpression") return false
+  const properties = first.properties ?? []
+  for (const prop of properties) {
+    if (prop.type !== "Property") continue
+    const key = prop.key
+    const keyName =
+      key?.type === "Identifier"
+        ? key.name
+        : key?.type === "Literal" && typeof key.value === "string"
+          ? key.value
+          : undefined
+    if (keyName !== "type") continue
+    const value = prop.value
+    if (
+      value?.type === "Literal" &&
+      typeof value.value === "string" &&
+      value.value === "form"
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 function getActionMemberMethod(

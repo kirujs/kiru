@@ -212,7 +212,10 @@ Same function runs on server (first paint) and client (navigations) — good for
 
 ```ts
 // After action.post success with meta:
-action.post(schema, handler, { invalidate: ["route:products-list"] })
+action.post(
+  { schema, invalidate: ["route:products-list"] },
+  handler
+)
 ```
 
 Or `router.invalidate()` manually.

@@ -71,7 +71,7 @@ export function warnStaticLoaderOnClientNavigation(): void {
 }
 
 const REMOTE_ACTION_PURE_CLIENT_MSG =
-  "Remote `action` and `formAction` require SSR with `createRenderer` and `actions.secret`. Pure CSR/SSG apps cannot invoke server actions."
+  "Remote `action` (including `action.post({ type: \"form\" }, …)`) require SSR with `createRenderer` and `actions.secret`. Pure CSR/SSG apps cannot invoke server actions."
 
 /** @throws when remote actions cannot run on this client bootstrap. */
 export function guardRemoteActionOnClient(): void {
