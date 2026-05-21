@@ -5,16 +5,31 @@ import {
   formDataToInput,
   KIRU_FORM_TOKEN_FIELD,
   __INTERNAL_REMOTE_REGISTRY,
-  buildRemoteActionContext,
+  buildRemoteActionHandlerArgs,
   createRemoteActionHandler,
+  type RemoteFormActionHandlerArgs,
   redirect,
-  type RemoteActionContext,
   type Schema,
 } from "../../remote/index.js"
 import { staticLoaderSignal } from "../../router/navigationScope.js"
 import { makeKiruContextToken } from "../../remote/token.js"
+import type { CustomRequestContext } from "../../router/types.js"
 
 const SECRET = "test-secret-form-actions"
+
+function makeFormInvokeArgs(
+  context: CustomRequestContext,
+  signal: AbortSignal,
+  formData: FormData
+): RemoteFormActionHandlerArgs {
+  const base = buildRemoteActionHandlerArgs(context, signal, undefined)
+  return {
+    formData,
+    context: base.context,
+    signal: base.signal,
+    execution: base.execution,
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -155,7 +170,7 @@ const contactSchema: Schema<ContactInput> = {
 
 describe("action.post (form) / wrapper", () => {
   it("should return object with __kiruFormAction set to true", () => {
-    const formRef = action.post({ type: "form" }, async (_, _formData) => {
+    const formRef = action.post({ type: "form" }, async () => {
       return { success: true }
     })
 
@@ -184,21 +199,28 @@ describe("action.post (form) / wrapper", () => {
     let receivedCtx: unknown = null
     let receivedFormData: unknown = null
 
-    const formRef = action.post({ type: "form" }, async (ctx, formData) => {
-      receivedCtx = ctx
+    const formRef = action.post({ type: "form" }, async ({ context, formData, signal }) => {
+      receivedCtx = { context, signal }
       receivedFormData = formData
       return { success: true }
     })
 
     const testCtx = { userId: "123", role: "admin" }
-    const actionCtx = buildRemoteActionContext(testCtx, staticLoaderSignal())
     const testFormData = new FormData()
     testFormData.set("field1", "value1")
     testFormData.set("field2", "value2")
 
-    await formRef.__kiruInvoke(actionCtx, testFormData)
+    const invokeArgs = makeFormInvokeArgs(
+      testCtx,
+      staticLoaderSignal(),
+      testFormData
+    )
+    await formRef.__kiruInvoke(invokeArgs)
 
-    assert.deepStrictEqual(receivedCtx, actionCtx)
+    assert.deepStrictEqual(receivedCtx, {
+      context: testCtx,
+      signal: invokeArgs.signal,
+    })
     assert.strictEqual(receivedFormData, testFormData)
   })
 
@@ -210,8 +232,7 @@ describe("action.post (form) / wrapper", () => {
     })
 
     const result = formRef.__kiruInvoke(
-      buildRemoteActionContext({}, staticLoaderSignal()),
-      new FormData()
+      makeFormInvokeArgs({}, staticLoaderSignal(), new FormData())
     )
 
     assert.ok(result instanceof Promise)
@@ -219,7 +240,7 @@ describe("action.post (form) / wrapper", () => {
   })
 
   it("should handle async callbacks correctly", async () => {
-    const formRef = action.post({ type: "form" }, async (_, formData) => {
+    const formRef = action.post({ type: "form" }, async ({ formData }) => {
       // Simulate async operation
       await new Promise((resolve) => setTimeout(resolve, 10))
       const name = formData.get("name")
@@ -230,15 +251,14 @@ describe("action.post (form) / wrapper", () => {
     formData.set("name", "Alice")
 
     const result = await formRef.__kiruInvoke(
-      buildRemoteActionContext({}, staticLoaderSignal()),
-      formData
+      makeFormInvokeArgs({}, staticLoaderSignal(), formData)
     )
 
     assert.deepStrictEqual(result, { message: "Hello, Alice" })
   })
 
   it("should handle synchronous callbacks by wrapping in Promise", async () => {
-    const formRef = action.post({ type: "form" }, (_, formData) => {
+    const formRef = action.post({ type: "form" }, ({ formData }) => {
       const name = formData.get("name")
       return { message: `Hello, ${name}` }
     })
@@ -247,8 +267,7 @@ describe("action.post (form) / wrapper", () => {
     formData.set("name", "Bob")
 
     const result = formRef.__kiruInvoke(
-      buildRemoteActionContext({}, staticLoaderSignal()),
-      formData
+      makeFormInvokeArgs({}, staticLoaderSignal(), formData)
     )
 
     assert.ok(result instanceof Promise)
@@ -286,7 +305,7 @@ describe("action.post (form + schema)", () => {
     let received: { message: string } | null = null
     const formRef = action.post(
       { type: "form", schema: messageSchema },
-      async (_ctx, input: { message: string }) => {
+      async ({ input }) => {
         received = input
         return { ok: true }
       }
@@ -295,8 +314,7 @@ describe("action.post (form + schema)", () => {
     const fd = new FormData()
     fd.set("message", "  hello  ")
     await formRef.__kiruInvoke(
-      buildRemoteActionContext({}, staticLoaderSignal()),
-      fd
+      makeFormInvokeArgs({}, staticLoaderSignal(), fd)
     )
 
     assert.deepStrictEqual(received, { message: "hello" })
@@ -305,7 +323,7 @@ describe("action.post (form + schema)", () => {
   it("passes optional File fields after schema validation", async () => {
     const formRef = action.post(
       { type: "form", schema: contactSchema },
-      async (_ctx, input) => ({
+      async ({ input }) => ({
         email: input.email,
         hasAvatar: input.avatar instanceof File,
         avatarName: input.avatar?.name,
@@ -318,8 +336,7 @@ describe("action.post (form + schema)", () => {
     fd.set("avatar", file)
 
     const result = await formRef.__kiruInvoke(
-      buildRemoteActionContext({}, staticLoaderSignal()),
-      fd
+      makeFormInvokeArgs({}, staticLoaderSignal(), fd)
     )
 
     assert.deepStrictEqual(result, {
@@ -335,7 +352,7 @@ describe("action.post (form + schema)", () => {
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       submit: action.post(
         { type: "form", schema: messageSchema },
-        async (_ctx, input) => ({ message: input.message })
+        async ({ input }) => ({ message: input.message })
       ),
     })
 
@@ -354,7 +371,7 @@ describe("action.post (form + schema)", () => {
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       submit: action.post(
         { type: "form", schema: messageSchema },
-        async (_ctx, input) => ({ message: input.message })
+        async ({ input }) => ({ message: input.message })
       ),
     })
 
@@ -374,7 +391,7 @@ describe("action.post (form + schema)", () => {
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       submit: action.post(
         { type: "form", schema: contactSchema },
-        async (_ctx, input) => ({
+        async ({ input }) => ({
           email: input.email,
           hasAvatar: input.avatar instanceof File,
           avatarName: input.avatar?.name,
@@ -633,8 +650,8 @@ describe("action.post (form) / native submission", () => {
 
     let receivedContext: unknown = null
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: action.post({ type: "form" }, async (ctx, _formData) => {
-        receivedContext = ctx
+      testAction: action.post({ type: "form" }, async ({ context, signal, execution }) => {
+        receivedContext = { context, signal, execution }
         return { success: true }
       }),
     })
@@ -656,10 +673,15 @@ describe("action.post (form) / native submission", () => {
 
     assert.ok(res)
     assert.strictEqual(res.status, 303)
-    assert.deepStrictEqual(
-      receivedContext,
-      buildRemoteActionContext(expectedContext, req.signal)
-    )
+    assert.ok(receivedContext && typeof receivedContext === "object")
+    const handlerCtx = receivedContext as {
+      context: typeof expectedContext
+      signal: AbortSignal
+      execution?: unknown
+    }
+    assert.deepStrictEqual(handlerCtx.context, expectedContext)
+    assert.strictEqual(handlerCtx.signal, req.signal)
+    assert.ok(handlerCtx.execution)
   })
 
   it("should return null when action query parameter is missing", async () => {

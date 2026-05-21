@@ -27,7 +27,10 @@ export default function NestedStreamingTestPage() {
 function ProductCard({ product }: { product: StreamingProduct }) {
   const reviews = resource(({ signal }) => {
     console.log("get reviews")
-    return getStreamingReviews({ productId: product.id }, { signal })
+    return getStreamingReviews({
+      input: { productId: product.id },
+      signal,
+    })
   })
 
   return () => (

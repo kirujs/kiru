@@ -433,12 +433,14 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
                   earlyFlushHead: prepared.earlyFlushHead,
                   i18nPayload: prepared.i18nPayload,
                   documentLang: prepared.i18nPayload?.locale,
+                  renderSignal,
                 })
               : renderUnmatchedAppStream(
                   app,
                   requestContext,
                   compiledTemplate,
-                  decorateDocument
+                  decorateDocument,
+                  renderSignal
                 )
         )
 

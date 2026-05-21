@@ -64,6 +64,7 @@ export function renderStreamForRouteMatch(
     earlyFlushHead?: boolean
     i18nPayload?: HydratedI18nPayload
     documentLang?: string
+    renderSignal: AbortSignal
   }
 ): ReadableStream<string> {
   const { pathname } = match
@@ -82,6 +83,8 @@ export function renderStreamForRouteMatch(
     })
 
   const stream = renderToReadableStream(app, {
+    requestContext,
+    renderSignal: opts.renderSignal,
     onStreamStart: mayEarlyFlush
       ? (controller) => {
           const document = headWithoutPageData()
@@ -131,13 +134,16 @@ export function renderUnmatchedAppStream(
   app: JSX.Element,
   requestContext: CustomRequestContext,
   compiledTemplate: CompiledRouteHtmlTemplate | null,
-  decorateDocument: (document: DocumentHead) => void
+  decorateDocument: (document: DocumentHead) => void,
+  renderSignal: AbortSignal
 ): ReadableStream<string> {
   const document: DocumentHead = {
     headHtml: serializeRequestContextScript(requestContext),
   }
   decorateDocument(document)
   const stream = renderToReadableStream(app, {
+    requestContext,
+    renderSignal,
     onShellReady: (shell, controller) =>
       enqueueTemplatedShell(controller, {
         compiledTemplate,

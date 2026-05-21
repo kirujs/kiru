@@ -31,12 +31,16 @@ import {
 import { applyInvalidateResponseHeader } from "../router/routerGlobal.js"
 import { guardRemoteActionOnClient } from "../router/devWarnings.js"
 
+type RemoteActionCallEnvelope = {
+  input?: unknown
+  signal?: AbortSignal
+}
+
 type ServerActionsClient = {
   dispatch: (
     id: string,
-    method: "GET" | "POST",
-    input: unknown,
-    opts?: { signal?: AbortSignal }
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+    call?: RemoteActionCallEnvelope
   ) => Promise<unknown>
 }
 
@@ -49,18 +53,20 @@ function ensureServerActionsClient() {
   if (g.__kiru_serverActions) return
 
   g.__kiru_serverActions = {
-    dispatch: async (id, method, input, opts) => {
+    dispatch: async (id, method, call) => {
       guardRemoteActionOnClient()
+      const envelope = call ?? {}
       const headers: Record<string, string> = {
         "x-kiru-token": requestToken.current,
       }
       const init: RequestInit = {
         method,
-        signal: opts?.signal,
+        signal: envelope.signal,
         headers,
       }
-      if (method === "POST") {
+      if (method !== "GET") {
         headers["Content-Type"] = "application/json"
+        const input = envelope.input
         init.body = JSON.stringify(input === undefined ? null : input)
       }
       const r = await fetch(`/?action=${id}`, init)

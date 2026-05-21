@@ -16,8 +16,17 @@ const emptyContext = (
 /** Active scope during sync render; unset outside `runWithSsrActionContext`. */
 let current: SsrActionStoreEntry | undefined
 
+export function hasSsrActionScope(): boolean {
+  return current !== undefined
+}
+
 export function getSsrActionContext(): SsrActionStoreEntry {
   return current ?? emptyContext()
+}
+
+/** SSR scope entry when inside sync render; undefined outside. */
+export function getSsrActionScopeEntry(): SsrActionStoreEntry | undefined {
+  return current
 }
 
 /**

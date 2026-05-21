@@ -8,7 +8,6 @@ import {
 import {
   __INTERNAL_REMOTE_REGISTRY,
   action,
-  buildRemoteActionContext,
   createRemoteActionHandler,
   RemoteError,
 } from "../../remote/index.js"
@@ -193,7 +192,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/post-via-get"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action.post(async (_, input: string) => input),
+      fn: action.post(async ({ input }) => input),
     })
     const req = makeGetRequest(`${routeId}:fn`, token)
     assert.strictEqual(await handler(req), null)
@@ -204,7 +203,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/wrong-content-type"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action.post(async (_, input: string) => input),
+      fn: action.post(async ({ input }) => input),
     })
     const req = new Request(`http://localhost/?action=${routeId}:fn`, {
       method: "POST",
@@ -252,7 +251,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/body-invalid-json"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action.post(async (_, _input: void) => "ok"),
+      fn: action.post(async () => "ok"),
     })
     const req = new Request(`http://localhost/?action=${routeId}:fn`, {
       method: "POST",
@@ -315,7 +314,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/dispatch"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      greet: action.post(async (_, name: string) => `hello ${name}`),
+      greet: action.post(async ({ input: name }) => `hello ${name}`),
     })
     const req = makePostRequest(`${routeId}:greet`, token, "world")
     const res = await handler(req)
@@ -333,9 +332,10 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/tuple-input"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      add: action.post(
-        async (_, input: readonly [number, number]) => input[0]! + input[1]!
-      ),
+      add: action.post(async ({ input }) => {
+        const tuple = input as readonly [number, number]
+        return tuple[0]! + tuple[1]!
+      }),
     })
     const req = makePostRequest(`${routeId}:add`, token, [3, 7])
     const res = await handler(req)
@@ -363,9 +363,9 @@ describe("remote / handler", () => {
     const token = makeKiruContextToken(ctx as Record<string, unknown>, SECRET)
     const routeId = "test/ctx-after-await"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      delayed: action.get(async (ctx) => {
+      delayed: action.get(async ({ context }) => {
         await new Promise<void>((r) => setTimeout(r, 5))
-        return (ctx.context as { ping?: string }).ping
+        return (context as { ping?: string }).ping
       }),
     })
     const req = makeGetRequest(`${routeId}:delayed`, token)
@@ -381,17 +381,23 @@ describe("remote / handler", () => {
     const routeId = "test/get-context"
     let captured: unknown = null
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      whoami: action.get(async (ctx) => {
-        captured = ctx
+      whoami: action.get(async (args) => {
+        captured = args
         return "done"
       }),
     })
     const req = makeGetRequest(`${routeId}:whoami`, token)
     await handler(req)
-    assert.deepStrictEqual(
-      captured,
-      buildRemoteActionContext(ctx, req.signal)
-    )
+    assert.ok(captured && typeof captured === "object")
+    const handlerArgs = captured as {
+      input: undefined
+      context: typeof ctx
+      signal: AbortSignal
+      execution?: unknown
+    }
+    assert.deepStrictEqual(handlerArgs.context, ctx)
+    assert.strictEqual(handlerArgs.signal, req.signal)
+    assert.ok(handlerArgs.execution)
   })
 
   it("returns 499 when the request aborts during a slow action", async () => {
@@ -399,10 +405,10 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/abort"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      slow: action.get(async (ctx) => {
+      slow: action.get(async ({ signal }) => {
         await new Promise<void>((resolve, reject) => {
           const t = setTimeout(resolve, 500)
-          ctx.signal.addEventListener(
+          signal.addEventListener(
             "abort",
             () => {
               clearTimeout(t)
@@ -445,7 +451,7 @@ describe("remote / handler", () => {
             },
           },
         },
-        async (_, input) => `hello ${input.name}`
+        async ({ input }) => `hello ${input.name}`
       ),
     })
     const req = makePostRequest(`${routeId}:greet`, token, { wrong: true })
@@ -453,6 +459,116 @@ describe("remote / handler", () => {
     assert.strictEqual(res?.status, 400)
     const j = (await res?.json()) as { error: { code: string } }
     assert.strictEqual(j.error.code, "INVALID_INPUT")
+  })
+
+  it("nested action call via callable shares active RPC context", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const ctx = { user: { id: "u1", name: "Ada" } }
+    const token = makeKiruContextToken(ctx, SECRET)
+    const routeId = "test/composition"
+
+    const getUser = action.get(async ({ context }) => {
+      return (context as { user?: { id: string; name: string } }).user
+    })
+    getUser.__kiruActionId = `${routeId}:getUser`
+
+    const updateUser = action.post(async () => {
+      const user = await getUser()
+      return { updated: user?.name ?? "unknown" }
+    })
+    updateUser.__kiruActionId = `${routeId}:updateUser`
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      getUser,
+      updateUser,
+    })
+
+    const req = makePostRequest(`${routeId}:updateUser`, token, null)
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 200)
+    assert.deepStrictEqual(await res?.json(), { updated: "Ada" })
+  })
+
+  it("concurrent RPC handlers do not leak action context", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const routeId = "test/concurrent-ctx"
+
+    const readLabel = action.get(async ({ context }) => {
+      await new Promise<void>((r) => setTimeout(r, 20))
+      return (context as { label?: string }).label ?? "missing"
+    })
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, { readLabel })
+
+    const [a, b] = await Promise.all([
+      handler(
+        makeGetRequest(
+          `${routeId}:readLabel`,
+          makeKiruContextToken({ label: "A" }, SECRET)
+        )
+      ),
+      handler(
+        makeGetRequest(
+          `${routeId}:readLabel`,
+          makeKiruContextToken({ label: "B" }, SECRET)
+        )
+      ),
+    ])
+
+    assert.strictEqual(await a?.json(), "A")
+    assert.strictEqual(await b?.json(), "B")
+  })
+
+  it("nested frames form a linked stack with endedAt on pop", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const token = validToken()
+    const routeId = "test/frame-stack"
+
+    const inner = action.get(async ({ execution }) => {
+      const frame = execution!.runtime.currentFrame
+      return {
+        actionId: frame.actionId,
+        parentId: frame.parent?.actionId,
+      }
+    })
+    inner.__kiruActionId = `${routeId}:inner`
+
+    const outer = action.post(async () => {
+      const innerFrame = await inner()
+      return { innerFrame }
+    })
+    outer.__kiruActionId = `${routeId}:outer`
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, { inner, outer })
+
+    const req = makePostRequest(`${routeId}:outer`, token, null)
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 200)
+    const body = (await res?.json()) as {
+      innerFrame: { actionId: string; parentId?: string }
+    }
+    assert.strictEqual(body.innerFrame.actionId, `${routeId}:inner`)
+    assert.strictEqual(body.innerFrame.parentId, `${routeId}:outer`)
+  })
+
+  it("DELETE action accepts JSON body and returns result", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const token = validToken()
+    const routeId = "test/delete-verb"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      remove: action.delete(async ({ input: id }) => ({ removed: id })),
+    })
+    const req = new Request(`http://localhost/?action=${routeId}:remove`, {
+      method: "DELETE",
+      headers: {
+        "content-type": "application/json",
+        "x-kiru-token": token,
+      },
+      body: JSON.stringify("item-1"),
+    })
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 200)
+    assert.deepStrictEqual(await res?.json(), { removed: "item-1" })
   })
 
   it("__kiruRegister overwrites an existing registration for the same route", async () => {

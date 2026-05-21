@@ -128,5 +128,9 @@ export const routes = createRouteTree({
         component: () => import("./pages/context-concurrency"),
         head: { title: "E2E SSR context concurrency" },
       }),
+      createRoute("/actions-composition-demo", {
+        component: () => import("./pages/actions-composition-demo"),
+        head: { title: "E2E SSR namespaced & composed actions" },
+      }),
     ],
   })

@@ -1,4 +1,4 @@
-import { action, Schema } from "kiru/remote"
+import { action, RemoteActionHandlerArgs, Schema } from "kiru/remote"
 import { test } from "./test"
 
 console.log(test)
@@ -19,7 +19,7 @@ export const getSandboxServerEcho = action.get(async ({ context }) => {
 
 export const getServerEcho = action.post(
   { schema: mySchema },
-  async (_, input) => {
+  async ({ input }) => {
     return `Echo ${input.name}`
   }
 )
@@ -68,7 +68,7 @@ export const getTodos = action.get(async () => {
 
 export const createTodo = action.post(
   { schema: createTodoSchema },
-  (_, input) => {
+  ({ input }) => {
     const todo: TodoItem = {
       id: crypto.randomUUID(),
       text: input.text,
@@ -78,9 +78,38 @@ export const createTodo = action.post(
   }
 )
 
+const demoUsers = new Map<string, { id: string; name: string }>([
+  ["1", { id: "1", name: "Demo User" }],
+])
+
+export const users = {
+  get: action.get(async ({ context }) => {
+    const id = (context as { userId?: string }).userId ?? "1"
+    return demoUsers.get(id) ?? null
+  }),
+  rename: action.patch(
+    async ({
+      input,
+    }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
+      const u = demoUsers.get(input.id)
+      if (!u) throw new Error("User not found")
+      u.name = input.name
+      return u
+    }
+  ),
+}
+
+export const renameUserViaNamespace = action.post(
+  async ({ input }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
+    const before = await users.get()
+    const updated = await users.rename({ input })
+    return { before, updated }
+  }
+)
+
 export const updateTodo = action.post(
   { schema: updateTodoSchema },
-  async (_, input) => {
+  async ({ input }) => {
     //if (Math.random() > 0.5) throw new Error("Random error")
     const todo = todos.find((t) => t.id === input.id)
     if (!todo) throw new Error("Todo not found")

@@ -2,6 +2,8 @@ import { Fragment } from "../element.js"
 import { renderMode } from "../globals.js"
 import { STREAMED_DATA_DESCENDANTS, STREAMED_DATA_EVENT } from "../constants.js"
 import { withSpeculativeStreamPromiseCollector } from "../resource.js"
+import { runWithSsrRequestContext } from "../remote/action.js"
+import type { CustomRequestContext } from "../router/types.js"
 import {
   headlessRender,
   speculativeTraverse,
@@ -37,6 +39,9 @@ function withStreamRenderMode<T>(fn: () => T): T {
 }
 
 export interface RenderToReadableStreamOptions {
+  /** When set, nested speculative stream renders run remote actions with this context. */
+  requestContext?: CustomRequestContext
+  renderSignal?: AbortSignal
   /**
    * Runs before the synchronous shell render. Use to flush a precomputed
    * document prefix (static page head) while the shell is still rendering.
@@ -153,22 +158,35 @@ export function renderToReadableStream(
 
       const specPromise: Promise<string[]> = Promise.all(pending)
         .then(() => {
-          withStreamRenderMode(() =>
-            withSpeculativeStreamPromiseCollector(
-              (child) => {
-                if (!descendants.includes(child.id)) {
-                  descendants.push(child.id)
-                }
-              },
-              () =>
-                speculativeTraverse(
-                  { ...speculativeCtx, onStreamData: trackDescendantStreamData },
-                  continueRender(),
-                  anchorVNode,
-                  0
-                )
+          const runSpeculative = () =>
+            withStreamRenderMode(() =>
+              withSpeculativeStreamPromiseCollector(
+                (child) => {
+                  if (!descendants.includes(child.id)) {
+                    descendants.push(child.id)
+                  }
+                },
+                () =>
+                  speculativeTraverse(
+                    {
+                      ...speculativeCtx,
+                      onStreamData: trackDescendantStreamData,
+                    },
+                    continueRender(),
+                    anchorVNode,
+                    0
+                  )
+              )
             )
-          )
+          if (options?.requestContext && options?.renderSignal) {
+            runWithSsrRequestContext(
+              options.requestContext,
+              options.renderSignal,
+              runSpeculative
+            )
+          } else {
+            runSpeculative()
+          }
           return descendants
         })
         .catch(() => [])
@@ -197,7 +215,16 @@ export function renderToReadableStream(
     controller.error(error)
   })
 
-  withStreamRenderMode(() => headlessRender(ctx, rootNode))
+  const runShellRender = () => headlessRender(ctx, rootNode)
+  if (options?.requestContext && options?.renderSignal) {
+    runWithSsrRequestContext(
+      options.requestContext,
+      options.renderSignal,
+      () => withStreamRenderMode(runShellRender)
+    )
+  } else {
+    withStreamRenderMode(runShellRender)
+  }
 
   void promiseTry(async () => {
     try {

@@ -98,17 +98,20 @@ Augment `RouteMeta` and `CustomRequestContext`.
 
 ## Remote action handler context
 
-Handlers no longer receive `CustomRequestContext` as the first argument. Use **`RemoteActionContext`**:
+Handlers use a single **`RemoteActionHandlerArgs<Input>`** envelope (`{ input, context, signal, execution? }`). Calls use **`RemoteActionCallOptions`** (`{ input, signal? }` or `{ signal? }` for void/GET — entire options arg may be omitted).
 
 ```ts
 // Before
 action.post({ schema }, async (ctx, input) => { ... ctx.user ... })
+await createTodo({ title: "x" }, { signal })
 
 // After
-action.post({ schema }, async ({ context, signal }, input) => { ... context.user ... })
+action.post({ schema }, async ({ context, input }) => { ... context.user ... })
+await createTodo({ input: { title: "x" }, signal })
+await runPipeline()  // void POST / GET — no `{}` required
 ```
 
-`action.get` / `action.post` follow the same shape. Form posts use `action.post({ type: "form" }, handler)`. Zero-arg callbacks are unchanged. Client `fetch` abort: `action.post(input, { signal })` / `action.get({ signal })`.
+Form posts: `async ({ formData, context, signal }) =>`. Client abort: `action.get({ signal })`, `action.post({ input, signal })`.
 
 **SSR scope:** `runWithSsrRequestContext` wraps sync `headlessRender` only (single `current` slot, save/restore on nest). RPC uses the token, not that slot. Add `import "virtual:kiru:remote-registry"` to `serverEntry` for production action registration.
 
@@ -118,7 +121,7 @@ action.post({ schema }, async ({ context, signal }, input) => { ... context.user
 
 - [ ] Replace `validateSearch` / `defineSearchParams` / `KiruValidator` with `load.validation` + `Schema` / `parseInput`
 - [ ] Update `<Link prefetch="hover">` to `prefetch={{ trigger: "hover" }}` or omit for defaults
-- [ ] Update `*.actions.ts` handlers to `{ context, signal }` (not bare `ctx`)
+- [ ] Update `*.actions.ts` handlers to `{ input, context, signal }` envelope; calls to `{ input }` / `()` (not positional input)
 - [ ] Delete `FileRouter` imports
 - [ ] Delete `+Page.tsx` / `+config.ts` Vike files
 - [ ] Remove `e2e/ssr-bun` / `e2e/ssr-worker` if referenced in CI — use `ssr-matrix`

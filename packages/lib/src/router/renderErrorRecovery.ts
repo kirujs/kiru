@@ -123,6 +123,8 @@ export async function renderSsrErrorRecovery(
         input.renderSignal,
         () =>
           renderToReadableStream(recoveryApp, {
+            requestContext: recoveryCtx,
+            renderSignal: input.renderSignal,
             onShellReady: (shell, controller) =>
               enqueueTemplatedShell(controller, {
                 compiledTemplate: input.compiledTemplate,

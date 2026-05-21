@@ -2,6 +2,16 @@ import type { CustomRequestContext } from "../router/types.js"
 import type { Schema } from "../validation/index.js"
 import { parseInput } from "../validation/index.js"
 import { RemoteError } from "./errors.js"
+import {
+  getActiveActionContext,
+  getActiveActionExecution,
+  runWithActionFrame,
+  toRemoteActionHandlerArgs,
+} from "./actionInvokeScope.js"
+import {
+  getSsrActionScopeEntry,
+  runWithSsrActionContext,
+} from "./ssrActionScope.js"
 
 export type {
   ActionSchema,
@@ -26,29 +36,73 @@ export { RemoteError, isRemoteError } from "./errors.js"
 // SSR request-context threading
 // ---------------------------------------------------------------------------
 
-/** Per-request context and abort signal passed to remote / form action handlers. */
-export type RemoteActionContext = {
+import type { ActionExecution } from "./actionExecution.js"
+
+export type {
+  ActionExecution,
+  ActionExecutionFrame,
+  RequestExecutionContext,
+  ActionRuntimeContext,
+  CacheScope,
+  TraceContext,
+  TraceSpan,
+  Transaction,
+  CreateActionExecutionOptions,
+} from "./actionExecution.js"
+export {
+  createActionExecution,
+  createActionFrame,
+  createCacheScope,
+  createTraceContext,
+  listActionFrames,
+} from "./actionExecution.js"
+
+/** Arguments passed to remote action handlers (and nested `__kiruInvoke`). */
+export type RemoteActionHandlerArgs<Input> = {
+  input: Input
   context: CustomRequestContext
   signal: AbortSignal
+  /** Request runtime (frames, cache, tracing). Set during RPC and nested composition. */
+  execution?: ActionExecution
 }
 
-import { getSsrActionContext, runWithSsrActionContext } from "./ssrActionScope.js"
-
-export function buildRemoteActionContext(
-  context: CustomRequestContext,
+/** Registry / HTTP entry invoke shape (input is unknown at the boundary). */
+export type RemoteActionInvokeArgs = {
+  input: unknown
+  context: CustomRequestContext
   signal: AbortSignal
-): RemoteActionContext {
-  return { context, signal }
+  execution?: ActionExecution
 }
 
-/** Active SSR action context while inside a sync `runWithSsrRequestContext` scope. */
-export function __getSsrActionContext(): RemoteActionContext {
-  return getSsrActionContext()
+export function buildRemoteActionHandlerArgs<Input>(
+  context: CustomRequestContext,
+  signal: AbortSignal,
+  input: Input,
+  execution?: ActionExecution
+): RemoteActionHandlerArgs<Input> {
+  return { input, context, signal, execution }
+}
+
+/** Active SSR handler args while inside a sync `runWithSsrRequestContext` scope. */
+export function __getSsrActionContext(): RemoteActionHandlerArgs<void> {
+  const entry = getSsrActionScopeEntry()
+  if (!entry) {
+    return buildRemoteActionHandlerArgs(
+      {},
+      new AbortController().signal,
+      undefined
+    )
+  }
+  return buildRemoteActionHandlerArgs(
+    entry.context,
+    entry.signal,
+    undefined
+  )
 }
 
 /** Request context from the active SSR action scope. */
 export function __getSsrRequestContext(): CustomRequestContext {
-  return getSsrActionContext().context
+  return __getSsrActionContext().context
 }
 
 /** Run synchronous SSR render work with action context (nested save/restore). */
@@ -60,31 +114,110 @@ export function runWithSsrRequestContext<T>(
   return runWithSsrActionContext(ctx, signal, fn)
 }
 
+function resolveCallableHandlerArgs<Input>(
+  input: Input,
+  call?: RemoteActionCallOptions<Input>
+): RemoteActionHandlerArgs<Input> {
+  const active = getActiveActionContext()
+  if (active) {
+    const signal = call?.signal ?? active.signal
+    return {
+      input,
+      context: active.context,
+      signal,
+      execution: active.execution,
+    }
+  }
+  const ssr = getSsrActionScopeEntry()
+  if (ssr) {
+    const signal = call?.signal ?? ssr.signal
+    return buildRemoteActionHandlerArgs(ssr.context, signal, input)
+  }
+  throw new Error(
+    "Remote action called without request context. Use during SSR render, inside another action handler, or from the client (after hydration)."
+  )
+}
+
+async function awaitActionValidation(
+  validate: (input: unknown) => void | Promise<void>,
+  input: unknown
+): Promise<void> {
+  const result = validate(input)
+  if (result != null && typeof (result as Promise<void>).then === "function") {
+    await result
+  }
+}
+
+function dispatchCallableInvoke<Input, Output>(
+  runHandler: RemoteActionHandler<Input, Output>,
+  args: RemoteActionHandlerArgs<Input>,
+  actionId?: string
+): Promise<Output> {
+  const execution = getActiveActionExecution()
+  if (execution && actionId) {
+    return Promise.resolve(
+      runWithActionFrame(actionId, () =>
+        runHandler(toRemoteActionHandlerArgs(execution, args.input))
+      )
+    )
+  }
+  return Promise.resolve(runHandler(args))
+}
+
 // ---------------------------------------------------------------------------
 // Remote action (JSON)
 // ---------------------------------------------------------------------------
 
-export type RemoteActionMethod = "GET" | "POST"
+export type RemoteActionMethod =
+  | "GET"
+  | "POST"
+  | "PUT"
+  | "PATCH"
+  | "DELETE"
 
-export type RemoteActionCallback<Input, Output> = (
-  ctx: RemoteActionContext,
-  input: Input
+const BODY_METHODS = new Set<RemoteActionMethod>([
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+])
+
+export function isRemoteActionBodyMethod(
+  method: RemoteActionMethod
+): method is "POST" | "PUT" | "PATCH" | "DELETE" {
+  return BODY_METHODS.has(method)
+}
+
+export type RemoteActionHandler<Input, Output> = (
+  args: RemoteActionHandlerArgs<Input>
 ) => Promise<Output> | Output
 
-/** @deprecated Use {@link Schema} instead. */
-export type RemoteActionSchema<Input> = Schema<Input>
+export type RemoteActionCallOptions<Input> = [Input] extends [void]
+  ? { signal?: AbortSignal }
+  : { input: Input; signal?: AbortSignal }
 
-export type RemoteActionOptions = {
-  signal?: AbortSignal
-}
+type RemoteCallable<Input, Output> = [Input] extends [void]
+  ? (options?: RemoteActionCallOptions<void>) => Promise<Output>
+  : (options: RemoteActionCallOptions<Input>) => Promise<Output>
 
-export type RemoteGetAction<Output> = ((
-  options?: RemoteActionOptions
-) => Promise<Output>) & {
+type RemoteActionBrand<Method extends RemoteActionMethod> = {
   __kiruRemoteAction: true
-  __kiruRemoteMethod: "GET"
-  __kiruInvoke: (ctx: RemoteActionContext, input: unknown) => Promise<Output>
+  __kiruRemoteMethod: Method
+  /** RPC id (`routeId:export.path`) for frame stack / tracing. */
+  __kiruActionId?: string
+  __kiruInvoke: (args: RemoteActionInvokeArgs) => Promise<unknown>
+  __kiruInvalidateRoutes?: string[]
+  __kiruRevalidate?: RemoteRevalidateMeta
 }
+
+export type RemoteGetAction<Output> = RemoteCallable<void, Output> &
+  RemoteActionBrand<"GET">
+
+export type RemoteBodyAction<
+  Method extends "POST" | "PUT" | "PATCH" | "DELETE",
+  Input,
+  Output,
+> = RemoteCallable<Input, Output> & RemoteActionBrand<Method>
 
 export type RemoteRevalidateMeta = {
   paths?: string[]
@@ -101,129 +234,184 @@ export type RemoteActionMeta = {
   revalidate?: RemoteRevalidateMeta
 }
 
-/** First argument to {@link action.post} when schema, meta, or form encoding is needed. */
-export type RemotePostConfig<Input = unknown> = {
-  /** `"form"` for native / progressive-enhancement forms; default `"json"`. */
-  type?: "json" | "form"
+/** Config for JSON body actions (POST, PUT, PATCH, DELETE). */
+export type RemoteJsonActionConfig<Input = unknown> = {
   schema?: Schema<Input>
 } & RemoteActionMeta
 
-export type RemotePostAction<Input, Output> = ((
-  input: Input,
-  options?: RemoteActionOptions
-) => Promise<Output>) & {
-  __kiruRemoteAction: true
-  __kiruRemoteMethod: "POST"
-  __kiruInvoke: (ctx: RemoteActionContext, input: unknown) => Promise<Output>
-  __kiruInvalidateRoutes?: string[]
-  __kiruRevalidate?: RemoteRevalidateMeta
-}
+/** Config for `action.post({ type: "form" }, …)` handlers. */
+export type RemoteFormActionConfig<Input = unknown> = {
+  type: "form"
+  schema?: Schema<Input>
+} & RemoteActionMeta
 
 export type RemoteActionFunction<Input, Output> =
   | RemoteGetAction<Output>
-  | RemotePostAction<Input, Output>
+  | RemoteBodyAction<"POST", Input, Output>
+  | RemoteBodyAction<"PUT", Input, Output>
+  | RemoteBodyAction<"PATCH", Input, Output>
+  | RemoteBodyAction<"DELETE", Input, Output>
 
-type GetCallback<Output> =
-  | ((ctx: RemoteActionContext) => Promise<Output> | Output)
-  | (() => Promise<Output> | Output)
-
-function wrapGetCallback<Output>(
-  callback: GetCallback<Output>
-): (ctx: RemoteActionContext) => Promise<Output> | Output {
-  if (callback.length === 0) {
-    return () => (callback as () => Promise<Output> | Output)()
-  }
-  return callback as (ctx: RemoteActionContext) => Promise<Output> | Output
+export function isRemoteGetAction(value: unknown): value is RemoteGetAction<unknown> {
+  return (
+    !!value &&
+    typeof value === "function" &&
+    "__kiruRemoteAction" in value &&
+    (value as RemoteGetAction<unknown>).__kiruRemoteMethod === "GET"
+  )
 }
 
-function createRemoteAction<Input, Output>(
-  method: RemoteActionMethod,
-  runAction: RemoteActionCallback<Input, Output>,
+export function isRemoteBodyAction(
+  value: unknown
+): value is RemoteBodyAction<"POST", unknown, unknown> {
+  return (
+    !!value &&
+    typeof value === "function" &&
+    "__kiruRemoteAction" in value &&
+    isRemoteActionBodyMethod(
+      (value as RemoteBodyAction<"POST", unknown, unknown>).__kiruRemoteMethod
+    )
+  )
+}
+
+function createRemoteAction<Input, Output, Method extends RemoteActionMethod>(
+  method: Method,
+  runAction: RemoteActionHandler<Input, Output>,
   validateActionInput: (input: unknown) => void | Promise<void>,
   meta?: RemoteActionMeta
-): RemoteGetAction<Output> | RemotePostAction<Input, Output> {
+): Method extends "GET"
+  ? RemoteGetAction<Output>
+  : RemoteBodyAction<Extract<Method, "POST" | "PUT" | "PATCH" | "DELETE">, Input, Output> {
+  const invoke = async (args: RemoteActionHandlerArgs<Input>) => {
+    await validateActionInput(args.input)
+    return runAction(args)
+  }
+
   if (method === "GET") {
-    const wrapped = (async (_options?: RemoteActionOptions): Promise<Output> => {
-      const ctx = getSsrActionContext()
-      await validateActionInput(undefined)
-      return runAction(ctx, undefined as Input)
+    const wrapped = (async (
+      options?: RemoteActionCallOptions<void>
+    ): Promise<Output> => {
+      const call = options ?? {}
+      const args = resolveCallableHandlerArgs(undefined as void, call)
+      await awaitActionValidation(validateActionInput, undefined)
+      return dispatchCallableInvoke(
+        runAction as RemoteActionHandler<void, Output>,
+        args,
+        wrapped.__kiruActionId
+      )
     }) as RemoteGetAction<Output>
 
     wrapped.__kiruRemoteAction = true
     wrapped.__kiruRemoteMethod = "GET"
-    wrapped.__kiruInvoke = async (ctx, _input) => {
-      await validateActionInput(undefined)
-      return runAction(ctx, undefined as Input)
-    }
-    return wrapped
+    wrapped.__kiruInvoke = invoke as RemoteActionBrand<"GET">["__kiruInvoke"]
+    return wrapped as Method extends "GET"
+      ? RemoteGetAction<Output>
+      : RemoteBodyAction<
+          Extract<Method, "POST" | "PUT" | "PATCH" | "DELETE">,
+          Input,
+          Output
+        >
   }
 
   const wrapped = (async (
-    input: Input,
-    _options?: RemoteActionOptions
+    options?: RemoteActionCallOptions<Input>
   ): Promise<Output> => {
-    const ctx = getSsrActionContext()
-    await validateActionInput(input)
-    return runAction(ctx, input)
-  }) as RemotePostAction<Input, Output>
+    const call = (options ?? {}) as RemoteActionCallOptions<Input>
+    const input = (
+      "input" in (call as object) ? (call as { input: Input }).input : undefined
+    ) as Input
+    const args = resolveCallableHandlerArgs(input, call)
+    await awaitActionValidation(validateActionInput, args.input)
+    return dispatchCallableInvoke(runAction, args, wrapped.__kiruActionId)
+  }) as RemoteBodyAction<
+    Extract<Method, "POST" | "PUT" | "PATCH" | "DELETE">,
+    Input,
+    Output
+  >
 
   wrapped.__kiruRemoteAction = true
-  wrapped.__kiruRemoteMethod = "POST"
+  wrapped.__kiruRemoteMethod = method as Extract<
+    Method,
+    "POST" | "PUT" | "PATCH" | "DELETE"
+  >
   if (meta?.invalidate?.length) {
     wrapped.__kiruInvalidateRoutes = meta.invalidate
   }
   if (meta?.revalidate) {
     wrapped.__kiruRevalidate = meta.revalidate
   }
-  wrapped.__kiruInvoke = async (ctx, input) => {
-    await validateActionInput(input)
-    return runAction(ctx, input as Input)
-  }
-  return wrapped
+  wrapped.__kiruInvoke = invoke as RemoteActionBrand<
+    Extract<Method, "POST" | "PUT" | "PATCH" | "DELETE">
+  >["__kiruInvoke"]
+  return wrapped as Method extends "GET"
+    ? RemoteGetAction<Output>
+    : RemoteBodyAction<
+        Extract<Method, "POST" | "PUT" | "PATCH" | "DELETE">,
+        Input,
+        Output
+      >
 }
 
-function metaFromConfig(config: RemotePostConfig<unknown>): RemoteActionMeta {
+function metaFromConfig(config: RemoteJsonActionConfig<unknown>): RemoteActionMeta {
   return {
     invalidate: config.invalidate,
     revalidate: config.revalidate,
   }
 }
 
-function createJsonPostAction<Input, Output>(
-  runAction: RemoteActionCallback<Input, Output>,
+function createJsonBodyAction<
+  Method extends "POST" | "PUT" | "PATCH" | "DELETE",
+  Input,
+  Output,
+>(
+  method: Method,
+  runAction: RemoteActionHandler<Input, Output>,
   schema?: Schema<Input>,
   meta?: RemoteActionMeta
-): RemotePostAction<Input, Output> {
-  const validateActionInput = async (input: unknown) => {
+): RemoteBodyAction<Method, Input, Output> {
+  const validateActionInput = (input: unknown): void | Promise<void> => {
     if (!schema) return
-    try {
-      await parseInput(schema, input)
-    } catch {
-      throw new RemoteError("Invalid remote action input", "INVALID_INPUT", {
-        status: 400,
-      })
-    }
+    return (async () => {
+      try {
+        await parseInput(schema, input)
+      } catch {
+        throw new RemoteError("Invalid remote action input", "INVALID_INPUT", {
+          status: 400,
+        })
+      }
+    })()
   }
   return createRemoteAction(
-    "POST",
+    method,
     runAction,
     validateActionInput,
     meta
-  ) as RemotePostAction<Input, Output>
+  ) as RemoteBodyAction<Method, Input, Output>
+}
+
+function handlerArgsFromFormInvoke(
+  args: RemoteFormActionHandlerArgs
+): RemoteActionHandlerArgs<void> {
+  return {
+    input: undefined,
+    context: args.context,
+    signal: args.signal,
+    execution: args.execution,
+  }
 }
 
 function createFormPostAction<Input, Output>(
-  config: RemotePostConfig<Input>,
+  config: RemoteFormActionConfig<Input>,
   callback:
-    | RemoteFormActionCallback<Output>
-    | RemoteActionCallback<Input, Output>
+    | RemoteFormActionHandler<Output>
+    | RemoteActionHandler<Input, Output>
 ): RemoteFormActionFunction<Output> {
   const meta = metaFromConfig(config)
   const schema = config.schema
 
   const __kiruInvoke = schema
-    ? async (ctx: RemoteActionContext, formData: FormData) => {
-        const raw = formDataToInput(formData)
+    ? async (args: RemoteFormActionHandlerArgs) => {
+        const raw = formDataToInput(args.formData)
         let input: Input
         try {
           input = await parseInput(schema, raw)
@@ -233,12 +421,15 @@ function createFormPostAction<Input, Output>(
           })
         }
         return Promise.resolve(
-          (callback as RemoteActionCallback<Input, Output>)(ctx, input)
+          (callback as RemoteActionHandler<Input, Output>)({
+            ...handlerArgsFromFormInvoke(args),
+            input,
+          })
         )
       }
-    : (ctx: RemoteActionContext, formData: FormData) =>
+    : (args: RemoteFormActionHandlerArgs) =>
         Promise.resolve(
-          (callback as RemoteFormActionCallback<Output>)(ctx, formData)
+          (callback as RemoteFormActionHandler<Output>)(args)
         )
 
   return {
@@ -250,57 +441,69 @@ function createFormPostAction<Input, Output>(
   }
 }
 
-function post<Input, Output>(
-  callback: RemoteActionCallback<Input, Output>
-): RemotePostAction<Input, Output>
-function post<Output>(
-  config: { type: "form"; schema?: undefined } & RemoteActionMeta,
-  callback: RemoteFormActionCallback<Output>
-): RemoteFormActionFunction<Output>
-function post<Input, Output>(
-  config: { type: "form"; schema: Schema<Input> } & RemoteActionMeta,
-  callback: RemoteActionCallback<Input, Output>
-): RemoteFormActionFunction<Output>
-function post<Input, Output>(
-  config: RemotePostConfig<Input>,
-  callback: RemoteActionCallback<Input, Output>
-): RemotePostAction<Input, Output>
-function post<Input, Output>(
-  callbackOrConfig:
-    | RemoteActionCallback<Input, Output>
-    | RemotePostConfig<Input>,
-  maybeCallback?:
-    | RemoteFormActionCallback<Output>
-    | RemoteActionCallback<Input, Output>
-):
-  | RemotePostAction<Input, Output>
-  | RemoteFormActionFunction<Output> {
-  if (typeof callbackOrConfig === "function") {
-    return createJsonPostAction(callbackOrConfig)
+type JsonBodyMethod = "POST" | "PUT" | "PATCH" | "DELETE"
+
+function defineJsonBodyAction<Method extends JsonBodyMethod>(method: Method) {
+  function bodyAction<Input, Output>(
+    callback: RemoteActionHandler<Input, Output>
+  ): RemoteBodyAction<Method, Input, Output>
+  function bodyAction<Output>(
+    config: { type: "form"; schema?: undefined } & RemoteActionMeta,
+    callback: RemoteFormActionHandler<Output>
+  ): RemoteFormActionFunction<Output>
+  function bodyAction<Input, Output>(
+    config: { type: "form"; schema: Schema<Input> } & RemoteActionMeta,
+    callback: RemoteActionHandler<Input, Output>
+  ): RemoteFormActionFunction<Output>
+  function bodyAction<Input, Output>(
+    config: RemoteJsonActionConfig<Input>,
+    callback: RemoteActionHandler<Input, Output>
+  ): RemoteBodyAction<Method, Input, Output>
+  function bodyAction<Input, Output>(
+    callbackOrConfig:
+      | RemoteActionHandler<Input, Output>
+      | RemoteJsonActionConfig<Input>
+      | RemoteFormActionConfig<Input>,
+    maybeCallback?:
+      | RemoteFormActionHandler<Output>
+      | RemoteActionHandler<Input, Output>
+  ):
+    | RemoteBodyAction<Method, Input, Output>
+    | RemoteFormActionFunction<Output> {
+    if (typeof callbackOrConfig === "function") {
+      return createJsonBodyAction(method, callbackOrConfig)
+    }
+    const config = callbackOrConfig
+    const callback = maybeCallback
+    if (!callback) {
+      throw new Error(`action.${method.toLowerCase()}(config, callback) requires a handler`)
+    }
+    if ("type" in config && config.type === "form") {
+      if (method !== "POST") {
+        throw new Error(`action.${method.toLowerCase()} does not support form actions`)
+      }
+      return createFormPostAction(config, callback)
+    }
+    return createJsonBodyAction(
+      method,
+      callback as RemoteActionHandler<Input, Output>,
+      config.schema,
+      metaFromConfig(config)
+    )
   }
-  const config = callbackOrConfig
-  const callback = maybeCallback
-  if (!callback) {
-    throw new Error("action.post(config, callback) requires a handler")
-  }
-  if (config.type === "form") {
-    return createFormPostAction(config, callback)
-  }
-  return createJsonPostAction(
-    callback as RemoteActionCallback<Input, Output>,
-    config.schema,
-    metaFromConfig(config)
-  )
+  return bodyAction
 }
 
 export const action = {
-  get<Output>(callback: GetCallback<Output>): RemoteGetAction<Output> {
-    const run = wrapGetCallback(callback)
-    const runAction: RemoteActionCallback<void, Output> = (ctx, _input) =>
-      Promise.resolve(run(ctx))
-    return createRemoteAction("GET", runAction, () => {}) as RemoteGetAction<Output>
+  get<Output>(
+    callback: RemoteActionHandler<void, Output>
+  ): RemoteGetAction<Output> {
+    return createRemoteAction("GET", callback, () => {}) as RemoteGetAction<Output>
   },
-  post,
+  post: defineJsonBodyAction("POST"),
+  put: defineJsonBodyAction("PUT"),
+  patch: defineJsonBodyAction("PATCH"),
+  delete: defineJsonBodyAction("DELETE"),
 }
 
 // ---------------------------------------------------------------------------
@@ -331,9 +534,26 @@ export function isKiruRedirect(value: unknown): value is KiruRedirect {
   )
 }
 
-export type RemoteFormActionCallback<Output> = (
-  ctx: RemoteActionContext,
+export function isRemoteFormAction(
+  value: unknown
+): value is RemoteFormActionFunction<unknown> {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "__kiruFormAction" in value &&
+    (value as { __kiruFormAction: unknown }).__kiruFormAction === true
+  )
+}
+
+export type RemoteFormActionHandlerArgs = {
   formData: FormData
+  context: CustomRequestContext
+  signal: AbortSignal
+  execution?: ActionExecution
+}
+
+export type RemoteFormActionHandler<Output> = (
+  args: RemoteFormActionHandlerArgs
 ) => Promise<Output> | Output
 
 /**
@@ -349,10 +569,7 @@ export type RemoteFormActionFunction<Output> = {
   __kiruFormActionId: string
   __kiruInvalidateRoutes?: string[]
   __kiruRevalidate?: RemoteRevalidateMeta
-  __kiruInvoke: (
-    ctx: RemoteActionContext,
-    formData: FormData
-  ) => Promise<Output>
+  __kiruInvoke: (args: RemoteFormActionHandlerArgs) => Promise<Output>
 }
 
 /** Convert {@link FormData} to a plain object for schema validation (preserves File/Blob). */

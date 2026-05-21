@@ -39,10 +39,10 @@ All notable changes to this project will be documented in this file.
 ### Remote / forms
 
 - **Breaking — unified `action.post`:** Removed `formAction` and positional `action.post(schema, handler)` / `action.post(handler, meta)`. Use `action.post({ type: "form" }, handler)` for forms; `action.post({ schema, invalidate, revalidate }, handler)` for JSON with config; bare `action.post(handler)` for simple JSON RPC.
-- **Breaking — action handler context:** `action.get` / `action.post` callbacks receive **`RemoteActionContext`** `{ context, signal }` instead of bare `CustomRequestContext`. Use `context.user` (etc.) where you previously used `ctx.user`. Zero-arg handlers are unchanged. Client calls may pass `{ signal }` (GET last arg, POST second arg); the server forwards `Request.signal` into the handler. Aborted RPCs return **499**. SSR sets context only during **sync** `runWithSsrRequestContext`; RPC uses the token, not that slot.
+- **Breaking — action call/handler envelope:** Handlers receive **`RemoteActionHandlerArgs`** `{ input, context, signal, execution? }`. Calls use a single options object (`await foo({ input })`, `await runPipeline()`, `await getEcho({ signal })`) — positional `(input, opts)` is removed. Form handlers use **`RemoteFormActionHandlerArgs`** with `formData`. Aborted RPCs return **499**.
 - **Actions:** `action.post({ schema }, handler)` validates with `parseInput`; `{ invalidate }` / `{ revalidate }` on the same config object refetch loaders or prerender cache after success.
 - **Fix:** `createFormController` sends `x-kiru-form` so enhanced submissions receive JSON (including redirects) instead of native 303 responses; structured `fieldErrors` on validation failure.
-- **Tests:** Unit coverage for Standard Schema / `parseInput`, loader validation, route response headers, form-action redirect handling (enhanced JSON and native `303`), action abort (499) and `RemoteActionContext` injection.
+- **Tests:** Unit coverage for Standard Schema / `parseInput`, loader validation, route response headers, form-action redirect handling (enhanced JSON and native `303`), action abort (499) and handler-args injection.
 
 ### Abortable navigation and rendering
 

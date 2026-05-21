@@ -102,7 +102,8 @@
     "sharp": ">=0.33.0"
   },
   "browser": {
-    "./dist/image/preloadRegistry.js": "./dist/image/preloadRegistry.client.js"
+    "./dist/image/preloadRegistry.js": "./dist/image/preloadRegistry.client.js",
+    "./dist/remote/actionInvokeScope.js": "./dist/remote/actionInvokeScope.client.js"
   },
   "peerDependenciesMeta": {
     "@standard-schema/spec": {

@@ -726,4 +726,62 @@ describe("SSR server", () => {
     )
   })
 
+  describe("namespaced and composed remote actions", () => {
+    const visitActionsDemo = () => {
+      const port = Cypress.env("port")
+      cy.visit(`http://127.0.0.1:${port}/actions-composition-demo`)
+      cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
+      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    }
+
+    it("invokes a namespaced GET action with a dotted RPC id", () => {
+      visitActionsDemo()
+      cy.intercept("GET", /\?action=[^&]*api\.getEcho/).as("namespaceGet")
+      cy.get('[data-testid="namespace-get"]').click()
+      cy.wait("@namespaceGet").then(({ request, response }) => {
+        expect(request.method).to.eq("GET")
+        expect(response?.statusCode).to.eq(200)
+        const actionId = new URL(request.url).searchParams.get("action")
+        expect(actionId).to.include("api.getEcho")
+      })
+      cy.get('[data-testid="namespace-get-result"]').should(
+        "have.text",
+        "echo:E2E User"
+      )
+    })
+
+    it("composed POST runs nested namespaced actions in one HTTP round-trip", () => {
+      visitActionsDemo()
+      cy.intercept("POST", /\?action=[^&]*runPipeline/).as("composeAction")
+      cy.get('[data-testid="compose-run"]').click()
+      cy.wait("@composeAction")
+        .its("response.statusCode")
+        .should("eq", 200)
+      cy.get('[data-testid="compose-result"]').should(
+        "have.text",
+        JSON.stringify({
+          echo: "echo:E2E User",
+          ping: { pong: true },
+          nested: true,
+        })
+      )
+    })
+
+    it("invokes a namespaced DELETE action", () => {
+      visitActionsDemo()
+      cy.intercept("DELETE", /\?action=[^&]*api\.removeLabel/).as(
+        "namespaceDelete"
+      )
+      cy.get('[data-testid="namespace-delete"]').click()
+      cy.wait("@namespaceDelete").then(({ request, response }) => {
+        expect(request.method).to.eq("DELETE")
+        expect(response?.statusCode).to.eq(200)
+      })
+      cy.get('[data-testid="namespace-delete-result"]').should(
+        "have.text",
+        JSON.stringify({ removed: "demo", had: true })
+      )
+    })
+  })
+
 })

@@ -23,8 +23,10 @@ export default function HomePage() {
                       checked={todo.completed}
                       onchange={(e) =>
                         updateTodo({
-                          id: todo.id,
-                          completed: e.currentTarget.checked,
+                          input: {
+                            id: todo.id,
+                            completed: e.currentTarget.checked,
+                          },
                         })
                           .then((todo) => {
                             console.log("updated todo", todo)
@@ -44,8 +46,10 @@ export default function HomePage() {
                       value={todo.text}
                       oninput={(e) =>
                         updateTodo({
-                          id: todo.id,
-                          text: e.currentTarget.value,
+                          input: {
+                            id: todo.id,
+                            text: e.currentTarget.value,
+                          },
                         }).then((todo) => {
                           todosData.value = todosData.value.map((t) =>
                             t.id === todo.id ? todo : t
@@ -65,7 +69,9 @@ export default function HomePage() {
         onsubmit={(e) => {
           e.preventDefault()
           const formData = new FormData(e.currentTarget)
-          createTodo({ text: formData.get("text") as string }).then(
+          createTodo({
+            input: { text: formData.get("text") as string },
+          }).then(
             () => todosData.refetch()
             //(todo) => (todosData.value = [...todosData.value, todo])
           )

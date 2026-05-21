@@ -1,4 +1,4 @@
-import { action } from "kiru/remote"
+import { action, type Schema } from "kiru/remote"
 
 export const getServerMessage = action.get(async ({ context }) => {
   return `hello from server (${context.user?.name ?? "unknown"})`
@@ -39,20 +39,23 @@ export const getStreamingProduct = action.get<StreamingProduct>(async () => {
   return { id: "p1", name: "Streaming Product" }
 })
 
-export const getStreamingReviews = action.post<{ productId: string }, StreamingReview[]>(
-  {
-    parse: (input) => {
-      if (typeof input !== "object" || input === null || !("productId" in input)) {
-        throw new Error("Invalid input")
-      }
-      return input as { productId: string }
-    },
+const streamingReviewsInputSchema: Schema<{ productId: string }> = {
+  parse: (input: unknown) => {
+    if (typeof input !== "object" || input === null || !("productId" in input)) {
+      throw new Error("Invalid input")
+    }
+    return input as { productId: string }
   },
-  async (_, input: { productId: string }) => {
+}
+
+export const getStreamingReviews = action.post<
+  { productId: string },
+  StreamingReview[]
+>(
+  { schema: streamingReviewsInputSchema },
+  async ({ input }) => {
     console.log("action: get streaming reviews")
     await new Promise((r) => setTimeout(r, 1000))
-    return [
-      { id: "r1", text: `Review for ${input.productId}` },
-    ]
+    return [{ id: "r1", text: `Review for ${input.productId}` }]
   }
 )
