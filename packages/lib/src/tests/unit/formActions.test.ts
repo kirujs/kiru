@@ -22,12 +22,18 @@ function makeFormInvokeArgs(
   signal: AbortSignal,
   formData: FormData
 ): RemoteFormActionHandlerArgs {
-  const base = buildRemoteActionHandlerArgs(context, signal, undefined, undefined)
+  const base = buildRemoteActionHandlerArgs(
+    context,
+    signal,
+    undefined,
+    undefined,
+    {}
+  )
   return {
     formData,
+    headers: base.headers,
     context: base.context,
     signal: base.signal,
-    execution: base.execution,
   }
 }
 
@@ -650,8 +656,8 @@ describe("action.post (form) / native submission", () => {
 
     let receivedContext: unknown = null
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: action.post({ type: "form" }, async ({ context, signal, execution }) => {
-        receivedContext = { context, signal, execution }
+      testAction: action.post({ type: "form" }, async ({ context, signal, headers }) => {
+        receivedContext = { context, signal, headers }
         return { success: true }
       }),
     })
@@ -677,11 +683,11 @@ describe("action.post (form) / native submission", () => {
     const handlerCtx = receivedContext as {
       context: typeof expectedContext
       signal: AbortSignal
-      execution?: unknown
+      headers: Record<string, string>
     }
     assert.deepStrictEqual(handlerCtx.context, expectedContext)
     assert.strictEqual(handlerCtx.signal, req.signal)
-    assert.ok(handlerCtx.execution)
+    assert.ok(handlerCtx.headers)
   })
 
   it("should return null when action query parameter is missing", async () => {

@@ -3,38 +3,45 @@ import type { RemoteActionHandlerArgs } from "./action.js"
 import {
   createActionExecution,
   createActionFrame,
+  headersToValidationInput,
   type ActionExecution,
   type CreateActionExecutionOptions,
 } from "./actionExecution.js"
 
 const actionExecutionAls = new AsyncLocalStorage<ActionExecution>()
 
-export function getActiveActionExecution(): ActionExecution | undefined {
+export function getActionExecutionContext(): ActionExecution | undefined {
   return actionExecutionAls.getStore()
 }
 
 export function toRemoteActionHandlerArgs<Body, Query = void>(
   execution: ActionExecution,
   body: Body,
-  query: Query
+  query: Query,
+  headers?: Record<string, string>
 ): RemoteActionHandlerArgs<Body, Query> {
   return {
     body,
     query,
+    headers:
+      headers ?? headersToValidationInput(execution.request.headers),
     context: execution.request.context,
     signal: execution.request.signal,
-    execution,
   }
 }
 
-/** Active handler args when inside RPC/composition. */
+/** Active flat handler args when inside RPC/composition (pre-validation placeholders). */
 export function getActiveActionContext(): RemoteActionHandlerArgs<
   void,
   void
 > | undefined {
-  const execution = getActiveActionExecution()
+  const execution = getActionExecutionContext()
   if (!execution) return undefined
-  return toRemoteActionHandlerArgs(execution, undefined, undefined)
+  return toRemoteActionHandlerArgs(
+    execution,
+    undefined as void,
+    undefined as void
+  )
 }
 
 export function createActionExecutionForRequest(
@@ -60,22 +67,22 @@ export function runWithActionFrame<T>(
   fn: () => T | Promise<T>,
   meta?: Record<string, unknown>
 ): T | Promise<T> {
-  const execution = actionExecutionAls.getStore()
-  if (!execution) {
+  const store = actionExecutionAls.getStore()
+  if (!store) {
     throw new Error(
       "runWithActionFrame called without an active ActionExecution (missing runInActionExecution?)"
     )
   }
 
-  const { runtime } = execution
-  const parent = runtime.currentFrame
+  const { runtime, execution: execState } = store
+  const parent = execState.currentFrame
   const span = runtime.tracing.startSpan(actionId, { actionId })
   const frame = createActionFrame(actionId, parent, meta)
-  runtime.currentFrame = frame
+  execState.currentFrame = frame
 
   const finish = () => {
     frame.endedAt = Date.now()
-    runtime.currentFrame = parent
+    execState.currentFrame = parent
     runtime.tracing.endSpan(span)
   }
 

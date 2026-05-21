@@ -1,3 +1,4 @@
+import { headersToValidationInput } from "./actionExecution.js"
 import type {
   RemoteActionInvokeArgs,
   RemoteFormActionFunction,
@@ -75,8 +76,10 @@ export {
   type RemoteActionMeta,
   type ActionExecution,
   type ActionExecutionFrame,
-  type RequestExecutionContext,
-  type ActionRuntimeContext,
+  type RequestEnvelope,
+  type RuntimeContext,
+  type ExecutionState,
+  type MiddlewareState,
   type CacheScope,
   type TraceContext,
   type TraceSpan,
@@ -86,12 +89,14 @@ export {
   createCacheScope,
   createTraceContext,
   listActionFrames,
+  headersToValidationInput,
   formDataToInput,
   buildRemoteActionHandlerArgs,
+  type RemoteActionInput,
 } from "./action.js"
 
 export {
-  getActiveActionExecution,
+  getActionExecutionContext,
   getActiveActionContext,
   runInActionExecution,
   runWithActionFrame,
@@ -208,6 +213,9 @@ async function invokeJsonRemoteAction(
     context,
     signal: request.signal,
     request,
+    headers: request.headers,
+    body,
+    query,
     entryActionId: rpcActionId,
   })
   const handlerArgs: RemoteActionInvokeArgs = {
@@ -303,13 +311,15 @@ export function createRemoteActionHandler(
           context,
           signal: request.signal,
           request,
+          headers: request.headers,
+          body: formData,
           entryActionId: rpcActionId,
         })
         const formArgs: RemoteFormActionHandlerArgs = {
           formData,
+          headers: headersToValidationInput(execution.request.headers),
           context: execution.request.context,
           signal: execution.request.signal,
-          execution,
         }
         try {
           if (request.signal.aborted) {

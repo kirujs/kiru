@@ -119,9 +119,9 @@ Handlers receive a single **`RemoteActionHandlerArgs<Body, Query>`** object:
 type RemoteActionHandlerArgs<Body, Query = void> = {
   body: Body
   query: Query
+  headers: Record<string, string>
   context: CustomRequestContext
   signal: AbortSignal
-  execution?: ActionExecution
 }
 ```
 
@@ -129,7 +129,8 @@ type RemoteActionHandlerArgs<Body, Query = void> = {
 - **`signal`** — aborts when the HTTP request is cancelled (client disconnect, `fetch` abort, or SSR render abort)
 - **`body`** — validated JSON body (`void` for GET / no-body POST)
 - **`query`** — validated query (`void` when no `validation.query`)
-- **`execution`** — request runtime (frames, cache, tracing) during RPC and nested composition
+- **`headers`** — incoming request headers (lowercase keys; first value when duplicated)
+- **Runtime (frames, cache, tracing)** — use `getActionExecutionContext()` inside handlers; not on callback args
 
 **Client / server calls** use one options envelope:
 
@@ -140,7 +141,7 @@ await api.removeLabel({ body: "demo" })          // body actions — `{ body }` 
 await search({ query: { q: "kiru" }, signal }) // GET with query schema
 ```
 
-Form handlers use **`RemoteFormActionHandlerArgs`**: `{ formData, context, signal, execution? }` (or `{ formData, … }` plus `body` when `{ type: "form", schema }` parses fields).
+Form handlers use **`RemoteFormActionHandlerArgs`**: `{ formData, headers, context, signal }` (or `{ formData, … }` plus `body` when `{ type: "form", schema }` parses fields).
 
 ## Namespaced exports
 
@@ -168,37 +169,42 @@ On the server, `await users.get(id)` from another handler runs **in-process** vi
 ### Execution model
 
 ```ts
-type ActionExecutionFrame = {
-  actionId: string
-  parent?: ActionExecutionFrame
-  startedAt: number
-  endedAt?: number
-  meta?: Record<string, unknown>
-}
-
-type RequestExecutionContext = {
-  requestId: string
-  request: Request
-  response?: Response
+type RequestEnvelope = {
+  body?: unknown
+  query?: Record<string, unknown>
+  headers: Headers
   context: CustomRequestContext
+  requestId: string
   signal: AbortSignal
+  raw: Request
 }
 
-type ActionRuntimeContext = {
+type RuntimeContext = {
+  cache: CacheScope
+  tracing: TraceContext
+  transaction?: Transaction
+  middleware: { locals: Record<string, unknown> }
+}
+
+type ExecutionState = {
   rootFrame: ActionExecutionFrame
   currentFrame: ActionExecutionFrame
-  cache: CacheScope      // request-local memo (dedupe nested calls)
-  tracing: TraceContext  // spans / flamegraphs later
-  transaction?: Transaction
 }
 
 type ActionExecution = {
-  request: RequestExecutionContext
-  runtime: ActionRuntimeContext
+  request: RequestEnvelope
+  runtime: RuntimeContext
+  execution: ExecutionState
 }
 ```
 
-Use `execution?.runtime.cache.memo(key, fn)` for in-request dedupe; `execution?.runtime.currentFrame` for the innermost frame.
+`ActionExecution` lives in **AsyncLocalStorage** during RPC/nested calls only. Handlers use flat args; read ALS via `getActionExecutionContext()`:
+
+```ts
+const ex = getActionExecutionContext()
+ex?.runtime.cache.memo(key, fn)           // in-request dedupe
+ex?.execution.currentFrame               // innermost frame
+```
 
 ```ts
 export const users = {

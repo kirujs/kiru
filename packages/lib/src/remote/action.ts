@@ -5,13 +5,12 @@ import { parseInput } from "../validation/index.js"
 import {
   runActionMiddleware,
   type ActionMiddleware,
-  type ActionMiddlewareContext,
   type RemoteActionMethod,
 } from "./actionMiddleware.js"
 import { RemoteError } from "./errors.js"
 import {
+  getActionExecutionContext,
   getActiveActionContext,
-  getActiveActionExecution,
   runWithActionFrame,
   toRemoteActionHandlerArgs,
 } from "./actionInvokeScope.js"
@@ -47,12 +46,15 @@ export { runActionMiddleware } from "./actionMiddleware.js"
 // ---------------------------------------------------------------------------
 
 import type { ActionExecution } from "./actionExecution.js"
+import { headersToValidationInput } from "./actionExecution.js"
 
 export type {
   ActionExecution,
   ActionExecutionFrame,
-  RequestExecutionContext,
-  ActionRuntimeContext,
+  RequestEnvelope,
+  RuntimeContext,
+  ExecutionState,
+  MiddlewareState,
   CacheScope,
   TraceContext,
   TraceSpan,
@@ -64,20 +66,27 @@ export {
   createActionFrame,
   createCacheScope,
   createTraceContext,
+  headersToValidationInput,
   listActionFrames,
 } from "./actionExecution.js"
+export { getActionExecutionContext } from "./actionInvokeScope.js"
 
 export type { RemoteActionMethod }
 
-/** Arguments passed to remote action handlers (and nested `__kiruInvoke`). */
-export type RemoteActionHandlerArgs<Body, Query = void> = {
+/** Flat input for handlers and middleware (not the ALS object). */
+export type RemoteActionInput<Body = unknown, Query = void> = {
   body: Body
   query: Query
+  headers: Record<string, string>
   context: CustomRequestContext
   signal: AbortSignal
-  /** Request runtime (frames, cache, tracing). Set during RPC and nested composition. */
-  execution?: ActionExecution
 }
+
+/** Arguments passed to remote action handlers. */
+export type RemoteActionHandlerArgs<
+  Body,
+  Query = void,
+> = RemoteActionInput<Body, Query>
 
 /** Registry / HTTP entry invoke shape (unknown at the boundary). */
 export type RemoteActionInvokeArgs = {
@@ -94,9 +103,9 @@ export function buildRemoteActionHandlerArgs<Body, Query = void>(
   signal: AbortSignal,
   body: Body,
   query: Query,
-  execution?: ActionExecution
+  headers: Record<string, string> = {}
 ): RemoteActionHandlerArgs<Body, Query> {
-  return { body, query, context, signal, execution }
+  return { body, query, headers, context, signal }
 }
 
 /** Parse URL search params for an action RPC (excludes `action`). */
@@ -133,14 +142,16 @@ export function __getSsrActionContext(): RemoteActionHandlerArgs<void, void> {
       {},
       new AbortController().signal,
       undefined,
-      undefined
+      undefined,
+      {}
     )
   }
   return buildRemoteActionHandlerArgs(
     entry.context,
     entry.signal,
     undefined,
-    undefined
+    undefined,
+    {}
   )
 }
 
@@ -168,22 +179,25 @@ function resolveCallableHandlerArgs<Body, Query>(
   body: Body,
   query: Query,
   call?: RemoteActionCallOptions<Body, Query>
-): RemoteActionHandlerArgs<Body, Query> {
+): Pick<
+  RemoteActionHandlerArgs<Body, Query>,
+  "body" | "query" | "headers" | "context" | "signal"
+> {
   const active = getActiveActionContext()
   if (active) {
     const signal = call?.signal ?? active.signal
     return {
       body,
       query,
+      headers: active.headers,
       context: active.context,
       signal,
-      execution: active.execution,
     }
   }
   const ssr = getSsrActionScopeEntry()
   if (ssr) {
     const signal = call?.signal ?? ssr.signal
-    return buildRemoteActionHandlerArgs(ssr.context, signal, body, query)
+    return buildRemoteActionHandlerArgs(ssr.context, signal, body, query, {})
   }
   throw new Error(
     "Remote action called without request context. Use during SSR render, inside another action handler, or from the client (after hydration)."
@@ -230,7 +244,7 @@ function dispatchCallableInvoke<Body, Query, Output>(
   args: RemoteActionHandlerArgs<Body, Query>,
   actionId?: string
 ): Promise<Output> {
-  const execution = getActiveActionExecution()
+  const execution = getActionExecutionContext()
   if (execution && actionId) {
     return Promise.resolve(
       runWithActionFrame(actionId, () =>
@@ -238,7 +252,8 @@ function dispatchCallableInvoke<Body, Query, Output>(
           toRemoteActionHandlerArgs(
             execution,
             args.body,
-            args.query
+            args.query,
+            args.headers
           )
         )
       )
@@ -463,15 +478,16 @@ function createRemoteAction<Body, Query, Output, Method extends RemoteActionMeth
   } = options
 
   const invoke = async (args: RemoteActionInvokeArgs) => {
-    const middlewareCtx: ActionMiddlewareContext = {
-      request: args.request,
-      method,
-      context: args.context,
-      signal: args.signal,
+    const headers = headersToValidationInput(
+      args.execution?.request.headers ?? args.request.headers
+    )
+    await runActionMiddleware(middleware, {
       body: args.body,
       query: args.query,
-    }
-    await runActionMiddleware(middleware, middlewareCtx)
+      headers,
+      context: args.context,
+      signal: args.signal,
+    })
     const validated = await validateActionPayload(validation, {
       body: args.body,
       query: args.query,
@@ -479,9 +495,9 @@ function createRemoteAction<Body, Query, Output, Method extends RemoteActionMeth
     return runAction({
       body: validated.body,
       query: validated.query,
+      headers,
       context: args.context,
       signal: args.signal,
-      execution: args.execution,
     })
   }
 
@@ -606,9 +622,9 @@ function handlerArgsFromFormInvoke(
   return {
     body: undefined,
     query: undefined as void,
+    headers: args.headers,
     context: args.context,
     signal: args.signal,
-    execution: args.execution,
   }
 }
 
@@ -838,9 +854,9 @@ export function isRemoteFormAction(
 
 export type RemoteFormActionHandlerArgs = {
   formData: FormData
+  headers: Record<string, string>
   context: CustomRequestContext
   signal: AbortSignal
-  execution?: ActionExecution
 }
 
 export type RemoteFormActionHandler<Output> = (

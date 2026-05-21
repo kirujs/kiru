@@ -9,28 +9,50 @@ export type ActionExecutionFrame = {
   meta?: Record<string, unknown>
 }
 
-/** HTTP / transport identity for one RPC request (stable, request-scoped). */
-export type RequestExecutionContext = {
-  requestId: string
-  request: Request
-  response?: Response
+/** Transport input for one action RPC (ALS request layer). */
+export type RequestEnvelope = {
+  body?: unknown
+  query?: Record<string, unknown>
+  headers: Headers
   context: CustomRequestContext
+  requestId: string
   signal: AbortSignal
+  raw: Request
 }
 
-/** Mutable call-graph + per-request runtime services (nested frames, cache, tracing). */
-export type ActionRuntimeContext = {
-  rootFrame: ActionExecutionFrame
-  currentFrame: ActionExecutionFrame
+export type MiddlewareState = {
+  locals: Record<string, unknown>
+}
+
+/** Per-request runtime services (cache, tracing, middleware bag). */
+export type RuntimeContext = {
   cache: CacheScope
   tracing: TraceContext
   transaction?: Transaction
+  middleware: MiddlewareState
 }
 
-/** One request execution: transport layer + action runtime layer. */
+/** Call-graph frames (ALS execution layer). */
+export type ExecutionState = {
+  rootFrame: ActionExecutionFrame
+  currentFrame: ActionExecutionFrame
+}
+
+/** ALS store shape only — not passed to handlers/middleware. */
 export type ActionExecution = {
-  request: RequestExecutionContext
-  runtime: ActionRuntimeContext
+  request: RequestEnvelope
+  runtime: RuntimeContext
+  execution: ExecutionState
+}
+
+/** Lowercase header names; first value wins when duplicated. */
+export function headersToValidationInput(headers: Headers): Record<string, string> {
+  const out: Record<string, string> = {}
+  headers.forEach((value, key) => {
+    const k = key.toLowerCase()
+    if (out[k] === undefined) out[k] = value
+  })
+  return out
 }
 
 /** Request-local memoization (in-flight dedupe, not CDN/global). */
@@ -135,9 +157,11 @@ export type CreateActionExecutionOptions = {
   context: CustomRequestContext
   signal: AbortSignal
   request: Request
+  headers: Headers
+  body?: unknown
+  query?: Record<string, unknown>
   requestId?: string
-  response?: Response
-  /** Sets both {@link ActionRuntimeContext.rootFrame} and `currentFrame`. */
+  /** Sets both {@link ExecutionState.rootFrame} and `currentFrame`. */
   entryActionId: string
   cache?: CacheScope
   tracing?: TraceContext
@@ -159,18 +183,23 @@ export function createActionExecution(
 
   return {
     request: {
-      requestId,
-      request: options.request,
-      response: options.response,
+      body: options.body,
+      query: options.query,
+      headers: options.headers,
       context: options.context,
+      requestId,
       signal: options.signal,
+      raw: options.request,
     },
     runtime: {
-      rootFrame,
-      currentFrame: rootFrame,
       cache: options.cache ?? createCacheScope(),
       tracing,
       transaction: options.transaction,
+      middleware: { locals: {} },
+    },
+    execution: {
+      rootFrame,
+      currentFrame: rootFrame,
     },
   }
 }
@@ -178,7 +207,7 @@ export function createActionExecution(
 /** Walk from `currentFrame` to root (innermost first). */
 export function listActionFrames(execution: ActionExecution): ActionExecutionFrame[] {
   const out: ActionExecutionFrame[] = []
-  let cur: ActionExecutionFrame | undefined = execution.runtime.currentFrame
+  let cur: ActionExecutionFrame | undefined = execution.execution.currentFrame
   while (cur) {
     out.push(cur)
     cur = cur.parent

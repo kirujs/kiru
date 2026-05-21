@@ -4,7 +4,7 @@ import type {
   CreateActionExecutionOptions,
 } from "./actionExecution.js"
 
-export function getActiveActionExecution(): ActionExecution | undefined {
+export function getActionExecutionContext(): ActionExecution | undefined {
   return undefined
 }
 
@@ -18,14 +18,15 @@ export function getActiveActionContext(): RemoteActionHandlerArgs<
 export function toRemoteActionHandlerArgs<Body, Query = void>(
   execution: ActionExecution,
   body: Body,
-  query: Query
+  query: Query,
+  headers?: Record<string, string>
 ): RemoteActionHandlerArgs<Body, Query> {
   return {
     body,
     query,
+    headers: headers ?? {},
     context: execution.request.context,
     signal: execution.request.signal,
-    execution,
   }
 }
 

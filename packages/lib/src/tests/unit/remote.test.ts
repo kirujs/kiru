@@ -9,6 +9,7 @@ import {
   __INTERNAL_REMOTE_REGISTRY,
   action,
   createRemoteActionHandler,
+  getActionExecutionContext,
   RemoteError,
 } from "../../remote/index.js"
 const SECRET = "test-secret-abc"
@@ -381,9 +382,11 @@ describe("remote / handler", () => {
     const token = makeKiruContextToken(ctx, SECRET)
     const routeId = "test/get-context"
     let captured: unknown = null
+    let capturedCtx: unknown = null
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       whoami: action.get(async (args) => {
         captured = args
+        capturedCtx = getActionExecutionContext()
         return "done"
       }),
     })
@@ -393,13 +396,14 @@ describe("remote / handler", () => {
     const handlerArgs = captured as {
       body: undefined
       query: undefined
+      headers: Record<string, string>
       context: typeof ctx
       signal: AbortSignal
-      execution?: unknown
     }
     assert.deepStrictEqual(handlerArgs.context, ctx)
     assert.strictEqual(handlerArgs.signal, req.signal)
-    assert.ok(handlerArgs.execution)
+    assert.ok(handlerArgs.headers)
+    assert.ok(capturedCtx)
   })
 
   it("returns 499 when the request aborts during a slow action", async () => {
@@ -592,8 +596,9 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/frame-stack"
 
-    const inner = action.get(async ({ execution }) => {
-      const frame = execution!.runtime.currentFrame
+    const inner = action.get(async () => {
+      const ex = getActionExecutionContext()!
+      const frame = ex.execution.currentFrame
       return {
         actionId: frame.actionId,
         parentId: frame.parent?.actionId,

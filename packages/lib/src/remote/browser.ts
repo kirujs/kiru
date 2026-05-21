@@ -34,6 +34,7 @@ export {
   type RemoteActionMethod,
   type RemoteActionHandler,
   type RemoteActionHandlerArgs,
+  type RemoteActionInput,
   type RemoteActionCallOptions,
   type ActionMiddleware,
   type ActionMiddlewareContext,
