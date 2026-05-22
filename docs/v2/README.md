@@ -86,6 +86,7 @@ flowchart TB
 15. **[02-competitive-positioning.md](./02-competitive-positioning.md)** — vs Next / SvelteKit / SolidStart / Nuxt.
 16. **[15-testing.md](./15-testing.md)** — Unit, e2e, **`.test.tsx` runner gap**, recommended cases.
 17. **[16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md)** — Ship blockers and prioritized fixes.
+18. **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** — **Sprint backlog (S0–S5), checkboxes, exit criteria, DoD for v2.0.0.**
 
 ---
 

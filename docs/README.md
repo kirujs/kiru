@@ -9,6 +9,7 @@ This folder documents **Kiru v2** — the router, rendering modes (CSR / SSR / S
 | New to Kiru v2 | [v2/README.md](./v2/README.md) |
 | Choosing CSR vs SSR vs SSG | [v2/03-rendering-modes.md](./v2/03-rendering-modes.md) |
 | Shipping to production | [v2/14-adapters-and-deploy-runtimes.md](./v2/14-adapters-and-deploy-runtimes.md), [v2/16-gaps-risks-and-launch-checklist.md](./v2/16-gaps-risks-and-launch-checklist.md) |
+| **Release planning / sprints** | **[v2/18-release-sprint-todos.md](./v2/18-release-sprint-todos.md)** |
 | Auth / forms / mutations | [v2/07-remote-actions.md](./v2/07-remote-actions.md) |
 | QA / CI | [v2/15-testing.md](./v2/15-testing.md) |
 
@@ -35,6 +36,7 @@ All detailed guides live under **[`docs/v2/`](./v2/)**:
 | 15 | Testing strategy & coverage gaps | [15-testing.md](./v2/15-testing.md) |
 | 16 | Gaps, risks, launch checklist | [16-gaps-risks-and-launch-checklist.md](./v2/16-gaps-risks-and-launch-checklist.md) |
 | 17 | Package exports & import guide | [17-package-exports-and-import-guide.md](./v2/17-package-exports-and-import-guide.md) |
+| 18 | **Release sprint todos** | [18-release-sprint-todos.md](./v2/18-release-sprint-todos.md) |
 
 ## Monorepo map (implementation)
 

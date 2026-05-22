@@ -148,28 +148,24 @@ Launch credibility requires fixing **CSR middleware error handling**, **running 
 
 ## Suggested fix order (sprints)
 
-**Sprint 1 — Trust**
+See **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** for the full sprint plan (S0–S5), per-task checkboxes, acceptance criteria, and v2.0.0 definition of done.
 
-1. P0-2 test runner  
-2. P0-1 middleware error  
-3. E2e middleware + action invalidate  
+**Summary:**
 
-**Sprint 2 — Parity**
-
-4. P0-3 outlet integration tests  
-5. Expand SSG e2e  
-6. File-routes SSR fixture  
-
-**Sprint 3 — Adopt**
-
-7. Migration guide + version bump  
-8. Cloudflare golden path  
-9. Security doc for RPC endpoints  
+| Sprint | Focus |
+|--------|--------|
+| S0 | Stabilize branch, actions API, ISR build checks |
+| S1 | Trust — test runner + CSR middleware fix |
+| S2 | Client parity — outlet matrix + integration tests |
+| S3 | E2E & hybrid — SSG, file-routes, matrix CI |
+| S4 | Release kit — migration, templates, deploy docs |
+| S5 | Edge & security — Cloudflare + SECURITY.md |
 
 ---
 
 ## Further reading
 
+- [18-release-sprint-todos.md](./18-release-sprint-todos.md)
 - [02-competitive-positioning.md](./02-competitive-positioning.md)
 - [15-testing.md](./15-testing.md)
 - [05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md)
