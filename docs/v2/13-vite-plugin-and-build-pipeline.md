@@ -121,8 +121,8 @@ When `serverEntry` set:
 
 `adapter: "cloudflare"`:
 
-- `assertISRAllowed` at build for each ISR route
-- `warnCloudflareISRInPages` / `generateWranglerSnippet` helpers
+- `warnCloudflareISRInPages` page scan (non-throwing; build fail via `assertISRAllowed` on route meta — **S5**)
+- `generateWranglerSnippet` helpers
 - Worker bundle excludes Node fs cache
 
 ---

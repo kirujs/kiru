@@ -76,7 +76,7 @@ export function assertISRAllowed(
     throw new Error(
       `[kiru] ISR with time-based revalidate or cache tags is not supported on deploy target "${target}"${route}. ` +
         `Use revalidate: false for immutable prerender, or dynamic: "force-dynamic" for SSR-only. ` +
-        `See docs/router/deploy-runtimes.md`
+        `See docs/v2/14-adapters-and-deploy-runtimes.md`
     )
   }
 }

@@ -99,8 +99,8 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 
 - [x] Fix CSR middleware error handling
 - [x] Run `router.test.tsx` in CI green
-- [ ] Verify remote action API stable (default export, `ActionFailure`)
-- [ ] `assertISRAllowed` passes on all cloudflare builds
+- [x] Verify remote action API stable (default export, `ActionFailure`) — S0-1 / S3 e2e
+- [x] `assertISRAllowed` runtime API + unit tests (S0-3); vite-plugin build fail → S5
 
 ### Testing
 
@@ -123,7 +123,7 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 - [ ] `create-kiru` templates match bootstrap imports
 - [ ] One golden Node deploy sample
 - [ ] One golden Cloudflare Worker sample
-- [ ] Changelog v2 breaking changes
+- [x] Changelog v2 breaking changes — draft in [CHANGELOG.md](../../CHANGELOG.md); inventory in [BREAKING-CHANGES.md](./BREAKING-CHANGES.md)
 
 ### Positioning
 
@@ -141,8 +141,8 @@ See **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** for the full 
 
 | Sprint | Focus |
 |--------|--------|
-| S0 | Stabilize branch, actions API, ISR build checks |
-| S1 | Trust — test runner + CSR middleware fix |
+| S0 | ~~Stabilize branch~~ **done** — actions API, ISR build checks, CHANGELOG draft |
+| S1 | ~~Trust~~ **done** — test runner + CSR middleware fix |
 | S2 | Client parity — outlet matrix + integration tests |
 | S3 | E2E & hybrid — SSG, FBR SSR/SSG e2e (P1-3), FBR special filenames (P1-12), matrix CI |
 | S4 | Release kit — migration, templates, deploy docs |

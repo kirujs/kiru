@@ -20,8 +20,11 @@ describe("@kirujs/runtime", () => {
   })
 
   it("assertISRAllowed throws for timed revalidate on cloudflare", () => {
-    assert.throws(() =>
-      assertISRAllowed("cloudflare", { revalidate: 60 }, { routeId: "/blog" })
+    assert.throws(
+      () =>
+        assertISRAllowed("cloudflare", { revalidate: 60 }, { routeId: "/blog" }),
+      (err: Error) =>
+        err.message.includes("docs/v2/14-adapters-and-deploy-runtimes.md")
     )
   })
 

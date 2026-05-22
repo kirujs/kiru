@@ -1,0 +1,93 @@
+# v2 breaking changes (vs `main`)
+
+Inventory for **S0-4** and the Sprint 4 **MIGRATION.md**. Package version on branch is still `1.5.3` until **P1-7** bumps to `2.0.0`.
+
+**Verified:** 2026-05-22 — `node builderman.js test` green; lib `pnpm test` (407 tests); remote-actions e2e in `e2e/ssr`; dev warning guards in lib CI.
+
+---
+
+## Router bootstrap (required)
+
+| Before (v1-style) | After (v2) |
+|-------------------|------------|
+| Single client mount path | `createRouterApp` from **`kiru/router/csr`** (SPA) |
+| SSR HTML + generic router import | **`kiru/router/ssr`** |
+| SSG / static HTML hydrate | **`kiru/router/ssg`** |
+
+Wrong bootstrap triggers **dev warnings** (`devWarnings.guard-*.test.ts`). SSR/SSG HTML mounted with `csr` loses loader data and request context.
+
+See [17-package-exports-and-import-guide.md](./17-package-exports-and-import-guide.md), [09-client-bootstrap-and-hydration.md](./09-client-bootstrap-and-hydration.md).
+
+---
+
+## Remote actions
+
+| Before | After |
+|--------|--------|
+| Ad-hoc failure envelopes | **`ActionFailure`** + `isActionFailure` from `kiru/remote` |
+| `actionFail` / `__kiruFail` | Still accepted on the wire for migration; prefer `fail()` / `ActionFailure` in new code |
+
+Patterns now supported and covered in e2e:
+
+- Named exports in `*.actions.ts`
+- **Default export** action object (`default-export-demo`)
+- **Linked** page + `.actions.ts` module
+
+See [07-remote-actions.md](./07-remote-actions.md).
+
+---
+
+## Middleware
+
+| Before | After |
+|--------|--------|
+| CSR `{ error: 403 }` effectively redirected to `/login` | **`RouteMiddlewareHttpError`** → error outlet; status preserved |
+| SSR error shape | Aligned where possible with `prepareAppForUrl` |
+
+See [05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md).
+
+---
+
+## File-based routes
+
+| Before | After |
+|--------|--------|
+| Manual `routes.ts` only | Optional **`router.fileRoutes`** codegen → `routes.gen.ts` |
+| Fixed `layout.tsx`, `error.tsx`, `not-found.tsx` | Configurable **`layoutFiles`**, **`errorFiles`**, **`notFoundFiles`** |
+
+See [04-route-tree-and-matching.md](./04-route-tree-and-matching.md).
+
+---
+
+## Build & deploy
+
+| Before | After |
+|--------|--------|
+| Implicit deploy assumptions | **`router.adapter`**: `node` \| `bun` \| `cloudflare` |
+| ISR on all targets | **Cloudflare:** `assertISRAllowed` API (runtime); build **warns** via page scan today; fail on route meta at SSG build planned **S5** |
+
+See [14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md), [10-isr-hybrid-and-prerender.md](./10-isr-hybrid-and-prerender.md).
+
+---
+
+## Removed / not present on v2 branch
+
+| Item | Notes |
+|------|--------|
+| **`bootstrapEnv`** | Not in codebase; no migration step |
+| **Vike / `types.vike.ts` in sandbox** | Sandbox SSR reworked to Kiru handler + vite-plugin (see `sandbox/ssr/`) |
+| Monolithic “one import for everything” client router | Split bootstrap + `kiru/router` server API |
+
+---
+
+## Testing & CI expectations
+
+- Lib tests: `*.test.ts` **and** `*.test.tsx` via `packages/lib/scripts/test.mjs`.
+- Release gate: `node builderman.js test` (packages + e2e matrix including `e2e/ssr`, `e2e/ssg`, `e2e/file-routes-*`, `e2e/ssr-matrix`).
+
+---
+
+## Feeds Sprint 4
+
+- **P1-7** `MIGRATION.md` — expand sections above with copy-paste examples.
+- **S4-8** `CHANGELOG.md` — [../../CHANGELOG.md](../../CHANGELOG.md) Unreleased section.

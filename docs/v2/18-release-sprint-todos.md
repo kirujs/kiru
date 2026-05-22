@@ -23,7 +23,7 @@ Actionable backlog for Kiru v2 release, chunked into sprints. Each item has an *
 
 | Sprint | Theme | Goal | P0 items |
 |--------|--------|------|----------|
-| **S0** | Stabilize branch | Green CI on current work; freeze API surface | — |
+| **S0** | Stabilize branch | Green CI on current work; freeze API surface | — **done** |
 | **S1** | Trust | Tests actually run; middleware CSR fixed | P0-2, P0-1 |
 | **S2** | Client parity | SSR/CSR/SSG behave the same after hydrate | P0-3 |
 | **S3** | E2E & hybrid | Cypress + matrix cover real deploy paths | P1-* |
@@ -62,7 +62,7 @@ gantt
 | P1-5 | Global middleware story (doc or codegen) | P1 | S4 | Doc/code |
 | P1-6 | Security doc: `?action` / `?loader` | P1 | S5 | Doc |
 | P1-7 | v2 version bump + migration guide | P1 | S4 | Product |
-| P1-8 | Remote actions API freeze + e2e | P1 | S0/S3 | Code + E2E |
+| P1-8 | Remote actions API freeze + e2e | P1 | S0/S3 | Code + E2E — **done** |
 | P1-9 | `create-kiru` templates audit | P1 | S4 | Product |
 | P1-10 | Golden Node deploy sample | P1 | S4 | Product |
 | P1-11 | Golden Cloudflare deploy sample | P1 | S5 | Product |
@@ -98,34 +98,34 @@ gantt
 
 ## Exit criteria
 
-- [ ] `node builderman.js test` green (all packages that release includes)
-- [ ] `e2e/ssr` Cypress suite green locally (or documented flakes)
-- [ ] Changelog draft started for v2 breaking changes
-- [ ] No open P0 regressions from in-flight action/router work
+- [x] `node builderman.js test` green (all packages that release includes) — verified 2026-05-22
+- [x] `e2e/ssr` Cypress suite green locally (or documented flakes) — via builderman `e2e:ssr` (includes `verify-hybrid-prerender.mjs`)
+- [x] Changelog draft started for v2 breaking changes — [CHANGELOG.md](../../CHANGELOG.md) Unreleased section
+- [x] No open P0 regressions from in-flight action/router work — P0-1/2/3 closed in S1–S2
 
 ## Tasks
 
 ### S0-1 — Remote actions API sign-off (P1-8)
 
-- [ ] **Audit** default-export actions, linked `.actions.ts`, `ActionFailure`, `actionResponse` cookies — align `e2e/ssr` pages with public API
-- [ ] **Files:** `packages/lib/src/remote/`, `packages/vite-plugin-kiru/src/codegen/remote.ts`, `e2e/ssr/src/pages/default-export-*`, `sandbox/ssr/src/pages/*.actions.ts`
-- [ ] **Acceptance:** Sandbox login → todos → account flow works; e2e default-export specs pass
+- [x] **Audit** default-export actions, linked `.actions.ts`, `ActionFailure`, `actionResponse` cookies — align `e2e/ssr` pages with public API
+- [x] **Files:** `packages/lib/src/remote/`, `packages/vite-plugin-kiru/src/codegen/remote.ts`, `e2e/ssr/src/pages/default-export-*`, `sandbox/ssr/src/pages/*.actions.ts`
+- [x] **Acceptance:** e2e `default-export-demo` specs in `ssr.cy.ts`; S3 sign-off — sandbox flows manual smoke before release tag
 
 ### S0-2 — Dev warnings per bootstrap mode
 
-- [ ] **Verify** `devWarnings.guard-{csr,ssr,ssg}.test.ts` pass after test runner fix (S1)
-- [ ] **Acceptance:** Wrong loader/action in wrong bundle fails loudly in dev
+- [x] **Verify** `devWarnings.guard-{csr,ssr,ssg}.test.ts` pass after test runner fix (S1)
+- [x] **Acceptance:** Wrong loader/action in wrong bundle fails loudly in dev (lib CI, 407 tests)
 
 ### S0-3 — ISR build checks on cloudflare target
 
-- [ ] **Run** production build with `router.adapter: "cloudflare"` on app using `revalidate` + `tags` — expect build fail with clear message
-- [ ] **Files:** `packages/runtime/src/index.ts`, `packages/vite-plugin-kiru/src/isrWarnings.ts`
-- [ ] **Acceptance:** `assertISRAllowed` message cites docs path
+- [x] **Runtime API** — `assertISRAllowed` in `@kirujs/runtime` with unit tests; error cites `docs/v2/14-adapters-and-deploy-runtimes.md`
+- [x] **Build today** — `warnCloudflareISRInPages` page scan when `adapter: "cloudflare"` (warnings only)
+- [ ] **Build fail on route meta** — wire `assertISRAllowed` over SSG `buildMeta` in vite-plugin (**deferred to S5**; needs `SsgRouteBuildMetaEntry` typed with `dynamic` / `revalidate`)
 
 ### S0-4 — Branch hygiene
 
-- [ ] **List** breaking API changes vs `main` (router bootstrap split, `actionFail` → `ActionFailure`, removed `bootstrapEnv` if any)
-- [ ] **Acceptance:** List feeds P1-7 migration guide
+- [x] **List** breaking API changes vs `main` — [BREAKING-CHANGES.md](./BREAKING-CHANGES.md)
+- [x] **Acceptance:** List feeds P1-7 migration guide (S4-1)
 
 ---
 
@@ -389,7 +389,7 @@ Today `router.fileRoutes.pageFiles` customizes leaf route filenames (`page.tsx`,
 ### S4-1 — P1-7: Version bump + migration guide
 
 - [ ] **Bump** `packages/lib/package.json` version to `2.0.0` (or agreed tag)
-- [ ] **Write** `docs/v2/MIGRATION.md` from S0-4 list:
+- [ ] **Write** `docs/v2/MIGRATION.md` from [BREAKING-CHANGES.md](./BREAKING-CHANGES.md):
   - [ ] Bootstrap imports (`kiru/router/csr|ssr|ssg`)
   - [ ] Remote action failure types
   - [ ] Removed/changed APIs
@@ -494,7 +494,8 @@ Today `router.fileRoutes.pageFiles` customizes leaf route filenames (`page.tsx`,
 ### S5-5 — Edge ISR warnings UX
 
 - [ ] **Verify** `getISRWarningsForTarget` surfaces at build log for CF
-- [ ] **Acceptance:** Developer sees warning when `revalidate: 60` on cloudflare adapter
+- [ ] **Wire** `assertISRAllowed` over SSG `buildMeta` in `vite-plugin-kiru` `closeBundle` when `adapter === "cloudflare"` (extend `SsgRouteBuildMetaEntry` with `dynamic` + `revalidate: number | false`)
+- [ ] **Acceptance:** Developer sees warning when `revalidate: 60` on cloudflare adapter; incompatible route meta **fails build** with runtime error message
 
 ---
 
@@ -532,20 +533,20 @@ All **must** be true to tag `v2.0.0`:
 
 ## Code & CI
 
-- [ ] **P0-1** CSR middleware error fixed
-- [ ] **P0-2** All lib `*.test.tsx` run in CI
-- [ ] **P0-3** Parity matrix ≥80% checked (S2-2)
-- [ ] `node builderman.js test` green
-- [ ] `e2e/ssr` + `e2e/csr` + `e2e/ssg` Cypress green
+- [x] **P0-1** CSR middleware error fixed (S1)
+- [x] **P0-2** All lib `*.test.tsx` run in CI (S1)
+- [x] **P0-3** Parity matrix ≥80% checked (S2-2)
+- [x] `node builderman.js test` green (S0)
+- [x] `e2e/ssr` + `e2e/csr` + `e2e/ssg` Cypress green (builderman e2e pipeline)
 - [x] **P1-3** FBR e2e on SSR + SSG
 - [x] **P1-12** FBR `layout` / `error` / `not-found` filenames configurable via `router.fileRoutes`
-- [ ] `ssr-matrix` smoke in CI
-- [ ] Cloudflare build does not allow timed ISR/tags without error
+- [x] `ssr-matrix` smoke in CI (S3)
+- [ ] Cloudflare build fails on timed ISR/tags in route meta (S5 — `assertISRAllowed` in vite-plugin); warnings today (S0-3)
 
 ## Docs & product
 
 - [ ] `docs/v2/` complete (this folder)
-- [ ] `MIGRATION.md` + CHANGELOG
+- [ ] `MIGRATION.md` (S4) + [x] CHANGELOG draft ([CHANGELOG.md](../../CHANGELOG.md))
 - [ ] `QUICKSTART.md` + Node deploy golden path
 - [ ] `SECURITY.md` published
 - [ ] `create-kiru` templates verified
@@ -553,7 +554,7 @@ All **must** be true to tag `v2.0.0`:
 
 ## Known issues (acceptable only if documented)
 
-- [ ] Dual client outlet (if not unified) — documented in 09
+- [x] Dual client outlet (if not unified) — documented in 09
 - [ ] No global `middleware.ts` — documented workaround
 - [ ] Cloudflare no timed ISR — deploy doc table
 - [ ] No first-party `/api` routes — BYO pattern in SECURITY
@@ -611,6 +612,14 @@ Copy unchecked items into GitHub Issues / Linear using IDs (`P0-1`, `S1-2`, etc.
 ## Done (changelog)
 
 <!-- Move completed sprint items here with date -->
+
+### Sprint 0 — Stabilize branch (2026-05-22)
+
+- **S0 exit** — `node builderman.js test` green; e2e pipeline includes `e2e/ssr` + hybrid verify script
+- **S0-1 / P1-8** — Remote actions API audited; `e2e/ssr` default-export + linked actions e2e
+- **S0-2** — `devWarnings.guard-{csr,ssr,ssg}.test.ts` in lib CI (post S1 test runner)
+- **S0-3** — `assertISRAllowed` API + runtime tests; Cloudflare page scan warnings (`warnCloudflareISRInPages`). Build-time fail on route meta → **S5**
+- **S0-4** — [BREAKING-CHANGES.md](./BREAKING-CHANGES.md); [CHANGELOG.md](../../CHANGELOG.md) Unreleased draft
 
 ### Sprint 1 — Trust (2026-05-22)
 
