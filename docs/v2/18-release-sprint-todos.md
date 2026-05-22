@@ -56,7 +56,8 @@ gantt
 | P0-3 | SSR/CSR outlet parity tests or unify | P0 | S2 | Code + test |
 | P1-1 | E2E middleware error SSR + CSR | P1 | S1/S3 | E2E |
 | P1-2 | Expand SSG + hybrid e2e | P1 | S3 | E2E |
-| P1-3 | File-routes SSR/hybrid fixture | P1 | S3 | E2E |
+| P1-3 | FBR e2e: SSR + SSG fixtures | P1 | S3 | E2E |
+| P1-12 | FBR configurable layout/error/not-found filenames | P1 | S3 | Code + doc |
 | P1-4 | Cloudflare Worker CI smoke | P1 | S5 | CI |
 | P1-5 | Global middleware story (doc or codegen) | P1 | S4 | Doc/code |
 | P1-6 | Security doc: `?action` / `?loader` | P1 | S5 | Doc |
@@ -267,13 +268,13 @@ gantt
 # Sprint 3 — E2E & hybrid deploy paths
 
 **Duration (suggested):** 5–7 days  
-**Goal:** Cypress and scripts cover hybrid ISR, SSG client nav, file-routes beyond CSR, and action flows.
+**Goal:** Cypress and scripts cover hybrid ISR, SSG client nav, FBR under SSR/SSG (not CSR-only), configurable FBR special filenames, and action flows.
 
 **Depends on:** S1–S2.
 
 ## Exit criteria
 
-- [ ] P1-2, P1-3, P1-8 e2e complete
+- [ ] P1-2, P1-3, P1-8, P1-12 complete (or P1-12 explicitly deferred with ticket)
 - [ ] `e2e/ssr/scripts/verify-hybrid-prerender.mjs` in CI
 - [ ] `e2e/ssr-matrix` green in CI
 - [ ] SSG e2e count increased (target: +10 `it()` vs today ~18)
@@ -308,12 +309,40 @@ gantt
 - [ ] **Complete** coverage for `default-export-demo`, literal vs linked actions
 - [ ] **Acceptance:** All cases in `e2e/ssr/cypress/e2e/ssr.cy.ts` or tier3
 
-### S3-5 — P1-3: File-routes SSR or hybrid fixture
+### S3-5 — P1-3: FBR e2e for SSR and SSG
 
-- [ ] **Option A:** New `e2e/file-routes-ssr` with `serverEntry` + codegen
-- [ ] **Option B:** Add `serverEntry` to existing file-routes app
-- [ ] **Tests:** middleware redirect, dynamic `[slug]`, route group, `extendRoutes` — under SSR
-- [ ] **Acceptance:** ≥3 SSR e2e tests for file-routes OR doc “CSR-only” in file-routes README
+`e2e/file-routes` is CSR-only today ([15-testing.md](./15-testing.md)). Extend coverage so file-based codegen is exercised under server render and static prerender, not only client bootstrap.
+
+**SSR**
+
+- [ ] **Option A:** New `e2e/file-routes-ssr` with `serverEntry` + `router.fileRoutes` codegen
+- [ ] **Option B:** Add `serverEntry` + hybrid handler to existing `e2e/file-routes`
+- [ ] **Tests (SSR):** middleware redirect, dynamic `[slug]`, route group, `extendRoutes` — full page load + at least one client nav after hydrate
+- [ ] **Acceptance:** ≥3 Cypress tests in an SSR file-routes app (mirror key cases from `e2e/file-routes/cypress/e2e/file-routes.cy.ts`)
+
+**SSG**
+
+- [ ] **Option A:** New `e2e/file-routes-ssg` with `router.fileRoutes` + `ssg: true` (routes default to `routes.gen.ts`)
+- [ ] **Option B:** Enable `fileRoutes` on a dedicated pages tree under `e2e/ssg` (or small sibling app)
+- [ ] **Tests (SSG):** static prerender of FBR index + dynamic route; `not-found` for unknown path; client `Link` nav after load
+- [ ] **Acceptance:** ≥3 Cypress tests in an SSG file-routes app; prerender output includes expected route HTML
+
+**Shared**
+
+- [ ] **Files:** `packages/file-routes/`, `e2e/file-routes/`, new `e2e/file-routes-ssr` / `e2e/file-routes-ssg` if split
+- [ ] **Doc:** Update [04-route-tree-and-matching.md](./04-route-tree-and-matching.md) and `e2e/file-routes/README` — no longer “CSR verified only” once SSR/SSG land
+
+### S3-10 — P1-12: FBR configurable layout / error / not-found filenames
+
+Today `router.fileRoutes.pageFiles` customizes leaf route filenames (`page.tsx`, `index.tsx`, …), but `layout.tsx`, `error.tsx`, and `not-found.tsx` are hardcoded in `@kirujs/file-routes` (`scanPagesDir.ts`). Teams using alternate conventions (e.g. `_layout.tsx`, `404.tsx`) cannot align special files with their page naming scheme.
+
+- [ ] **Add** options on `FileRoutesOptions` and `router.fileRoutes` (names TBD, e.g. `layoutFiles`, `errorFiles`, `notFoundFiles` — same glob-style patterns as `pageFiles`)
+- [ ] **Refactor** `scanPagesDir.ts` to match special files via `fileNameMatchesPagePattern` (or shared matcher) instead of fixed regexes
+- [ ] **Defaults** preserve current behavior: `layout.{tsx,ts,jsx,js,mdx}`, `error.{…}`, `not-found.{…}`
+- [ ] **Plumb** through `packages/vite-plugin-kiru/src/fileRoutesConfig.ts` and plugin types/README
+- [ ] **Tests:** `packages/file-routes` unit tests with custom filenames; optional fixture under `packages/file-routes/fixtures/`
+- [ ] **Doc:** [04-route-tree-and-matching.md](./04-route-tree-and-matching.md) + `docs/router/file-based-routes.md` — table of configurable patterns
+- [ ] **Acceptance:** App with `layoutFiles: ["_layout.{tsx,ts}"]` (or equivalent) codegen’s `routes.gen.ts` without renaming files on disk to `layout.tsx`
 
 ### S3-6 — `ssr-matrix` CI
 
@@ -505,6 +534,8 @@ All **must** be true to tag `v2.0.0`:
 - [ ] **P0-3** Parity matrix ≥80% checked (S2-2)
 - [ ] `node builderman.js test` green
 - [ ] `e2e/ssr` + `e2e/csr` + `e2e/ssg` Cypress green
+- [ ] **P1-3** FBR e2e on SSR + SSG (or documented defer)
+- [ ] **P1-12** FBR `layout` / `error` / `not-found` filenames configurable via `router.fileRoutes` (or documented defer)
 - [ ] `ssr-matrix` smoke in CI
 - [ ] Cloudflare build does not allow timed ISR/tags without error
 
@@ -549,7 +580,8 @@ All **must** be true to tag `v2.0.0`:
 | No `/api` routes (W-4) | S4, S5 | S4-7, S5-3 |
 | `prepareAppForUrl` untested (W-2 related) | S2 | S2-4 |
 | Thin SSG e2e (P1-2) | S3 | S3-1 |
-| File-routes SSR gap (P1-3) | S3 | S3-5 |
+| File-routes SSR/SSG gap (P1-3) | S3 | S3-5 |
+| FBR special files not configurable (P1-12) | S3 | S3-10 |
 | Thin middleware unit tests | S1 | S1-5 |
 
 ---
@@ -561,7 +593,7 @@ All **must** be true to tag `v2.0.0`:
 | S0 | Actions API | ISR build | Smoke e2e | Changelog draft |
 | S1 | navigation fix | test.mjs | e2e SSR error | Update middleware doc |
 | S2 | outlet unify/audit | prepareApp tests | parity matrix | Update hydration doc |
-| S3 | e2e pages | matrix CI | Cypress | — |
+| S3 | e2e pages, FBR config | matrix CI | Cypress FBR SSR/SSG | file-routes docs |
 | S4 | templates | DEPLOY-NODE | — | QUICKSTART, MIGRATION |
 | S5 | — | DEPLOY-CF | CF smoke | SECURITY |
 

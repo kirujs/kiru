@@ -44,7 +44,8 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 |----|-----|-------|
 | P1-1 | No e2e for middleware `{ error }` | Add SSR + CSR cases after P0-1 |
 | P1-2 | SSG e2e thinner than SSR | ~18 vs ~65 tests — expand hybrid + static loader nav |
-| P1-3 | File-routes only CSR e2e | Add SSR/hybrid fixture or scope docs “CSR verified” |
+| P1-3 | FBR e2e: CSR only today | Add SSR + SSG Cypress fixtures (≥3 tests each); see S3-5 in [18](./18-release-sprint-todos.md) |
+| P1-12 | FBR special filenames hardcoded | `pageFiles` is configurable; `layout` / `error` / `not-found` are not — add `layoutFiles` etc. on `router.fileRoutes` |
 | P1-4 | Cloudflare ISR story | Build-time assert exists; need Worker smoke in CI |
 | P1-5 | No global `middleware.ts` | Document root scope pattern; consider codegen |
 | P1-6 | Multiplexed `?action` / `?loader` | Publish security whitepaper for adopters |
@@ -85,6 +86,8 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 | Edge users enable ISR tags | Low | Medium | Build assert + docs |
 | Loader RPC abuse | Low | High | Origin + token docs, rate limit at adapter |
 | Hash hydration mismatch | Low | Medium | Regression test |
+| FBR regressions only caught on CSR | Medium | Medium | P1-3 SSR + SSG e2e |
+| FBR naming mismatch vs app conventions | Low | Low | P1-12 configurable special files |
 
 ---
 
@@ -104,6 +107,9 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 - [ ] E2e: default-export actions (e2e pages in branch)
 - [ ] ssr-matrix green on CI
 - [ ] SSG hybrid script: `e2e/ssr/scripts/verify-hybrid-prerender.mjs`
+- [ ] **P1-3** E2e: file-based routes on SSR (middleware, dynamic, groups — mirror `e2e/file-routes`)
+- [ ] **P1-3** E2e: file-based routes on SSG (prerender + client nav + not-found)
+- [ ] **P1-12** FBR: configurable `layout` / `error` / `not-found` filename patterns via `router.fileRoutes`
 
 ### Documentation (this folder)
 
@@ -137,7 +143,7 @@ See **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** for the full 
 | S0 | Stabilize branch, actions API, ISR build checks |
 | S1 | Trust — test runner + CSR middleware fix |
 | S2 | Client parity — outlet matrix + integration tests |
-| S3 | E2E & hybrid — SSG, file-routes, matrix CI |
+| S3 | E2E & hybrid — SSG, FBR SSR/SSG e2e (P1-3), FBR special filenames (P1-12), matrix CI |
 | S4 | Release kit — migration, templates, deploy docs |
 | S5 | Edge & security — Cloudflare + SECURITY.md |
 
