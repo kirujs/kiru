@@ -9,11 +9,6 @@ export default defineConfig({
     kiru({
       router: {
         ssg: true,
-        images: {
-          optimize: true,
-          formats: ["webp"],
-          config: { strategy: "build" },
-        },
       },
     }),
   ],

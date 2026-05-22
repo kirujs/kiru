@@ -111,26 +111,6 @@ export async function runSsgPrerender(input: {
       pageModuleUsesStaticLoader,
     } = (await vite.ssrLoadModule("kiru/router")) as SsgPrerenderRouter
 
-    if (opts.router?.images) {
-      try {
-        const manifestPath = path.join(state.outDir, "kiru-image-manifest.json")
-        const raw = await fs.readFile(manifestPath, "utf8")
-        const imageMod = (await vite.ssrLoadModule("kiru/image")) as {
-          setBuildImageManifest: (manifest: unknown) => void
-          defineImageConfig: (config: Record<string, unknown>) => void
-        }
-        imageMod.setBuildImageManifest(JSON.parse(raw))
-        const imageOpts =
-          typeof opts.router.images === "object" ? opts.router.images : {}
-        imageMod.defineImageConfig({
-          strategy: "build",
-          ...imageOpts.config,
-        })
-      } catch {
-        /* optional */
-      }
-    }
-
     let site = routesMod.site
     if (!site) {
       const candidates =

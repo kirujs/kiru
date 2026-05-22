@@ -3,7 +3,6 @@ import { serializeDocumentHead } from "./meta.js"
 import { serializeRequestContextScript } from "./requestContext.js"
 import { serializePageDataScript } from "./pageData.js"
 import { serializeI18nScript, type HydratedI18nPayload } from "./i18nContext.js"
-import { mergeImagePreloadsIntoHead } from "../image/preloadRegistry.js"
 import { mergeRouteAndPageHead } from "./pageHead.js"
 import type {
   CompiledRouteHtmlTemplate,
@@ -71,7 +70,7 @@ export function renderStreamForRouteMatch(
   const baseHeadMeta =
     opts.streamHeadMeta ??
     mergeRouteAndPageHead(match.route.head, undefined)
-  const resolveHeadMeta = () => mergeImagePreloadsIntoHead(baseHeadMeta)
+  const resolveHeadMeta = () => baseHeadMeta
   const mayEarlyFlush =
     !!opts.earlyFlushHead &&
     opts.compiledTemplate?.headBeforeBody === true

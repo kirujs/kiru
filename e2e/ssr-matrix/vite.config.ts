@@ -20,9 +20,6 @@ export default defineConfig({
         adapter: cell.adapter,
         serverEntry: cell.serverEntry,
         ssg: true,
-        ...(cell.adapter === "cloudflare"
-          ? { images: { config: { strategy: "build" } } }
-          : {}),
       },
     }),
   ],

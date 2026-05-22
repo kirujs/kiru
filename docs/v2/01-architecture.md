@@ -8,7 +8,7 @@ This document describes how Kiru v2’s router and rendering stack is structured
 
 1. **One route tree** powers CSR, SSR, SSG, and hybrid ISR — no duplicate route definitions per mode.
 2. **Tree-shakeable client bundles** — CSR builds must not pull SSR hydration; SSG must not pull SSR-only loader RPC unless hybrid.
-3. **Explicit deploy capabilities** — Node/Bun vs Cloudflare differ for ISR, disk, and image optimization (`@kirujs/runtime`).
+3. **Explicit deploy capabilities** — Node/Bun vs Cloudflare differ for ISR and disk (`@kirujs/runtime`). Image pipeline redesign: [21-image-pipeline-adr.md](./21-image-pipeline-adr.md).
 4. **Framework parity where it matters** — loaders, middleware, actions, streaming HTML, static generation, and client navigations after hydration.
 
 Kiru is **not** aiming for React Server Components or a second server rendering paradigm; the server produces HTML + serialized hydration payloads for a **client-side signal tree**.
@@ -54,7 +54,7 @@ Kiru is **not** aiming for React Server Components or a second server rendering 
 
 | Package | Runtimes |
 |---------|----------|
-| `adapter-node` | Node — `createKiruHandler`, disk ISR, static assets, sharp images |
+| `adapter-node` | Node — `createKiruHandler`, disk ISR, static assets |
 | `adapter-bun` | Bun — same capabilities as Node |
 | `adapter-cloudflare` | Workers — SSR + **immutable** prerender via `getAsset`; no timed ISR |
 
@@ -66,8 +66,8 @@ Single source of truth for **what each deploy target can do**:
 
 ```typescript
 // packages/runtime/src/index.ts (conceptual)
-node | bun  → { isr: true, mutablePrerenderCache: true, runtimeImageOptimizer: true, fs: true }
-cloudflare → { isr: false, mutablePrerenderCache: false, runtimeImageOptimizer: false, fs: false }
+node | bun  → { isr: true, mutablePrerenderCache: true, fs: true }
+cloudflare → { isr: false, mutablePrerenderCache: false, fs: false }
 ```
 
 Build and adapter startup call `assertISRAllowed()` when edge + timed revalidate/tags would be ignored.
@@ -222,7 +222,7 @@ Co-located `middleware.ts` is normalized via `collectRouteMiddlewareModule` (`ro
 
 - **Vite** — bundling, HMR, client/server split.
 - **Adapters** — static file serving, `fetch` integration, `getRequestContext`.
-- **sharp** (optional) — build-time and Node runtime image variants.
+- Image pipeline — removed in v2.0; v2.1+ per [21-image-pipeline-adr.md](./21-image-pipeline-adr.md).
 - **Cypress e2e** — behavioral contracts; see [15-testing.md](./15-testing.md).
 
 ---

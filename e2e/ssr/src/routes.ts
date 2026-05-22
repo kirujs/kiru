@@ -86,10 +86,6 @@ export const routes = createRouteTree({
         component: () => import("./pages/ppr-force-static-demo"),
         head: { title: "E2E PPR force-static" },
       }),
-      createRoute("/image-demo", {
-        component: () => import("./pages/image-demo"),
-        head: { title: "E2E Image" },
-      }),
       createRoute("/streaming-test", {
         component: () => import("./pages/streaming-test"),
         head: { title: "E2E SSR Streaming test" },

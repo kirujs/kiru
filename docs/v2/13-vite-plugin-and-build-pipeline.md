@@ -40,8 +40,6 @@ export default defineConfig({
 | `remote` | glob | Action codegen + virtual registry |
 | `htmlTemplate` | path | Shell for prerender/SSR (default `index.html`) |
 | `htmlShell` | async fn | Full HTML override per route |
-| `images` | boolean \| ImagePluginOptions | Asset pipeline |
-
 ### Bootstrap resolution
 
 ```typescript

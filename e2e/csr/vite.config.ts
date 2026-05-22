@@ -7,15 +7,5 @@ export default defineConfig({
       port: 8001,
     },
   },
-  plugins: [
-    kiru({
-      router: {
-        images: {
-          optimize: true,
-          formats: ["webp"],
-          config: { strategy: "build" },
-        },
-      },
-    }),
-  ],
+  plugins: [kiru()],
 })

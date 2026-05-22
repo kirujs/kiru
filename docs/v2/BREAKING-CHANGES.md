@@ -70,6 +70,15 @@ See [14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md), 
 
 ---
 
+## Images (v2.0)
+
+| Before | After |
+|--------|--------|
+| `<Image />` from `kiru`, `kiru/image`, `router.images`, `/_kiru/image` (sharp) | **Removed** — use `<img>` + static URLs; see [21-image-pipeline-adr.md](./21-image-pipeline-adr.md) |
+| `createKiruHandler({ image: … })` | Option removed from `@kirujs/adapter-node` |
+
+---
+
 ## Removed / not present on v2 branch
 
 | Item | Notes |

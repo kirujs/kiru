@@ -169,9 +169,8 @@ fillRouteHtmlTemplate(templateHtml, {
 
 - `generatePublicStaticPaths` cached per renderer instance
 - Prerender cache async init on first ISR use
-- Image preload registry merged into head during stream (`mergeImagePreloadsIntoHead`)
-
 ---
+
 
 ## Further reading
 

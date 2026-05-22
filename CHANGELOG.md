@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `@kirujs/runtime` deploy capabilities and `assertISRAllowed` for edge targets.
 - Adapters: `@kirujs/adapter-node`, `@kirujs/adapter-bun`, `@kirujs/adapter-cloudflare`.
 - `docs/v2/` architecture and release documentation set.
+- ADRs: parallel routes ([docs/v2/20-parallel-routes-adr.md](./docs/v2/20-parallel-routes-adr.md)), image pipeline ([docs/v2/21-image-pipeline-adr.md](./docs/v2/21-image-pipeline-adr.md)).
 
 ### Changed
 
@@ -24,6 +25,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Breaking:** Prefer `ActionFailure` / `fail()` from `kiru/remote` over legacy `actionFail` / `__kiruFail` wire envelopes.
 - CSR middleware `{ error: status }` renders the error outlet instead of redirecting to `/login`.
 - `packages/lib` test runner executes `*.test.tsx` (router, hydration, dev warnings).
+- `prepareAppForUrl` split into `prepareAppLocale`, `prepareAppMatch`, `prepareAppHead`, `prepareAppTypes` (Sprint 5).
+
+### Removed
+
+- **Breaking:** `<Image />`, `kiru/image`, Vite `router.images`, and Node `/_kiru/image` sharp optimizer (Sprint 5 — redesign in image pipeline ADR).
 
 ### Fixed
 

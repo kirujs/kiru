@@ -147,7 +147,7 @@ const vitePluginCacheConfig = {
     fileRoutes.artifact("build"),
     devtoolsHost.artifact("build"),
     runtime.artifact("build"),
-    adapterCloudflare.artifact("build"),
+    adapterNode.artifact("build"),
     pnpm.package(),
   ],
   outputs: ["dist"],
@@ -160,7 +160,7 @@ const vitePlugin = task({
     build: {
       run: "pnpm build",
       cache: vitePluginCacheConfig,
-      dependencies: [lib, fileRoutes, devtoolsHost, runtime, adapterCloudflare],
+      dependencies: [lib, fileRoutes, devtoolsHost, runtime, adapterNode],
     },
     test: {
       run: "pnpm test",
@@ -213,20 +213,6 @@ const csrTest = task({
   cwd: "e2e/csr",
 })
 
-/** Sharp image pipeline; excluded from default `e2e/csr` Cypress config. */
-const csrImageTest = task({
-  name: "e2e:csr:image",
-  cwd: "e2e/csr",
-  commands: {
-    test: {
-      run: "pnpm run test:image",
-      cache: E2ECachConfig,
-    },
-  },
-  dependencies: adapterDeps,
-  env: { NODE_ENV: "development" },
-})
-
 const ssgTest = task({
   ...sharedE2EConfig,
   name: "e2e:ssg",
@@ -273,7 +259,13 @@ const ssrMatrixTest = task({
     build: {
       run: 'node -e "process.exit(0)"',
       cache: {
-        inputs: ["scripts", "src", "vite.config.ts", "wrangler.toml", pnpm.package()],
+        inputs: [
+          "scripts",
+          "src",
+          "vite.config.ts",
+          "wrangler.toml",
+          pnpm.package(),
+        ],
         outputs: [],
       },
     },
@@ -287,10 +279,9 @@ const ssrMatrixTest = task({
 })
 
 // `pnpm test` at repo root runs lib unit tests (incl. *.test.tsx) via adapterDeps,
-// then this pipeline: CSR Cypress, CSR image (Sharp), SSG/SSR/file-routes/matrix e2e.
+// then this pipeline: CSR Cypress, SSG/SSR/file-routes/matrix e2e.
 const e2e = pipeline([
   csrTest,
-  csrImageTest,
   ssgTest,
   ssrTest,
   fileRoutesTest,

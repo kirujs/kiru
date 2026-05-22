@@ -24,7 +24,6 @@
     "kiru": "workspace:^",
     "kiru-devtools-host": "workspace:^",
     "rollup": "^4.57.1",
-    "sharp": "^0.34.5",
     "tsx": "^4.21.0"
   },
   "dependencies": {

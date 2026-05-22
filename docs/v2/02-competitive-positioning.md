@@ -33,7 +33,7 @@ How Kiru v2 compares to **Next.js (App Router)**, **SvelteKit**, **SolidStart**,
 | API routes / REST handlers | ❌ multiplexed `?action` / `?loader` | ✅ Route Handlers | ✅ `+server` | ✅ | ✅ server/api |
 | React Server Components | ❌ | ✅ | N/A | N/A | N/A |
 | Content / MDX layer | ❌ built-in | ✅ ecosystem | ✅ | Partial | ✅ @nuxt/content |
-| Image pipeline | ✅ `kiru/image` + sharp | ✅ `next/image` | ✅ `@sveltejs/enhanced-img` | Partial | ✅ `@nuxt/image` |
+| Image pipeline | ❌ removed v2.0 (ADR v2.1+) | ✅ `next/image` | ✅ `@sveltejs/enhanced-img` | Partial | ✅ `@nuxt/image` |
 | i18n routing | ✅ built-in router | ✅ ecosystem | ✅ ecosystem | Partial | ✅ @nuxtjs/i18n |
 | View Transitions | ✅ router option | Partial | ✅ | ✅ | Via Vue |
 | DevTools | ✅ kiru devtools | ✅ | ✅ | Partial | ✅ |
@@ -87,7 +87,7 @@ That is powerful but unfamiliar. BFFs and public APIs often want `/api/v1/...` r
 
 ### 3. Cloudflare is second-class for caching
 
-Timed ISR, tags, mutable prerender cache, and runtime sharp optimization are **disabled** on `cloudflare` deploy target. Workers are supported for SSR + immutable static assets, not for “Next on Workers” parity.
+Timed ISR, tags, and mutable prerender cache are **disabled** on `cloudflare` deploy target. Workers are supported for SSR + immutable static assets, not for “Next on Workers” parity. Runtime image optimization was removed in v2.0 (see [21-image-pipeline-adr.md](./21-image-pipeline-adr.md)).
 
 ### 4. Middleware scope
 

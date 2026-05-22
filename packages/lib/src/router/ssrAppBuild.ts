@@ -1,7 +1,6 @@
 import { Fragment } from "../element.js"
 import { renderMode } from "../globals.js"
 import { headlessRender } from "../headlessRender.js"
-import { mergeImagePreloadsIntoHead } from "../image/preloadRegistry.js"
 import { createI18nRuntime, serializeI18nScript, type HydratedI18nPayload } from "./i18nContext.js"
 import { serializeDocumentHead } from "./meta.js"
 import { serializePageDataScript } from "./pageData.js"
@@ -54,9 +53,8 @@ export async function renderStringWithDocument(
     renderMode.current = prev
   }
 
-  const resolvedMeta = mergeImagePreloadsIntoHead(
+  const resolvedMeta =
     streamHeadMeta ?? mergeRouteAndPageHead(match.route.head, undefined)
-  )
   const ctxScript = serializeRequestContextScript(requestContext)
   const pageDataScript =
     pageData !== undefined ? serializePageDataScript(pageData) : ""

@@ -54,10 +54,6 @@
       "types": "./dist/ssr/routerHydrate.d.ts",
       "default": "./dist/ssr/routerHydrate.js"
     },
-    "./image": {
-      "types": "./dist/image/index.d.ts",
-      "default": "./dist/image/index.js"
-    },
     "./router": {
       "types": "./dist/router/index.d.ts",
       "browser": "./dist/router/client.js",
@@ -103,18 +99,13 @@
     "@kirujs/runtime": "workspace:^"
   },
   "peerDependencies": {
-    "@standard-schema/spec": "^1.1.0",
-    "sharp": ">=0.33.0"
+    "@standard-schema/spec": "^1.1.0"
   },
   "browser": {
-    "./dist/image/preloadRegistry.js": "./dist/image/preloadRegistry.client.js",
     "./dist/remote/actionInvokeScope.js": "./dist/remote/actionInvokeScope.client.js"
   },
   "peerDependenciesMeta": {
     "@standard-schema/spec": {
-      "optional": true
-    },
-    "sharp": {
       "optional": true
     }
   },

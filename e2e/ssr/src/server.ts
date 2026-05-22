@@ -1,10 +1,8 @@
 import "virtual:kiru:remote-registry"
 import { createServer } from "node:http"
-import sharp from "sharp"
 import { createKiruHandler, toNodeListener } from "@kirujs/adapter-node"
 import i18n from "./i18n.js"
 import { routes } from "./routes"
-import { imageConfig } from "./imageConfig.js"
 
 const isProd = process.env.NODE_ENV === "production"
 
@@ -31,7 +29,6 @@ const kiru = createKiruHandler({
       user: { name: name || "E2E User" },
     }
   },
-  image: isProd ? { config: imageConfig, sharp } : undefined,
 })
 
 export default { fetch: kiru.fetch }

@@ -170,11 +170,6 @@ export interface KiruPluginOptions {
       document: { headHtml: string; title?: string },
       assets?: { manifest?: Record<string, unknown> }
     ) => string | Promise<string>
-    /**
-     * Static image imports → `ImageAsset` metadata; optional build-time variants.
-     * @see docs/router/kiru-image.md
-     */
-    images?: boolean | import("./image/plugin.js").ImagePluginOptions
   }
 }
 

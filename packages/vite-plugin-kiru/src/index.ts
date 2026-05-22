@@ -62,7 +62,6 @@ import { promises as fs } from "node:fs"
 import path from "node:path"
 import { glob } from "tinyglobby"
 
-import { kiruImagePlugin } from "./image/plugin.js"
 import { assertCloudflareRouteBuildMeta } from "./assertCloudflareBuildMeta.js"
 import { warnCloudflareISRInPages } from "./isrWarnings.js"
 import { generateWranglerSnippet } from "./wranglerSnippet.js"
@@ -891,13 +890,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
   } satisfies Plugin
 
-  const plugins: PluginOption[] = [mainPlugin, remotePlugin]
-  if (opts.router?.images) {
-    const imageOpts =
-      typeof opts.router.images === "object" ? opts.router.images : {}
-    plugins.push(kiruImagePlugin(imageOpts))
-  }
-  return plugins
+  return [mainPlugin, remotePlugin]
 }
 
 // Export additional utilities

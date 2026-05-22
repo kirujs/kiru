@@ -6,11 +6,11 @@ Production apps use **adapters** to connect `createRenderer` to a host HTTP stac
 
 ## Deploy targets
 
-| Target | ISR timed/tags | Mutable prerender cache | Runtime sharp | FS prerender dir |
-|--------|----------------|-------------------------|---------------|------------------|
-| `node` | ✅ | ✅ | ✅ | ✅ |
-| `bun` | ✅ | ✅ | ✅ | ✅ |
-| `cloudflare` | ❌ | ❌ | ❌ | ❌ |
+| Target | ISR timed/tags | Mutable prerender cache | FS prerender dir |
+|--------|----------------|-------------------------|------------------|
+| `node` | ✅ | ✅ | ✅ |
+| `bun` | ✅ | ✅ | ✅ |
+| `cloudflare` | ❌ | ❌ | ❌ |
 
 Source: `packages/runtime/src/index.ts`.
 
@@ -37,7 +37,6 @@ Shared types:
 | `importMetaUrl` | Resolve `clientDir` |
 | `prerenderedHtmlDir` | Hybrid disk serve (default client dir; `false` to disable) |
 | `getRequestContext` | Per-request `CustomRequestContext` |
-| `image` | sharp runtime optimizer |
 | `serveStaticAssets` | Serve Vite assets before SSR (default prod) |
 | `stream` | Pass through to `createRenderer` |
 

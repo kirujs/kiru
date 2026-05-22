@@ -20,7 +20,6 @@
   },
   "dependencies": {
     "@kirujs/adapter-node": "workspace:^",
-    "kiru": "workspace:^",
-    "sharp": "^0.34.5"
+    "kiru": "workspace:^"
   }
 }

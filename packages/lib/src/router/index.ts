@@ -58,8 +58,3 @@ export {
 } from "./i18nContext.js"
 export { createI18nTranslator, getByPath, type DotPath } from "./i18n/translate.js"
 export * from "./site.js"
-export {
-  createImageOptimizer,
-  createImageOptimizerIfRuntime,
-  type CreateImageOptimizerOptions,
-} from "./imageOptimizer.js"

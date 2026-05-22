@@ -22,11 +22,7 @@
     "directory": "packages/adapter-node"
   },
   "peerDependencies": {
-    "kiru": ">=1.5.0",
-    "sharp": ">=0.33.0"
-  },
-  "peerDependenciesMeta": {
-    "sharp": { "optional": true }
+    "kiru": ">=1.5.0"
   },
   "dependencies": {
     "@kirujs/adapter-contract": "workspace:^",
@@ -35,7 +31,6 @@
   "devDependencies": {
     "@types/node": "^25.6.0",
     "kiru": "workspace:^",
-    "sharp": "^0.34.5",
     "typescript": "^5.9.3"
   }
 }

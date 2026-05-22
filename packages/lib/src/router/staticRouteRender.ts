@@ -1,4 +1,3 @@
-import { runWithImagePreloadRegistry } from "../image/preloadRegistry.js"
 import {
   getI18nLocaleRouting,
   loaderI18nFields,
@@ -36,9 +35,7 @@ export async function renderMatchToStaticHtml(
     signal?: AbortSignal
   }
 ): Promise<{ body: string; document: DocumentHead; pageData?: unknown }> {
-  return runWithImagePreloadRegistry(() =>
-    renderMatchToStaticHtmlInner(manifest, match, pathPolicy, options)
-  )
+  return renderMatchToStaticHtmlInner(manifest, match, pathPolicy, options)
 }
 
 async function renderMatchToStaticHtmlInner(

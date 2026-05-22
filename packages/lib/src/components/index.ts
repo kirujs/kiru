@@ -1,5 +1,4 @@
 export { ErrorBoundary, type ErrorBoundaryProps } from "./errorBoundary.js"
-export { Image, type ImageProps } from "./image.js"
 export * from "./derive.js"
 export * from "./for.js"
 export * from "./lazy.js"

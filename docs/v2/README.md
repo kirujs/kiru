@@ -79,7 +79,7 @@ flowchart TB
 ### Product & DX
 
 13. **[11-i18n.md](./11-i18n.md)** — Locales, domains, detection, prerender expansion.
-14. **[12-seo-head-sitemap-images.md](./12-seo-head-sitemap-images.md)** — Head layers, sitemap, image optimizer.
+14. **[12-seo-head-sitemap-images.md](./12-seo-head-sitemap-images.md)** — Head layers, sitemap (images: [21-image-pipeline-adr.md](./21-image-pipeline-adr.md)).
 15. **[13-vite-plugin-and-build-pipeline.md](./13-vite-plugin-and-build-pipeline.md)** — Plugin options, SSG build, dev SSR, codegen.
 
 ### Strategy & quality

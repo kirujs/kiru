@@ -64,14 +64,14 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 | P2-5 | Content/MDX layer | Ecosystem gap vs Nuxt |
 | P2-6 | prepareAppForUrl complexity | Hard to maintain — needs integration tests when TSX runs |
 | P2-7 | Configurable static 404 / host fallback strategies | Analysis in [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md); code: `notFoundStrategy`, rewrite codegen |
-| P2-8 | CSRF: warn on `allowedOrigins: ["*"]` in production | S4 tests + S5 SECURITY.md; stricter default deferred |
+| P2-8 | CSRF: warn on `allowedOrigins: ["*"]` in production | S4 tests + S6 SECURITY.md; stricter default deferred |
 | P2-9 | Optional CSRF nonce API | Post-v2 for regulated adopters |
 
 ---
 
 ## Low priority (P3)
 
-- OG image generation route
+- OG image generation route (after [21-image-pipeline-adr.md](./21-image-pipeline-adr.md) phase 3)
 - Service worker / PWA kit
 - ICU i18n
 - Parallel/intercepting routes
@@ -137,7 +137,7 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 
 ## Suggested fix order (sprints)
 
-See **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** for the full sprint plan (S0–S5), per-task checkboxes, acceptance criteria, and v2.0.0 definition of done.
+See **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** for the full sprint plan (S0–S6), per-task checkboxes, acceptance criteria, and v2.0.0 definition of done.
 
 **Summary:**
 
@@ -148,7 +148,8 @@ See **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** for the full 
 | S2 | Client parity — outlet matrix + integration tests |
 | S3 | E2E & hybrid — SSG, FBR SSR/SSG e2e (P1-3), FBR special filenames (P1-12), matrix CI |
 | S4 | Edge & security — Cloudflare CI, ISR build fail, RPC test hardening |
-| S5 | Release kit — docs, recipes, kirujs.dev, migration, deploy guides |
+| S5 | ~~API & router depth~~ **done** — ADRs 20–21, image removal, `prepareAppForUrl` refactor |
+| S6 | Release kit — docs, recipes, kirujs.dev, migration, deploy guides |
 
 ---
 

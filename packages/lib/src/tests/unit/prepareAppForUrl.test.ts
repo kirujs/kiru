@@ -103,6 +103,43 @@ describe("prepareAppForUrl", () => {
     assert.equal(result.body, "Forbidden")
   })
 
+  it("merges request context headers into middleware error", async () => {
+    const manifest = compileRouteTree(
+      createRouteTree({
+        middleware: [() => ({ error: 503, body: "Unavailable" })],
+        children: [createRoute("/x", { component: nullComponent })],
+      })
+    )
+    const result = await prepareAppForUrl(
+      "http://localhost/x",
+      { headers: { "x-custom": "1" } },
+      manifest,
+      pathPolicy
+    )
+    assert.ok(result && isPrepareError(result))
+    assert.equal(result.headers?.["x-custom"], "1")
+  })
+
+  it("returns null when middleware aborts", async () => {
+    const manifest = compileRouteTree(
+      createRouteTree({
+        children: [
+          createRoute("/abort", {
+            component: nullComponent,
+            middleware: [() => ({ abort: true })],
+          }),
+        ],
+      })
+    )
+    const result = await prepareAppForUrl(
+      "http://localhost/abort",
+      undefined,
+      manifest,
+      pathPolicy
+    )
+    assert.equal(result, null)
+  })
+
   it("redirects to canonical search when query defaults missing", async () => {
     const pageLoad = loader({
       validation: {
@@ -177,5 +214,68 @@ describe("prepareAppForUrl", () => {
       pathPolicy
     )
     assert.equal(result, null)
+  })
+
+  it("returns 200 PreparedApp with routeMatch for a matched leaf", async () => {
+    const manifest = compileRouteTree(
+      createRouteTree({
+        children: [createRoute("/home", { component: nullComponent })],
+      })
+    )
+    const result = await prepareAppForUrl(
+      "http://localhost/home",
+      undefined,
+      manifest,
+      pathPolicy
+    )
+    assert.ok(result && !isPrepareRedirect(result) && !isPrepareError(result))
+    assert.equal(result.responseStatus, 200)
+    assert.equal(result.routeMatch?.pathname, "/home")
+    assert.ok(result.app)
+  })
+
+  it("applies custom page status export", async () => {
+    const manifest = compileRouteTree(
+      createRouteTree({
+        children: [
+          createRoute("/created", {
+            component: async () => ({
+              default: () => null,
+              status: 201,
+            }),
+          }),
+        ],
+      })
+    )
+    const result = await prepareAppForUrl(
+      "http://localhost/created",
+      undefined,
+      manifest,
+      pathPolicy
+    )
+    assert.ok(result && !isPrepareRedirect(result) && !isPrepareError(result))
+    assert.equal(result.responseStatus, 201)
+  })
+
+  it("returns external redirect when middleware lands on a different pathname", async () => {
+    const manifest = compileRouteTree(
+      createRouteTree({
+        children: [
+          createRoute("/old", {
+            component: nullComponent,
+            middleware: [() => ({ redirect: "/new" })],
+          }),
+          createRoute("/new", { component: nullComponent }),
+        ],
+      })
+    )
+    const result = await prepareAppForUrl(
+      "http://localhost/old",
+      undefined,
+      manifest,
+      pathPolicy
+    )
+    assert.ok(result && isPrepareRedirect(result))
+    assert.equal(result.location, "/new")
   })
 })

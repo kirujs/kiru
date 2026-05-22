@@ -195,9 +195,16 @@ Tests in `router.test.tsx` cover root error without layout (when that suite runs
 
 ---
 
+## Parallel and intercepting routes
+
+**Not implemented in v2.0.** Planned programmatic API (named scope slots, phased intercepting): [20-parallel-routes-adr.md](./20-parallel-routes-adr.md).
+
+---
+
 ## Further reading
 
 - [05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md)
 - [06-loaders-and-data.md](./06-loaders-and-data.md)
 - [13-vite-plugin-and-build-pipeline.md](./13-vite-plugin-and-build-pipeline.md)
 - [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)
+- [20-parallel-routes-adr.md](./20-parallel-routes-adr.md)

@@ -40,7 +40,6 @@ export const routes = createRouteTree({
       "/loaders/universal",
       () => import("./pages/loaders/universal.tsx")
     ),
-    createRoute("/image-demo", () => import("./pages/image-demo/index.tsx")),
   ],
 })
 

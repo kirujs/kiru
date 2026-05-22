@@ -38,10 +38,6 @@ export const routes = createRouteTree({
             component: () => import("./pages/about"),
             head: { title: "E2E SSG About" },
           }),
-          createRoute("/image-demo", {
-            component: () => import("./pages/image-demo"),
-            head: { title: "E2E SSG Image" },
-          }),
           createRoute("/loaders/static", {
             component: () => import("./pages/loaders-static"),
             head: { title: "E2E SSG static loader" },

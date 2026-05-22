@@ -79,10 +79,6 @@ import { /* action helpers */ } from "kiru/remote"
 
 Browser field may point to `remote/browser.js` for client stubs.
 
-### `kiru/image`
-
-Image component + config types.
-
 ### `kiru/jsx-runtime` / `kiru/jsx-dev-runtime`
 
 JSX automatic runtime.
@@ -129,7 +125,8 @@ Ensures client bundles do not pull Node-only paths.
 | Peer | Purpose |
 |------|---------|
 | `@standard-schema/spec` | Loader/search validation |
-| `sharp` | Image optimization |
+
+Image optimization (`kiru/image`) was removed in v2.0; planned v2.1+ per [21-image-pipeline-adr.md](./21-image-pipeline-adr.md).
 
 ---
 

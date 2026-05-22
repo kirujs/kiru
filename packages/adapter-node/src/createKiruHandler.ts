@@ -1,11 +1,9 @@
 import {
   createRenderer,
-  createImageOptimizerIfRuntime,
   type CreateRendererOptions,
   type Renderer,
   type StreamRenderer,
 } from "kiru/router"
-import type { ImageConfig } from "kiru/image"
 import type { KiruDeployTarget } from "@kirujs/runtime"
 import {
   composeRespond,
@@ -29,12 +27,6 @@ export type CreateKiruHandlerOptions = Omit<
   clientDir?: string
   /** Production hybrid ISR directory; defaults to resolved clientDir. Pass `false` to disable. */
   prerenderedHtmlDir?: string | false
-  image?: {
-    config: ImageConfig
-    /** Instance from `import sharp from "sharp"` (sharp’s callable export). */
-    sharp?: typeof import("sharp")
-    cacheDir?: string
-  }
   /** When true (default in production), serve static files from clientDir before SSR. */
   serveStaticAssets?: boolean
   /** Per-request context passed to `renderer.render`. */
@@ -70,28 +62,13 @@ function createSsrHandle(
   }
 }
 
-function createStaticAssetsMiddleware(options: {
-  clientDir: string
-  imageHandler: ((request: Request) => Promise<Response | null>) | null
-  imagePath?: string
-}): KiruRespondMiddleware {
-  const { clientDir, imageHandler, imagePath } = options
+function createStaticAssetsMiddleware(clientDir: string): KiruRespondMiddleware {
   return async (request, next) => {
     const pathname = new URL(request.url).pathname
-
-    if (imageHandler && imagePath && pathname === imagePath) {
-      const imageRes = await imageHandler(request)
-      if (imageRes) {
-        return imageRes
-      }
-      return new Response("Not Found", { status: 404 })
-    }
-
     const staticRes = await serveStaticFile(clientDir, pathname)
     if (staticRes) {
       return staticRes
     }
-
     return next()
   }
 }
@@ -119,7 +96,6 @@ export function createKiruResponder(
 
   const {
     getRequestContext,
-    image,
     serveStaticAssets = isProd,
     stream,
     deployTarget = "node",
@@ -138,25 +114,9 @@ export function createKiruResponder(
     ? createRenderer({ ...rendererCommon, stream: true })
     : createRenderer(rendererCommon)
 
-  const imageHandler =
-    serveStaticAssets && isProd && image
-      ? createImageOptimizerIfRuntime({
-          root: paths.clientDir,
-          config: image.config,
-          sharp: image.sharp,
-          cacheDir: image.cacheDir ?? `${paths.clientDir}/.kiru-image-cache`,
-        })
-      : null
-
   const layers: KiruRespondMiddleware[] = []
   if (serveStaticAssets && isProd) {
-    layers.push(
-      createStaticAssetsMiddleware({
-        clientDir: paths.clientDir,
-        imageHandler,
-        imagePath: image?.config.path,
-      })
-    )
+    layers.push(createStaticAssetsMiddleware(paths.clientDir))
   }
 
   const handle = composeRespond(

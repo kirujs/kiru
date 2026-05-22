@@ -1,6 +1,5 @@
 import { __DEV__ } from "../env.js"
 import { renderToString } from "../renderToString.js"
-import { runWithImagePreloadRegistry } from "../image/preloadRegistry.js"
 import {
   compileRouteTree,
   generatePublicStaticPaths,
@@ -524,8 +523,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     }
   }
 
-  const renderCore = (requestOrUrl: Request | string, ctx?: RenderRequestContext) =>
-    runWithImagePreloadRegistry(() => renderCoreInner(requestOrUrl, ctx))
+  const renderCore = renderCoreInner
 
   return { manifest, renderCore, handleRemoteAction }
 }

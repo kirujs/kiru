@@ -1,8 +1,5 @@
 import { defineConfig } from "vite"
 import kiru from "vite-plugin-kiru"
-import { imageStrategy } from "./src/imageConfig.js"
-
-const useBuildImages = imageStrategy === "build"
 
 export default defineConfig({
   server: {
@@ -18,15 +15,6 @@ export default defineConfig({
         serverEntry: "./src/server.ts",
         ssg: true,
         remote: "**/*.actions.ts",
-        ...(useBuildImages
-          ? {
-              images: {
-                optimize: true,
-                formats: ["webp"],
-                config: { strategy: "build" },
-              },
-            }
-          : {}),
       },
     }),
   ],

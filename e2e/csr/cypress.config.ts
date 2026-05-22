@@ -25,8 +25,6 @@ export default defineConfig({
     env: {
       port,
     },
-    // Needs `vite build` output; run via `pnpm test:image`.
-    excludeSpecPattern: ["**/image.cy.ts"],
     setupNodeEvents(on) {
       let server: ViteDevServer | null = null
       const restoreAllHmrFiles = registerHmrFileTasks(on)
