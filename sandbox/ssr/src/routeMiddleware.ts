@@ -4,6 +4,8 @@ declare module "kiru/router" {
   interface RouteMeta {
     requiresAuth?: boolean
     unauthorizedRedirect?: string
+    guestOnly?: boolean
+    guestRedirect?: string
   }
 }
 
@@ -16,6 +18,15 @@ export const requireAuth: RouteMiddleware = ({ context, to }) => {
       ? to.meta.unauthorizedRedirect
       : "/login"
   return { redirect: login }
+}
+
+/** Send signed-in users away from login/register-style routes. */
+export const guestOnly: RouteMiddleware = ({ context, to }) => {
+  if (!to.meta.guestOnly) return
+  if (!context.user) return
+  const dest =
+    typeof to.meta.guestRedirect === "string" ? to.meta.guestRedirect : "/todos"
+  return { redirect: dest }
 }
 
 export const blockUserZero: RouteMiddleware = ({ to }) => {

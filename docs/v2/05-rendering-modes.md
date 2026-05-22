@@ -143,9 +143,9 @@ createRoute("/docs", {
 | Client-only API | `clientLoader` | rare | `clientLoader` after hydrate |
 | SEO + personalization | — | static shell + CSR island | hybrid or full SSR |
 
-## Bootstrap mode marker
+## Bootstrap mode (build-time)
 
-`markRouterBootstrap("csr" | "ssg" | "ssr")` sets `globalThis.__kiru_routerBootstrap` for dev warnings in `devWarnings.ts`.
+`vite-plugin-kiru` injects `__KIRU_ROUTER_BOOTSTRAP__` (`"csr"` | `"ssg"` | `"ssr"`) on client bundles. Import `createRouterApp` from the matching `kiru/router/{csr,ssg,ssr}` entry so the define and bootstrap stay aligned.
 
 ## Common deploy mistakes (docs fodder)
 

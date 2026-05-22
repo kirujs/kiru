@@ -1,5 +1,5 @@
 import { createRoute, createRouteTree } from "kiru/router"
-import { blockUserZero, requireAuth } from "./routeMiddleware.js"
+import { blockUserZero, guestOnly, requireAuth } from "./routeMiddleware.js"
 
 export const routes = createRouteTree({
   middleware: [requireAuth, blockUserZero],
@@ -9,6 +9,39 @@ export const routes = createRouteTree({
   layout: () => import("./pages/layout.tsx"),
   error: () => import("./pages/error-page.tsx"),
   children: [
+    createRoute("/login", {
+      component: () => import("./pages/login.tsx"),
+      meta: {
+        guestOnly: true,
+        guestRedirect: "/todos",
+      },
+      head: {
+        title: "Login — Kiru SSR",
+        description: "Sign in with a form action and server Set-Cookie.",
+      },
+    }),
+    createRoute("/todos", {
+      component: () => import("./pages/todos.tsx"),
+      meta: {
+        requiresAuth: true,
+        unauthorizedRedirect: "/login",
+      },
+      head: {
+        title: "Todos — Kiru SSR",
+        description: "Todo CRUD with form and JSON remote actions.",
+      },
+    }),
+    createRoute("/account", {
+      component: () => import("./pages/account.tsx"),
+      meta: {
+        requiresAuth: true,
+        unauthorizedRedirect: "/login",
+      },
+      head: {
+        title: "Account — Kiru SSR",
+        description: "Update profile via form action and token refresh.",
+      },
+    }),
     createRoute("/", {
       component: () => import("./pages/index.tsx"),
       head: {

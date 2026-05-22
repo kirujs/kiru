@@ -2,6 +2,7 @@
 .builderman
 node_modules
 dist
+dist-test
 pnpm-lock.yaml
 .env
 sandbox/*

@@ -111,7 +111,7 @@ export type RendererActionsOptions = {
    * (exact origin). Use `"*"` to disable the check.
    */
   allowedOrigins?: string[]
-  /** When true, `RemoteError` instances are serialized as JSON responses. */
+  /** When true, internal `RemoteError` throws map to `__kiruFail` JSON (legacy migration). */
   exposeErrors?: boolean
 }
 
@@ -608,7 +608,7 @@ async function responseToStreamRenderResult(
 }
 
 function prepareRenderer(options: CreateRendererOptions) {
-  const { routes, htmlTemplate, actions } = options
+  const { routes, htmlTemplate, actions, deployTarget = "node" } = options
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
   const compiledTemplate =
     htmlTemplate !== undefined ? compileRouteHtmlTemplate(htmlTemplate) : null
@@ -623,6 +623,7 @@ function prepareRenderer(options: CreateRendererOptions) {
     ? createRemoteActionHandler(actions.secret, {
         allowedOrigins: actions.allowedOrigins,
         exposeErrors: actions.exposeErrors,
+        deployTarget,
       })
     : null
   const handleLoader = actions

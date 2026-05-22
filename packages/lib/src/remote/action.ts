@@ -7,6 +7,7 @@ import {
   type ActionMiddleware,
   type RemoteActionMethod,
 } from "./actionMiddleware.js"
+import { fail, type KiruActionFail } from "./actionFail.js"
 import { RemoteError } from "./errors.js"
 import {
   getActionExecutionContext,
@@ -37,7 +38,6 @@ export {
   toOutputJsonSchema,
 } from "../validation/index.js"
 
-export { RemoteError, isRemoteError } from "./errors.js"
 export type { ActionMiddleware, ActionMiddlewareContext } from "./actionMiddleware.js"
 export { runActionMiddleware } from "./actionMiddleware.js"
 
@@ -243,7 +243,7 @@ function dispatchCallableInvoke<Body, Query, Output>(
   runHandler: RemoteActionHandler<Body, Query, Output>,
   args: RemoteActionHandlerArgs<Body, Query>,
   actionId?: string
-): Promise<Output> {
+): Promise<KiruActionServerResult<Output>> {
   const execution = getActionExecutionContext()
   if (execution && actionId) {
     return Promise.resolve(
@@ -281,7 +281,9 @@ export function isRemoteActionBodyMethod(
 
 export type RemoteActionHandler<Body, Query, Output> = (
   args: RemoteActionHandlerArgs<Body, Query>
-) => Promise<Output> | Output
+) =>
+  | Promise<KiruActionServerResult<Output>>
+  | KiruActionServerResult<Output>
 
 type RemoteCallable<Body, Query, Output> = (
   options?: RemoteActionCallOptions<Body, Query>
@@ -524,7 +526,7 @@ function createRemoteAction<Body, Query, Output, Method extends RemoteActionMeth
           query: validated.query,
         },
         wrapped.__kiruActionId
-      )
+      ) as Promise<Output>
     }) as RemoteGetAction<Query, Output>
 
     wrapped.__kiruRemoteAction = true
@@ -567,7 +569,7 @@ function createRemoteAction<Body, Query, Output, Method extends RemoteActionMeth
         query: validated.query,
       },
       wrapped.__kiruActionId
-    )
+    ) as Promise<Output>
   }) as RemoteBodyAction<
     Extract<Method, "POST" | "PUT" | "PATCH" | "DELETE">,
     Body,
@@ -644,8 +646,11 @@ function createFormPostAction<Input, Output>(
         try {
           body = await parseInput(schema, raw)
         } catch {
-          throw new RemoteError("Invalid remote action body", "INVALID_BODY", {
-            status: 400,
+          return fail({
+            message: "Invalid input",
+            status: 422,
+            code: "INVALID_BODY",
+            fields: { _form: "Invalid input" },
           })
         }
         return Promise.resolve(
@@ -820,16 +825,68 @@ export const action = {
 /** Hidden field name injected into native `<form>` elements for the signed context token. */
 export const KIRU_FORM_TOKEN_FIELD = "__kiru_token" as const
 
-/** Returned by {@link redirect} inside a form action callback to trigger a server-side redirect. */
+/** Structured Set-Cookie for action response metadata (serialized by the framework). */
+export type KiruSetCookie = {
+  name: string
+  value: string
+  path?: string
+  maxAge?: number
+  expires?: Date
+  httpOnly?: boolean
+  secure?: boolean
+  sameSite?: "Strict" | "Lax" | "None"
+}
+
+/** Optional cookies and signed context refresh on action responses. */
+export type KiruActionResponseOptions = {
+  cookies?: readonly KiruSetCookie[]
+  /** When set, the framework signs this context into `x-kiru-token` on the HTTP response. */
+  context?: CustomRequestContext
+}
+
+/** Returned by {@link redirect} inside an action callback to trigger a server-side redirect. */
 export type KiruRedirect = {
   readonly __kiruRedirect: true
   readonly status: number
   readonly location: string
+  readonly cookies?: readonly KiruSetCookie[]
+  readonly context?: CustomRequestContext
 }
 
-/** Create a redirect response from inside an `action.post({ type: "form" }, …)` callback. */
-export function redirect(status: number, location: string): KiruRedirect {
-  return { __kiruRedirect: true, status, location }
+/** Wrapper for action success with response metadata (cookies, token refresh). */
+export type KiruActionResult<T> = {
+  readonly __kiruActionResult: true
+  readonly value: T
+  readonly cookies?: readonly KiruSetCookie[]
+  readonly context?: CustomRequestContext
+}
+
+/** Create a redirect response from inside an action callback. */
+export function redirect(
+  status: number,
+  location: string,
+  options?: KiruActionResponseOptions
+): KiruRedirect {
+  return {
+    __kiruRedirect: true,
+    status,
+    location,
+    cookies: options?.cookies,
+    context: options?.context,
+  }
+}
+
+/** Attach Set-Cookie / context refresh metadata to a non-redirect action result. */
+export function actionResult<T>(
+  value: T,
+  options?: KiruActionResponseOptions
+): KiruActionResult<T> {
+  return {
+    __kiruActionResult: true,
+    value,
+    cookies: options?.cookies,
+    context: options?.context,
+  }
 }
 
 export function isKiruRedirect(value: unknown): value is KiruRedirect {
@@ -840,6 +897,43 @@ export function isKiruRedirect(value: unknown): value is KiruRedirect {
     (value as { __kiruRedirect: unknown }).__kiruRedirect === true
   )
 }
+
+export function isKiruActionResult(value: unknown): value is KiruActionResult<unknown> {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "__kiruActionResult" in value &&
+    (value as { __kiruActionResult: unknown }).__kiruActionResult === true
+  )
+}
+
+export type {
+  KiruActionFail,
+  KiruActionFailWire,
+} from "./actionFail.js"
+export {
+  fail,
+  isKiruActionFail,
+  failWireBody,
+  resolveFailHttpStatus,
+  sanitizeFailFields,
+} from "./actionFail.js"
+
+export { ActionFailure, isActionFailure } from "./actionFailure.js"
+
+/** Server handler return before HTTP serialization (success + transport markers). */
+export type KiruActionServerResult<Output> =
+  | Output
+  | KiruRedirect
+  | KiruActionFail
+  | KiruActionResult<Output>
+
+/** Unwrap transport wrappers for client-visible action output types. */
+export type UnwrapKiruActionOutput<T> = T extends KiruActionResult<infer V>
+  ? V
+  : T extends KiruRedirect | KiruActionFail
+    ? never
+    : T
 
 export function isRemoteFormAction(
   value: unknown
@@ -861,7 +955,9 @@ export type RemoteFormActionHandlerArgs = {
 
 export type RemoteFormActionHandler<Output> = (
   args: RemoteFormActionHandlerArgs
-) => Promise<Output> | Output
+) =>
+  | Promise<KiruActionServerResult<Output>>
+  | KiruActionServerResult<Output>
 
 /**
  * Typed handle for a form action.
@@ -876,7 +972,9 @@ export type RemoteFormActionFunction<Output> = {
   __kiruFormActionId: string
   __kiruInvalidateRoutes?: string[]
   __kiruRevalidate?: RemoteRevalidateMeta
-  __kiruInvoke: (args: RemoteFormActionHandlerArgs) => Promise<Output>
+  __kiruInvoke: (
+    args: RemoteFormActionHandlerArgs
+  ) => Promise<KiruActionServerResult<Output>>
 }
 
 /** Convert {@link FormData} to a plain object for schema validation (preserves File/Blob). */

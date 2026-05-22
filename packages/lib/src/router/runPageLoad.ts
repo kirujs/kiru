@@ -8,7 +8,12 @@ import { formatRouterSearch } from "./navigation.js"
 import type { CustomRequestContext, RouteMatch, RouteMeta } from "./types.js"
 import { toRenderError } from "./types.js"
 import { readHydratedPageData } from "./pageData.js"
-import { guardServerLoaderOnClient } from "./devWarnings.js"
+import { __DEV__, __KIRU_PURE_CLIENT__, __KIRU_SSR__ } from "../env.js"
+import {
+  warnOnce,
+  SERVER_LOADER_PURE_CLIENT_DEV_MSG,
+  SERVER_LOADER_NO_RPC_DEV_MSG,
+} from "./devWarnings.dev.js"
 import {
   buildLoaderCacheKey,
   getLoaderCacheEntry,
@@ -128,7 +133,13 @@ export async function runPageLoadFromModule(
   const load = readPageLoadExport(mod)
   if (!load) return undefined
   if (load.__kiruLoader === "server" && typeof window !== "undefined") {
-    guardServerLoaderOnClient()
+    if (__KIRU_PURE_CLIENT__) {
+      if (__DEV__) warnOnce("server-loader-pure-client", SERVER_LOADER_PURE_CLIENT_DEV_MSG)
+      throw new Error(SERVER_LOADER_PURE_CLIENT_DEV_MSG)
+    }
+    if (__DEV__ && __KIRU_SSR__ && !(globalThis as Record<string, unknown>).__kiru_loaders) {
+      warnOnce("server-loader-without-rpc", SERVER_LOADER_NO_RPC_DEV_MSG)
+    }
   }
   const data = await load.__kiruInvoke(ctx)
   throwIfAborted(ctx.signal)
@@ -238,7 +249,13 @@ export async function resolvePagePropsFromModule(
       }
     }
     if (load.__kiruLoader === "server") {
-      guardServerLoaderOnClient()
+      if (__KIRU_PURE_CLIENT__) {
+        if (__DEV__) warnOnce("server-loader-pure-client", SERVER_LOADER_PURE_CLIENT_DEV_MSG)
+        throw new Error(SERVER_LOADER_PURE_CLIENT_DEV_MSG)
+      }
+      if (__DEV__ && __KIRU_SSR__ && !(globalThis as Record<string, unknown>).__kiru_loaders) {
+        warnOnce("server-loader-without-rpc", SERVER_LOADER_NO_RPC_DEV_MSG)
+      }
     }
   }
   if (

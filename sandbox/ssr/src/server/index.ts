@@ -1,17 +1,14 @@
+import "virtual:kiru:remote-registry"
 import { createServer } from "node:http"
 import { createKiruHandler, toNodeListener } from "@kirujs/adapter-node"
+import { getUserFromRequest, type SandboxUser } from "./auth.js"
 import { routes } from "../routes.js"
 
 const isProd = process.env.NODE_ENV === "production"
 
-interface User {
-  name: string
-  age: number
-}
-
 declare module "kiru/router" {
   interface CustomRequestContext {
-    user: User | null
+    user: SandboxUser | null
   }
 }
 
@@ -26,11 +23,8 @@ const kiru = createKiruHandler({
     allowedOrigins: ["*"],
     exposeErrors: true,
   },
-  getRequestContext: () => ({
-    user: {
-      name: "John Doe",
-      age: 30,
-    },
+  getRequestContext: async (request) => ({
+    user: getUserFromRequest(request),
   }),
 })
 

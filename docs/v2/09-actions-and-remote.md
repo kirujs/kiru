@@ -43,7 +43,7 @@ export const echo = action.post(async ({ body }) => ({ echo: body }))
 ```
 
 - Validates with Standard Schema (`parseInput`) on `validation.body` / `validation.query`
-- Middleware runs before validation; reject with `throw new RemoteError(...)` (e.g. `401` / `UNAUTHORIZED`)
+- Middleware runs before validation; reject with `return fail({ status: 401, message: "…", code: "UNAUTHORIZED" })`
 - SSR: `runWithSsrRequestContext` around sync render only (save/restore `current` scope)
 - Client: `resource(createTodo)` or generated stub → `fetch("/?action=...")`
 
@@ -68,9 +68,114 @@ const form = createFormController(submitContact)
 **Progressive enhancement:**
 
 - Native submit → `303` redirect (traditional)
-- Enhanced (`x-kiru-form` header) → JSON body with `redirect`, `fieldErrors`
+- Enhanced (`x-kiru-form` header) → JSON with `__kiruRedirect`, `__kiruFail`, or success payload
 
-Branch fix: `createFormController` sends `x-kiru-form` so validation errors return JSON (E2E form-action specs in `e2e/ssr`).
+`createFormController` sends `x-kiru-form` so validation errors return JSON (E2E form-action specs in `e2e/ssr`). On `fail()`, the controller sets `fieldErrors` from `fields` and `message` for non-field errors (e.g. auth banner).
+
+## Expected failures: `fail()`
+
+Use **`return fail({ message, status?, code?, fields?, data? })`** for expected failures on **both** form actions and JSON RPC — same wire marker (`__kiruFail`), same HTTP status rules.
+
+| Situation | Default HTTP status |
+|-----------|---------------------|
+| `fail()` with non-empty `fields` (undefined keys stripped) | **422** |
+| `fail()` without `fields` | **400** |
+| Explicit `status` | Always wins (e.g. `401`) |
+
+```ts
+import { action, fail } from "kiru/remote"
+
+// Form validation
+if (!username) {
+  return fail({
+    message: "Invalid login",
+    status: 422,
+    fields: { username: "Required" },
+  })
+}
+
+// JSON auth
+if (!context.user) {
+  return fail({ status: 401, message: "Sign in required", code: "UNAUTHORIZED" })
+}
+```
+
+Wire JSON (enhanced form and JSON RPC):
+
+```json
+{
+  "__kiruFail": true,
+  "message": "Invalid credentials",
+  "status": 401,
+  "code": "AUTH_FAILED",
+  "fields": { "username": "Unknown user or wrong password" }
+}
+```
+
+- **JSON client:** `dispatch` throws **`ActionFailure`** (`isActionFailure`, `status`, `message`, `code?`, `fields?`, `data?`). Legacy `{ error: { … } }` envelopes are still recognized for one release.
+- **Forms:** parse `__kiruFail` before checking `res.ok` so custom statuses (e.g. `401`) work on enhanced submits.
+- **Exceptions:** `throw new Error()` → `500`. Do not use `RemoteError` in app code (internal migration only).
+
+## Response metadata (cookies, token refresh)
+
+Handlers can attach **Set-Cookie** and refresh the signed RPC context on the HTTP response. The framework serializes cookies and signs tokens — handlers do not set raw response headers.
+
+### `redirect` with cookies and context
+
+```ts
+import { action, redirect } from "kiru/remote"
+
+export const login = action.post({ type: "form" }, async ({ formData }) => {
+  const user = await authenticate(formData)
+  const sessionId = await createSession(user.id)
+  return redirect(303, "/app", {
+    cookies: [
+      {
+        name: "session",
+        value: sessionId,
+        path: "/",
+        maxAge: 604800,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ],
+    context: { user }, // signed into x-kiru-token on the response
+  })
+})
+```
+
+| Transport | Redirect body | Cookies / token |
+|-----------|---------------|-------------------|
+| Native form POST | `303` + `Location` | `Set-Cookie`, optional `x-kiru-token` |
+| Enhanced form (`x-kiru-form`) | JSON `{ __kiruRedirect, status, location }` | Response headers (browser applies cookies before `location.assign`) |
+| JSON RPC (`action.post`, etc.) | Same JSON redirect shape | Same response headers |
+
+### `actionResult` (success without redirect)
+
+```ts
+import { action, actionResult } from "kiru/remote"
+
+export const refreshSession = action.post(async () => {
+  const user = await loadUser()
+  return actionResult({ ok: true }, {
+    cookies: [/* … */],
+    context: { user },
+  })
+})
+```
+
+The client receives the unwrapped `value` in JSON. `createFormController` excludes `KiruRedirect`, `KiruActionResult`, and `KiruActionFail` from the reactive `result` type.
+
+### Client behavior
+
+After a successful enhanced form or JSON action fetch, the client calls `applyActionResponseHeaders`:
+
+- `x-kiru-invalidate` → `router.invalidate`
+- `x-kiru-token` → updates `requestToken` for subsequent `/?action=` and `/?loader=` calls
+
+**Important:** Token refresh uses the **`context` you pass in metadata**, not a re-run of `getRequestContext` on the same request. The incoming `Cookie` header is unchanged until the browser stores the new cookies and you navigate or issue another document request.
+
+For login flows that redirect, the next document SSR run reads cookies via `getRequestContext` and emits a fresh `k-request-token` in HTML — that is usually enough without relying on `x-kiru-token` on the action response.
 
 ## Renderer `actions` option
 
@@ -161,6 +266,35 @@ export const admin = {
 ```
 
 Client stubs preserve the object shape (`users.get`, `admin.users.ban`). Nested object literals only (no computed keys or re-exports).
+
+### Default export
+
+You can default-export action namespaces or a single action. RPC ids use the **`default`** prefix (`default.get`, `default.getEcho`), not the file name.
+
+**Anonymous default** (SSR injects `__kiru_default` for registry refs):
+
+```ts
+export default {
+  get: action.get(async ({ context }) => { /* … */ }),
+}
+```
+
+**Linked const** (recommended when the same file calls actions in-process or you want a stable local binding). The `const` must appear **before** `export default` in the file:
+
+```ts
+const users = {
+  get: action.get(async ({ context }) => { /* … */ }),
+}
+export default users
+
+export const runPipeline = action.post(async () => {
+  return users.get()
+})
+```
+
+On the client, `import users from "./page.actions"` works for both patterns. Server registry refs stay `users.get` for the linked form; anonymous default uses `__kiru_default.get` after transform.
+
+Use `export const users = { … }` when you want RPC ids `users.*` instead of `default.*`, or named imports without default.
 
 ## Calling actions inside actions
 

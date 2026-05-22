@@ -219,6 +219,11 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             resolveRouterBootstrapDefine(opts)
           ),
         }
+      } else {
+        partial.define = {
+          ...config.define,
+          __KIRU_ROUTER_BOOTSTRAP__: "",
+        }
       }
       return partial
     },

@@ -5,20 +5,21 @@ import type {
   RemoteFormActionHandlerArgs,
 } from "./action.js"
 import {
-  isKiruRedirect,
   isRemoteActionBodyMethod,
   KIRU_FORM_TOKEN_FIELD,
   parseActionQueryFromUrl,
 } from "./action.js"
+import { buildActionHttpResponse, normalizeActionResult } from "./actionResponse.js"
 import {
   createActionExecutionForRequest,
   runInActionExecution,
 } from "./actionInvokeScope.js"
 import { isAbortError } from "../router/navigationScope.js"
-import { isRemoteError } from "./errors.js"
+import { fail } from "./actionFail.js"
+import { isRemoteError, type RemoteError } from "./errors.js"
 import { unwrapKiruToken } from "./token.js"
 
-export { RemoteError, isRemoteError } from "./errors.js"
+export { ActionFailure, isActionFailure } from "./actionFailure.js"
 export {
   makeKiruContextToken,
   makeKiruContextTokenAsync,
@@ -30,8 +31,18 @@ export type { TokenHeader, TokenPayload } from "./token.js"
 export {
   action,
   redirect,
+  actionResult,
+  fail,
+  isKiruActionFail,
   isKiruRedirect,
+  isKiruActionResult,
   KIRU_FORM_TOKEN_FIELD,
+  type KiruActionFail,
+  type KiruActionFailWire,
+  type KiruSetCookie,
+  type KiruActionResponseOptions,
+  type KiruActionResult,
+  type UnwrapKiruActionOutput,
   type RemoteActionFunction,
   type RemoteGetAction,
   type RemoteBodyAction,
@@ -96,6 +107,13 @@ export {
 } from "./action.js"
 
 export {
+  KIRU_TOKEN_RESPONSE_HEADER,
+  normalizeActionResult,
+  buildActionHttpResponse,
+  serializeSetCookie,
+} from "./actionResponse.js"
+
+export {
   getActionExecutionContext,
   getActiveActionContext,
   runInActionExecution,
@@ -142,8 +160,10 @@ export type CreateRemoteActionHandlerOptions = {
    * (exact origin, e.g. `https://app.example.com`). Use `"*"` to disable the check.
    */
   allowedOrigins?: string[]
-  /** When true, {@link RemoteError} instances become JSON `{ error: { code, message, details? } }`. */
+  /** When true, internal {@link RemoteError} throws map to `__kiruFail` JSON (legacy migration). */
   exposeErrors?: boolean
+  /** Used for async context token signing on edge runtimes. @default "node" */
+  deployTarget?: import("@kirujs/runtime").KiruDeployTarget
 }
 
 function isAllowedOrigin(
@@ -200,6 +220,38 @@ function invalidateHeadersForAction(
   return { "x-kiru-invalidate": routes.join(",") }
 }
 
+/** Map legacy internal throws to {@link fail} wire shape. */
+function failFromRemoteError(e: RemoteError) {
+  const details = e.details as { fieldErrors?: Record<string, string> } | undefined
+  return fail({
+    message: e.message,
+    status: e.status,
+    code: e.code,
+    fields: details?.fieldErrors,
+  })
+}
+
+async function responseFromThrownRemoteError(
+  e: RemoteError,
+  secret: string,
+  options: CreateRemoteActionHandlerOptions | undefined,
+  init: {
+    isEnhanced: boolean
+    referer?: string
+    extraHeaders?: Record<string, string>
+  }
+): Promise<Response> {
+  const normalized = normalizeActionResult(failFromRemoteError(e))
+  return buildActionHttpResponse({
+    normalized,
+    secret,
+    deployTarget: options?.deployTarget,
+    isEnhanced: init.isEnhanced,
+    referer: init.referer,
+    extraHeaders: init.extraHeaders,
+  })
+}
+
 async function invokeJsonRemoteAction(
   handler: RegisteredRemoteAction,
   request: Request,
@@ -207,6 +259,7 @@ async function invokeJsonRemoteAction(
   body: unknown,
   query: Record<string, string | string[]>,
   rpcActionId: string,
+  secret: string,
   options?: CreateRemoteActionHandlerOptions
 ): Promise<Response> {
   const execution = createActionExecutionForRequest({
@@ -235,18 +288,22 @@ async function invokeJsonRemoteAction(
     )
     const { applyServerRevalidate } = await import("../router/revalidate.js")
     await applyServerRevalidate(handler.__kiruRevalidate)
-    return new Response(JSON.stringify(result), {
-      status: 200,
-      headers: { ...jsonHeaders, ...invalidateHeadersForAction(handler) },
+    const normalized = normalizeActionResult(result)
+    return buildActionHttpResponse({
+      normalized,
+      secret,
+      deployTarget: options?.deployTarget,
+      isEnhanced: true,
+      extraHeaders: invalidateHeadersForAction(handler),
     })
   } catch (e) {
     if (isAbortError(e) || request.signal.aborted) {
       return new Response(null, { status: 499 })
     }
     if (isRemoteError(e) && options?.exposeErrors) {
-      return new Response(JSON.stringify({ error: e.toJSON() }), {
-        status: e.status,
-        headers: jsonHeaders,
+      return responseFromThrownRemoteError(e, secret, options, {
+        isEnhanced: true,
+        extraHeaders: invalidateHeadersForAction(handler),
       })
     }
     return new Response(null, { status: 500 })
@@ -331,40 +388,24 @@ export function createRemoteActionHandler(
           const { applyServerRevalidate } = await import("../router/revalidate.js")
           await applyServerRevalidate(handler.__kiruRevalidate)
           const isEnhanced = !!request.headers.get("x-kiru-form")
-
-          if (isKiruRedirect(result)) {
-            if (isEnhanced) {
-              return new Response(JSON.stringify(result), {
-                status: 200,
-                headers: jsonHeaders,
-              })
-            }
-            return new Response(null, {
-              status: result.status,
-              headers: { Location: result.location },
-            })
-          }
-
-          if (isEnhanced) {
-            return new Response(JSON.stringify(result), {
-              status: 200,
-              headers: { ...jsonHeaders, ...invalidateHeadersForAction(handler) },
-            })
-          }
-          // Native POST with a non-redirect result: redirect back to referer.
-          const referer = request.headers.get("referer") ?? "/"
-          return new Response(null, {
-            status: 303,
-            headers: { Location: referer },
+          const normalized = normalizeActionResult(result)
+          return buildActionHttpResponse({
+            normalized,
+            secret,
+            deployTarget: options?.deployTarget,
+            isEnhanced,
+            referer: request.headers.get("referer") ?? "/",
+            extraHeaders: invalidateHeadersForAction(handler),
           })
         } catch (e) {
           if (isAbortError(e) || request.signal.aborted) {
             return new Response(null, { status: 499 })
           }
           if (isRemoteError(e) && options?.exposeErrors) {
-            return new Response(JSON.stringify({ error: e.toJSON() }), {
-              status: e.status,
-              headers: jsonHeaders,
+            return responseFromThrownRemoteError(e, secret, options, {
+              isEnhanced: !!request.headers.get("x-kiru-form"),
+              referer: request.headers.get("referer") ?? "/",
+              extraHeaders: invalidateHeadersForAction(handler),
             })
           }
           return new Response(null, { status: 500 })
@@ -444,6 +485,7 @@ export function createRemoteActionHandler(
         body,
         query,
         rpcActionId,
+        secret,
         options
       )
     } catch {

@@ -54,4 +54,7 @@ const requestToken = {
     s?.remove()
     return (tkn = t)
   },
+  setCurrent(token: string) {
+    tkn = token
+  },
 }

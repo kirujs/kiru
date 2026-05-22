@@ -132,5 +132,9 @@ export const routes = createRouteTree({
         component: () => import("./pages/actions-composition-demo"),
         head: { title: "E2E SSR namespaced & composed actions" },
       }),
+      createRoute("/default-export-demo", {
+        component: () => import("./pages/default-export-demo"),
+        head: { title: "E2E SSR default export actions" },
+      }),
     ],
   })

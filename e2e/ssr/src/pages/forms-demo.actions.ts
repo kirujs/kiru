@@ -1,13 +1,14 @@
-import { action, redirect, RemoteError } from "kiru/remote"
+import { action, fail, redirect } from "kiru/remote"
 
 export const submitValidation = action.post(
   { type: "form" },
   async ({ formData }) => {
     const message = String(formData.get("message") ?? "").trim()
     if (!message) {
-      throw new RemoteError("Message required", "VALIDATION_ERROR", {
+      return fail({
+        message: "Message required",
         status: 422,
-        details: { fieldErrors: { message: "Required" } },
+        fields: { message: "Required" },
       })
     }
     return { message }

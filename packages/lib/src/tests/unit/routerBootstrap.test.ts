@@ -21,13 +21,11 @@ describe("router bootstrap entries", () => {
     })
   })
 
-  it("kiru/router/ssr createRouterApp is bootstrapSsrClient", () => {
+  it("kiru/router/ssr exports createRouterApp", () => {
     assert.strictEqual(typeof createSsrRouterApp, "function")
-    assert.strictEqual(createSsrRouterApp.name, "createRouterApp")
   })
 
-  it("kiru/router/ssg createRouterApp is bootstrapSsgClient", () => {
+  it("kiru/router/ssg exports createRouterApp", () => {
     assert.strictEqual(typeof createSsgRouterApp, "function")
-    assert.strictEqual(createSsgRouterApp.name, "createRouterApp")
   })
 })

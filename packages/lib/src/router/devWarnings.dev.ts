@@ -1,5 +1,4 @@
-import { isBrowser } from "../env.js"
-import { getRouterBootstrapMode } from "./bootstrapMode.js"
+import { __KIRU_PURE_CLIENT__, isBrowser } from "../env.js"
 
 const warned = new Set<string>()
 
@@ -20,9 +19,7 @@ export const REMOTE_ACTION_PURE_CLIENT_DEV_MSG =
   'Remote `action` (including `action.post({ type: "form" }, …)`) require SSR with `createRenderer` and `actions.secret`. Pure CSR/SSG apps cannot invoke server actions.'
 
 export function warnRouterViewWithoutSsrBootstrap(): void {
-  if (!isBrowser) return
-  const mode = getRouterBootstrapMode()
-  if (mode === "ssr" || mode === "ssg") return
+  if (!isBrowser || !__KIRU_PURE_CLIENT__) return
   const hasPageData = document.querySelector("script[k-page-data]")
   const hasRequestContext = document.querySelector("script[k-request-context]")
   if (!hasPageData && !hasRequestContext) return

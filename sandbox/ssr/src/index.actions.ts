@@ -24,60 +24,6 @@ export const getServerEcho = action.post({
   },
 })
 
-export interface TodoItem {
-  id: string
-  text: string
-  completed: boolean
-}
-
-export type CreateTodoInput = Omit<TodoItem, "id" | "completed">
-export type UpdateTodoInput = Partial<Omit<TodoItem, "id">> & {
-  id: string
-}
-
-const createTodoSchema: Schema<CreateTodoInput> = {
-  parse: (input) => {
-    if (typeof input !== "object" || input === null || !("text" in input)) {
-      throw new Error("Invalid input")
-    }
-    return input as CreateTodoInput
-  },
-}
-
-const updateTodoSchema: Schema<UpdateTodoInput> = {
-  parse: (input) => {
-    if (typeof input !== "object" || input === null || !("id" in input)) {
-      throw new Error("Invalid input")
-    }
-    return input as UpdateTodoInput
-  },
-}
-
-const todos: TodoItem[] = [
-  {
-    id: "1",
-    text: "buy coffee",
-    completed: false,
-  },
-]
-
-export const getTodos = action.get(async () => {
-  await new Promise((r) => setTimeout(r, 4000))
-  return todos
-})
-
-export const createTodo = action.post({
-  validation: { body: createTodoSchema },
-  handler: ({ body }) => {
-    const todo: TodoItem = {
-      id: crypto.randomUUID(),
-      text: body.text,
-      completed: false,
-    }
-    return todos.push(todo), todo
-  },
-})
-
 const demoUsers = new Map<string, { id: string; name: string }>([
   ["1", { id: "1", name: "Demo User" }],
 ])
@@ -88,9 +34,7 @@ export const users = {
     return demoUsers.get(id) ?? null
   }),
   rename: action.patch(
-    async ({
-      body,
-    }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
+    async ({ body }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
       const u = demoUsers.get(body.id)
       if (!u) throw new Error("User not found")
       u.name = body.name
@@ -106,18 +50,3 @@ export const renameUserViaNamespace = action.post(
     return { before, updated }
   }
 )
-
-export const updateTodo = action.post({
-  validation: { body: updateTodoSchema },
-  handler: async ({ body }) => {
-    const todo = todos.find((t) => t.id === body.id)
-    if (!todo) throw new Error("Todo not found")
-    if ("text" in body && typeof body.text === "string") {
-      todo.text = body.text
-    }
-    if ("completed" in body && typeof body.completed === "boolean") {
-      todo.completed = body.completed
-    }
-    return todo
-  },
-})

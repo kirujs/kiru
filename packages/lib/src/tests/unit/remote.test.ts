@@ -8,10 +8,14 @@ import {
 import {
   __INTERNAL_REMOTE_REGISTRY,
   action,
+  actionResult,
   createRemoteActionHandler,
   getActionExecutionContext,
-  RemoteError,
+  KIRU_TOKEN_RESPONSE_HEADER,
+  redirect,
+  fail,
 } from "../../remote/index.js"
+import { RemoteError } from "../../remote/errors.js"
 const SECRET = "test-secret-abc"
 
 // ---------------------------------------------------------------------------
@@ -156,7 +160,7 @@ describe("remote / handler — options", () => {
     assert.strictEqual(j.error.code, "FORBIDDEN_ORIGIN")
   })
 
-  it("exposes RemoteError as JSON when exposeErrors is true", async () => {
+  it("maps internal RemoteError to __kiruFail when exposeErrors is true", async () => {
     const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
     const token = validToken()
     const routeId = "test/remote-err"
@@ -168,8 +172,41 @@ describe("remote / handler — options", () => {
     const req = makeGetRequest(`${routeId}:boom`, token)
     const res = await handler(req)
     assert.strictEqual(res?.status, 422)
-    const j = (await res?.json()) as { error: { code: string } }
-    assert.strictEqual(j.error.code, "TEST_CODE")
+    const j = (await res?.json()) as { __kiruFail: boolean; code?: string; message: string }
+    assert.strictEqual(j.__kiruFail, true)
+    assert.strictEqual(j.code, "TEST_CODE")
+    assert.strictEqual(j.message, "nope")
+  })
+
+  it("returns fail() wire with status defaults", async () => {
+    const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
+    const token = validToken()
+    const routeId = "test/fail-defaults"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      withFields: action.get(async () =>
+        fail({ message: "bad", fields: { x: "nope" } })
+      ),
+      noFields: action.get(async () => fail({ message: "bad" })),
+      auth: action.get(async () =>
+        fail({ message: "nope", status: 401, code: "UNAUTHORIZED" })
+      ),
+    })
+    const withFields = await handler(makeGetRequest(`${routeId}:withFields`, token))
+    assert.strictEqual(withFields?.status, 422)
+    const wf = (await withFields?.json()) as {
+      __kiruFail: boolean
+      fields?: Record<string, string>
+    }
+    assert.strictEqual(wf.__kiruFail, true)
+    assert.deepStrictEqual(wf.fields, { x: "nope" })
+
+    const noFields = await handler(makeGetRequest(`${routeId}:noFields`, token))
+    assert.strictEqual(noFields?.status, 400)
+
+    const auth = await handler(makeGetRequest(`${routeId}:auth`, token))
+    assert.strictEqual(auth?.status, 401)
+    const aj = (await auth?.json()) as { code?: string }
+    assert.strictEqual(aj.code, "UNAUTHORIZED")
   })
 })
 
@@ -463,8 +500,9 @@ describe("remote / handler", () => {
     const req = makePostRequest(`${routeId}:greet`, token, { wrong: true })
     const res = await handler(req)
     assert.strictEqual(res?.status, 400)
-    const j = (await res?.json()) as { error: { code: string } }
-    assert.strictEqual(j.error.code, "INVALID_BODY")
+    const j = (await res?.json()) as { __kiruFail: boolean; code?: string }
+    assert.strictEqual(j.__kiruFail, true)
+    assert.strictEqual(j.code, "INVALID_BODY")
   })
 
   it("validates GET action query", async () => {
@@ -499,11 +537,12 @@ describe("remote / handler", () => {
 
     const bad = await handler(makeGetRequest(`${routeId}:search`, token))
     assert.strictEqual(bad?.status, 400)
-    const j = (await bad?.json()) as { error: { code: string } }
-    assert.strictEqual(j.error.code, "INVALID_QUERY")
+    const j = (await bad?.json()) as { __kiruFail: boolean; code?: string }
+    assert.strictEqual(j.__kiruFail, true)
+    assert.strictEqual(j.code, "INVALID_QUERY")
   })
 
-  it("runs middleware before handler and surfaces RemoteError", async () => {
+  it("runs middleware before handler and surfaces fail wire from RemoteError", async () => {
     const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
     const token = validToken()
     const routeId = "test/mw-auth"
@@ -520,8 +559,9 @@ describe("remote / handler", () => {
     })
     const denied = await handler(makeGetRequest(`${routeId}:secret`, token))
     assert.strictEqual(denied?.status, 401)
-    const j = (await denied?.json()) as { error: { code: string } }
-    assert.strictEqual(j.error.code, "UNAUTHORIZED")
+    const j = (await denied?.json()) as { __kiruFail: boolean; code?: string }
+    assert.strictEqual(j.__kiruFail, true)
+    assert.strictEqual(j.code, "UNAUTHORIZED")
 
     const allowed = await handler(
       makeGetRequest(
@@ -642,6 +682,48 @@ describe("remote / handler", () => {
     const res = await handler(req)
     assert.strictEqual(res?.status, 200)
     assert.deepStrictEqual(await res?.json(), { removed: "item-1" })
+  })
+
+  it("JSON POST redirect returns redirect JSON and Set-Cookie", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const token = validToken()
+    const routeId = "test/json-redirect"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      go: action.post(async () =>
+        redirect(303, "/done", {
+          cookies: [{ name: "s", value: "v", path: "/" }],
+        })
+      ),
+    })
+    const req = makePostRequest(`${routeId}:go`, token, null)
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 200)
+    const body = (await res?.json()) as {
+      __kiruRedirect: boolean
+      location: string
+      status: number
+    }
+    assert.strictEqual(body.__kiruRedirect, true)
+    assert.strictEqual(body.location, "/done")
+    const cookies = res!.headers.getSetCookie?.() ?? [res!.headers.get("set-cookie")!]
+    assert.ok(cookies.some((c) => c.includes("s=v")))
+  })
+
+  it("JSON POST actionResult unwraps body and sets x-kiru-token", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const token = validToken()
+    const routeId = "test/json-action-result"
+    const fresh = { role: "admin" }
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      go: action.post(async () => actionResult({ ok: 1 }, { context: fresh })),
+    })
+    const req = makePostRequest(`${routeId}:go`, token, null)
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 200)
+    assert.deepStrictEqual(await res?.json(), { ok: 1 })
+    const newToken = res!.headers.get(KIRU_TOKEN_RESPONSE_HEADER)
+    assert.ok(newToken)
+    assert.deepStrictEqual(unwrapKiruToken(newToken!, SECRET), fresh)
   })
 
   it("__kiruRegister overwrites an existing registration for the same route", async () => {

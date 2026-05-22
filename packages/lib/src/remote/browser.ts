@@ -2,11 +2,16 @@
  * Browser bundler entry for {@link ./index.js}: action helpers only.
  * Token signing and RPC handlers live in the server entry (Node crypto).
  */
-export { RemoteError, isRemoteError } from "./errors.js"
 export {
   action,
   redirect,
+  actionResult,
+  fail,
+  isKiruActionFail,
   isKiruRedirect,
+  isKiruActionResult,
+  ActionFailure,
+  isActionFailure,
   KIRU_FORM_TOKEN_FIELD,
   isStandardJSONSchemaV1,
   isStandardSchemaV1,
@@ -42,9 +47,16 @@ export {
   type RemoteFormActionHandler,
   type RemoteFormActionHandlerArgs,
   type KiruRedirect,
+  type KiruSetCookie,
+  type KiruActionResponseOptions,
+  type KiruActionResult,
+  type KiruActionFail,
+  type KiruActionFailWire,
+  type UnwrapKiruActionOutput,
   formDataToInput,
 } from "./action.js"
 export {
   createFormController,
   type CreateFormControllerResult,
+  type FormActionClientOutput,
 } from "./formController.js"

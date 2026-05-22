@@ -4,10 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Remote actions
+
+- **Response metadata:** `redirect(status, location, { cookies, context })` and `actionResult(value, { cookies, context })` attach framework-serialized `Set-Cookie` and optional `x-kiru-token` on action HTTP responses (native form, enhanced form, and JSON RPC). JSON actions support `redirect()` with the same client navigation behavior as enhanced forms. Client: `applyActionResponseHeaders`, `requestToken.setCurrent`. Sandbox SSR login/logout demo uses server-set session cookies (no client `document.cookie` bridge).
+- **Breaking — expected failures:** Public `RemoteError` / `isRemoteError` removed from `kiru/remote`. Use **`return fail({ message, status?, code?, fields?, data? })`** for form and JSON actions (`__kiruFail` wire; default status **422** with `fields`, **400** without). JSON `dispatch` throws **`ActionFailure`**; `createFormController` adds **`message`** signal and reads `__kiruFail` (legacy `{ error: { details: { fieldErrors } } }` shim for one release). Internal `RemoteError` throws still map to `__kiruFail` when `exposeErrors` is enabled.
+
 ### Bundle hygiene
 
 - **`kiru`:** `DevTools` moved to `kiru/devtools` (no longer on the main barrel).
-- **`kiru` router:** dev-only warnings split into `devWarnings.dev.ts`; production client bundles use shorter guard errors and call-site `if (__DEV__)` for hints.
+- **`kiru` router:** dev-only warnings split into `devWarnings.dev.ts`; production client bundles use shorter guard errors and call-site `if (__DEV__)` for hints. Removed runtime `markRouterBootstrap` / `getRouterBootstrapMode` — client bundles require `__KIRU_ROUTER_BOOTSTRAP__` from vite-plugin-kiru.
 - **`vite-plugin-kiru`:** injects `__KIRU_ROUTER_BOOTSTRAP__` (`csr` | `ssr` | `ssg`) on client builds for compile-time guard DCE.
 
 ### Deploy adapters

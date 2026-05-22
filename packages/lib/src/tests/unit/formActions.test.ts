@@ -7,12 +7,16 @@ import {
   __INTERNAL_REMOTE_REGISTRY,
   buildRemoteActionHandlerArgs,
   createRemoteActionHandler,
+  fail,
   type RemoteFormActionHandlerArgs,
   redirect,
+  actionResult,
+  KIRU_TOKEN_RESPONSE_HEADER,
   type Schema,
 } from "../../remote/index.js"
 import { staticLoaderSignal } from "../../router/navigationScope.js"
-import { makeKiruContextToken } from "../../remote/token.js"
+import { makeKiruContextToken, unwrapKiruToken } from "../../remote/token.js"
+import { RemoteError } from "../../remote/errors.js"
 import type { CustomRequestContext } from "../../router/types.js"
 
 const SECRET = "test-secret-form-actions"
@@ -366,9 +370,15 @@ describe("action.post (form + schema)", () => {
     const req = makeFormRequest(`${routeId}:submit`, token, { message: "" })
     const res = await handler(req)
 
-    assert.strictEqual(res?.status, 400)
-    const body = (await res?.json()) as { error: { code: string } }
-    assert.strictEqual(body.error.code, "INVALID_BODY")
+    assert.strictEqual(res?.status, 422)
+    const body = (await res?.json()) as {
+      __kiruFail: boolean
+      code?: string
+      fields?: Record<string, string>
+    }
+    assert.strictEqual(body.__kiruFail, true)
+    assert.strictEqual(body.code, "INVALID_BODY")
+    assert.strictEqual(body.fields?._form, "Invalid input")
   })
 
   it("accepts valid form fields through the HTTP handler (enhanced JSON)", async () => {
@@ -814,10 +824,200 @@ describe("action.post (form) / redirect handling", () => {
     assert.strictEqual(res.status, 303)
     assert.strictEqual(res.headers.get("location"), "/hello")
   })
+
+  it("native POST redirect includes Set-Cookie from redirect options", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const routeId = "test/redirect-cookie-native"
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      go: action.post({ type: "form" }, async () =>
+        redirect(303, "/hello", {
+          cookies: [
+            { name: "session", value: "abc", path: "/", maxAge: 3600, sameSite: "Lax" },
+          ],
+        })
+      ),
+    })
+
+    const req = makeFormRequest(`${routeId}:go`, validToken(), {}, {
+      contentType: "application/x-www-form-urlencoded",
+    })
+    const res = await handler(req)
+
+    assert.ok(res)
+    assert.strictEqual(res.status, 303)
+    const cookies = res.headers.getSetCookie?.() ?? [res.headers.get("set-cookie")!]
+    assert.ok(cookies.some((c) => c.includes("session=abc")))
+  })
+
+  it("enhanced POST redirect puts Set-Cookie on response, not JSON body", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const routeId = "test/redirect-cookie-enhanced"
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      go: action.post({ type: "form" }, async () =>
+        redirect(303, "/hello", {
+          cookies: [{ name: "session", value: "xyz", path: "/" }],
+        })
+      ),
+    })
+
+    const req = makeFormRequest(`${routeId}:go`, validToken(), {}, {
+      enhanced: true,
+    })
+    const res = await handler(req)
+
+    assert.ok(res)
+    assert.strictEqual(res.status, 200)
+    const body = JSON.parse(await res.text())
+    assert.strictEqual(body.location, "/hello")
+    assert.strictEqual(body.cookies, undefined)
+    const cookies = res.headers.getSetCookie?.() ?? [res.headers.get("set-cookie")!]
+    assert.ok(cookies.some((c) => c.includes("session=xyz")))
+  })
+
+  it("enhanced POST actionResult unwraps JSON and sets Set-Cookie", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const routeId = "test/action-result-enhanced"
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      go: action.post({ type: "form" }, async () =>
+        actionResult({ ok: true }, {
+          cookies: [{ name: "sid", value: "1", path: "/" }],
+        })
+      ),
+    })
+
+    const req = makeFormRequest(`${routeId}:go`, validToken(), {}, {
+      enhanced: true,
+    })
+    const res = await handler(req)
+
+    assert.ok(res)
+    assert.deepStrictEqual(await res.json(), { ok: true })
+    const cookies = res.headers.getSetCookie?.() ?? [res.headers.get("set-cookie")!]
+    assert.ok(cookies.some((c) => c.includes("sid=1")))
+  })
+
+  it("redirect with context emits x-kiru-token on enhanced response", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const routeId = "test/redirect-token-enhanced"
+    const fresh = { user: { id: "u1" } }
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      go: action.post({ type: "form" }, async () =>
+        redirect(303, "/app", { context: fresh })
+      ),
+    })
+
+    const req = makeFormRequest(`${routeId}:go`, validToken(), {}, {
+      enhanced: true,
+    })
+    const res = await handler(req)
+
+    assert.ok(res)
+    const token = res.headers.get(KIRU_TOKEN_RESPONSE_HEADER)
+    assert.ok(token)
+    assert.deepStrictEqual(unwrapKiruToken(token!, SECRET), fresh)
+  })
 })
 
 describe("action.post (form) / error handling", () => {
-  // Tests for error scenarios
+  it("returns __kiruFail with fields for enhanced POST", async () => {
+    const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
+    const routeId = "test/form-validation-enhanced"
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      submit: action.post({ type: "form" }, async () =>
+        fail({
+          message: "Message required",
+          status: 422,
+          fields: { message: "Required" },
+        })
+      ),
+    })
+
+    const req = makeFormRequest(`${routeId}:submit`, validToken(), {}, {
+      enhanced: true,
+    })
+    const res = await handler(req)
+
+    assert.strictEqual(res?.status, 422)
+    const body = (await res?.json()) as {
+      __kiruFail: boolean
+      message: string
+      fields?: Record<string, string>
+    }
+    assert.strictEqual(body.__kiruFail, true)
+    assert.strictEqual(body.message, "Message required")
+    assert.deepStrictEqual(body.fields, { message: "Required" })
+  })
+
+  it("maps internal RemoteError to __kiruFail for enhanced POST when exposeErrors is true", async () => {
+    const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
+    const routeId = "test/form-remote-err-migrate"
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      submit: action.post({ type: "form" }, async () => {
+        throw new RemoteError("Message required", "VALIDATION_ERROR", {
+          status: 422,
+          details: { fieldErrors: { message: "Required" } },
+        })
+      }),
+    })
+
+    const req = makeFormRequest(`${routeId}:submit`, validToken(), {}, {
+      enhanced: true,
+    })
+    const res = await handler(req)
+
+    assert.strictEqual(res?.status, 422)
+    const body = (await res?.json()) as {
+      __kiruFail: boolean
+      fields?: Record<string, string>
+    }
+    assert.strictEqual(body.__kiruFail, true)
+    assert.deepStrictEqual(body.fields, { message: "Required" })
+  })
+
+  it("returns 500 for enhanced POST RemoteError when exposeErrors is false", async () => {
+    const handler = createRemoteActionHandler(SECRET)
+    const routeId = "test/form-validation-hidden"
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      submit: action.post({ type: "form" }, async () => {
+        throw new RemoteError("nope", "VALIDATION_ERROR", {
+          status: 422,
+          details: { fieldErrors: { message: "Required" } },
+        })
+      }),
+    })
+
+    const req = makeFormRequest(`${routeId}:submit`, validToken(), {}, {
+      enhanced: true,
+    })
+    const res = await handler(req)
+
+    assert.strictEqual(res?.status, 500)
+  })
+
+  it("returns 500 for enhanced POST on generic Error", async () => {
+    const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
+    const routeId = "test/form-generic-error"
+
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      submit: action.post({ type: "form" }, async () => {
+        throw new Error("boom")
+      }),
+    })
+
+    const req = makeFormRequest(`${routeId}:submit`, validToken(), {}, {
+      enhanced: true,
+    })
+    const res = await handler(req)
+
+    assert.strictEqual(res?.status, 500)
+  })
 })
 
 describe("action.post (form) / origin validation", () => {
@@ -826,16 +1026,4 @@ describe("action.post (form) / origin validation", () => {
 
 describe("action.post (form) / context injection", () => {
   // Tests for request context handling
-})
-
-describe("createFormController / initialization", () => {
-  // Tests for controller creation
-})
-
-describe("createFormController / submission", () => {
-  // Tests for controller submission behavior
-})
-
-describe("createFormController / token management", () => {
-  // Tests for automatic token handling
 })

@@ -25,7 +25,8 @@
   ],
   "scripts": {
     "build": "pnpm i && tsc",
-    "test": "cross-env NODE_ENV=development node --test dist/**/*.test.js",
+    "test": "cross-env NODE_ENV=development node scripts/test.mjs",
+    "pretest": "pnpm run build",
     "dev": "tsc --watch"
   },
   "exports": {
@@ -125,6 +126,7 @@
     "@types/node": "^25.6.0",
     "chai": "^6.2.2",
     "cross-env": "^10.1.0",
+    "esbuild": "^0.27.2",
     "jsdom": "^27.4.0",
     "ts-mocha": "^11.1.0",
     "typescript": "^5.9.3"

@@ -24,13 +24,14 @@ import {
 } from "../router/navigationScope.js"
 import { formatRouterSearch } from "../router/navigation.js"
 import { requestToken } from "../globals.js"
-import {
-  markRouterBootstrap,
-  type RouterBootstrapMode,
-} from "../router/devWarnings.js"
-import { applyInvalidateResponseHeader } from "../router/routerGlobal.js"
-import { guardRemoteActionOnClient } from "../router/devWarnings.js"
-import { serializeActionCallQuery } from "../remote/action.js"
+import { applyActionResponseHeaders } from "../router/routerGlobal.js"
+import { isKiruRedirect, serializeActionCallQuery } from "../remote/action.js"
+import { isKiruActionFail } from "../remote/actionFail.js"
+import { ActionFailure } from "../remote/actionFailure.js"
+import { __DEV__, __KIRU_PURE_CLIENT__ } from "../env.js"
+import { REMOTE_ACTION_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
+import { ensureLoaderClient } from "../router/loaderClient.js"
+import { getRouterRuntime } from "../router/routerRuntime.js"
 
 type RemoteActionCallEnvelope = {
   body?: unknown
@@ -56,7 +57,9 @@ function ensureServerActionsClient() {
 
   g.__kiru_serverActions = {
     dispatch: async (id, method, call) => {
-      guardRemoteActionOnClient()
+      if (__DEV__ && __KIRU_PURE_CLIENT__) {
+        return Promise.reject(new Error(REMOTE_ACTION_PURE_CLIENT_DEV_MSG))
+      }
       const envelope = call ?? {}
       const headers: Record<string, string> = {
         "x-kiru-token": requestToken.current,
@@ -79,11 +82,34 @@ function ensureServerActionsClient() {
         ? `/?action=${encodeURIComponent(id)}&${queryString}`
         : `/?action=${encodeURIComponent(id)}`
       const r = await fetch(actionUrl, init)
+      applyActionResponseHeaders(r.headers)
+      const text = await r.text()
+      let data: unknown = null
+      if (text) {
+        try {
+          data = JSON.parse(text) as unknown
+        } catch {
+          data = null
+        }
+      }
+      if (isKiruActionFail(data)) {
+        throw ActionFailure.fromWire(data)
+      }
       if (!r.ok) {
+        const legacy =
+          ActionFailure.fromLegacyEnvelope(data) ??
+          ActionFailure.fromWire(data)
+        if (legacy) throw legacy
         throw new Error("Action failed")
       }
-      applyInvalidateResponseHeader(r.headers.get("x-kiru-invalidate"))
-      return r.json()
+      if (isKiruRedirect(data)) {
+        window.location.assign(
+          new URL((data as { location: string }).location, window.location.href)
+            .href
+        )
+        return data
+      }
+      return data
     },
   }
 }
@@ -96,11 +122,6 @@ export function __kiruEnsureRemoteDispatch(): ServerActionsClient["dispatch"] {
     }
   ).__kiru_serverActions!.dispatch
 }
-
-import {
-  ensureLoaderClient,
-} from "../router/loaderClient.js"
-import { getRouterRuntime } from "../router/routerRuntime.js"
 
 export {
   __kiruEnsureLoaderDispatch,
@@ -135,8 +156,6 @@ export type BootstrapSsrClientOptions = {
     readonly string[],
     unknown
   >
-  /** @internal Set by `kiru/router/ssg` vs `kiru/router/ssr` bootstrap. */
-  bootstrapMode?: RouterBootstrapMode
 }
 
 /**
@@ -188,25 +207,44 @@ async function buildSsrClientOutlet(
     useHydratedPageData: options.useHydratedPageData,
     forceReload: options.forceReload,
     onLeafRenderError: (err) => {
-      router.outletRenderError.value = toRenderError(err)
-      void recoverSsrOutletFromRenderError(router, manifest, outlet)
+      const renderErr = toRenderError(err)
+      const matchAtError = committedMatch
+      router.outletRenderError.value = renderErr
+      void recoverSsrOutletFromRenderError(
+        router,
+        manifest,
+        outlet,
+        matchAtError,
+        renderErr
+      )
     },
   })
+}
+
+function isSameCommittedMatch(
+  current: RouteMatch | null,
+  atError: RouteMatch | null
+): boolean {
+  if (current === atError) return true
+  if (!current || !atError) return false
+  return (
+    current.route.id === atError.route.id &&
+    current.pathname === atError.pathname
+  )
 }
 
 async function recoverSsrOutletFromRenderError(
   router: SsrClientRouter,
   manifest: RouteManifest,
-  outlet: { value: JSX.Element | null }
+  outlet: { value: JSX.Element | null },
+  matchAtError: RouteMatch | null,
+  err: Error
 ): Promise<void> {
-  const err = router.outletRenderError.peek()
-  if (!err) return
-  const recovery = await renderClientErrorOutlet(
-    manifest,
-    router.match.peek(),
-    err
-  )
-  if (recovery) outlet.value = recovery
+  const recovery = await renderClientErrorOutlet(manifest, matchAtError, err)
+  if (!recovery) return
+  if (router.outletRenderError.peek() !== err) return
+  if (!isSameCommittedMatch(router.match.peek(), matchAtError)) return
+  outlet.value = recovery
 }
 
 function subscribeSsrClientOutlet(
@@ -270,7 +308,6 @@ function subscribeSsrClientOutlet(
 export async function bootstrapSsrClient(
   options: BootstrapSsrClientOptions
 ): Promise<AppHandle> {
-  markRouterBootstrap(options.bootstrapMode ?? "ssr")
   const manifest =
     "routes" in options.routes
       ? options.routes
@@ -380,7 +417,6 @@ export function bootstrapSsgClient(
 ): Promise<AppHandle> {
   return bootstrapSsrClient({
     ...options,
-    bootstrapMode: "ssg",
     hydrateOptions: {
       ...options.hydrateOptions,
       hydrationMode: "static",

@@ -261,15 +261,16 @@ describe("SSR server", () => {
     it("recovers via client navigation after SSR error page", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/`, { failOnStatusCode: true })
+      cy.window().its("__kiruHydratedAt").should("be.a", "number")
       cy.get('a[href="/nav-break"]').click()
       cy.get('[data-testid="ssr-error-page"]').should(
         "contain",
         "SSR error boundary: e2e-nav-boom"
       )
-      cy.get('a[href="/"]').first().click()
+      cy.contains("nav a", "Home").click()
       cy.location("pathname").should("eq", "/")
+      cy.get('[data-testid="ssr-home"]', { timeout: 10_000 }).should("exist")
       cy.get('[data-testid="ssr-error-page"]').should("not.exist")
-      cy.get('[data-testid="ssr-home"]').should("exist")
     })
 
     it("uses leaf route error over scope error", () => {
@@ -653,7 +654,10 @@ describe("SSR server", () => {
       cy.intercept("POST", /\?action=/).as("formAction")
       cy.get('[data-testid="forms-demo-input"]').type("from-cypress")
       cy.get('[data-testid="forms-demo-submit"]').click()
-      cy.wait("@formAction").its("response.statusCode").should("eq", 200)
+      cy.wait("@formAction").then((interception) => {
+        expect(interception.response?.statusCode).to.eq(200)
+        expect(interception.request.headers["x-kiru-form"]).to.eq("1")
+      })
       cy.get('[data-testid="forms-demo-result"]').should(
         "have.text",
         "from-cypress"
@@ -669,7 +673,7 @@ describe("SSR server", () => {
       cy.get('[data-testid="ssr-loader"]').should("exist")
     })
 
-    it("surfaces fieldErrors from validation RemoteError", () => {
+    it("surfaces fieldErrors from validation fail()", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/forms/demo`)
       cy.window().its("__kiruHydratedAt").should("be.a", "number")
@@ -680,6 +684,26 @@ describe("SSR server", () => {
         "have.text",
         "Required"
       )
+    })
+
+    it("clears validation error after successful enhanced submit", () => {
+      const port = Cypress.env("port")
+      cy.visit(`http://127.0.0.1:${port}/forms/demo`)
+      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.intercept("POST", /\?action=/).as("formValidation")
+      cy.get('[data-testid="forms-validation-submit"]').click()
+      cy.wait("@formValidation").its("response.statusCode").should("eq", 422)
+      cy.get('[data-testid="forms-validation-error"]').should(
+        "have.text",
+        "Required"
+      )
+      cy.get('[data-testid="forms-validation-input"]').type("ok")
+      cy.get('[data-testid="forms-validation-submit"]').click()
+      cy.wait("@formValidation").then((interception) => {
+        expect(interception.response?.statusCode).to.eq(200)
+        expect(interception.request.headers["x-kiru-form"]).to.eq("1")
+      })
+      cy.get('[data-testid="forms-validation-error"]').should("have.text", "")
     })
   })
 
@@ -780,6 +804,61 @@ describe("SSR server", () => {
       cy.get('[data-testid="namespace-delete-result"]').should(
         "have.text",
         JSON.stringify({ removed: "demo", had: true })
+      )
+    })
+  })
+
+  describe("default export remote actions", () => {
+    const visitDefaultExportDemo = () => {
+      const port = Cypress.env("port")
+      cy.visit(`http://127.0.0.1:${port}/default-export-demo`)
+      cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
+      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    }
+
+    it("invokes literal default export GET with default.getEcho RPC id", () => {
+      visitDefaultExportDemo()
+      cy.intercept("GET", /\?action=[^&]*default\.getEcho/).as("literalDefaultGet")
+      cy.get('[data-testid="literal-default-get"]').click()
+      cy.wait("@literalDefaultGet").then(({ request, response }) => {
+        expect(request.method).to.eq("GET")
+        expect(response?.statusCode).to.eq(200)
+        const actionId = new URL(request.url).searchParams.get("action")
+        expect(actionId).to.include("default.getEcho")
+      })
+      cy.get('[data-testid="literal-default-result"]').should(
+        "have.text",
+        "literal-default:E2E User"
+      )
+    })
+
+    it("invokes linked default export GET with default.getEcho RPC id", () => {
+      visitDefaultExportDemo()
+      cy.intercept("GET", /\?action=[^&]*default\.getEcho/).as("linkedDefaultGet")
+      cy.get('[data-testid="linked-default-get"]').click()
+      cy.wait("@linkedDefaultGet").then(({ request, response }) => {
+        expect(request.method).to.eq("GET")
+        expect(response?.statusCode).to.eq(200)
+        const actionId = new URL(request.url).searchParams.get("action")
+        expect(actionId).to.include("default.getEcho")
+      })
+      cy.get('[data-testid="linked-default-result"]').should(
+        "have.text",
+        "linked-default:E2E User"
+      )
+    })
+
+    it("composed POST runs in-process catalog.getEcho via linked binding", () => {
+      visitDefaultExportDemo()
+      cy.intercept("POST", /\?action=[^&]*runPipeline/).as("linkedCompose")
+      cy.get('[data-testid="linked-compose-run"]').click()
+      cy.wait("@linkedCompose").its("response.statusCode").should("eq", 200)
+      cy.get('[data-testid="linked-compose-result"]').should(
+        "have.text",
+        JSON.stringify({
+          echo: "linked-default:E2E User",
+          linked: true,
+        })
       )
     })
   })

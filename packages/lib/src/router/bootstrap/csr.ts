@@ -4,7 +4,6 @@ import { createElement } from "../../element.js"
 import { createRouter, RouterProvider, RouterView } from "../csr.js"
 import type { InternationalizationConfig } from "../i18n/index.js"
 import { ensureClientI18nReady, I18nReactiveRoot } from "../i18nContext.js"
-import { markRouterBootstrap } from "../devWarnings.js"
 import { ensureLoaderClient } from "../loaderClient.js"
 import { getRouterRuntime } from "../routerRuntime.js"
 import type { RouterPathPolicy } from "../pathPolicy.js"
@@ -39,7 +38,6 @@ export async function createRouterApp(
   options: CreateRouterAppOptions
 ): Promise<AppHandle> {
   const { routes, container, pathPolicy, transition, i18n, appOptions } = options
-  markRouterBootstrap("csr")
   ensureLoaderClient()
   const router = createRouter({
     routes,

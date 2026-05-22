@@ -1,9 +1,16 @@
 import { signal } from "kiru"
-import { Link, onAfterRouteEnter, onBeforeRouteUpdate } from "kiru/router"
+import {
+  Link,
+  onAfterRouteEnter,
+  onBeforeRouteUpdate,
+  useRequestContext,
+} from "kiru/router"
 
 const guardEvents = signal<string[]>([])
 
 export default function Layout() {
+  const ctx = useRequestContext()
+
   onAfterRouteEnter((to) => {
     guardEvents.value = [...guardEvents.peek(), `enter:${to.pathname}`]
   })
@@ -24,8 +31,19 @@ export default function Layout() {
           Kiru SSR Sandbox
         </h1>
         <p className="mt-2 text-sm text-slate-400">
-          Tailwind CSS v4 styling with router guard event visibility.
+          Auth, account, and todos — remote actions with real cookies.
         </p>
+
+        {ctx.user ? (
+          <p className="mt-3 text-sm text-slate-300">
+            Signed in as{" "}
+            <span className="font-mono text-cyan-200">{ctx.user.name}</span>
+            <span className="text-slate-500"> · {ctx.user.email}</span>
+          </p>
+        ) : (
+          <p className="mt-3 text-sm text-slate-500">Not signed in</p>
+        )}
+
         <nav className="mt-6 flex flex-wrap gap-2">
           <Link
             to="/"
@@ -33,6 +51,29 @@ export default function Layout() {
           >
             Home
           </Link>
+          {ctx.user ? (
+            <>
+              <Link
+                to="/todos"
+                className="rounded-full border border-cyan-700 bg-cyan-950/80 px-3 py-1 text-sm font-medium text-cyan-100 hover:bg-cyan-900"
+              >
+                Todos
+              </Link>
+              <Link
+                to="/account"
+                className="rounded-full border border-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:border-cyan-400 hover:text-cyan-200"
+              >
+                Account
+              </Link>
+            </>
+          ) : (
+            <Link
+              to="/login"
+              className="rounded-full border border-cyan-700 bg-cyan-950/80 px-3 py-1 text-sm font-medium text-cyan-100 hover:bg-cyan-900"
+            >
+              Sign in
+            </Link>
+          )}
           <Link
             to="/about"
             className="rounded-full border border-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:border-cyan-400 hover:text-cyan-200"
@@ -58,34 +99,16 @@ export default function Layout() {
             User 42
           </Link>
           <Link
-            to="/users/0"
-            className="rounded-full border border-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:border-cyan-400 hover:text-cyan-200"
-          >
-            User 0 (guarded)
-          </Link>
-          <Link
             to="/demo-loader"
             className="rounded-full border border-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:border-cyan-400 hover:text-cyan-200"
           >
             Route demo
           </Link>
           <Link
-            to="/loaders/server"
-            className="rounded-full border border-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:border-cyan-400 hover:text-cyan-200"
-          >
-            serverLoader
-          </Link>
-          <Link
             to="/break-ssr"
             className="rounded-full border border-rose-800/80 px-3 py-1 text-sm font-medium text-rose-200 hover:border-rose-400"
           >
             Break SSR
-          </Link>
-          <Link
-            to="/break-ssr-leaf"
-            className="rounded-full border border-amber-800/80 px-3 py-1 text-sm font-medium text-amber-200 hover:border-amber-400"
-          >
-            Break (leaf error)
           </Link>
         </nav>
         <p
