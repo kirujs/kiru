@@ -1,158 +1,235 @@
-# Architecture — mental model
+# Architecture
 
-Kiru v2 treats routing as a **compiled manifest** plus **environment-specific runtimes** (CSR router, SSR renderer, SSG prerender). One `routes.ts` file drives all modes.
+This document describes how Kiru v2’s router and rendering stack is structured across packages, how a single HTTP request flows through the system, and where complexity is intentionally split for tree-shaking and deploy targets.
 
-## Layered stack
+---
 
+## Design goals
+
+1. **One route tree** powers CSR, SSR, SSG, and hybrid ISR — no duplicate route definitions per mode.
+2. **Tree-shakeable client bundles** — CSR builds must not pull SSR hydration; SSG must not pull SSR-only loader RPC unless hybrid.
+3. **Explicit deploy capabilities** — Node/Bun vs Cloudflare differ for ISR, disk, and image optimization (`@kirujs/runtime`).
+4. **Framework parity where it matters** — loaders, middleware, actions, streaming HTML, static generation, and client navigations after hydration.
+
+Kiru is **not** aiming for React Server Components or a second server rendering paradigm; the server produces HTML + serialized hydration payloads for a **client-side signal tree**.
+
+---
+
+## Package boundaries
+
+### `kiru` (`packages/lib`)
+
+| Area | Path | Responsibility |
+|------|------|----------------|
+| Router core | `src/router/csr.ts` | `createRouter`, history, `navigate`, guards |
+| Matching | `src/router/manifest.ts` | `compileRouteTree`, `matchRoute`, static path generation |
+| Server render | `src/router/renderer.ts` | `createRenderer`, actions/loader multiplex |
+| Preparation | `src/router/prepareAppForUrl.ts` | Match URL → middleware → loaders → JSX app |
+| Client prep | `src/router/clientRoutePrep.ts`, `prepareRoute.ts` | Shared loader/head prep for CSR & SSR client |
+| Hydration | `src/ssr/routerHydrate.ts` | `bootstrapSsrClient`, `bootstrapSsgClient` |
+| Remote | `src/remote/` | Action registry, dispatch, `ActionFailure`, cookies |
+| Env guards | `src/env.ts` | `__KIRU_PURE_CLIENT__`, `__KIRU_SSR__` |
+
+**Exports** (see [17-package-exports-and-import-guide.md](./17-package-exports-and-import-guide.md)):
+
+- `kiru/router` — full router + renderer (server-safe).
+- `kiru/router/client` — browser subset (package.json `"browser"` field).
+- `kiru/router/csr` | `ssr` | `ssg` — bootstrap-only entry points.
+- `kiru/ssr/router` — low-level hydrate API.
+
+### `vite-plugin-kiru` (`packages/vite-plugin-kiru`)
+
+- Injects `__KIRU_ROUTER_BOOTSTRAP__` on **client** builds.
+- Runs SSG prerender during `vite build` when `router.ssg` is set.
+- Bundles `router.serverEntry` for SSR.
+- Codegen: remote registry, loader registry, file routes, page loaders, HMR.
+- Dev server: SSR request handling when `serverEntry` is configured.
+
+### `@kirujs/file-routes` (`packages/file-routes`)
+
+- Scans `src/pages` → generates `routes.gen.ts`.
+- Co-located `middleware.ts`, `page.config.ts`, `layout.tsx`, `not-found.tsx`.
+
+### Adapters
+
+| Package | Runtimes |
+|---------|----------|
+| `adapter-node` | Node — `createKiruHandler`, disk ISR, static assets, sharp images |
+| `adapter-bun` | Bun — same capabilities as Node |
+| `adapter-cloudflare` | Workers — SSR + **immutable** prerender via `getAsset`; no timed ISR |
+
+`adapter-contract` defines `KiruHandle`, `toFetchHandler`, middleware composition.
+
+### `@kirujs/runtime`
+
+Single source of truth for **what each deploy target can do**:
+
+```typescript
+// packages/runtime/src/index.ts (conceptual)
+node | bun  → { isr: true, mutablePrerenderCache: true, runtimeImageOptimizer: true, fs: true }
+cloudflare → { isr: false, mutablePrerenderCache: false, runtimeImageOptimizer: false, fs: false }
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  App: routes.ts (createRouteTree) + pages + site.config    │
-└───────────────────────────┬─────────────────────────────────┘
-                            │ compileRouteTree
-┌───────────────────────────▼─────────────────────────────────┐
-│  RouteManifest — flat routes, scopes, meta, static flags   │
-└─────────┬───────────────────────┬─────────────────────────┘
-          │                       │
-   CSR    │ createRouter          │ createRenderer / prerenderStaticRoutes
-          │ navigation.ts         │ renderer.ts, ssg.ts
-          ▼                       ▼
-┌─────────────────┐     ┌─────────────────────────────────────┐
-│ Browser history │     │ Server: adapters (Node/Bun/CF)       │
-│ hydrate (ssg/   │     │ Response | null, static assets, ISR  │
-│ ssr bootstrap)  │     └─────────────────────────────────────┘
-└─────────────────┘
-```
 
-## Single navigation pipeline (CSR)
+Build and adapter startup call `assertISRAllowed()` when edge + timed revalidate/tags would be ignored.
 
-Client navigations funnel through `packages/lib/src/router/navigation.ts`:
+---
 
-1. Match URL → `matchRoute(manifest, pathname, pathPolicy)`
-2. **Route middleware** — global + per-scope/page chain (`runRouteMiddleware`)
-3. Commit URL / history
-4. **Prepare route** — loaders, `pageHead`, streaming gate (`prepareRoute.ts`, `runPageLoad.ts`)
-5. Update outlet (`RouterView` / SSR shell subscription)
+## Compile-time bootstrap guards
 
-SSR first paint runs the same middleware + loader ordering inside `createRenderer` → `prepareAppForUrl.ts`.
+`packages/lib/src/env.ts`:
 
-## HTML document contract
+| Constant | When true |
+|----------|-----------|
+| `__KIRU_PURE_CLIENT__` | Client bundle is `csr` or `ssg` |
+| `__KIRU_SSR__` | Client bundle is `ssr` |
 
-SSR and SSG emit a filled HTML shell:
+**Why it matters:**
 
-| Token / script | Purpose |
-|----------------|---------|
-| `{{kiru_head}}` / `{{kiru_body}}` | Vite template injection (dev + build shell) |
-| `<script k-page-data>` | Serialized loader props for hydrate |
-| `<script k-request-context>` | Serialized `CustomRequestContext` |
-| `<script k-i18n>` | Locale + message bundle snapshot |
-| `kiru:deferred` | Streaming loader placeholders (SSR stream) |
+- `serverLoader` on a pure CSR/SSG client bundle triggers dev warnings and failed RPC.
+- Remote `dispatch` on pure client rejects in dev with a clear message.
+- Tests compile each file with a per-file bootstrap via `packages/lib/scripts/test.mjs`.
 
-Hydration reads these in `routerHydrate.ts` (`readHydratedRequestContext`, `useHydratedPageData`).
+---
 
-## Loader execution matrix
-
-| Kind | First paint (SSR) | First paint (SSG) | CSR navigation | SSR navigation |
-|------|-------------------|-------------------|----------------|----------------|
-| `loader` | Server runs | Build runs | Client runs | Server via RPC or universal split |
-| `serverLoader` | Server | Build (static paths) | **Throws** without SSR | `POST /?loader=` |
-| `clientLoader` | Stub / skip | N/A on static | Client | Client after hydrate |
-| `staticLoader` | Build bake → module export | Build bake | **Warn** — no op | Uses baked payload |
-
-`staticLoader` data lives in `export const __kiruStaticLoaderPayload` on the page module (see [03-loaders-and-data.md](./03-loaders-and-data.md)).
-
-## Three “middleware” layers (do not conflate)
-
-| Layer | Where | Examples |
-|-------|--------|----------|
-| HTTP | Your server (Hono, Express) | CORS, logging, rate limits |
-| **Route middleware** | `createRouter` / `createRenderer` | Auth redirect, meta policy |
-| Component guards | CSR only (`navigationGuards.ts`) | Unsaved form confirm |
-
-Kiru adapters intentionally do not register HTTP middleware.
-
-## Deploy target affects renderer
-
-`createRenderer({ deployTarget })`:
-
-- **node / bun:** disk prerender dir, ISR TTL, `revalidatePath` / `revalidateTag`, Sharp runtime images
-- **cloudflare:** no disk ISR; immutable prerender from Assets; Web Crypto action tokens
-
-`getRuntimeCapabilities(target)` in `@kirujs/runtime` is the single capability source for plugin warnings and adapter behavior.
-
-## File map (high-signal)
-
-| File | Responsibility |
-|------|----------------|
-| `createRouteTree.ts` | Authoring API |
-| `manifest.ts` | Compile tree, match, static path generation |
-| `csr.ts` | `createRouter`, signals, navigations |
-| `renderer.ts` | `createRenderer` orchestration, actions, re-exports |
-| `prepareAppForUrl.ts` | SSR match, middleware, loaders, redirects |
-| `rendererStream.ts` | Streaming shell + templated flush |
-| `ssrAppBuild.ts` | `buildAppElement`, string render + document head |
-| `staticRouteRender.ts` | SSG / string SSR match render |
-| `renderErrorRecovery.ts` | SSR error boundary HTML / stream |
-| `prerenderRegenerate.ts` | ISR background regen (`onRegenerate`) |
-| `clientRoutePrep.ts` | Shared CSR/SSR outlet prep + document head |
-| `prefetchRoute.ts` | Link hover/visible prefetch |
-| `loaderClient.ts` | Client `/?loader=` dispatch |
-| `loaderRegistry.ts` | Server loader RPC registry (internal import path) |
-| `routerRuntime.ts` | Internal router state (nav generation) |
-| `navigation.ts` | Client navigation orchestration |
-| `routeMiddleware.ts` | Middleware runner |
-| `routeMeta.ts` | Meta merge, middleware chain |
-| `runPageLoad.ts` | Loader dispatch, validation, cache |
-| `loaderCache.ts` | staleTime / gcTime client cache |
-| `prerenderServe.ts` | Production disk HTML serve + SWR regen |
-| `prerenderCache.ts` | Disk + memory ISR store |
-| `ssg.ts` | `prerenderStaticRoutes` build API |
-| `bootstrap/*.ts` | `createRouterApp` per mode |
-| `ssr/routerHydrate.ts` | Hydrate + post-hydrate navigations |
-
-## Request lifecycle (SSR first paint)
+## Request lifecycle (SSR)
 
 ```mermaid
 sequenceDiagram
-  participant Browser
+  participant HTTP
   participant Adapter
   participant Renderer
-  participant MW as Route middleware
-  participant Load as Loaders
+  participant Prepare as prepareAppForUrl
+  participant MW as runRouteMiddleware
+  participant Load as runPageLoad
+  participant HTML
 
-  Browser->>Adapter: GET /users/1
-  Adapter->>Renderer: render(request, { context })
-  Renderer->>Renderer: tryServePrerenderedFromDisk?
-  Renderer->>MW: runRouteMiddleware
-  MW-->>Renderer: continue | redirect | error
-  Renderer->>Load: prepareAppForUrl
-  Load-->>Renderer: page props + head
-  Renderer-->>Adapter: HTML + scripts
-  Adapter-->>Browser: Response
-  Browser->>Browser: bootstrapSsrClient (hydrate)
+  HTTP->>Adapter: Request
+  Adapter->>Renderer: render(request, ctx)
+  alt Prerender hit (prod, static path)
+    Renderer->>HTML: disk / cache HTML
+  else SSR path
+    Renderer->>Prepare: prepareAppForUrl(url, ctx)
+    Prepare->>MW: chain for matched route
+    MW-->>Prepare: continue | redirect | error | abort
+    Prepare->>Load: page module + loaders
+    Load-->>Prepare: pageProps, serialized data
+    Prepare-->>Renderer: PreparedApp (JSX)
+    Renderer->>HTML: string or ReadableStream
+  end
+  Adapter->>HTTP: Response
 ```
 
-## Request lifecycle (CSR navigation)
+**Multiplexed side channels** on the same origin (when `createRenderer({ actions })` is configured):
 
-```mermaid
-sequenceDiagram
-  participant User
-  participant Router as createRouter
-  participant MW as Middleware
-  participant Load as clientLoader/loader
+| Query | Method | Handler |
+|-------|--------|---------|
+| `?action=<id>` | GET/POST/… | Remote action |
+| `?loader=<routeId>:load` | POST | Server loader RPC |
 
-  User->>Router: Link click / navigate()
-  Note over Router: Previous nav AbortController aborted; navToken bumped
-  Router->>MW: runRouteMiddleware
-  MW-->>Router: redirect?
-  Router->>Load: prepareRouteForNavigation (LoaderContext.signal)
-  Load-->>Router: leaf props (discarded if nav superseded)
-  Router->>User: DOM update
+Both use signed context tokens (`k-request-token`) and optional origin allowlists.
+
+---
+
+## Client lifecycle (after first paint)
+
+Two **outlet implementations** exist (important for parity testing):
+
+### Path A — CSR (`kiru/router/csr`)
+
+```
+createRouterApp → RouterProvider → RouterView
+  → resource() watches match, loaderEpoch, outletRenderError
+  → buildClientOutletSubtree()
 ```
 
-## Design principles on this branch
+`RouterView` is the documented CSR outlet. It uses `ErrorBoundary` and coordinates `isNavigating` with loader pending state.
 
-1. **One route tree** — no duplicate filesystem routing vs programmatic routes.
-2. **Explicit modes** — bootstrap import (`csr` / `ssg` / `ssr`) documents deploy contract.
-3. **SSR and CSR share policy** — middleware + meta + loader context shape align.
-4. **Static is opt-in** — `static: true` on scope/page controls prerender set only.
-5. **Bring your own server** — `Response | null` handler composes with Hono/Express/etc.
+### Path B — SSR / SSG (`bootstrapSsrClient` / `bootstrapSsgClient`)
+
+```
+createRouter → preload outlet via buildSsrClientOutlet()
+  → hydrate(Fragment + createSsrRouterShell(() => outlet.value))
+  → subscribeSsrClientOutlet() on match / isNavigating / currentNavigation
+```
+
+SSR/SSG **do not mount `RouterView`**. They keep outlet JSX in a `signal` and refresh it on navigation. Same underlying `buildClientOutletSubtree`, but different scheduling and pending UX.
+
+**Hydration mode:**
+
+- SSR: `hydrationMode: "dynamic"` (default in `kiru/router/ssr`).
+- SSG: `hydrationMode: "static"` (via `bootstrapSsgClient`).
+
+---
+
+## `createStaticRouter` (build-time only)
+
+`createStaticRouter` in `csr.ts` provides a **non-navigating** router (`navigationMode: "static"`, `navigate` no-ops) used when rendering HTML during prerender or SSR string generation (`ssrAppBuild.ts`). Application code should use `createRouter` or `createRouterApp`, not `createStaticRouter`.
+
+---
+
+## State: request context vs router state
+
+| State | Storage | SSR first paint | Client navigation |
+|-------|---------|-----------------|-------------------|
+| URL | router signals (`pathname`, `query`, `hash`, `params`) | From request | `navigation.ts` |
+| Per-request app data | `CustomRequestContext` (augmentable) | Serialized `k-request-context` script | `requestContext` signal; refreshed via action headers |
+| Page loader data | `k-page-data` script + loader cache | Hydrated once | RPC / re-fetch per loader rules |
+| i18n | `k-i18n` script + runtime | Hydrated | `loadI18nMessages` on locale change |
+| Route meta | `useMatches()` segments | From compiled tree | Recomputed on match |
+
+Augment `CustomRequestContext` and `RouteMeta` via `declare module "kiru/router"` (see types in `packages/lib/src/router/types.ts`).
+
+---
+
+## Navigation pipeline (CSR / hydrated SSR)
+
+`createNavigateInternal` in `navigation.ts` runs, in order:
+
+1. **Leave guards** (`onBeforeRouteLeave`) — per-route component guards, CSR only.
+2. **Update guards** (`onBeforeRouteUpdate`) — same route id, param change.
+3. **Route middleware** — `runRouteMiddleware` (redirect / abort / error).
+4. **Search validation** — schema from page `validation` export.
+5. **History commit** — `pushState` / `replaceState`, scroll stack.
+6. **Enter guards** — component enter hooks.
+
+SSR first paint runs middleware inside `prepareAppForUrl` with a real `Request`; client navigations pass `request: undefined` to middleware (documented on `RouteMiddlewareContext`).
+
+---
+
+## Error handling layers
+
+| Layer | Mechanism |
+|-------|-----------|
+| Loader throw | Propagates to route prep; may set error page props |
+| Render throw | Route `error` module or root `error` |
+| Middleware `{ error, body? }` | SSR: HTTP status + body; CSR: **see [05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md)** |
+| Client boundary | `ErrorBoundary` in `RouterView`; SSR outlet uses `outletRenderError` + `renderClientErrorOutlet` |
+
+---
+
+## File-based vs manual routes
+
+Both compile to the same `RouteManifest`:
+
+- **Manual:** `createRouteTree` in `src/routes.ts`.
+- **Generated:** `generateFileRoutes` → `src/routes.gen.ts`, enabled with `router.fileRoutes` in Vite.
+
+Co-located `middleware.ts` is normalized via `collectRouteMiddlewareModule` (`routeMiddleware.ts`).
+
+---
+
+## What belongs outside the router
+
+- **Vite** — bundling, HMR, client/server split.
+- **Adapters** — static file serving, `fetch` integration, `getRequestContext`.
+- **sharp** (optional) — build-time and Node runtime image variants.
+- **Cypress e2e** — behavioral contracts; see [15-testing.md](./15-testing.md).
+
+---
+
+## Further reading
+
+- [03-rendering-modes.md](./03-rendering-modes.md)
+- [08-renderer-ssr-and-streaming.md](./08-renderer-ssr-and-streaming.md)
+- [09-client-bootstrap-and-hydration.md](./09-client-bootstrap-and-hydration.md)
+- [16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md)
