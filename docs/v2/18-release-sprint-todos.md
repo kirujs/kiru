@@ -72,6 +72,7 @@ gantt
 | P2-4 | Evaluate default static hoisting | P2 | Post | Code |
 | P2-5 | Content/MDX — defer or partner | P2 | Post | — |
 | P2-6 | `prepareAppForUrl` integration tests | P2 | S2 | Test |
+| P2-7 | Configurable static 404 / host fallback strategies | P2 | Post | Doc + code |
 | P3-1 | OG image route convention | P3 | Post | — |
 | P3-2 | PWA / service worker kit | P3 | Post | — |
 | P3-3 | ICU i18n | P3 | Post | — |
@@ -285,7 +286,7 @@ gantt
 
 - [ ] **Add** client navigation after SSG load (internal `Link` click)
 - [ ] **Add** static loader page: data present without `?loader=` POST
-- [ ] **Add** 404 / `not-found` static page if applicable
+- [x] **Add** 404 / `not-found` static page — covered by `e2e/file-routes-ssg` (+ `e2e/ssg`); deploy strategy work tracked in **P2-7** / [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)
 - [ ] **Add** hybrid: optional job runs `verify-hybrid-prerender.mjs` in CI
 - [ ] **Files:** `e2e/ssg/cypress/e2e/ssg.cy.ts`, new specs as needed
 - [ ] **Acceptance:** +10 tests or explicit defer list with P2 ticket
@@ -466,6 +467,7 @@ Today `router.fileRoutes.pageFiles` customizes leaf route filenames (`page.tsx`,
   - [ ] `getAsset` for prerender
   - [ ] `assetFetch` for bundles
   - [ ] ISR limits table from [14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md)
+  - [ ] Static 404 / `nearest-asset` vs `hybrid-ssr` — [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)
 - [ ] **Acceptance:** Wrangler deploy documented step-by-step
 
 ### S5-2 — P1-4: Cloudflare CI smoke
@@ -509,6 +511,7 @@ Work after **v2.0.0** tag unless schedule allows earlier.
 | P2-4 | [ ] Static JSX hoisting — benchmark + default on if safe | `experimental.staticHoisting` |
 | P2-5 | [ ] Content layer decision | Defer or integrate MDX |
 | P2-6 | [ ] Deeper `prepareAppForUrl` refactor + tests | After S2-4 baseline |
+| P2-7 | [ ] Configurable static 404 / host fallback strategies | [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md) (analysis done); spike `notFoundStrategy` on vite `router` + adapters; shared `resolveHtmlAssetCandidates`; optional `_redirects` / `_routes.json` codegen; per-scope static 404 if needed |
 | W-2 | [ ] Split `navigation.ts` into smaller modules | No behavior change |
 
 ## P3 — Low (roadmap)
@@ -634,6 +637,10 @@ Copy unchecked items into GitHub Issues / Linear using IDs (`P0-1`, `S1-2`, etc.
 - **P1-2** — `e2e/ssg/cypress/e2e/ssg-parity.cy.ts` (+10 tests); 30 SSG Cypress tests total
 - **S3-2–S3-4, S3-6–S3-9** — Verified done (CSR parity, SSR invalidate/revalidate, default-export actions, matrix CI, tier3 ISR, hash e2e, ActionFailure forms)
 - **Docs** — [04-route-tree-and-matching.md](./04-route-tree-and-matching.md), [15-testing.md](./15-testing.md), [e2e/file-routes/README.md](../../e2e/file-routes/README.md)
+
+### Docs — static 404 / host fallback (2026-05-22)
+
+- **P2-7 (analysis)** — [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md); cross-links in 04, 10, 13, 14, 16; S3-1 static 404 e2e noted done via `e2e/file-routes-ssg`
 
 ---
 

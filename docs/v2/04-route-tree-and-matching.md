@@ -183,10 +183,13 @@ Prerender and adapters may cache compiled manifest for performance.
 
 | Scenario | Behavior |
 |----------|----------|
-| No match + root `notFound` | Render notFound tree (404 status on SSR) |
+| No match + nearest scope `notFound` | `loadNotFoundRouteTree` — walks scopes for pathname (not only root) |
+| No match + root `notFound` | Render notFound tree (404 status on SSR); SSG emits **`404.html`** only for **root** `notFound` |
 | No match + no notFound | Renderer returns null / adapter 404 |
 | Throw in page | Nearest `error` module on scope/leaf |
 | Throw in root with layout | `rootError` + `rootLayout` if configured |
+
+**Static hosting:** Scope `notFound` works in the client and on SSR; build-time SSG does not emit per-scope `404.html` today. How CDN preview and deploy hosts resolve unknown URLs (`exact` vs SPA shell vs hybrid SSR) is documented in [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md).
 
 Tests in `router.test.tsx` cover root error without layout (when that suite runs — see [15-testing.md](./15-testing.md)).
 
@@ -197,3 +200,4 @@ Tests in `router.test.tsx` cover root error without layout (when that suite runs
 - [05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md)
 - [06-loaders-and-data.md](./06-loaders-and-data.md)
 - [13-vite-plugin-and-build-pipeline.md](./13-vite-plugin-and-build-pipeline.md)
+- [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)

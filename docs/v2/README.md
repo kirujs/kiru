@@ -74,19 +74,20 @@ flowchart TB
 9. **[09-client-bootstrap-and-hydration.md](./09-client-bootstrap-and-hydration.md)** — `bootstrapSsrClient` / `bootstrapSsgClient`, hash workaround, outlet subscriptions.
 10. **[10-isr-hybrid-and-prerender.md](./10-isr-hybrid-and-prerender.md)** — `defineISR`, disk cache, `revalidatePath` / `revalidateTag`.
 11. **[14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md)** — Node, Bun, Cloudflare; capability matrix.
+12. **[19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)** — SSG `404.html`, SPA fallback, Cloudflare nearest-asset vs portable deploy strategies.
 
 ### Product & DX
 
-12. **[11-i18n.md](./11-i18n.md)** — Locales, domains, detection, prerender expansion.
-13. **[12-seo-head-sitemap-images.md](./12-seo-head-sitemap-images.md)** — Head layers, sitemap, image optimizer.
-14. **[13-vite-plugin-and-build-pipeline.md](./13-vite-plugin-and-build-pipeline.md)** — Plugin options, SSG build, dev SSR, codegen.
+13. **[11-i18n.md](./11-i18n.md)** — Locales, domains, detection, prerender expansion.
+14. **[12-seo-head-sitemap-images.md](./12-seo-head-sitemap-images.md)** — Head layers, sitemap, image optimizer.
+15. **[13-vite-plugin-and-build-pipeline.md](./13-vite-plugin-and-build-pipeline.md)** — Plugin options, SSG build, dev SSR, codegen.
 
 ### Strategy & quality
 
-15. **[02-competitive-positioning.md](./02-competitive-positioning.md)** — vs Next / SvelteKit / SolidStart / Nuxt.
-16. **[15-testing.md](./15-testing.md)** — Unit, e2e, **`.test.tsx` runner gap**, recommended cases.
-17. **[16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md)** — Ship blockers and prioritized fixes.
-18. **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** — **Sprint backlog (S0–S5), checkboxes, exit criteria, DoD for v2.0.0.**
+16. **[02-competitive-positioning.md](./02-competitive-positioning.md)** — vs Next / SvelteKit / SolidStart / Nuxt.
+17. **[15-testing.md](./15-testing.md)** — Unit, e2e, **`.test.tsx` runner gap**, recommended cases.
+18. **[16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md)** — Ship blockers and prioritized fixes.
+19. **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** — **Sprint backlog (S0–S5), checkboxes, exit criteria, DoD for v2.0.0.**
 
 ---
 

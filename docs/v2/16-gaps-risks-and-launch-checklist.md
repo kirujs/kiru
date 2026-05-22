@@ -63,6 +63,7 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 | P2-4 | `experimental.staticHoisting` off | Performance story vs safety |
 | P2-5 | Content/MDX layer | Ecosystem gap vs Nuxt |
 | P2-6 | prepareAppForUrl complexity | Hard to maintain — needs integration tests when TSX runs |
+| P2-7 | Configurable static 404 / host fallback strategies | Analysis in [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md); code: `notFoundStrategy`, rewrite codegen |
 
 ---
 
@@ -88,6 +89,7 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 | Hash hydration mismatch | Low | Medium | Regression test |
 | FBR regressions only caught on CSR | Medium | Medium | P1-3 SSR + SSG e2e |
 | FBR naming mismatch vs app conventions | Low | Low | P1-12 configurable special files |
+| Wrong static fallback on edge (parent index.html for 404) | Low | Medium | P2-7 docs + opt-in `nearest-asset`; default `hybrid-ssr` / `exact` |
 
 ---
 
@@ -151,6 +153,7 @@ See **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** for the full 
 ## Further reading
 
 - [18-release-sprint-todos.md](./18-release-sprint-todos.md)
+- [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)
 - [02-competitive-positioning.md](./02-competitive-positioning.md)
 - [15-testing.md](./15-testing.md)
 - [05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md)

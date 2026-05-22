@@ -103,6 +103,8 @@ When `serverEntry` set:
 - `createPreviewSsrProxy` — proxy to SSR server when hybrid
 - `preview-server.test.ts`, `preview-integration.test.ts`
 
+**Not-found behavior by mode:** SSG-only → `404.html` for unknown paths; hybrid → SSR (skips static `404.html`); CSR → Vite SPA `index.html` fallback. Strategy matrix: [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md).
+
 ---
 
 ## SSG-only build
@@ -168,4 +170,5 @@ Tests should set `NODE_ENV=development` in lib package (`package.json` pretest).
 - [03-rendering-modes.md](./03-rendering-modes.md)
 - [10-isr-hybrid-and-prerender.md](./10-isr-hybrid-and-prerender.md)
 - [14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md)
+- [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)
 - [17-package-exports-and-import-guide.md](./17-package-exports-and-import-guide.md)

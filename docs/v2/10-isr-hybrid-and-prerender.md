@@ -60,6 +60,8 @@ flowchart TD
 
 `tryServePrerenderedFromDisk` + `diskPrerenderCache` — `prerenderedHtmlDir` must align with Vite client output.
 
+**Hybrid unknown paths:** Paths not in the static path set go to **SSR** (`prepareAppForUrl`), not to prerendered `404.html`. SSG-only preview serves `404.html` for misses; hybrid preview proxies to SSR instead. See [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md).
+
 **Dev:** Branch skipped — always live SSR.
 
 ---
@@ -153,3 +155,4 @@ See [14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md).
 - [03-rendering-modes.md](./03-rendering-modes.md)
 - [08-renderer-ssr-and-streaming.md](./08-renderer-ssr-and-streaming.md)
 - [13-vite-plugin-and-build-pipeline.md](./13-vite-plugin-and-build-pipeline.md)
+- [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)

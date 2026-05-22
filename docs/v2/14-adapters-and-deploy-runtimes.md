@@ -107,6 +107,16 @@ Adapters should serve Vite client output before hitting Kiru.
 
 ---
 
+## Static 404 and fallback strategies
+
+Kiru’s **router** uses exact matching plus nearest-scope `notFound`. **Hosts** differ: SSG may serve `404.html`, CSR static deploys often use `index.html` with 200, Cloudflare may probe asset candidates, and **hybrid** apps should send unknown paths to SSR instead of static `404.html`.
+
+Recommended deploy strategies (`exact`, `csr-recovery`, `nearest-asset`, `hybrid-ssr`), defaults per adapter, and footguns: **[19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)**.
+
+When writing `DEPLOY-CLOUDFLARE.md`, link there for `getAsset` candidate resolution vs Worker-first hybrid SSR.
+
+---
+
 ## SSR matrix e2e
 
 `e2e/ssr-matrix` — shared fixture, multiple servers, smoke script `matrix.mjs`.
@@ -136,5 +146,6 @@ Plugin may emit `wrangler.toml` snippet (`wranglerSnippet.ts`) — review genera
 ## Further reading
 
 - [10-isr-hybrid-and-prerender.md](./10-isr-hybrid-and-prerender.md)
+- [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)
 - [02-competitive-positioning.md](./02-competitive-positioning.md)
 - [16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md)
