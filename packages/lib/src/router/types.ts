@@ -13,8 +13,22 @@ export type ErrorPage = Kiru.Component<ErrorPageProps>
 
 /** Coerce any thrown value into `Error` for {@link ErrorPageProps}. */
 export function toRenderError(thrown: unknown): Error {
+  if (thrown instanceof RouteMiddlewareHttpError) return thrown
   if (thrown instanceof Error) return thrown
   return new Error(String(thrown))
+}
+
+/** Thrown into the client error outlet when route middleware returns `{ error: status }`. */
+export class RouteMiddlewareHttpError extends Error {
+  readonly status: number
+  readonly body?: string
+
+  constructor(status: number, body?: string) {
+    super(body ?? `HTTP ${status}`)
+    this.name = "RouteMiddlewareHttpError"
+    this.status = status
+    this.body = body
+  }
 }
 
 /**

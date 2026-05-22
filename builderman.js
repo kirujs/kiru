@@ -39,7 +39,11 @@ const lib = task({
       env: {
         NODE_ENV: "development",
       },
-      cache: libCacheConfig,
+      cache: {
+        inputs: ["src", "scripts/test.mjs", pnpm.package()],
+        outputs: ["dist", "dist-test"],
+      },
+      dependencies: [runtime],
     },
   },
 })
@@ -209,16 +213,39 @@ const csrTest = task({
   cwd: "e2e/csr",
 })
 
+/** Sharp image pipeline; excluded from default `e2e/csr` Cypress config. */
+const csrImageTest = task({
+  name: "e2e:csr:image",
+  cwd: "e2e/csr",
+  commands: {
+    test: {
+      run: "pnpm run test:image",
+      cache: E2ECachConfig,
+    },
+  },
+  dependencies: adapterDeps,
+  env: { NODE_ENV: "development" },
+})
+
 const ssgTest = task({
   ...sharedE2EConfig,
   name: "e2e:ssg",
   cwd: "e2e/ssg",
 })
 
+/** Production build, hybrid/ISR verify scripts, then Cypress (tier1 + tier3). */
 const ssrTest = task({
-  ...sharedE2EConfig,
   name: "e2e:ssr",
   cwd: "e2e/ssr",
+  commands: {
+    build: { run: "pnpm build", cache: E2ECachConfig },
+    test: {
+      run: "pnpm run build && node ./scripts/verify-hybrid-prerender.mjs && node ./scripts/concurrent-request-context.mjs && pnpm run cy:run && pnpm exec cypress run --config-file cypress.tier3.config.ts",
+      cache: E2ECachConfig,
+    },
+  },
+  dependencies: adapterDeps,
+  env: { NODE_ENV: "development" },
 })
 
 const fileRoutesTest = task({
@@ -247,9 +274,19 @@ const ssrMatrixTest = task({
   env: { NODE_ENV: "development" },
 })
 
-const e2e = pipeline([csrTest, ssgTest, ssrTest, fileRoutesTest, ssrMatrixTest]).toTask({
+// `pnpm test` at repo root runs lib unit tests (incl. *.test.tsx) via adapterDeps,
+// then this pipeline: CSR Cypress, CSR image (Sharp), SSG/SSR/file-routes/matrix e2e.
+const e2e = pipeline([
+  csrTest,
+  csrImageTest,
+  ssgTest,
+  ssrTest,
+  fileRoutesTest,
+  ssrMatrixTest,
+]).toTask({
   name: "e2e",
-  maxConcurrency: process.env.GITHUB ? 1 : undefined,
+  // One Cypress/vite server at a time (avoids port 5173/5174/5192 races on Windows).
+  maxConcurrency: 1,
   dependencies: adapterDeps,
 })
 

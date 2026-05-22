@@ -222,7 +222,8 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       } else {
         partial.define = {
           ...config.define,
-          __KIRU_ROUTER_BOOTSTRAP__: "",
+          // Server/worker SSR bundles: leave bootstrap unset (must be a JS literal for esbuild).
+          __KIRU_ROUTER_BOOTSTRAP__: "undefined",
         }
       }
       return partial

@@ -14,7 +14,7 @@ function collectTests(dir, acc = []) {
     const path = join(dir, name)
     if (statSync(path).isDirectory()) {
       collectTests(path, acc)
-    } else if (name.endsWith(".test.ts")) {
+    } else if (name.endsWith(".test.ts") || name.endsWith(".test.tsx")) {
       acc.push(path)
     }
   }
@@ -36,7 +36,7 @@ mkdirSync(outDir, { recursive: true })
 const tests = collectTests(srcTests)
 for (const entry of tests) {
   const rel = relative(join(root, "src"), entry).replace(/\\/g, "/")
-  const outfile = join(outDir, rel.replace(/\.ts$/, ".js"))
+  const outfile = join(outDir, rel.replace(/\.tsx?$/, ".js"))
   const bootstrap = bootstrapForTestFile(entry)
   await esbuild.build({
     entryPoints: [entry],

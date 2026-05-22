@@ -183,6 +183,18 @@ describe("SSR server", () => {
     cy.contains("This page should be redirected away.").should("not.exist")
   })
 
+  it("returns HTTP 403 from SSR middleware { error } (not redirect to login)", () => {
+    const port = Cypress.env("port")
+    cy.request({
+      url: `http://127.0.0.1:${port}/forbidden`,
+      failOnStatusCode: false,
+    }).then((res) => {
+      expect(res.status).to.eq(403)
+      expect(res.body).to.include("Forbidden")
+      expect(res.headers.location).to.be.undefined
+    })
+  })
+
   it("handles standard route navigation and dynamic params", () => {
     cy.contains("a", "About").click()
     cy.location("pathname").should("eq", "/about")

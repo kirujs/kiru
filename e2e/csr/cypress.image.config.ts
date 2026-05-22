@@ -1,7 +1,9 @@
 import { defineConfig } from "cypress"
 import { build, preview, type PreviewServer } from "vite"
+import { freeListeningPort } from "../shared/free-listening-port.mjs"
 
-const port = 5173
+/** Separate from default CSR dev server (5173) so builderman can run both in one `pnpm test`. */
+const port = 5174
 
 export default defineConfig({
   e2e: {
@@ -9,6 +11,7 @@ export default defineConfig({
     setupNodeEvents(on) {
       let server: PreviewServer | null = null
       on("before:run", async () => {
+        freeListeningPort(port)
         await build({ configFile: "./vite.config.ts" })
         server = await preview({
           configFile: "./vite.config.ts",
@@ -16,7 +19,10 @@ export default defineConfig({
         })
       })
       on("after:run", async () => {
-        await server?.close()
+        if (server) {
+          await server.close()
+          server = null
+        }
       })
     },
   },

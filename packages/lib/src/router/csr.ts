@@ -459,6 +459,9 @@ export function createRouter({
       setLastNavigation: (entry) => {
         lastNavigationHolder.entry = entry
       },
+      setOutletRenderError: (err) => {
+        outletRenderError.value = err
+      },
       localeRouting,
       locale,
       onLocaleChange:

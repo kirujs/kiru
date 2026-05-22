@@ -1,5 +1,6 @@
 import { defineConfig } from "cypress"
 import { createServer, type ViteDevServer } from "vite"
+import { freeListeningPort } from "../shared/free-listening-port.mjs"
 import { runConcurrentContextCheck } from "./scripts/lib/concurrent-context.mjs"
 
 const port = 5192
@@ -40,10 +41,14 @@ export default defineConfig({
         },
       })
       on("before:run", async () => {
+        freeListeningPort(port)
         server = await startViteDevServer()
       })
       on("after:run", async () => {
-        await server?.close()
+        if (server) {
+          await server.close()
+          server = null
+        }
       })
     },
   },

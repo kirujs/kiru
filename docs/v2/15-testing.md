@@ -9,26 +9,27 @@ How Kiru v2 is tested today, where coverage is strong, and **gaps that affect la
 | Layer | Location | Runner |
 |-------|----------|--------|
 | Unit | `packages/lib/src/tests/unit/*.test.ts` | `pnpm test` → `scripts/test.mjs` |
-| Unit (TSX) | `packages/lib/src/tests/unit/*.test.tsx` | **Not in default runner** |
+| Unit (TSX) | `packages/lib/src/tests/unit/*.test.tsx` | `pnpm test` → `scripts/test.mjs` |
 | Package unit | `packages/file-routes`, `vite-plugin-kiru`, `runtime`, `adapter-contract` | per-package `pnpm test` |
 | E2E | `e2e/csr`, `e2e/ssr`, `e2e/ssg`, `e2e/file-routes` | Cypress |
+| CSR image | `e2e/csr` `test:image` | Cypress `image.cy.ts` on port **5174** (Sharp preview; CSR dev uses **5173**) |
 | Adapter smoke | `e2e/ssr-matrix` | Custom node scripts |
 
-Monorepo: `node builderman.js test` orchestrates packages.
+Monorepo: `node builderman.js test` (or `pnpm test` at root) orchestrates packages. Pass `--skip-e2e` to run unit/package tests only.
+
+**Builderman `test` order (high level):**
+
+1. `packages/lib` — `pnpm test` (all `*.test.ts` + `*.test.tsx`; runs before e2e via `adapterDeps`)
+2. Other package unit tests (`file-routes`, `vite-plugin-kiru`, adapters, …)
+3. E2e pipeline (serial on CI): `e2e/csr` Cypress → `e2e/csr` `test:image` → `e2e/ssg` → `e2e/ssr` (build + hybrid verify scripts + Cypress tier1/tier3) → `e2e/file-routes` → `e2e/ssr-matrix`
 
 ---
 
-## Critical gap: `.test.tsx` excluded from lib test runner
+## Lib test runner (`.test.ts` + `.test.tsx`)
 
-`packages/lib/scripts/test.mjs` only collects `*.test.ts`:
+`packages/lib/scripts/test.mjs` collects both `*.test.ts` and `*.test.tsx` and maps outfiles with `\.tsx?$` → `.js`.
 
-```javascript
-} else if (name.endsWith(".test.ts")) {
-  acc.push(path)
-}
-```
-
-**Not executed in CI** unless another job runs them:
+**Previously skipped** (now in default `pnpm test`):
 
 | File | Approximate coverage |
 |------|---------------------|
@@ -40,7 +41,7 @@ Monorepo: `node builderman.js test` orchestrates packages.
 | `resource-streaming.test.tsx` | Resource + stream |
 | Others | DOM/reconciler |
 
-**Recommendation:** Extend collector to `.test.tsx` or rename/move tests to `.test.ts`. Until fixed, treat green `packages/lib` CI as **incomplete** for router v2.
+Fixed 2026-05-22 (Sprint 1). Treat green `packages/lib` `pnpm test` as covering router/renderer TSX suites.
 
 ---
 

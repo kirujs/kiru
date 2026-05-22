@@ -1,13 +1,16 @@
 import { defineConfig } from "cypress"
 import { createServer, type ViteDevServer } from "vite"
 import { registerHmrFileTasks } from "../shared/cypress-hmr-file-tasks"
+import { freeListeningPort } from "../shared/free-listening-port.mjs"
+
+const port = 5173
 
 async function startServer() {
   const server = await createServer({
     configFile: "./vite.config.ts",
     server: {
       host: "127.0.0.1",
-      port: 5173,
+      port,
       strictPort: true,
       hmr: {
         port: 8003,
@@ -20,7 +23,7 @@ async function startServer() {
 export default defineConfig({
   e2e: {
     env: {
-      port: 5173,
+      port,
     },
     // Needs `vite build` output; run via `pnpm test:image`.
     excludeSpecPattern: ["**/image.cy.ts"],
@@ -29,11 +32,15 @@ export default defineConfig({
       const restoreAllHmrFiles = registerHmrFileTasks(on)
 
       on("before:run", async () => {
+        freeListeningPort(port)
         server = await startServer()
       })
       on("after:run", async () => {
         await restoreAllHmrFiles()
-        await server?.close()
+        if (server) {
+          await server.close()
+          server = null
+        }
       })
     },
   },

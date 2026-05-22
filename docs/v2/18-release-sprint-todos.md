@@ -577,7 +577,13 @@ Copy unchecked items into GitHub Issues / Linear using IDs (`P0-1`, `S1-2`, etc.
 
 <!-- Move completed sprint items here with date -->
 
-_None yet._
+### Sprint 1 — Trust (2026-05-22)
+
+- **P0-2** — `packages/lib/scripts/test.mjs` runs `*.test.tsx` (11 files, 396+ tests in lib CI)
+- **P0-1** — CSR middleware `{ error }` → `RouteMiddlewareHttpError` + error outlet (no `/login` redirect)
+- **P1-1 partial** — SSR e2e `/forbidden` returns 403 (`e2e/ssr`)
+- **S1-3, S1-5** — `navigationMiddlewareError.test.ts`, expanded `routeMiddleware.test.ts`
+- **S1-6** — [05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md) updated
 
 ---
 

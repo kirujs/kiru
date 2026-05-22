@@ -105,6 +105,11 @@ export const routes = createRouteTree({
         middleware: [() => ({ redirect: "/" })],
         head: { title: "Guarded Route" },
       }),
+      createRoute("/forbidden", {
+        component: () => import("./pages/forbidden"),
+        middleware: [() => ({ error: 403, body: "Forbidden" })],
+        head: { title: "Forbidden" },
+      }),
       createRoute("/blocked", {
         component: async () => ({
           default: () => "If you see this, leave guard failed.",

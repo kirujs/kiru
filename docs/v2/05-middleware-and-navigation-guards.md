@@ -42,7 +42,7 @@ Plan auth accordingly: use hydrated `context` + client-side session signals on n
 | `void` | Continue | Continue |
 | `{ redirect }` | 3xx / internal redirect loop | `navigate` to target |
 | `{ abort: true }` | Treat as no match / stop | Cancel navigation |
-| `{ error: number, body? }` | **HTTP error response** with status/body | **See known issue below** |
+| `{ error: number, body? }` | **HTTP error response** with status/body | Commit URL, error outlet, `navigate()` → `errored` |
 
 ### Execution order
 
@@ -54,42 +54,31 @@ SSR may loop redirects up to `MAX_SSR_MIDDLEWARE_REDIRECTS` (16) in `prepareAppF
 
 ---
 
-## Known issue: CSR middleware `{ error }`
+## CSR middleware `{ error }` (client navigations)
 
-**Server (correct):**
+When middleware returns `{ error: status, body? }` on a client navigation:
+
+1. History updates to the **target** URL (parity with SSR: `/forbidden` stays `/forbidden`).
+2. `router.navigate()` resolves to `{ status: "errored", error }`.
+3. `afterEach` receives `failure: { type: "error", error }` where `error` is a `RouteMiddlewareHttpError`.
+4. The matched route’s **error outlet** renders via `outletRenderError` (same path as loader/render failures).
 
 ```typescript
-// prepareAppForUrl.ts
-if (mw.type === "error") {
-  return {
-    kind: "error",
-    status: mw.status,
-    body: mw.body,
-    headers: mergeResponseHeaders(ctx?.headers),
-  }
+import { RouteMiddlewareHttpError } from "kiru/router"
+
+// In an error route module:
+export default function Forbidden({ error }: { error: Error }) {
+  const status =
+    error instanceof RouteMiddlewareHttpError ? error.status : 500
+  return <p data-status={status}>{error.message}</p>
 }
 ```
 
-**Client (incorrect today):**
+`RouteMiddlewareHttpError` exposes `status` and optional `body`; `error.message` is `body` or `` `HTTP ${status}` ``.
 
-```typescript
-// navigation.ts — hardcoded redirect
-if (mw.type === "error") {
-  return runRedirect("/login")
-}
-```
+**SSR** still returns the raw status/body from `prepareAppForUrl` (no error route render unless you omit `body` and handle in adapter). **E2E:** `e2e/ssr` `/forbidden` returns 403 with body `Forbidden` on full load.
 
-Any middleware that returns `{ error: 403 }` or `{ error: 503, body: "..." }` on a **client navigation** will redirect to `/login` instead of showing an error page or status-specific handling.
-
-**Launch impact:** High — breaks parity with SvelteKit `error()` / Next middleware response patterns on SPA navigations.
-
-**Recommended fix direction:**
-
-- Render dedicated error outlet / status page from middleware result, or
-- Map status to configurable redirect table, or
-- Propagate `NavigationFailure` with type `error` and let app handle
-
-**Testing gap:** No e2e covers middleware `{ error }` on CSR; SSR-only if at all.
+**CSR client-nav e2e** is tracked separately (S3-2); unit coverage: `navigationMiddlewareError.test.ts`.
 
 ---
 
@@ -170,7 +159,7 @@ Set on scopes/routes via `meta` or `page.config.ts`. Middleware reads `ctx.to.me
 ## Best practices
 
 1. **Auth:** Set session in `getRequestContext` (adapter) → serialize into `CustomRequestContext` → read `ctx.context` in middleware.
-2. **403 vs 401:** Do not use `{ error }` on CSR until fixed; use `{ redirect: "/forbidden" }` or client-only guard.
+2. **403 vs 401:** Use `{ error: 403 }` for forbidden UX, or `{ redirect: "/login" }` when a login page is intentional — they are not interchangeable.
 3. **SSR-only checks:** Use `if (ctx.request) { ... }` for cookie/header inspection on first paint; mirror logic on client using stored context after login action refreshes token.
 4. **Keep middleware pure** — no DOM access; fast async.
 

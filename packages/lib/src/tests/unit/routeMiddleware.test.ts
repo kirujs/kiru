@@ -84,4 +84,79 @@ describe("runRouteMiddleware", () => {
     })
     assert.equal(out.type, "redirect")
   })
+
+  it("returns error when middleware returns { error: 403 }", async () => {
+    const manifest = compileRouteTree(
+      createRouteTree({
+        middleware: [() => ({ error: 403 })],
+        children: [
+          createRoute("/", {
+            component: async () => ({ default: () => null }),
+          }),
+        ],
+      })
+    )
+    const match = matchRoute(manifest, "/")!
+    const out = await runRouteMiddleware({
+      to: buildMiddlewareLocation(
+        { pathname: "/", hash: "", query: {}, href: "/" },
+        match,
+        buildMatchSegments(match)
+      ),
+      from: null,
+      context: {},
+      match,
+    })
+    assert.deepEqual(out, { type: "error", status: 403, body: undefined })
+  })
+
+  it("returns error with body when middleware returns { error: 503, body }", async () => {
+    const manifest = compileRouteTree(
+      createRouteTree({
+        middleware: [() => ({ error: 503, body: "maintenance" })],
+        children: [
+          createRoute("/", {
+            component: async () => ({ default: () => null }),
+          }),
+        ],
+      })
+    )
+    const match = matchRoute(manifest, "/")!
+    const out = await runRouteMiddleware({
+      to: buildMiddlewareLocation(
+        { pathname: "/", hash: "", query: {}, href: "/" },
+        match,
+        buildMatchSegments(match)
+      ),
+      from: null,
+      context: {},
+      match,
+    })
+    assert.deepEqual(out, { type: "error", status: 503, body: "maintenance" })
+  })
+
+  it("returns abort when middleware returns { abort: true }", async () => {
+    const manifest = compileRouteTree(
+      createRouteTree({
+        middleware: [() => ({ abort: true })],
+        children: [
+          createRoute("/", {
+            component: async () => ({ default: () => null }),
+          }),
+        ],
+      })
+    )
+    const match = matchRoute(manifest, "/")!
+    const out = await runRouteMiddleware({
+      to: buildMiddlewareLocation(
+        { pathname: "/", hash: "", query: {}, href: "/" },
+        match,
+        buildMatchSegments(match)
+      ),
+      from: null,
+      context: {},
+      match,
+    })
+    assert.equal(out.type, "abort")
+  })
 })

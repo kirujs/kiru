@@ -4,7 +4,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { defineConfig } from "cypress"
 import { assertServerBundleConsistent } from "./scripts/assert-server-bundle.mjs"
-import { freeListeningPort } from "./scripts/free-listening-port.mjs"
+import { freeListeningPort } from "../shared/free-listening-port.mjs"
 
 const port = 5193
 const root = path.dirname(fileURLToPath(import.meta.url))

@@ -25,6 +25,7 @@ import type {
   RouteMiddlewareLocation,
   RouteTreeMatchSegment,
 } from "./types.js"
+import { RouteMiddlewareHttpError } from "./types.js"
 import { runGuards, toRedirect } from "./runNavigationGuards.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { collectMiddlewareChain, mergeRouteMeta } from "./routeMeta.js"
@@ -205,6 +206,8 @@ export type NavigationPipelineDeps = {
   localeRouting?: I18nLocaleRouting
   locale?: Signal<string>
   onLocaleChange?: (locale: string) => void
+  /** Set after middleware `{ error }` once location is committed (cleared by commitLocation). */
+  setOutletRenderError?: (err: Error | null) => void
 }
 
 export type NavigateInternalOptions = {
@@ -245,6 +248,7 @@ export function createNavigateInternal(
     localeRouting,
     locale,
     onLocaleChange,
+    setOutletRenderError,
   } = deps
 
   const navigateInternal = async (
@@ -468,7 +472,38 @@ export function createNavigateInternal(
           return { status: "cancelled" }
         }
         if (mw.type === "error") {
-          return runRedirect("/login")
+          const err = new RouteMiddlewareHttpError(mw.status, mw.body)
+          failure = { type: "error", error: err }
+          if (token !== navToken.value) {
+            abortNavigationWork()
+            return { status: "cancelled" }
+          }
+          if (replace) {
+            saveScrollAt(historyIndex.value)
+            history.replaceState(
+              { ...history.state, index: historyIndex.value },
+              "",
+              resolved.href
+            )
+          } else {
+            saveScrollAt(historyIndex.value)
+            const nextIndex = historyIndex.value + 1
+            deps.scrollStack.value = deps.scrollStack.value.slice(0, nextIndex)
+            history.pushState(
+              { ...history.state, index: nextIndex },
+              "",
+              resolved.href
+            )
+            historyIndex.value = nextIndex
+          }
+          await runTransition(
+            () => commitLocation(resolved),
+            enableTransition,
+            navAbort.signal
+          )
+          setOutletRenderError?.(err)
+          navResult = { status: "errored", error: err }
+          return navResult
         }
       }
 

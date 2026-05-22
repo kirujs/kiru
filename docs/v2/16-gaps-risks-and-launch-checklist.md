@@ -14,35 +14,15 @@ Launch credibility requires fixing **CSR middleware error handling**, **running 
 
 ## Ship blockers (P0)
 
-### P0-1 — CSR middleware `{ error }` hardcoded to `/login`
+### P0-1 — CSR middleware `{ error }` ~~hardcoded to `/login`~~ **Fixed (2026-05-22)**
 
-**Location:** `packages/lib/src/router/navigation.ts` (~line 470)
-
-**Problem:** `{ error: number, body? }` from route middleware becomes `runRedirect("/login")` on client navigations. SSR returns proper HTTP status/body.
-
-**Impact:** Forbidden/logout/service-unavailable flows break on SPA navigations; security-sensitive apps cannot rely on middleware errors client-side.
-
-**Fix direction:**
-
-- Map to error outlet / `NavigationFailure` type `error`, or
-- Configurable handler per status, or
-- Reuse SSR error page component with status code
-
-**Docs:** [05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md)
+Client navigations commit the target URL, set `outletRenderError` with `RouteMiddlewareHttpError`, and return `navigate()` status `errored`. See [05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md).
 
 ---
 
-### P0-2 — `*.test.tsx` not executed by `packages/lib` test runner
+### P0-2 — `*.test.tsx` not executed by `packages/lib` test runner **Fixed (2026-05-22)**
 
-**Location:** `packages/lib/scripts/test.mjs`
-
-**Problem:** `router.test.tsx` (~1400 lines) and other TSX tests never run in default `pnpm test`.
-
-**Impact:** Regressions in renderer, streaming, ISR, PPR modes, and error pages can merge undetected.
-
-**Fix:** Collect `.test.tsx` or migrate tests to `.test.ts`.
-
-**Docs:** [15-testing.md](./15-testing.md)
+`packages/lib/scripts/test.mjs` collects `*.test.ts` and `*.test.tsx`. See [15-testing.md](./15-testing.md).
 
 ---
 
@@ -112,8 +92,8 @@ Launch credibility requires fixing **CSR middleware error handling**, **running 
 
 ### Code correctness
 
-- [ ] Fix CSR middleware error handling
-- [ ] Run `router.test.tsx` in CI green
+- [x] Fix CSR middleware error handling
+- [x] Run `router.test.tsx` in CI green
 - [ ] Verify remote action API stable (default export, `ActionFailure`)
 - [ ] `assertISRAllowed` passes on all cloudflare builds
 
