@@ -227,9 +227,16 @@ Co-located `middleware.ts` is normalized via `collectRouteMiddlewareModule` (`ro
 
 ---
 
+## Hydration chunk preloads (v2)
+
+Build emits `kiru-route-chunks.json`; SSR/SSG HTML and `Link` hover inject `<link rel="modulepreload">` for the matched route tree. Client bootstrap loads the manifest; `loadRouteTree` still uses dynamic `import()`. [22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md).
+
+---
+
 ## Further reading
 
 - [03-rendering-modes.md](./03-rendering-modes.md)
 - [08-renderer-ssr-and-streaming.md](./08-renderer-ssr-and-streaming.md)
 - [09-client-bootstrap-and-hydration.md](./09-client-bootstrap-and-hydration.md)
+- [22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md)
 - [16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md)

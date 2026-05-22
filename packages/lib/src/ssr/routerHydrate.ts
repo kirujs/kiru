@@ -32,6 +32,7 @@ import { ActionFailure } from "../remote/actionFailure.js"
 import { __DEV__, __KIRU_PURE_CLIENT__ } from "../env.js"
 import { REMOTE_ACTION_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
 import { ensureLoaderClient } from "../router/loaderClient.js"
+import { loadClientHydrationChunksManifest } from "../router/hydrationChunks.js"
 import { getRouterRuntime } from "../router/routerRuntime.js"
 
 type RemoteActionCallEnvelope = {
@@ -393,6 +394,7 @@ export async function bootstrapSsrClient(
   })
   registerKiruRouter(router)
   ensureLoaderClient()
+  await loadClientHydrationChunksManifest()
   await ensureClientI18nReady(router)
   const pendingClientHash = stashClientHashForSsrHydration(router)
 

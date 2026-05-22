@@ -50,6 +50,7 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 | P1-5 | No global `middleware.ts` | Document root scope pattern; consider codegen |
 | P1-6 | Multiplexed `?action` / `?loader` | Publish security whitepaper for adopters |
 | P1-7 | Version / migration | Package `1.5.3` vs v2 branding — migration guide from v1 |
+| P1-13 | Hydration chunk prewarm | **Done (S6)** — `modulepreload` first paint + Link hover; [22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md) |
 
 ---
 

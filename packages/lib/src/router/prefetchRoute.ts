@@ -10,6 +10,7 @@ import {
 import { isLoaderRpcAvailable } from "./loaderClient.js"
 import { readPageLoadExport } from "./loaders.js"
 import type { ClientOutletRouter } from "./clientRoutePrep.js"
+import { preloadChunksForMatch } from "./hydrationChunks.js"
 type PrefetchFlight = {
   abort: AbortController
   promise: Promise<void>
@@ -50,11 +51,8 @@ async function runPrefetchRoute(
   if (!match) return
 
   if (chunks) {
-    for (const scope of match.route.scopes) {
-      if (signal.aborted) return
-      void scope.layout?.()
-    }
-    void match.route.component()
+    if (signal.aborted) return
+    preloadChunksForMatch(match)
   }
 
   if (!data || signal.aborted) return

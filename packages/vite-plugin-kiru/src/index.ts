@@ -40,6 +40,10 @@ import {
   handleSsrDevRequest,
   injectDevCssLinks,
 } from "./dev-server.js"
+import {
+  buildDevHydrationChunksManifest,
+  formatDevHydrationPreloadHeadHtml,
+} from "./devHydrationChunks.js"
 import { collectSsrDevHeadExtras } from "./devIndexHtml.js"
 import {
   capturePreviewRequestUrl,
@@ -65,7 +69,16 @@ import { glob } from "tinyglobby"
 import { assertCloudflareRouteBuildMeta } from "./assertCloudflareBuildMeta.js"
 import { warnCloudflareISRInPages } from "./isrWarnings.js"
 import { generateWranglerSnippet } from "./wranglerSnippet.js"
-import { injectClientEntryScripts } from "./injectClientScripts.js"
+import {
+  injectClientEntryScripts,
+  injectHydrationPreloadLinks,
+} from "./injectClientScripts.js"
+import {
+  buildHydrationChunksManifest,
+  parseRouteModuleBindings,
+  readRoutesSource,
+  ROUTE_CHUNKS_MANIFEST,
+} from "./hydrationChunks.js"
 import type { KiruPluginOptions } from "./types.js"
 import type {
   ConfigEnv,
@@ -382,6 +395,31 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           }
           return cachedEntryUrls
         }
+        const routesModuleAbs = router.ssg?.routesModuleAbs?.replace(/\\/g, "/")
+        let devHydrationManifest:
+          | Awaited<ReturnType<typeof buildDevHydrationChunksManifest>>
+          | undefined
+        const invalidateDevHydrationManifest = () => {
+          devHydrationManifest = undefined
+        }
+        const getDevHydrationManifest = async () => {
+          if (devHydrationManifest) return devHydrationManifest
+          if (!routesModuleAbs) return undefined
+          const routesSource = await readRoutesSource(routesModuleAbs)
+          const bindings = parseRouteModuleBindings(
+            routesSource,
+            routesModuleAbs,
+            state.projectRoot
+          )
+          const paths = [...new Set(bindings.map((b) => b.pathname))]
+          if (!paths.includes("/")) paths.unshift("/")
+          devHydrationManifest = await buildDevHydrationChunksManifest(
+            server,
+            state,
+            paths
+          )
+          return devHydrationManifest
+        }
         server.watcher.on("change", (file) => {
           const resolvedFile = path.resolve(file).replace(/\\/g, "/")
           if (resolvedFile === templatePath) {
@@ -392,6 +430,9 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             for (const mod of serverEntryModules) {
               server.moduleGraph.invalidateModule(mod)
             }
+          }
+          if (routesModuleAbs && resolvedFile === routesModuleAbs) {
+            invalidateDevHydrationManifest()
           }
           if (state.remotePaths.includes(resolvedFile)) {
             invalidateRemoteRegistry()
@@ -408,6 +449,15 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
 
         server.middlewares.use(async (req, res, next) => {
           const pathname = toPreviewPathname(req.originalUrl ?? "/")
+          if (pathname === `/${ROUTE_CHUNKS_MANIFEST}`) {
+            const manifest = await getDevHydrationManifest()
+            if (manifest) {
+              res.statusCode = 200
+              res.setHeader("Content-Type", "application/json; charset=utf-8")
+              res.end(JSON.stringify(manifest))
+              return
+            }
+          }
           if (isPreviewAssetPath(pathname)) {
             return next()
           }
@@ -416,8 +466,14 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             const handled = await handleSsrDevRequest(server, req, res, {
               serverEntry: getServerEntry(),
               getEntryUrls,
-              getHeadInjection: () =>
-                collectSsrDevHeadExtras(
+              getHeadInjection: async () => {
+                const requestPath = toPreviewPathname(req.originalUrl ?? "/")
+                const manifest = await getDevHydrationManifest()
+                const preload = formatDevHydrationPreloadHeadHtml(
+                  requestPath,
+                  manifest
+                )
+                const extras = await collectSsrDevHeadExtras(
                   server,
                   state.projectRoot,
                   templateName,
@@ -430,7 +486,9 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
                         ),
                       ]
                     : []
-                ),
+                )
+                return [extras, preload].filter(Boolean).join("\n    ")
+              },
               loadRemoteRegistry: state.router.remote
                 ? async () => {
                     await server.ssrLoadModule(REMOTE_REGISTRY_VIRTUAL_ID)
@@ -448,7 +506,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             next(e)
           }
         })
-        return attachFileRoutesAfterListen
+        return async () => {
+          await attachFileRoutesAfterListen()
+          await getDevHydrationManifest()
+        }
       }
 
       const routesModuleAbs = router.ssg?.routesModuleAbs
@@ -635,6 +696,33 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           clientManifest,
         })
 
+        let hydrationChunksManifest:
+          | ReturnType<typeof buildHydrationChunksManifest>
+          | undefined
+        if (clientManifest && state.router.ssg.routesModuleAbs) {
+          const routesSource = await readRoutesSource(
+            state.router.ssg.routesModuleAbs
+          )
+          const routeBindings = parseRouteModuleBindings(
+            routesSource,
+            state.router.ssg.routesModuleAbs,
+            state.projectRoot
+          )
+          hydrationChunksManifest = buildHydrationChunksManifest({
+            viteManifest: clientManifest as Record<
+              string,
+              { file?: string; imports?: string[]; isEntry?: boolean }
+            >,
+            routes: manifest.routes,
+            routeBindings,
+          })
+          await fs.writeFile(
+            path.join(state.outDir, ROUTE_CHUNKS_MANIFEST),
+            JSON.stringify(hydrationChunksManifest, null, 2),
+            "utf8"
+          )
+        }
+
         for (const output of outputs) {
           let html: string
           if (opts.router?.htmlShell) {
@@ -660,6 +748,18 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
               { file?: string; css?: string[] }
             >
           )
+          const logicalPath = localeRouting
+            ? splitAppPathname(output.path, localeRouting).pathname
+            : output.path
+          const routeMatch = matchRoute(manifest, logicalPath, pathPolicy)
+          if (hydrationChunksManifest) {
+            html = injectHydrationPreloadLinks(html, {
+              bootstrap: hydrationChunksManifest.bootstrap,
+              route: routeMatch
+                ? hydrationChunksManifest.byRouteId[routeMatch.route.id]
+                : undefined,
+            })
+          }
           const writePath = output.diskPath ?? output.path
           const seg = writePath.replace(/^\//, "")
           const relativePath =
@@ -671,10 +771,6 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           await fs.mkdir(path.dirname(target), { recursive: true })
           await fs.writeFile(target, html, "utf8")
 
-          const logicalPath = localeRouting
-            ? splitAppPathname(output.path, localeRouting).pathname
-            : output.path
-          const routeMatch = matchRoute(manifest, logicalPath, pathPolicy)
           if (routeMatch) {
             const metaEntry = getRouteBuildMetaEntry(routeMatch.route, buildMeta)
             persistPrerenderBuildOutput({

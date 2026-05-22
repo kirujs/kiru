@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs"
+import path from "node:path"
 import { __DEV__ } from "../env.js"
 import { renderToString } from "../renderToString.js"
 import {
@@ -63,6 +65,11 @@ import {
 } from "../remote/index.js"
 import { runWithSsrRequestContext } from "../remote/action.js"
 import { toPathname } from "./requestUrl.js"
+import {
+  appendHydrationPreloadsToHeadHtml,
+  collectChunkUrlsForMatch,
+  type HydrationChunksManifest,
+} from "./hydrationChunks.js"
 
 export {
   buildRoutedSubtree,
@@ -169,6 +176,24 @@ export type CreateRendererOptions = {
    * @see docs/router/deploy-runtimes.md
    */
   deployTarget?: KiruDeployTarget
+  /**
+   * Client route chunk URLs for `<link rel="modulepreload">` on first paint.
+   * When omitted and `prerenderedHtmlDir` is set, loads `kiru-route-chunks.json`
+   * from that directory (Node/Bun SSR).
+   */
+  hydrationChunks?: HydrationChunksManifest
+}
+
+function appendRouteModulePreloads(
+  headHtml: string,
+  match: RouteMatch | null,
+  hydrationChunks: HydrationChunksManifest | undefined
+): string {
+  if (!match || !hydrationChunks) return headHtml
+  return appendHydrationPreloadsToHeadHtml(headHtml, {
+    bootstrap: hydrationChunks.bootstrap,
+    route: collectChunkUrlsForMatch(match, hydrationChunks),
+  })
 }
 
 function engine(options: CreateRendererOptions & { stream: boolean }) {
@@ -177,6 +202,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     compiledTemplate,
     actionsSecret,
     handleRemoteAction,
+    hydrationChunks,
   } = prepareRenderer(options)
   const pathPolicy = resolvePathPolicy(options.pathPolicy)
   const i18nConfig = options.i18n
@@ -420,6 +446,11 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         // implicitly-deferred `<script type="module">` entry tag hydrates
         // immediately instead of waiting on the slowest in-flight resource.
         const decorateDocument = (document: DocumentHead) => {
+          document.headHtml = appendRouteModulePreloads(
+            document.headHtml,
+            routeMatch,
+            hydrationChunks
+          )
           if (actionTokenInsertion) document.headHtml += actionTokenInsertion
         }
 
@@ -482,6 +513,13 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
             } satisfies DocumentHead,
           }))
 
+      if (routeMatch) {
+        document.headHtml = appendRouteModulePreloads(
+          document.headHtml,
+          routeMatch,
+          hydrationChunks
+        )
+      }
       if (actionTokenInsertion) document.headHtml += actionTokenInsertion
 
       const fullHead =
@@ -605,9 +643,26 @@ async function responseToStreamRenderResult(
   }
 }
 
+function loadHydrationChunksFromClientDir(
+  clientDir: string | undefined
+): HydrationChunksManifest | undefined {
+  if (!clientDir) return undefined
+  const file = path.join(clientDir, "kiru-route-chunks.json")
+  if (!existsSync(file)) return undefined
+  try {
+    const data = JSON.parse(readFileSync(file, "utf8")) as HydrationChunksManifest
+    return data?.version === 1 ? data : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function prepareRenderer(options: CreateRendererOptions) {
   const { routes, htmlTemplate, actions, deployTarget = "node" } = options
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
+  const hydrationChunks =
+    options.hydrationChunks ??
+    loadHydrationChunksFromClientDir(options.prerenderedHtmlDir)
   const compiledTemplate =
     htmlTemplate !== undefined ? compileRouteHtmlTemplate(htmlTemplate) : null
   if (__DEV__ && htmlTemplate !== undefined) {
@@ -647,6 +702,7 @@ function prepareRenderer(options: CreateRendererOptions) {
     compiledTemplate,
     actionsSecret,
     handleRemoteAction: handlePost,
+    hydrationChunks,
   }
 }
 

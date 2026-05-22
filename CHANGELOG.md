@@ -17,7 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `@kirujs/runtime` deploy capabilities and `assertISRAllowed` for edge targets.
 - Adapters: `@kirujs/adapter-node`, `@kirujs/adapter-bun`, `@kirujs/adapter-cloudflare`.
 - `docs/v2/` architecture and release documentation set.
-- ADRs: parallel routes ([docs/v2/20-parallel-routes-adr.md](./docs/v2/20-parallel-routes-adr.md)), image pipeline ([docs/v2/21-image-pipeline-adr.md](./docs/v2/21-image-pipeline-adr.md)).
+- ADRs: parallel routes ([docs/v2/20-parallel-routes-adr.md](./docs/v2/20-parallel-routes-adr.md)), image pipeline ([docs/v2/21-image-pipeline-adr.md](./docs/v2/21-image-pipeline-adr.md)), hydration module pre-warm ([docs/v2/22-hydration-module-prewarm-adr.md](./docs/v2/22-hydration-module-prewarm-adr.md)).
+- Route-scoped `<link rel="modulepreload">` on SSR/SSG first paint and `Link` hover (`kiru-route-chunks.json`, `P1-13`), including a **bootstrap** layer (`fetchpriority="low"`) for shared entry static imports.
 
 ### Changed
 

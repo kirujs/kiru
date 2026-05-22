@@ -5,6 +5,7 @@ import { createRouter, RouterProvider, RouterView } from "../csr.js"
 import type { InternationalizationConfig } from "../i18n/index.js"
 import { ensureClientI18nReady, I18nReactiveRoot } from "../i18nContext.js"
 import { ensureLoaderClient } from "../loaderClient.js"
+import { loadClientHydrationChunksManifest } from "../hydrationChunks.js"
 import { getRouterRuntime } from "../routerRuntime.js"
 import type { RouterPathPolicy } from "../pathPolicy.js"
 import type { CreateRouterAppBaseOptions } from "./types.js"
@@ -39,6 +40,7 @@ export async function createRouterApp(
 ): Promise<AppHandle> {
   const { routes, container, pathPolicy, transition, i18n, appOptions } = options
   ensureLoaderClient()
+  await loadClientHydrationChunksManifest()
   const router = createRouter({
     routes,
     pathPolicy,

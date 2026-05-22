@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "cross-env NODE_ENV=development vite",
+    "prebuild": "pnpm --filter kiru run build && pnpm --filter @kirujs/adapter-node run build",
     "build": "vite build",
     "server:e2e": "cross-env NODE_ENV=production PORT=5192 node dist/server",
     "cy:run": "cypress run",

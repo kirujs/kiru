@@ -114,7 +114,7 @@ Behaviors both paths must match after hydrate. Checked in Cypress or lib tests.
 | `router.invalidate()` refetch | router.test | ssr invalidate-demo | ssg-parity (clientLoader + invalidate trigger) |
 | Action `x-kiru-invalidate` | — | ssr invalidate-demo | — (SSG preview has no action RPC) |
 | Back/forward + loader cache | navigation e2e | ssr e2e | ssg history e2e |
-| Link prefetch hover | — | tier3 (defer S3) | — |
+| Link prefetch hover (loader RPC + chunk `modulepreload`) | parity.cy.ts | ssr.cy.ts | — |
 | Render error → error route | error-recovery e2e | ssr-break e2e | 404 static |
 | Middleware redirect | guarded e2e | guarded e2e | — |
 | Middleware `{ error }` | parity.cy.ts | HTTP 403 + lib jsdom | ssg parity e2e |
@@ -122,6 +122,21 @@ Behaviors both paths must match after hydrate. Checked in Cypress or lib tests.
 | Locale prefix nav | i18n e2e | tier3 / i18n | i18n e2e |
 
 **Risk:** Bug fixes must often be applied in **two** scheduling layers — see [16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md).
+
+---
+
+## Module pre-warm (v2)
+
+Kiru avoids cold `import()` waterfalls during hydration and navigations by emitting **route-scoped** [`<link rel="modulepreload">`](https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/rel/modulepreload) hints.
+
+| Surface | Mechanism |
+|---------|-----------|
+| SSR/SSG first paint | Bootstrap shared chunks (`fetchpriority="low"`) + route `modulepreload` in `{{kiru_head}}` from `kiru-route-chunks.json` |
+| Client bootstrap | `loadClientHydrationChunksManifest()` fetches `/kiru-route-chunks.json` |
+| `Link` hover (`prefetch.chunks`) | `preloadChunksForMatch` injects target-route links — **no** speculative `import()` in `prefetchRoute` |
+| Navigate / hydrate | `loadRouteTree` still runs `component()` / `layout?.()`; preloads only warm the graph |
+
+Loader **data** prefetch (`prefetch.data`, `POST ?loader=`) is unchanged. See [06-loaders-and-data.md](./06-loaders-and-data.md) and [22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md).
 
 ---
 

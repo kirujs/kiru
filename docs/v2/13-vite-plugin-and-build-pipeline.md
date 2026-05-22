@@ -58,13 +58,16 @@ Hybrid = **both** `ssg` and `serverEntry` → client is `ssr`.
 flowchart LR
   A[vite build client] --> B[SSG prerender pass]
   B --> C[Write HTML + cache index]
-  C --> D[Inject static loader payloads]
-  D --> E[Build SSR server bundle]
+  C --> D[Inject static loader payloads + modulepreload]
+  D --> E[Write kiru-route-chunks.json]
+  E --> F[Build SSR server bundle]
 ```
 
 `ensureSsgPrerenderCache` — caches prerender in plugin state for preview.
 
 `injectStaticLoaderPayloadIntoClientChunks` — prepends const map to client chunks.
+
+**Hydration chunks (v2):** After the client build, the plugin writes `kiru-route-chunks.json` (route → hashed chunk URLs from Vite `manifest.json`) and injects per-route `<link rel="modulepreload">` into prerendered HTML. Live SSR reads the same file from `prerenderedHtmlDir`. See [22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md).
 
 ---
 

@@ -35,6 +35,7 @@ How Kiru v2 compares to **Next.js (App Router)**, **SvelteKit**, **SolidStart**,
 | Content / MDX layer | ❌ built-in | ✅ ecosystem | ✅ | Partial | ✅ @nuxt/content |
 | Image pipeline | ❌ removed v2.0 (ADR v2.1+) | ✅ `next/image` | ✅ `@sveltejs/enhanced-img` | Partial | ✅ `@nuxt/image` |
 | i18n routing | ✅ built-in router | ✅ ecosystem | ✅ ecosystem | Partial | ✅ @nuxtjs/i18n |
+| Route-tree `modulepreload` (hydration / Link hover) | ✅ v2.0 | Partial (bundler heuristics) | ✅ | Partial | Partial |
 | View Transitions | ✅ router option | Partial | ✅ | ✅ | Via Vue |
 | DevTools | ✅ kiru devtools | ✅ | ✅ | Partial | ✅ |
 

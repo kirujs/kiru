@@ -169,6 +169,8 @@ fillRouteHtmlTemplate(templateHtml, {
 
 - `generatePublicStaticPaths` cached per renderer instance
 - Prerender cache async init on first ISR use
+- **Route module preloads** — `createRenderer` appends `<link rel="modulepreload">` to document head from `kiru-route-chunks.json` (or `hydrationChunks` option). Streaming uses the same links in early head flush; do not add extra `<script type="module">` tags. See [22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md).
+
 ---
 
 

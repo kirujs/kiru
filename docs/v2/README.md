@@ -88,7 +88,8 @@ flowchart TB
 17. **[15-testing.md](./15-testing.md)** — Unit, e2e, recommended cases.
 18. **[16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md)** — Ship blockers and prioritized fixes.
 19. **[BREAKING-CHANGES.md](./BREAKING-CHANGES.md)** — v2 API inventory vs `main` (feeds migration).
-20. **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** — Sprint backlog S0–S5; [CHANGELOG.md](../../CHANGELOG.md) at repo root.
+20. **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** — Sprint backlog S0–S6; [CHANGELOG.md](../../CHANGELOG.md) at repo root.
+21. **[22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md)** — SSR/SSG + Link-hover `modulepreload` (v2.0).
 
 ---
 

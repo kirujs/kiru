@@ -70,6 +70,7 @@ gantt
 | P1-9 | `create-kiru` templates audit | P1 | S6 | Product |
 | P1-10 | Golden Node deploy sample | P1 | S6 | Product |
 | P1-11 | Golden Cloudflare deploy sample | P1 | S4/S6 | Product (sample S4, doc S6) |
+| P1-13 | Hydration `modulepreload` (SSG + SSR + Link hover) — ADR 22 | P1 | S6 | Code + doc + E2E |
 | P2-1 | Vercel/Netlify deploy guide | P2 | Post | Doc |
 | P2-2 | REST API pattern doc (BYO mount) | P2 | Post | Doc |
 | P2-3 | Positioning: not RSC (public) | P2 | S6 | Doc |
@@ -86,6 +87,7 @@ gantt
 | P3-5 | Draft / preview mode | P3 | Post | — |
 | P3-6 | Session cookie kit with secure defaults (`HttpOnly`, `SameSite`) | P3 | Post | Product |
 | P3-7 | Rate limiting recipes at adapter boundary | P3 | Post | Doc |
+| P3-8 | Idle/tiered speculative chunk preload | P3 | Post | — |
 | W-1 | Weak: dual outlet maintenance | — | S2 | Tech debt |
 | W-2 | Weak: `navigation.ts` size/complexity | — | Post | Refactor |
 | W-3 | Weak: middleware `request` absent on CSR | — | S6 | Doc |
@@ -466,7 +468,8 @@ Remove sharp-based stack; design Node sharp + edge resvg for v2.1+.
 
 ## Exit criteria
 
-- [ ] P1-5, P1-6, P1-7, P1-9, P1-10, P2-3 done
+- [ ] P1-5, P1-6, P1-7, P1-9, P1-10, P1-13, P2-3 done
+- [x] **P1-13** — [22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md); `kiru-route-chunks.json`; SSR/SSG head + Link hover
 - [ ] CHANGELOG v2 published
 - [ ] kirujs.dev sync planned or stub complete
 - [ ] “Not RSC” positioning on landing/docs
@@ -541,6 +544,14 @@ Remove sharp-based stack; design Node sharp + edge resvg for v2.1+.
 - [ ] **Document:** no built-in `/api` — multiplex + BYO framework
 - [ ] **Files:** [05-middleware](./05-middleware-and-navigation-guards.md), [07-remote-actions](./07-remote-actions.md)
 
+### S6-11 — P1-13: Hydration module pre-warm (ADR 22)
+
+- [x] **ADR** — [22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md)
+- [x] **Build** — `kiru-route-chunks.json` in `vite-plugin-kiru`; SSG HTML `modulepreload` injection
+- [x] **Runtime** — `createRenderer` + `hydrationChunks.ts`; client manifest load; `prefetchRoute` uses links not speculative `import()`
+- [x] **Tests** — `hydrationChunks.test.ts` (lib + plugin); `e2e/ssr` first-paint + hover preloads
+- [x] **Docs** — 09, 06, 08, 13, 01, 16 cross-links
+
 ### S6-10 — CHANGELOG + release notes + kirujs.dev
 
 - [ ] **Finalize** CHANGELOG v2.0.0
@@ -572,6 +583,7 @@ Work after **v2.0.0** tag unless schedule allows earlier.
 | P3-2 | [ ] PWA / service worker starter |
 | P3-3 | [ ] ICU MessageFormat in i18n |
 | P3-5 | [ ] Draft mode / preview URL API |
+| P3-8 | [ ] Idle/tiered speculative chunk preload (`warm`/`cold`, `requestIdleCallback`) |
 
 ---
 
@@ -596,6 +608,10 @@ All **must** be true to tag `v2.0.0`:
 - [x] **P3-4** Parallel / intercepting routes — [20-parallel-routes-adr.md](./20-parallel-routes-adr.md)
 - [x] **P3-1** Image/OG — removed v2 image stack; [21-image-pipeline-adr.md](./21-image-pipeline-adr.md); OG phase 3 deferred
 - [x] **P2-6** `prepareAppForUrl` refactor + 11 tests (S5-3)
+
+## Hydration (S6)
+
+- [x] **P1-13** — [22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md)
 
 ## Docs & product (S6)
 

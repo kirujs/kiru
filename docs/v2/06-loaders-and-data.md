@@ -141,7 +141,14 @@ Action responses may send `x-kiru-invalidate` — `applyActionResponseHeaders` i
 
 ## Prefetch
 
-`prefetchRoute` + `Link` `prefetch` prop — pointerenter can fire loader RPC before navigation (e2e: `e2e/ssr` “prefetches server loader data on link hover”).
+`prefetchRoute` + `Link` `prefetch` prop on pointerenter (default when loader RPC is available: `chunks: true`, `data: true`):
+
+| Flag | Behavior |
+|------|----------|
+| `data` | `POST ?loader=` for server/universal loaders (e2e: “prefetches server loader data on link hover”) |
+| `chunks` | Injects `<link rel="modulepreload">` for the target route from `kiru-route-chunks.json` — does **not** call speculative `import()` |
+
+See [22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md).
 
 ---
 

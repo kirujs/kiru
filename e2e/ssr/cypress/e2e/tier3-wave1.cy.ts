@@ -5,6 +5,30 @@
 describe("Tier 3 wave 1", () => {
   const port = Cypress.env("port")
 
+  describe("Hydration module prewarm", () => {
+    it("includes route modulepreload links on first paint", () => {
+      cy.visit(`http://127.0.0.1:${port}/`)
+      cy.get('head link[rel="modulepreload"]')
+        .should("have.length.at.least", 1)
+        .first()
+        .should("have.attr", "href")
+        .and("match", /^\/assets\/.+\.js$/)
+    })
+
+    it("injects modulepreload links for target route on link hover", () => {
+      cy.visit(`http://127.0.0.1:${port}/`)
+      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get('head link[rel="modulepreload"]').then(($links) => {
+        const before = $links.length
+        cy.contains("a", "About").trigger("pointerenter", { bubbles: true })
+        cy.get('head link[rel="modulepreload"]').should(
+          "have.length.at.least",
+          before + 1
+        )
+      })
+    })
+  })
+
   describe("Hybrid ISR", () => {
     it("includes ISR sidecar metadata in the build output", () => {
       cy.readFile("dist/client/revalidate-demo.prerender-meta.json").then(
