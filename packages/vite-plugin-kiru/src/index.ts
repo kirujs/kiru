@@ -63,6 +63,7 @@ import path from "node:path"
 import { glob } from "tinyglobby"
 
 import { kiruImagePlugin } from "./image/plugin.js"
+import { assertCloudflareRouteBuildMeta } from "./assertCloudflareBuildMeta.js"
 import { warnCloudflareISRInPages } from "./isrWarnings.js"
 import { generateWranglerSnippet } from "./wranglerSnippet.js"
 import { injectClientEntryScripts } from "./injectClientScripts.js"
@@ -604,6 +605,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           buildMeta,
           manifest,
         } = cache
+
+        if (state.router.adapter === "cloudflare") {
+          assertCloudflareRouteBuildMeta(buildMeta)
+        }
 
         const {
           generateSitemapPaths,

@@ -27,3 +27,23 @@ jobs:
         run: pnpm build
       - name: Test
         run: pnpm test
+  cloudflare-smoke:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22.20.0
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.0
+      - name: Install dependencies
+        run: pnpm install
+      - name: Build packages
+        run: pnpm build
+      - name: Cloudflare smoke
+        run: node e2e/ssr-matrix/scripts/cloudflare-smoke.mjs

@@ -8,7 +8,8 @@
     "dev": "cross-env NODE_ENV=development vite",
     "test": "node ./scripts/matrix.mjs",
     "test:cell": "node ./scripts/run-cell.mjs",
-    "test:matrix": "node ./scripts/matrix.mjs"
+    "test:matrix": "node ./scripts/matrix.mjs",
+    "test:cloudflare-smoke": "node ./scripts/cloudflare-smoke.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250317.0",
@@ -29,6 +30,7 @@
     "wrangler": "^4.14.0"
   },
   "dependencies": {
+    "@kirujs/runtime": "workspace:^",
     "@kirujs/adapter-bun": "workspace:^",
     "@kirujs/adapter-cloudflare": "workspace:^",
     "@kirujs/adapter-contract": "workspace:^",

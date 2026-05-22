@@ -1,6 +1,6 @@
 # v2 breaking changes (vs `main`)
 
-Inventory for **S0-4** and the Sprint 4 **MIGRATION.md**. Package version on branch is still `1.5.3` until **P1-7** bumps to `2.0.0`.
+Inventory for **S0-4** and the Sprint 5 **MIGRATION.md**. Package version on branch is still `1.5.3` until **P1-7** bumps to `2.0.0`.
 
 **Verified:** 2026-05-22 — `node builderman.js test` green; lib `pnpm test` (407 tests); remote-actions e2e in `e2e/ssr`; dev warning guards in lib CI.
 
@@ -64,7 +64,7 @@ See [04-route-tree-and-matching.md](./04-route-tree-and-matching.md).
 | Before | After |
 |--------|--------|
 | Implicit deploy assumptions | **`router.adapter`**: `node` \| `bun` \| `cloudflare` |
-| ISR on all targets | **Cloudflare:** `assertISRAllowed` API (runtime); build **warns** via page scan today; fail on route meta at SSG build planned **S5** |
+| ISR on all targets | **Cloudflare:** `assertISRAllowed` API (runtime); build **warns** via page scan today; fail on route meta at SSG build planned **S4** |
 
 See [14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md), [10-isr-hybrid-and-prerender.md](./10-isr-hybrid-and-prerender.md).
 
@@ -87,7 +87,7 @@ See [14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md), 
 
 ---
 
-## Feeds Sprint 4
+## Feeds Sprint 5
 
 - **P1-7** `MIGRATION.md` — expand sections above with copy-paste examples.
-- **S4-8** `CHANGELOG.md` — [../../CHANGELOG.md](../../CHANGELOG.md) Unreleased section.
+- **S5-10** `CHANGELOG.md` — [../../CHANGELOG.md](../../CHANGELOG.md) Unreleased section.

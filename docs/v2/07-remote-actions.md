@@ -80,6 +80,8 @@ Actions use:
 
 Document for security reviewers: not classic cookie double-submit; relies on **secret-signed context** + origin policy. Teams with strict CSRF policies should review against internal standards.
 
+Full threat model: **`docs/v2/SECURITY.md`** (Sprint 5). Form POST uses the same `allowedOrigins` check as JSON actions ([`remote/index.ts`](../../packages/lib/src/remote/index.ts)).
+
 ---
 
 ## Cookies on responses

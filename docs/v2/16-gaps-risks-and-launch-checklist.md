@@ -46,7 +46,7 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 | P1-2 | SSG e2e thinner than SSR | ~18 vs ~65 tests — expand hybrid + static loader nav |
 | P1-3 | ~~FBR e2e: CSR only~~ | Done — `e2e/file-routes-ssr`, `e2e/file-routes-ssg` (Sprint 3) |
 | P1-12 | ~~FBR special filenames hardcoded~~ | Done — `layoutFiles`, `errorFiles`, `notFoundFiles` (Sprint 3) |
-| P1-4 | Cloudflare ISR story | Build-time assert exists; need Worker smoke in CI |
+| P1-4 | ~~Cloudflare ISR story~~ | Done — build fail on route meta (S4); `cloudflare-smoke` CI job |
 | P1-5 | No global `middleware.ts` | Document root scope pattern; consider codegen |
 | P1-6 | Multiplexed `?action` / `?loader` | Publish security whitepaper for adopters |
 | P1-7 | Version / migration | Package `1.5.3` vs v2 branding — migration guide from v1 |
@@ -64,6 +64,8 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 | P2-5 | Content/MDX layer | Ecosystem gap vs Nuxt |
 | P2-6 | prepareAppForUrl complexity | Hard to maintain — needs integration tests when TSX runs |
 | P2-7 | Configurable static 404 / host fallback strategies | Analysis in [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md); code: `notFoundStrategy`, rewrite codegen |
+| P2-8 | CSRF: warn on `allowedOrigins: ["*"]` in production | S4 tests + S5 SECURITY.md; stricter default deferred |
+| P2-9 | Optional CSRF nonce API | Post-v2 for regulated adopters |
 
 ---
 
@@ -100,7 +102,7 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 - [x] Fix CSR middleware error handling
 - [x] Run `router.test.tsx` in CI green
 - [x] Verify remote action API stable (default export, `ActionFailure`) — S0-1 / S3 e2e
-- [x] `assertISRAllowed` runtime API + unit tests (S0-3); vite-plugin build fail → S5
+- [x] `assertISRAllowed` runtime API + unit tests (S0-3); vite-plugin build fail on Cloudflare route meta (S4)
 
 ### Testing
 
@@ -145,8 +147,8 @@ See **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** for the full 
 | S1 | ~~Trust~~ **done** — test runner + CSR middleware fix |
 | S2 | Client parity — outlet matrix + integration tests |
 | S3 | E2E & hybrid — SSG, FBR SSR/SSG e2e (P1-3), FBR special filenames (P1-12), matrix CI |
-| S4 | Release kit — migration, templates, deploy docs |
-| S5 | Edge & security — Cloudflare + SECURITY.md |
+| S4 | Edge & security — Cloudflare CI, ISR build fail, RPC test hardening |
+| S5 | Release kit — docs, recipes, kirujs.dev, migration, deploy guides |
 
 ---
 

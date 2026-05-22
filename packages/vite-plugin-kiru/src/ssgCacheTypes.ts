@@ -30,6 +30,7 @@ export type SsgRouteManifest = {
 
 export type SsgRouteBuildMetaEntry = {
   revalidate?: unknown
+  dynamic?: "force-static" | "force-dynamic"
   tags?: string[]
 }
 

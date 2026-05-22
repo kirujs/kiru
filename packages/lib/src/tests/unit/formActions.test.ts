@@ -1021,7 +1021,57 @@ describe("action.post (form) / error handling", () => {
 })
 
 describe("action.post (form) / origin validation", () => {
-  // Tests for CSRF protection
+  it("403 when allowedOrigins is set and Origin header mismatches", async () => {
+    const handler = createRemoteActionHandler(SECRET, {
+      allowedOrigins: ["https://trusted.example"],
+    })
+    const routeId = "test/form-origin-block"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      submit: action.post({ type: "form" }, async () => ({ ok: true })),
+    })
+    const token = validToken()
+    const req = makeFormRequest(`${routeId}:submit`, token, {}, {
+      origin: "http://evil.com",
+    })
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 403)
+  })
+
+  it("allows form POST when Origin matches allowedOrigins", async () => {
+    const handler = createRemoteActionHandler(SECRET, {
+      allowedOrigins: ["http://localhost"],
+    })
+    const routeId = "test/form-origin-ok"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      submit: action.post({ type: "form" }, async () => ({ ok: true })),
+    })
+    const token = validToken()
+    const req = makeFormRequest(`${routeId}:submit`, token, {}, {
+      origin: "http://localhost",
+      enhanced: true,
+    })
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 200)
+    assert.deepStrictEqual(await res?.json(), { ok: true })
+  })
+
+  it("allows form POST when Referer matches allowedOrigins (no Origin)", async () => {
+    const handler = createRemoteActionHandler(SECRET, {
+      allowedOrigins: ["https://app.example.com"],
+    })
+    const routeId = "test/form-referer-ok"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      submit: action.post({ type: "form" }, async () => ({ via: "referer" })),
+    })
+    const token = validToken()
+    const req = makeFormRequest(`${routeId}:submit`, token, {}, {
+      referer: "https://app.example.com/page",
+      enhanced: true,
+    })
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 200)
+    assert.deepStrictEqual(await res?.json(), { via: "referer" })
+  })
 })
 
 describe("action.post (form) / context injection", () => {

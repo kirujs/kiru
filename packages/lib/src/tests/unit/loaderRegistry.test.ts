@@ -9,16 +9,25 @@ const SECRET = "test-loader-secret"
 function makeLoaderRequest(
   loaderId: string,
   token: string,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  extraHeaders?: Record<string, string>
 ) {
   return new Request(`http://localhost/?loader=${encodeURIComponent(loaderId)}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-kiru-token": token,
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   })
+}
+
+const loaderBody = {
+  params: {},
+  url: { pathname: "/loaders/server", search: "", hash: "" },
+  query: {},
+  context: {},
 }
 
 describe("createLoaderHandler", () => {
@@ -26,12 +35,7 @@ describe("createLoaderHandler", () => {
     const handler = createLoaderHandler(SECRET)
     const token = makeKiruContextToken({}, SECRET)
     const res = await handler(
-      makeLoaderRequest("r_missing:load", token, {
-        params: {},
-        url: { pathname: "/loaders/server", search: "", hash: "" },
-        query: {},
-        context: {},
-      })
+      makeLoaderRequest("r_missing:load", token, loaderBody)
     )
     assert.strictEqual(res?.status, 500)
   })
@@ -50,12 +54,7 @@ describe("createLoaderHandler", () => {
     const handler = createLoaderHandler(SECRET)
     const token = makeKiruContextToken({}, SECRET)
     const res = await handler(
-      makeLoaderRequest(`${routeId}:load`, token, {
-        params: {},
-        url: { pathname: "/loaders/server", search: "", hash: "" },
-        query: {},
-        context: {},
-      })
+      makeLoaderRequest(`${routeId}:load`, token, loaderBody)
     )
     assert.strictEqual(res?.status, 200)
   })
@@ -72,15 +71,75 @@ describe("createLoaderHandler", () => {
     const handler = createLoaderHandler(SECRET)
     const token = makeKiruContextToken({}, SECRET)
     const res = await handler(
-      makeLoaderRequest(`${routeId}:load`, token, {
-        params: {},
-        url: { pathname: "/loaders/server", search: "", hash: "" },
-        query: {},
-        context: {},
-      })
+      makeLoaderRequest(`${routeId}:load`, token, loaderBody)
     )
     assert.strictEqual(res?.status, 200)
     const body = await res?.json()
     assert.deepEqual(body, { source: "server", pathname: "/loaders/server" })
+  })
+
+  it("returns 400 when x-kiru-token header is missing", async () => {
+    const routeId = "test/loader-no-token"
+    __INTERNAL_LOADER_REGISTRY.register(routeId, {
+      load: serverLoader(async () => ({ ok: true })),
+    })
+    const handler = createLoaderHandler(SECRET)
+    const req = new Request(
+      `http://localhost/?loader=${encodeURIComponent(`${routeId}:load`)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(loaderBody),
+      }
+    )
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 400)
+  })
+
+  it("returns 400 when token is signed with wrong secret", async () => {
+    const routeId = "test/loader-wrong-secret"
+    __INTERNAL_LOADER_REGISTRY.register(routeId, {
+      load: serverLoader(async () => ({ ok: true })),
+    })
+    const handler = createLoaderHandler(SECRET)
+    const token = makeKiruContextToken({}, "other-secret")
+    const res = await handler(
+      makeLoaderRequest(`${routeId}:load`, token, loaderBody)
+    )
+    assert.strictEqual(res?.status, 400)
+  })
+
+  it("returns 403 when allowedOrigins is set and Origin mismatches", async () => {
+    const routeId = "test/loader-origin"
+    __INTERNAL_LOADER_REGISTRY.register(routeId, {
+      load: serverLoader(async () => ({ ok: true })),
+    })
+    const handler = createLoaderHandler(SECRET, {
+      allowedOrigins: ["https://trusted.example"],
+    })
+    const token = makeKiruContextToken({}, SECRET)
+    const res = await handler(
+      makeLoaderRequest(`${routeId}:load`, token, loaderBody, {
+        origin: "http://evil.com",
+      })
+    )
+    assert.strictEqual(res?.status, 403)
+  })
+
+  it("allows loader when Origin matches allowedOrigins", async () => {
+    const routeId = "test/loader-origin-ok"
+    __INTERNAL_LOADER_REGISTRY.register(routeId, {
+      load: serverLoader(async () => ({ data: 1 })),
+    })
+    const handler = createLoaderHandler(SECRET, {
+      allowedOrigins: ["http://localhost"],
+    })
+    const token = makeKiruContextToken({}, SECRET)
+    const res = await handler(
+      makeLoaderRequest(`${routeId}:load`, token, loaderBody, {
+        origin: "http://localhost",
+      })
+    )
+    assert.strictEqual(res?.status, 200)
   })
 })

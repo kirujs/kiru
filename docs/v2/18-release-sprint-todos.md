@@ -6,6 +6,8 @@ Actionable backlog for Kiru v2 release, chunked into sprints. Each item has an *
 
 **How to use:** Work sprints in order unless noted. Mark `- [ ]` → `- [x]` in PRs. Do not close a sprint until **exit criteria** are met.
 
+**Order note:** **S5** (docs, recipes, kirujs.dev, migration) is last on purpose — APIs, deploy paths, and edge behavior may still change in **S4**; avoid polishing public docs or the marketing site until then.
+
 ---
 
 ## Priority legend
@@ -27,8 +29,8 @@ Actionable backlog for Kiru v2 release, chunked into sprints. Each item has an *
 | **S1** | Trust | Tests actually run; middleware CSR fixed | P0-2, P0-1 |
 | **S2** | Client parity | SSR/CSR/SSG behave the same after hydrate | P0-3 |
 | **S3** | E2E & hybrid | Cypress + matrix cover real deploy paths | P1-* |
-| **S4** | Release kit | Docs site, templates, migration, golden deploys | P1-7, product |
-| **S5** | Edge & security | Cloudflare path + RPC security story | P1-4, P1-6 |
+| **S4** | Edge & security | Cloudflare path, ISR build guards, RPC hardening | P1-4 |
+| **S5** | Release kit | Docs, recipes, kirujs.dev, templates, migration | P1-7, product |
 | **Post** | Differentiation | P2/P3 ecosystem gaps | P2-*, P3-* |
 
 ```mermaid
@@ -41,8 +43,8 @@ gantt
   S2 Client parity          :s2, after s1, 7d
   section Release
   S3 E2E hybrid             :s3, after s2, 7d
-  S4 Release kit            :s4, after s3, 7d
-  S5 Edge security          :s5, after s4, 5d
+  S4 Edge security          :s4, after s3, 5d
+  S5 Release kit docs site  :s5, after s4, 7d
 ```
 
 ---
@@ -58,35 +60,39 @@ gantt
 | P1-2 | Expand SSG + hybrid e2e | P1 | S3 | E2E |
 | P1-3 | FBR e2e: SSR + SSG fixtures | P1 | S3 | E2E |
 | P1-12 | FBR configurable layout/error/not-found filenames | P1 | S3 | Code + doc |
-| P1-4 | Cloudflare Worker CI smoke | P1 | S5 | CI |
-| P1-5 | Global middleware story (doc or codegen) | P1 | S4 | Doc/code |
+| P1-4 | Cloudflare Worker CI smoke | P1 | S4 | CI |
+| P1-5 | Global middleware story (doc or codegen) | P1 | S5 | Doc/code |
 | P1-6 | Security doc: `?action` / `?loader` | P1 | S5 | Doc |
-| P1-7 | v2 version bump + migration guide | P1 | S4 | Product |
+| P1-7 | v2 version bump + migration guide | P1 | S5 | Product |
 | P1-8 | Remote actions API freeze + e2e | P1 | S0/S3 | Code + E2E — **done** |
-| P1-9 | `create-kiru` templates audit | P1 | S4 | Product |
-| P1-10 | Golden Node deploy sample | P1 | S4 | Product |
-| P1-11 | Golden Cloudflare deploy sample | P1 | S5 | Product |
+| P1-9 | `create-kiru` templates audit | P1 | S5 | Product |
+| P1-10 | Golden Node deploy sample | P1 | S5 | Product |
+| P1-11 | Golden Cloudflare deploy sample | P1 | S4/S5 | Product (sample S4, doc S5) |
 | P2-1 | Vercel/Netlify deploy guide | P2 | Post | Doc |
 | P2-2 | REST API pattern doc (BYO mount) | P2 | Post | Doc |
-| P2-3 | Positioning: not RSC (public) | P2 | S4 | Doc |
+| P2-3 | Positioning: not RSC (public) | P2 | S5 | Doc |
 | P2-4 | Evaluate default static hoisting | P2 | Post | Code |
 | P2-5 | Content/MDX — defer or partner | P2 | Post | — |
 | P2-6 | `prepareAppForUrl` integration tests | P2 | S2 | Test |
 | P2-7 | Configurable static 404 / host fallback strategies | P2 | Post | Doc + code |
+| P2-8 | Warn when `allowedOrigins` is `["*"]` in production build | P2 | Post | Code |
+| P2-9 | Optional per-form CSRF nonce (double-submit) for regulated adopters | P2 | Post | Code |
 | P3-1 | OG image route convention | P3 | Post | — |
 | P3-2 | PWA / service worker kit | P3 | Post | — |
 | P3-3 | ICU i18n | P3 | Post | — |
 | P3-4 | Parallel / intercepting routes | P3 | Post | — |
 | P3-5 | Draft / preview mode | P3 | Post | — |
+| P3-6 | Session cookie kit with secure defaults (`HttpOnly`, `SameSite`) | P3 | Post | Product |
+| P3-7 | Rate limiting recipes at adapter boundary | P3 | Post | Doc |
 | W-1 | Weak: dual outlet maintenance | — | S2 | Tech debt |
 | W-2 | Weak: `navigation.ts` size/complexity | — | Post | Refactor |
-| W-3 | Weak: middleware `request` absent on CSR | — | S4 | Doc |
-| W-4 | Weak: no first-party `/api` routes | — | S4/S5 | Doc |
+| W-3 | Weak: middleware `request` absent on CSR | — | S5 | Doc |
+| W-4 | Weak: no first-party `/api` routes | — | S5 | Doc |
 | R-1 | Risk: CSR middleware auth bug | — | S1 | Mitigate P0-1 |
 | R-2 | Risk: false-green CI | — | S1 | Mitigate P0-2 |
 | R-3 | Risk: SSR/CSR drift | — | S2 | Mitigate P0-3 |
-| R-4 | Risk: edge ISR misconfiguration | — | S5 | Mitigate P1-4 |
-| R-5 | Risk: loader/action RPC abuse | — | S5 | Mitigate P1-6 |
+| R-4 | Risk: edge ISR misconfiguration | — | S4 | Mitigate P1-4 |
+| R-5 | Risk: loader/action RPC abuse | — | S4/S5 | Tests S4, doc S5 |
 | R-6 | Risk: hash hydration mismatch | — | S3 | Test |
 
 ---
@@ -120,12 +126,12 @@ gantt
 
 - [x] **Runtime API** — `assertISRAllowed` in `@kirujs/runtime` with unit tests; error cites `docs/v2/14-adapters-and-deploy-runtimes.md`
 - [x] **Build today** — `warnCloudflareISRInPages` page scan when `adapter: "cloudflare"` (warnings only)
-- [ ] **Build fail on route meta** — wire `assertISRAllowed` over SSG `buildMeta` in vite-plugin (**deferred to S5**; needs `SsgRouteBuildMetaEntry` typed with `dynamic` / `revalidate`)
+- [x] **Build fail on route meta** — `assertCloudflareRouteBuildMeta` in vite-plugin `closeBundle` when `adapter === "cloudflare"` (S4-4)
 
 ### S0-4 — Branch hygiene
 
 - [x] **List** breaking API changes vs `main` — [BREAKING-CHANGES.md](./BREAKING-CHANGES.md)
-- [x] **Acceptance:** List feeds P1-7 migration guide (S4-1)
+- [x] **Acceptance:** List feeds P1-7 migration guide (S5-1)
 
 ---
 
@@ -370,23 +376,64 @@ Today `router.fileRoutes.pageFiles` customizes leaf route filenames (`page.tsx`,
 
 ---
 
-# Sprint 4 — Release kit (docs, templates, migration)
+# Sprint 4 — Edge & security
 
-**Duration (suggested):** 5–7 days  
-**Goal:** A new team can scaffold, deploy on Node, and understand breaking changes.
+**Duration (suggested):** 3–5 days  
+**Goal:** Cloudflare deploy path is safe in CI; ISR misconfiguration fails at build; RPC surface hardened before public docs.
 
-**Can overlap S3** for doc-only tasks.
+**Depends on:** S3.
 
 ## Exit criteria
 
-- [ ] P1-7, P1-9, P1-10, P2-3 done
-- [ ] CHANGELOG v2 published
-- [ ] kirujs.dev sync planned or stub complete
-- [ ] “Not RSC” positioning on landing/docs
+- [x] P1-4 done; P1-11 sample code polished (deploy doc → S5)
+- [x] Cloudflare sample deploys immutable SSG + SSR without ISR footguns
+- [x] `assertISRAllowed` fails incompatible route meta at build (S0-3)
 
 ## Tasks
 
-### S4-1 — P1-7: Version bump + migration guide
+### S4-1 — P1-11: Golden Cloudflare deploy sample (code)
+
+- [x] **Polish** `e2e/ssr-matrix` Worker fixture — [`e2e/ssr-matrix/README.md`](../../e2e/ssr-matrix/README.md)
+- [x] **Acceptance:** Wrangler smoke via `cloudflare-smoke.mjs` / matrix `worker-hono` (doc in S5-4)
+
+### S4-2 — P1-4: Cloudflare CI smoke
+
+- [x] **CI job:** `.github/workflows/build.yml` job `cloudflare-smoke`
+- [x] **Assert:** `assertISRAllowed` rejects timed revalidate in smoke script
+- [x] **Acceptance:** PR check `cloudflare-smoke` green
+
+### S4-3 — R-4, R-5 mitigation review (tests + CSRF)
+
+- [x] **Review** `loaderRegistry.test.ts` + `remote.test.ts` cover token forgery
+- [x] **Add** loader rejection tests + form `allowedOrigins` tests (`formActions.test.ts`)
+- [x] **Acceptance:** Gaps closed before **S5-6** `SECURITY.md` references coverage
+
+### S4-4 — Edge ISR warnings UX (S0-3 complete)
+
+- [x] **Verify** `getISRWarningsForTarget` surfaces at build log for CF (`warnCloudflareISRInPages`)
+- [x] **Wire** `assertCloudflareRouteBuildMeta` in `closeBundle` when `adapter === "cloudflare"`
+- [x] **Acceptance:** `isrCloudflareBuild.test.ts`; incompatible route meta **fails build**
+
+---
+
+# Sprint 5 — Release kit (docs, recipes, website)
+
+**Duration (suggested):** 5–7 days  
+**Goal:** A new team can scaffold, deploy on Node/Cloudflare, and understand breaking changes — after code and edge behavior are frozen.
+
+**Depends on:** S4 (final APIs, deploy samples, ISR rules).
+
+## Exit criteria
+
+- [ ] P1-5, P1-6, P1-7, P1-9, P1-10, P2-3 done
+- [ ] CHANGELOG v2 published
+- [ ] kirujs.dev sync planned or stub complete
+- [ ] “Not RSC” positioning on landing/docs
+- [ ] Recipes / quickstart paths match shipped templates and golden deploys
+
+## Tasks
+
+### S5-1 — P1-7: Version bump + migration guide
 
 - [ ] **Bump** `packages/lib/package.json` version to `2.0.0` (or agreed tag)
 - [ ] **Write** `docs/v2/MIGRATION.md` from [BREAKING-CHANGES.md](./BREAKING-CHANGES.md):
@@ -396,106 +443,69 @@ Today `router.fileRoutes.pageFiles` customizes leaf route filenames (`page.tsx`,
   - [ ] Loader / middleware behavior changes
 - [ ] **Acceptance:** Migration doc linked from CHANGELOG
 
-### S4-2 — P1-9: `create-kiru` template audit
+### S5-2 — P1-9: `create-kiru` template audit
 
 - [ ] **Verify** each template uses correct `createRouterApp` import per mode
 - [ ] **Verify** `vite-plugin-kiru` options match [13-vite-plugin-and-build-pipeline.md](./13-vite-plugin-and-build-pipeline.md)
 - [ ] **Update** `packages/create-kiru` README — link to `docs/v2/`
 - [ ] **Acceptance:** `npx create-kiru@latest` CSR + SSR templates run
 
-### S4-3 — P1-10: Golden Node deploy sample
+### S5-3 — P1-10: Golden Node deploy sample + doc
 
 - [ ] **Polish** `sandbox/ssr` or `e2e/ssr` server as copy-paste reference
 - [ ] **Document** `createKiruHandler`, `prerenderedHtmlDir`, env vars
 - [ ] **Add** `docs/v2/DEPLOY-NODE.md` (short golden path)
 - [ ] **Acceptance:** Fresh clone → build → `node dist/server` serves hybrid app
 
-### S4-4 — P1-5: Global middleware story
+### S5-4 — P1-11: `DEPLOY-CLOUDFLARE.md` (doc)
 
-- [ ] **Document** root scope middleware pattern (replaces Next `middleware.ts`)
-- [ ] **Optional code:** `file-routes` codegen for `src/middleware.ts` → root scope — spike only if ≤2 days
-- [ ] **Acceptance:** [04-route-tree-and-matching.md](./04-route-tree-and-matching.md) links pattern; W-3 documented
-
-### S4-5 — P2-3: Public positioning
-
-- [ ] **Add** “What Kiru is / is not” section to docs index
-- [ ] **Include:** No RSC; signals + SSR HTML; compare table from [02-competitive-positioning.md](./02-competitive-positioning.md)
-- [ ] **Acceptance:** Readable in 5 minutes by evaluator
-
-### S4-6 — Quickstart tutorial
-
-- [ ] **Write** `docs/v2/QUICKSTART.md` — 10-minute CSR + SSR paths
-- [ ] **Acceptance:** Linked from [README.md](./README.md)
-
-### S4-7 — W-3, W-4: Document CSR limitations
-
-- [ ] **Document:** middleware without `request` on client — use `context`
-- [ ] **Document:** no built-in `/api` — multiplex + BYO framework
-- [ ] **Files:** [05-middleware](./05-middleware-and-navigation-guards.md), [07-remote-actions](./07-remote-actions.md)
-
-### S4-8 — CHANGELOG + release notes
-
-- [ ] **Finalize** CHANGELOG v2.0.0
-- [ ] **List:** P0 fixes, breaking changes, adapter matrix
-- [ ] **Acceptance:** Ready for GitHub release
-
-### S4-9 — kirujs.dev sync (if in scope)
-
-- [ ] **Plan** pages matching `docs/v2/` topics
-- [ ] **Acceptance:** Checklist or tracking issue with URLs
-
----
-
-# Sprint 5 — Edge & security
-
-**Duration (suggested):** 3–5 days  
-**Goal:** Cloudflare deploy is safe and documented; security reviewers have RPC guidance.
-
-**Depends on:** S4 deploy docs recommended.
-
-## Exit criteria
-
-- [ ] P1-4, P1-6, P1-11 done
-- [ ] Cloudflare sample deploys immutable SSG + SSR without ISR footguns
-
-## Tasks
-
-### S5-1 — P1-11: Golden Cloudflare deploy sample
-
-- [ ] **Polish** `e2e/ssr-matrix` Worker fixture or new `examples/cloudflare-worker`
-- [ ] **Write** `docs/v2/DEPLOY-CLOUDFLARE.md`:
+- [ ] **Write** `docs/v2/DEPLOY-CLOUDFLARE.md` against S4-1 sample:
   - [ ] `getAsset` for prerender
   - [ ] `assetFetch` for bundles
   - [ ] ISR limits table from [14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md)
   - [ ] Static 404 / `nearest-asset` vs `hybrid-ssr` — [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)
 - [ ] **Acceptance:** Wrangler deploy documented step-by-step
 
-### S5-2 — P1-4: Cloudflare CI smoke
+### S5-5 — P1-5: Global middleware story
 
-- [ ] **CI job:** build worker + smoke fetch `/` (miniflare or vitest pool)
-- [ ] **Assert:** no throw on ISR-incompatible config at build
-- [ ] **Acceptance:** PR check `cloudflare-smoke` green
+- [ ] **Document** root scope middleware pattern (replaces Next `middleware.ts`)
+- [ ] **Optional code:** `file-routes` codegen for `src/middleware.ts` → root scope — spike only if ≤2 days
+- [ ] **Acceptance:** [04-route-tree-and-matching.md](./04-route-tree-and-matching.md) links pattern; W-3 documented
 
-### S5-3 — P1-6: Security document RPC endpoints
+### S5-6 — P1-6: Security document RPC endpoints
 
 - [ ] **Write** `docs/v2/SECURITY.md`:
   - [ ] `?action=` / `?loader=` threat model
-  - [ ] `actions.secret`, token rotation, `allowedOrigins`
-  - [ ] CSRF considerations (same-origin + token)
-  - [ ] Rate limiting recommendation at adapter
-- [ ] **Acceptance:** Linked from [07-remote-actions.md](./07-remote-actions.md)
+  - [ ] `actions.secret`, token rotation, `allowedOrigins` (required in prod; avoid `["*"]`)
+  - [ ] **CSRF model** — signed context + origin policy (JSON + form); not double-submit; cookie `SameSite` is app responsibility
+  - [ ] Rate limiting recommendation at adapter (see P3-7)
+  - [ ] Reference tests: `remote.test.ts`, `loaderRegistry.test.ts`, `formActions.test.ts` origin cases
+- [ ] **Acceptance:** Linked from [07-remote-actions.md](./07-remote-actions.md); references S4-3 test coverage
 
-### S5-4 — R-4, R-5 mitigation review
+### S5-7 — P2-3: Public positioning
 
-- [ ] **Review** `loaderRegistry.test.ts` + `remote.test.ts` cover token forgery
-- [ ] **Add** tests if gaps for rejected token / wrong origin
-- [ ] **Acceptance:** Security doc references test coverage
+- [ ] **Add** “What Kiru is / is not” section to docs index
+- [ ] **Include:** No RSC; signals + SSR HTML; compare table from [02-competitive-positioning.md](./02-competitive-positioning.md)
+- [ ] **Acceptance:** Readable in 5 minutes by evaluator; mirrored on kirujs.dev (S5-10)
 
-### S5-5 — Edge ISR warnings UX
+### S5-8 — Quickstart + recipes
 
-- [ ] **Verify** `getISRWarningsForTarget` surfaces at build log for CF
-- [ ] **Wire** `assertISRAllowed` over SSG `buildMeta` in `vite-plugin-kiru` `closeBundle` when `adapter === "cloudflare"` (extend `SsgRouteBuildMetaEntry` with `dynamic` + `revalidate: number | false`)
-- [ ] **Acceptance:** Developer sees warning when `revalidate: 60` on cloudflare adapter; incompatible route meta **fails build** with runtime error message
+- [ ] **Write** `docs/v2/QUICKSTART.md` — 10-minute CSR + SSR paths
+- [ ] **Add** recipe-style guides (e.g. auth middleware, hybrid ISR, file-routes) as separate short docs or `docs/v2/recipes/` — align with e2e demos
+- [ ] **Acceptance:** Linked from [README.md](./README.md)
+
+### S5-9 — W-3, W-4: Document CSR limitations
+
+- [ ] **Document:** middleware without `request` on client — use `context`
+- [ ] **Document:** no built-in `/api` — multiplex + BYO framework
+- [ ] **Files:** [05-middleware](./05-middleware-and-navigation-guards.md), [07-remote-actions](./07-remote-actions.md)
+
+### S5-10 — CHANGELOG + release notes + kirujs.dev
+
+- [ ] **Finalize** CHANGELOG v2.0.0
+- [ ] **List:** P0 fixes, breaking changes, adapter matrix
+- [ ] **Plan / stub** kirujs.dev pages matching `docs/v2/` topics (quickstart, migration, deploy, security, positioning)
+- [ ] **Acceptance:** Ready for GitHub release; website checklist or tracking issue with URLs
 
 ---
 
@@ -541,12 +551,12 @@ All **must** be true to tag `v2.0.0`:
 - [x] **P1-3** FBR e2e on SSR + SSG
 - [x] **P1-12** FBR `layout` / `error` / `not-found` filenames configurable via `router.fileRoutes`
 - [x] `ssr-matrix` smoke in CI (S3)
-- [ ] Cloudflare build fails on timed ISR/tags in route meta (S5 — `assertISRAllowed` in vite-plugin); warnings today (S0-3)
+- [x] Cloudflare build fails on timed ISR/tags in route meta (S4 — `assertCloudflareRouteBuildMeta` in vite-plugin)
 
 ## Docs & product
 
 - [ ] `docs/v2/` complete (this folder)
-- [ ] `MIGRATION.md` (S4) + [x] CHANGELOG draft ([CHANGELOG.md](../../CHANGELOG.md))
+- [ ] `MIGRATION.md` (S5) + [x] CHANGELOG draft ([CHANGELOG.md](../../CHANGELOG.md))
 - [ ] `QUICKSTART.md` + Node deploy golden path
 - [ ] `SECURITY.md` published
 - [ ] `create-kiru` templates verified
@@ -568,8 +578,8 @@ All **must** be true to tag `v2.0.0`:
 | CSR middleware auth bug | R-1 | S1 | S1-2, S1-3, S3-2 |
 | False-green CI | R-2 | S1 | S1-1 |
 | SSR/CSR drift | R-3 | S2 | S2-2, S2-3 |
-| Edge ISR misconfiguration | R-4 | S0, S5 | S0-3, S5-5 |
-| Loader/action RPC abuse | R-5 | S5 | S5-3, S5-4 |
+| Edge ISR misconfiguration | R-4 | S0, S4 | S0-3, S4-4 |
+| Loader/action RPC abuse | R-5 | S4, S5 | S4-3, S5-6 |
 | Hash hydration mismatch | R-6 | S3 | S3-8 |
 
 ---
@@ -580,8 +590,8 @@ All **must** be true to tag `v2.0.0`:
 |----------|--------|------|
 | Dual outlet (W-1) | S2 | S2-1, S2-3 |
 | `navigation.ts` complexity (W-2) | Post | P2 backlog |
-| No `request` in CSR middleware (W-3) | S4 | S4-7 |
-| No `/api` routes (W-4) | S4, S5 | S4-7, S5-3 |
+| No `request` in CSR middleware (W-3) | S5 | S5-9 |
+| No `/api` routes (W-4) | S5 | S5-6, S5-9 |
 | `prepareAppForUrl` untested (W-2 related) | S2 | S2-4 |
 | Thin SSG e2e (P1-2) | S3 | S3-1 |
 | File-routes SSR/SSG gap (P1-3) | S3 | S3-5 |
@@ -597,9 +607,9 @@ All **must** be true to tag `v2.0.0`:
 | S0 | Actions API | ISR build | Smoke e2e | Changelog draft |
 | S1 | navigation fix | test.mjs | e2e SSR error | Update middleware doc |
 | S2 | outlet unify/audit | prepareApp tests | parity matrix | Update hydration doc |
-| S3 | e2e pages, FBR config | matrix CI | Cypress FBR SSR/SSG | file-routes docs |
-| S4 | templates | DEPLOY-NODE | — | QUICKSTART, MIGRATION |
-| S5 | — | DEPLOY-CF | CF smoke | SECURITY |
+| S3 | e2e pages, FBR config | matrix CI | Cypress FBR SSR/SSG | file-routes docs (minimal) |
+| S4 | — | DEPLOY-CF sample, ISR build | CF smoke | — |
+| S5 | templates | golden deploy docs | — | QUICKSTART, recipes, MIGRATION, kirujs.dev |
 
 ---
 
@@ -618,7 +628,7 @@ Copy unchecked items into GitHub Issues / Linear using IDs (`P0-1`, `S1-2`, etc.
 - **S0 exit** — `node builderman.js test` green; e2e pipeline includes `e2e/ssr` + hybrid verify script
 - **S0-1 / P1-8** — Remote actions API audited; `e2e/ssr` default-export + linked actions e2e
 - **S0-2** — `devWarnings.guard-{csr,ssr,ssg}.test.ts` in lib CI (post S1 test runner)
-- **S0-3** — `assertISRAllowed` API + runtime tests; Cloudflare page scan warnings (`warnCloudflareISRInPages`). Build-time fail on route meta → **S5**
+- **S0-3** — `assertISRAllowed` API + runtime tests; Cloudflare page scan warnings (`warnCloudflareISRInPages`). Build-time fail on route meta → **S4**
 - **S0-4** — [BREAKING-CHANGES.md](./BREAKING-CHANGES.md); [CHANGELOG.md](../../CHANGELOG.md) Unreleased draft
 
 ### Sprint 1 — Trust (2026-05-22)
@@ -650,6 +660,13 @@ Copy unchecked items into GitHub Issues / Linear using IDs (`P0-1`, `S1-2`, etc.
 ### Docs — static 404 / host fallback (2026-05-22)
 
 - **P2-7 (analysis)** — [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md); cross-links in 04, 10, 13, 14, 16; S3-1 static 404 e2e noted done via `e2e/file-routes-ssg`
+
+### Sprint 4 — Edge & security (2026-05-22)
+
+- **S4-4 / S0-3** — `assertCloudflareRouteBuildMeta` in vite-plugin; `isrCloudflareBuild.test.ts`; `SsgRouteBuildMetaEntry.dynamic`
+- **S4-2 / P1-4** — `e2e/ssr-matrix/scripts/cloudflare-smoke.mjs`; GH job `cloudflare-smoke`
+- **S4-3** — Loader origin/token tests; form POST `allowedOrigins` tests; post-v2 CSRF backlog P2-8, P2-9, P3-6, P3-7
+- **S4-1 / P1-11** — [`e2e/ssr-matrix/README.md`](../../e2e/ssr-matrix/README.md)
 
 ---
 

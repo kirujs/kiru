@@ -121,7 +121,7 @@ When `serverEntry` set:
 
 `adapter: "cloudflare"`:
 
-- `warnCloudflareISRInPages` page scan (non-throwing; build fail via `assertISRAllowed` on route meta — **S5**)
+- `warnCloudflareISRInPages` page scan (non-throwing); build **fails** via `assertCloudflareRouteBuildMeta` → `assertISRAllowed` on discovered route meta when `adapter === "cloudflare"` (**S4**)
 - `generateWranglerSnippet` helpers
 - Worker bundle excludes Node fs cache
 
