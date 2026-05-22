@@ -82,11 +82,46 @@ SSG and SSR share **outlet subscription** architecture — same parity considera
 | Path | Outlet mechanism | Pending UX |
 |------|------------------|------------|
 | CSR | `RouterView` → `resource()` | `isLoaderPending`, `ErrorBoundary` |
-| SSR/SSG | `signal` + `subscribeSsrClientOutlet` | `isNavigating`, manual refresh |
+| SSR/SSG | `signal` + `subscribeSsrClientOutlet` | `isLoaderPending`, `isNavigating`, manual refresh |
 
 Both call `buildClientOutletSubtree` → `prepareRouteWithDocumentHead` → `prepareRouteForNavigation`.
 
-**Risk:** Bug fixes must often be applied in **two** places or unified — see [16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md).
+Shared navigation-end logic: `canEndClientNavigation` / `tryClearClientNavigation` in `packages/lib/src/router/outletNavigation.ts` (used by `RouterView` and `subscribeSsrClientOutlet`).
+
+### Decision: keep dual outlets (Sprint 2, 2026-05-22)
+
+**Unification deferred.** CSR `RouterView` and SSR/SSG `subscribeSsrClientOutlet` stay separate because:
+
+- CSR needs `resource()` + `ErrorBoundary` for async outlet work and render throws.
+- SSR/SSG need a pre-hydrate outlet build, per-refresh `AbortController`, and `useHydratedPageData: true` only on first paint.
+
+Tree building is already shared (`clientRoutePrep.ts`). Scheduling and error recovery stay in two modules until a later spike proves a single outlet can cover both without regressing hydration.
+
+| Concern | CSR | SSR/SSG |
+|---------|-----|---------|
+| Scheduling | `resource()` deps | `match` / `isNavigating` / `outletRenderError` subscriptions |
+| `useHydratedPageData` | always `true` in outlet | `true` first paint, `false` after hydrate |
+| Invalidate | `loaderEpoch` in `resource()` deps | `loaderEpoch.subscribe` → `refreshOutletOnInvalidate` |
+| Render throw | `ErrorBoundary` → `outletRenderError` | `onLeafRenderError` + `outletRenderError` subscription |
+
+### Parity checklist (e2e / integration)
+
+Behaviors both paths must match after hydrate. Checked in Cypress or lib tests.
+
+| Scenario | CSR | SSR hydrate | SSG hydrate |
+|----------|-----|-------------|-------------|
+| Client nav → `serverLoader` refetch | loaders e2e | ssr e2e | static loader nav |
+| `router.invalidate()` refetch | router.test | ssr invalidate-demo | — (S3) |
+| Action `x-kiru-invalidate` | — | ssr invalidate-demo | S3 |
+| Back/forward + loader cache | navigation e2e | ssr e2e | ssg history e2e |
+| Link prefetch hover | — | tier3 (defer S3) | — |
+| Render error → error route | error-recovery e2e | ssr-break e2e | 404 static |
+| Middleware redirect | guarded e2e | guarded e2e | — |
+| Middleware `{ error }` | parity.cy.ts | HTTP 403 + lib jsdom | ssg parity e2e |
+| Hash-only change | parity.cy.ts | url-state e2e | ssg hash e2e |
+| Locale prefix nav | i18n e2e | tier3 / i18n | i18n e2e |
+
+**Risk:** Bug fixes must often be applied in **two** scheduling layers — see [16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md).
 
 ---
 

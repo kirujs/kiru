@@ -204,9 +204,9 @@ gantt
 
 ## Exit criteria
 
-- [ ] P0-3 addressed (tests **or** unified outlet — pick one, document the other as deferred)
-- [ ] Post-hydrate navigation test matrix documented and green
-- [ ] P2-6 integration coverage started (at least 3 `prepareAppForUrl` scenarios)
+- [x] P0-3 addressed (tests **or** unified outlet — pick one, document the other as deferred)
+- [x] Post-hydrate navigation test matrix documented and green
+- [x] P2-6 integration coverage started (at least 3 `prepareAppForUrl` scenarios)
 
 ## Tasks
 
@@ -584,6 +584,16 @@ Copy unchecked items into GitHub Issues / Linear using IDs (`P0-1`, `S1-2`, etc.
 - **P1-1 partial** — SSR e2e `/forbidden` returns 403 (`e2e/ssr`)
 - **S1-3, S1-5** — `navigationMiddlewareError.test.ts`, expanded `routeMiddleware.test.ts`
 - **S1-6** — [05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md) updated
+
+### Sprint 2 — Client parity (2026-05-22)
+
+- **P0-3** — Keep dual outlets; parity checklist in [09-client-bootstrap-and-hydration.md](./09-client-bootstrap-and-hydration.md)
+- **S2-3** — `outletNavigation.ts`, SSR `isNavigating` / `isLoaderPending` / `outletRenderError` parity in `routerHydrate.ts`
+- **S2-4** — `prepareAppForUrl.test.ts` (6 cases including no-notFound → `null`)
+- **S2-5** — `routerBootstrap.test.ts` SSR/SSG jsdom hydrate; `routerHydrate.middlewareError.test.ts`
+- **S2-2** — `e2e/csr/cypress/e2e/parity.cy.ts`; SSG hash/forbidden/history; SSR HTTP 403 + existing serverLoader/invalidate/back tests
+- **P2-6** — Baseline `prepareAppForUrl` integration coverage in lib CI
+- **Deferred S3** — SSR Cypress client-nav middleware error UI (lib + CSR e2e sufficient); link prefetch hover
 
 ---
 

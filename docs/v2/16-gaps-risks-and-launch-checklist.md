@@ -26,15 +26,15 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 
 ---
 
-### P0-3 — Document and test dual client outlet paths
+### P0-3 — Document and test dual client outlet paths **Mitigated (2026-05-22, Sprint 2)**
 
-**Problem:** CSR uses `RouterView` + `resource()`; SSR/SSG uses signal outlet + subscriptions. Fixes can land in one path only.
+**Decision:** Keep dual outlets (`RouterView` vs `subscribeSsrClientOutlet`); shared tree build in `clientRoutePrep.ts`.
 
-**Impact:** Hydration/nav/invalidate bugs exclusive to SSR or CSR.
+**Fixes:** `tryClearClientNavigation` / `isLoaderPending` on SSR outlet; `outletRenderError` subscription; stale refresh guard in `routerHydrate.ts`.
 
-**Fix:** Shared integration tests post-hydrate, or unify outlet implementation.
+**Tests:** `prepareAppForUrl.test.ts` (5 cases), `routerHydrate.middlewareError.test.ts`, `e2e/csr/cypress/e2e/parity.cy.ts`, expanded SSG e2e (hash, forbidden, history). Parity checklist in [09-client-bootstrap-and-hydration.md](./09-client-bootstrap-and-hydration.md).
 
-**Docs:** [09-client-bootstrap-and-hydration.md](./09-client-bootstrap-and-hydration.md)
+**Deferred:** SSR Cypress client-nav middleware UI (covered by lib jsdom + CSR e2e + HTTP 403); link prefetch hover (S3).
 
 ---
 

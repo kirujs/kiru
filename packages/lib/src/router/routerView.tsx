@@ -11,6 +11,10 @@ import { __DEV__ } from "../env.js"
 import { warnRouterViewWithoutSsrBootstrap } from "./devWarnings.dev.js"
 import { getRouterRuntime } from "./routerRuntime.js"
 import { useRouter } from "./routerContext.js"
+import {
+  canEndClientNavigation,
+  tryClearClientNavigation,
+} from "./outletNavigation.js"
 
 /**
  * CSR route outlet: loads the matched route tree on navigation.
@@ -63,18 +67,13 @@ export function RouterView() {
 
   onMount(() => {
     if (__DEV__) warnRouterViewWithoutSsrBootstrap()
-    const canEndNavigation = () => {
-      const nav = router.currentNavigation.peek()
-      if (!nav?.to) return true
-      if (pathname.peek() !== nav.to.pathname) return false
-      const m = match.peek()
-      if (!m) return true
-      return JSON.stringify(m.params) === JSON.stringify(nav.to.params)
-    }
     const onPendingChange = (pending: boolean) => {
-      if (!pending && router.isNavigating.peek() && canEndNavigation()) {
-        router.isNavigating.value = false
-        router.currentNavigation.value = null
+      if (
+        !pending &&
+        router.isNavigating.peek() &&
+        canEndClientNavigation(router)
+      ) {
+        tryClearClientNavigation(router)
       }
     }
     const unsub = children.isPending.subscribe(onPendingChange)

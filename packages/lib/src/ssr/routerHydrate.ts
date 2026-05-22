@@ -23,6 +23,7 @@ import {
   type NavigationScope,
 } from "../router/navigationScope.js"
 import { formatRouterSearch } from "../router/navigation.js"
+import { tryClearClientNavigation } from "../router/outletNavigation.js"
 import { requestToken } from "../globals.js"
 import { applyActionResponseHeaders } from "../router/routerGlobal.js"
 import { isKiruRedirect, serializeActionCallQuery } from "../remote/action.js"
@@ -97,8 +98,7 @@ function ensureServerActionsClient() {
       }
       if (!r.ok) {
         const legacy =
-          ActionFailure.fromLegacyEnvelope(data) ??
-          ActionFailure.fromWire(data)
+          ActionFailure.fromLegacyEnvelope(data) ?? ActionFailure.fromWire(data)
         if (legacy) throw legacy
         throw new Error("Action failed")
       }
@@ -192,33 +192,44 @@ async function buildSsrClientOutlet(
   const runtime = getRouterRuntime(router)
   const gen = getNavGeneration ?? runtime.getNavGeneration
   const signal = scope?.signal ?? runtime.getNavSignal()
-  if (
-    scope &&
-    (!isScopeCurrent(scope, gen) || scope.signal.aborted)
-  ) {
+  if (scope && (!isScopeCurrent(scope, gen) || scope.signal.aborted)) {
     return null
   }
-  return buildClientOutletSubtree({
-    router,
-    match: committedMatch,
-    pathname: router.pathname.peek(),
-    signal,
-    getNavGeneration: gen,
-    useHydratedPageData: options.useHydratedPageData,
-    forceReload: options.forceReload,
-    onLeafRenderError: (err) => {
-      const renderErr = toRenderError(err)
-      const matchAtError = committedMatch
-      router.outletRenderError.value = renderErr
-      void recoverSsrOutletFromRenderError(
-        router,
-        manifest,
-        outlet,
-        matchAtError,
-        renderErr
-      )
-    },
-  })
+  const outletErr = router.outletRenderError.peek()
+  if (outletErr) {
+    router.isLoaderPending.value = true
+    try {
+      return await renderClientErrorOutlet(manifest, committedMatch, outletErr)
+    } finally {
+      if (!signal.aborted) router.isLoaderPending.value = false
+    }
+  }
+  router.isLoaderPending.value = true
+  try {
+    return buildClientOutletSubtree({
+      router,
+      match: committedMatch,
+      pathname: router.pathname.peek(),
+      signal,
+      getNavGeneration: gen,
+      useHydratedPageData: options.useHydratedPageData,
+      forceReload: options.forceReload,
+      onLeafRenderError: (err) => {
+        const renderErr = toRenderError(err)
+        const matchAtError = committedMatch
+        router.outletRenderError.value = renderErr
+        void recoverSsrOutletFromRenderError(
+          router,
+          manifest,
+          outlet,
+          matchAtError,
+          renderErr
+        )
+      },
+    })
+  } finally {
+    if (!signal.aborted) router.isLoaderPending.value = false
+  }
 }
 
 function isSameCommittedMatch(
@@ -233,6 +244,24 @@ function isSameCommittedMatch(
   )
 }
 
+/** Guards stale async outlet updates after refresh / error recovery. */
+function canCommitSsrOutletUpdate(
+  router: SsrClientRouter,
+  matchAtRefreshStart: RouteMatch | null,
+  options: {
+    refreshSignal?: AbortSignal
+    expectedOutletError?: Error | null
+  } = {}
+): boolean {
+  if (options.refreshSignal?.aborted) return false
+  if (options.expectedOutletError !== undefined) {
+    if (router.outletRenderError.peek() !== options.expectedOutletError) {
+      return false
+    }
+  }
+  return isSameCommittedMatch(router.match.peek(), matchAtRefreshStart)
+}
+
 async function recoverSsrOutletFromRenderError(
   router: SsrClientRouter,
   manifest: RouteManifest,
@@ -241,10 +270,14 @@ async function recoverSsrOutletFromRenderError(
   err: Error
 ): Promise<void> {
   const recovery = await renderClientErrorOutlet(manifest, matchAtError, err)
-  if (!recovery) return
-  if (router.outletRenderError.peek() !== err) return
-  if (!isSameCommittedMatch(router.match.peek(), matchAtError)) return
-  outlet.value = recovery
+  if (
+    recovery &&
+    canCommitSsrOutletUpdate(router, matchAtError, {
+      expectedOutletError: err,
+    })
+  ) {
+    outlet.value = recovery
+  }
 }
 
 function subscribeSsrClientOutlet(
@@ -260,6 +293,30 @@ function subscribeSsrClientOutlet(
     const ctrl = new AbortController()
     outletAbort = ctrl
     const match = router.match.peek()
+    const outletErr = router.outletRenderError.peek()
+    if (outletErr) {
+      router.isLoaderPending.value = true
+      try {
+        const recovery = await renderClientErrorOutlet(
+          manifest,
+          match,
+          outletErr
+        )
+        if (
+          recovery &&
+          canCommitSsrOutletUpdate(router, match, {
+            refreshSignal: ctrl.signal,
+            expectedOutletError: outletErr,
+          })
+        ) {
+          outlet.value = recovery
+        }
+      } finally {
+        if (!ctrl.signal.aborted) router.isLoaderPending.value = false
+      }
+      tryClearClientNavigation(router)
+      return
+    }
     const scope =
       match !== null
         ? createNavigationScope(
@@ -282,13 +339,29 @@ function subscribeSsrClientOutlet(
         scope,
         getNavGeneration
       )
-      if (
-        ctrl.signal.aborted ||
-        !isScopeCurrent(scope, getNavGeneration)
-      ) {
+      if (ctrl.signal.aborted || !isScopeCurrent(scope, getNavGeneration)) {
         return
       }
-      outlet.value = subtree
+      const pendingErr = router.outletRenderError.peek()
+      if (pendingErr) {
+        const errOut = await renderClientErrorOutlet(
+          manifest,
+          router.match.peek(),
+          pendingErr
+        )
+        if (
+          errOut &&
+          canCommitSsrOutletUpdate(router, match, {
+            refreshSignal: ctrl.signal,
+            expectedOutletError: pendingErr,
+          })
+        ) {
+          outlet.value = errOut
+        }
+      } else {
+        outlet.value = subtree
+      }
+      tryClearClientNavigation(router)
     } catch {
       if (!ctrl.signal.aborted) throw new Error("SSR outlet refresh failed")
     }
@@ -299,6 +372,7 @@ function subscribeSsrClientOutlet(
   router.match.subscribe(() => refresh(false))
   router.isNavigating.subscribe(() => refresh(false))
   router.currentNavigation.subscribe(() => refresh(false))
+  router.outletRenderError.subscribe(() => refresh(false))
 }
 
 /**
@@ -391,6 +465,7 @@ export async function bootstrapSsrClient(
     router.forceLoaderReload.value = false
     if (ctrl.signal.aborted || !isScopeCurrent(scope, getNavGeneration)) return
     outlet.value = subtree
+    tryClearClientNavigation(router)
   }
   router.loaderEpoch.subscribe(() => {
     void refreshOutletOnInvalidate()

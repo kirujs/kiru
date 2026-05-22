@@ -100,4 +100,20 @@ describe("SSG build", () => {
     cy.location("pathname").should("eq", "/about")
     cy.get('[data-testid="ssg-about"]').should("exist")
   })
+
+  it("preserves hash after SSG hydration", () => {
+    cy.visit("/hash-section#section")
+    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get('[data-testid="ssg-hash"]').should("contain", "#section")
+    cy.get("#section").should("exist")
+  })
+
+  it("shows middleware { error: 403 } on client navigation after hydrate", () => {
+    cy.visit("/")
+    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.contains("a", "Forbidden").click()
+    cy.location("pathname").should("eq", "/forbidden")
+    cy.get('[data-testid="ssg-error-page"]').should("contain", "Forbidden")
+    cy.get('[data-testid="ssg-forbidden-page"]').should("not.exist")
+  })
 })

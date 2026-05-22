@@ -7,6 +7,7 @@ export const routes = createRouteTree({
     head: { description: "E2E SSG app." },
     layout: () => import("./pages/layout.tsx"),
     notFound: () => import("./pages/not-found"),
+    error: () => import("./pages/ssg-error-page"),
     children: [
       createRouteScope({
         static: true,
@@ -44,6 +45,15 @@ export const routes = createRouteTree({
           createRoute("/loaders/static", {
             component: () => import("./pages/loaders-static"),
             head: { title: "E2E SSG static loader" },
+          }),
+          createRoute("/hash-section", {
+            component: () => import("./pages/hash-section"),
+            head: { title: "E2E SSG Hash" },
+          }),
+          createRoute("/forbidden", {
+            component: () => import("./pages/forbidden"),
+            middleware: [() => ({ error: 403, body: "Forbidden" })],
+            head: { title: "Forbidden" },
           }),
           createRoute("/posts/[slug]", {
             component: () => import("./pages/post"),

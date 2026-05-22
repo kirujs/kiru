@@ -12,6 +12,10 @@ export default function Layout({ children }: { children: JSX.Children }) {
         {" | "}
         <Link to="/loaders/static">Static loader</Link>
         {" | "}
+        <Link to="/hash-section">Hash section</Link>
+        {" | "}
+        <Link to="/forbidden">Forbidden</Link>
+        {" | "}
         <Link to="/context">Context</Link>
         {" | "}
         <Link to="/context/admin">Context admin</Link>
