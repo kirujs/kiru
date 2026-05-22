@@ -111,8 +111,8 @@ Behaviors both paths must match after hydrate. Checked in Cypress or lib tests.
 | Scenario | CSR | SSR hydrate | SSG hydrate |
 |----------|-----|-------------|-------------|
 | Client nav → `serverLoader` refetch | loaders e2e | ssr e2e | static loader nav |
-| `router.invalidate()` refetch | router.test | ssr invalidate-demo | — (S3) |
-| Action `x-kiru-invalidate` | — | ssr invalidate-demo | S3 |
+| `router.invalidate()` refetch | router.test | ssr invalidate-demo | ssg-parity (clientLoader + invalidate trigger) |
+| Action `x-kiru-invalidate` | — | ssr invalidate-demo | — (SSG preview has no action RPC) |
 | Back/forward + loader cache | navigation e2e | ssr e2e | ssg history e2e |
 | Link prefetch hover | — | tier3 (defer S3) | — |
 | Render error → error route | error-recovery e2e | ssr-break e2e | 404 static |

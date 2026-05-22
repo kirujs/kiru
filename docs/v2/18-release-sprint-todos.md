@@ -274,10 +274,10 @@ gantt
 
 ## Exit criteria
 
-- [ ] P1-2, P1-3, P1-8, P1-12 complete (or P1-12 explicitly deferred with ticket)
-- [ ] `e2e/ssr/scripts/verify-hybrid-prerender.mjs` in CI
-- [ ] `e2e/ssr-matrix` green in CI
-- [ ] SSG e2e count increased (target: +10 `it()` vs today ~18)
+- [x] P1-2, P1-3, P1-8, P1-12 complete
+- [x] `e2e/ssr/scripts/verify-hybrid-prerender.mjs` in CI
+- [x] `e2e/ssr-matrix` green in CI
+- [x] SSG e2e count increased (+10 in `ssg-parity.cy.ts`; 30 total Cypress `it()`)
 
 ## Tasks
 
@@ -534,8 +534,8 @@ All **must** be true to tag `v2.0.0`:
 - [ ] **P0-3** Parity matrix ≥80% checked (S2-2)
 - [ ] `node builderman.js test` green
 - [ ] `e2e/ssr` + `e2e/csr` + `e2e/ssg` Cypress green
-- [ ] **P1-3** FBR e2e on SSR + SSG (or documented defer)
-- [ ] **P1-12** FBR `layout` / `error` / `not-found` filenames configurable via `router.fileRoutes` (or documented defer)
+- [x] **P1-3** FBR e2e on SSR + SSG
+- [x] **P1-12** FBR `layout` / `error` / `not-found` filenames configurable via `router.fileRoutes`
 - [ ] `ssr-matrix` smoke in CI
 - [ ] Cloudflare build does not allow timed ISR/tags without error
 
@@ -626,6 +626,14 @@ Copy unchecked items into GitHub Issues / Linear using IDs (`P0-1`, `S1-2`, etc.
 - **S2-2** — `e2e/csr/cypress/e2e/parity.cy.ts`; SSG hash/forbidden/history; SSR HTTP 403 + existing serverLoader/invalidate/back tests
 - **P2-6** — Baseline `prepareAppForUrl` integration coverage in lib CI
 - **Deferred S3** — SSR Cypress client-nav middleware error UI (lib + CSR e2e sufficient); link prefetch hover
+
+### Sprint 3 — E2E & hybrid (2026-05-22)
+
+- **P1-12** — `layoutFiles`, `errorFiles`, `notFoundFiles` on `@kirujs/file-routes` + vite-plugin; unit fixture `fixtures/custom-names`
+- **P1-3** — `e2e/file-routes-ssr` (4 Cypress), `e2e/file-routes-ssg` (4 Cypress); builderman pipeline
+- **P1-2** — `e2e/ssg/cypress/e2e/ssg-parity.cy.ts` (+10 tests); 30 SSG Cypress tests total
+- **S3-2–S3-4, S3-6–S3-9** — Verified done (CSR parity, SSR invalidate/revalidate, default-export actions, matrix CI, tier3 ISR, hash e2e, ActionFailure forms)
+- **Docs** — [04-route-tree-and-matching.md](./04-route-tree-and-matching.md), [15-testing.md](./15-testing.md), [e2e/file-routes/README.md](../../e2e/file-routes/README.md)
 
 ---
 

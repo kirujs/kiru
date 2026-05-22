@@ -124,5 +124,7 @@ See [06-loaders-and-data.md](./06-loaders-and-data.md).
 | `e2e/ssg` | Static prerender + client nav |
 | `e2e/csr` | SPA, signals, loaders |
 | `e2e/file-routes` | `@kirujs/file-routes` codegen (CSR) |
+| `e2e/file-routes-ssr` | FBR + SSR hydrate |
+| `e2e/file-routes-ssg` | FBR + SSG prerender |
 | `e2e/ssr-matrix` | Multi-server adapter smoke |
 | `sandbox/ssr` | Auth/todos demo with real cookies |

@@ -44,8 +44,8 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 |----|-----|-------|
 | P1-1 | No e2e for middleware `{ error }` | Add SSR + CSR cases after P0-1 |
 | P1-2 | SSG e2e thinner than SSR | ~18 vs ~65 tests — expand hybrid + static loader nav |
-| P1-3 | FBR e2e: CSR only today | Add SSR + SSG Cypress fixtures (≥3 tests each); see S3-5 in [18](./18-release-sprint-todos.md) |
-| P1-12 | FBR special filenames hardcoded | `pageFiles` is configurable; `layout` / `error` / `not-found` are not — add `layoutFiles` etc. on `router.fileRoutes` |
+| P1-3 | ~~FBR e2e: CSR only~~ | Done — `e2e/file-routes-ssr`, `e2e/file-routes-ssg` (Sprint 3) |
+| P1-12 | ~~FBR special filenames hardcoded~~ | Done — `layoutFiles`, `errorFiles`, `notFoundFiles` (Sprint 3) |
 | P1-4 | Cloudflare ISR story | Build-time assert exists; need Worker smoke in CI |
 | P1-5 | No global `middleware.ts` | Document root scope pattern; consider codegen |
 | P1-6 | Multiplexed `?action` / `?loader` | Publish security whitepaper for adopters |
@@ -102,14 +102,13 @@ Client navigations commit the target URL, set `outletRenderError` with `RouteMid
 
 ### Testing
 
-- [ ] E2e: middleware error SSR + CSR
-- [ ] E2e: action invalidate + loader refetch
-- [ ] E2e: default-export actions (e2e pages in branch)
-- [ ] ssr-matrix green on CI
-- [ ] SSG hybrid script: `e2e/ssr/scripts/verify-hybrid-prerender.mjs`
-- [ ] **P1-3** E2e: file-based routes on SSR (middleware, dynamic, groups — mirror `e2e/file-routes`)
-- [ ] **P1-3** E2e: file-based routes on SSG (prerender + client nav + not-found)
-- [ ] **P1-12** FBR: configurable `layout` / `error` / `not-found` filename patterns via `router.fileRoutes`
+- [x] E2e: middleware error SSR + CSR
+- [x] E2e: action invalidate + loader refetch (SSR `invalidate-demo`)
+- [x] E2e: default-export actions (e2e pages in branch)
+- [x] ssr-matrix green on CI (builderman `e2e:ssr-matrix`)
+- [x] SSG hybrid script: `e2e/ssr/scripts/verify-hybrid-prerender.mjs` (runs in `e2e:ssr`)
+- [x] **P1-3** E2e: file-based routes on SSR and SSG
+- [x] **P1-12** FBR: configurable `layout` / `error` / `not-found` filename patterns
 
 ### Documentation (this folder)
 

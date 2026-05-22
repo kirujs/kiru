@@ -4,7 +4,12 @@ import { validateTree } from "./validateTree.js"
 import type { FileRoutesOptions } from "./types.js"
 
 export type { FileRouteDirNode, FileRoutesOptions, ScanPagesResult } from "./types.js"
-export { DEFAULT_PAGE_FILES } from "./types.js"
+export {
+  DEFAULT_ERROR_FILES,
+  DEFAULT_LAYOUT_FILES,
+  DEFAULT_NOT_FOUND_FILES,
+  DEFAULT_PAGE_FILES,
+} from "./types.js"
 export { scanPagesDir } from "./scanPagesDir.js"
 export { validateTree } from "./validateTree.js"
 export { codegenRouteTree } from "./codegenRouteTree.js"

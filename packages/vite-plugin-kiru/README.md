@@ -82,7 +82,7 @@ Scans `src/pages` and writes **`src/routes.gen.ts`** (regenerated in dev via Vit
 ```ts
 router: {
   fileRoutes: true,
-  // or { dir: "./src/pages", pageFiles: ["page.{tsx,mdx}"], extend: "./src/routes.extend.ts" }
+  // or { dir: "./src/pages", pageFiles: ["page.{tsx,mdx}"], layoutFiles: ["_layout.{tsx,ts}"], notFoundFiles: ["404.{tsx}"], extend: "./src/routes.extend.ts" }
 }
 ```
 

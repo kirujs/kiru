@@ -1,6 +1,11 @@
 import path from "node:path"
 import { resolveSingleModulePattern } from "./resolveModulePattern.js"
-import { DEFAULT_PAGE_FILES } from "@kirujs/file-routes"
+import {
+  DEFAULT_ERROR_FILES,
+  DEFAULT_LAYOUT_FILES,
+  DEFAULT_NOT_FOUND_FILES,
+  DEFAULT_PAGE_FILES,
+} from "@kirujs/file-routes"
 
 export type ResolvedFileRoutes = {
   pagesDir: string
@@ -8,6 +13,9 @@ export type ResolvedFileRoutes = {
   outFile: string
   outFileAbs: string
   pageFiles: string[]
+  layoutFiles: string[]
+  errorFiles: string[]
+  notFoundFiles: string[]
   extend?: string
   extendAbs?: string
 }
@@ -18,6 +26,9 @@ export type FileRoutesPluginOption =
       dir?: string
       outFile?: string
       pageFiles?: string[]
+      layoutFiles?: string[]
+      errorFiles?: string[]
+      notFoundFiles?: string[]
       extend?: string
     }
 
@@ -37,6 +48,9 @@ export function resolveFileRoutesOption(
     outFile,
     outFileAbs,
     pageFiles: config.pageFiles ?? [...DEFAULT_PAGE_FILES],
+    layoutFiles: config.layoutFiles ?? [...DEFAULT_LAYOUT_FILES],
+    errorFiles: config.errorFiles ?? [...DEFAULT_ERROR_FILES],
+    notFoundFiles: config.notFoundFiles ?? [...DEFAULT_NOT_FOUND_FILES],
     extend: config.extend,
     extendAbs: undefined,
   }

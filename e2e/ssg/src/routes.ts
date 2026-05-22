@@ -52,8 +52,24 @@ export const routes = createRouteTree({
           }),
           createRoute("/forbidden", {
             component: () => import("./pages/forbidden"),
+            static: false,
             middleware: [() => ({ error: 403, body: "Forbidden" })],
             head: { title: "Forbidden" },
+          }),
+          createRoute("/guarded", {
+            component: () => import("./pages/guarded"),
+            static: false,
+            middleware: [() => ({ redirect: "/about" })],
+            head: { title: "Guarded" },
+          }),
+          createRoute("/break-leaf", {
+            component: () => import("./pages/break-leaf"),
+            static: false,
+            head: { title: "Break" },
+          }),
+          createRoute("/invalidate-demo", {
+            component: () => import("./pages/invalidate-demo"),
+            head: { title: "SSG Invalidate" },
           }),
           createRoute("/posts/[slug]", {
             component: () => import("./pages/post"),

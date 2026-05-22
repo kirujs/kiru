@@ -137,20 +137,32 @@ SSR uses same tree builder as client `buildClientOutletSubtree`.
 
 `@kirujs/file-routes` maps:
 
-| File | Role |
-|------|------|
-| `page.tsx` / `index.tsx` | Route component |
-| `layout.tsx` | Scope layout |
-| `not-found.tsx` | Scope or root notFound |
-| `middleware.ts` | `default` or `middleware` export |
-| `page.config.ts` | `RoutePageConfig` (static, head, meta) |
-| `(group)/` | Route group — omitted from URL |
-| `[slug]` | Dynamic segment |
-| `[...slug]` | Rest segment |
+| File | Role | Configurable via `router.fileRoutes` |
+|------|------|--------------------------------------|
+| `page.tsx` / `index.tsx` (default) | Route component | `pageFiles` |
+| `layout.tsx` (default) | Scope layout | `layoutFiles` |
+| `error.tsx` (default) | Error boundary | `errorFiles` |
+| `not-found.tsx` (default) | Scope or root notFound | `notFoundFiles` |
+| `middleware.ts` | `default` or `middleware` export | — (fixed name) |
+| `page.config.ts` | `RoutePageConfig` (static, head, meta) | — |
+| `(group)/` | Route group — omitted from URL | — |
+| `[slug]` | Dynamic segment | — |
+| `[...slug]` | Rest segment | — |
+
+Defaults match the filenames above. Example for `_layout.tsx` / `404.tsx`:
+
+```typescript
+fileRoutes: {
+  layoutFiles: ["_layout.{tsx,ts,jsx,js,mdx}"],
+  notFoundFiles: ["404.{tsx,ts,jsx,js,mdx}"],
+}
+```
+
+Leading-underscore **directories** (e.g. `_components/`) remain private and are not scanned.
 
 Output: `routes.gen.ts` — import in app and pass to Vite `router.ssg.routes` or manual `routes.ts` re-export.
 
-**E2E:** `e2e/file-routes` (CSR only today) — see [15-testing.md](./15-testing.md).
+**E2E:** `e2e/file-routes` (CSR), `e2e/file-routes-ssr`, `e2e/file-routes-ssg` — see [15-testing.md](./15-testing.md).
 
 ---
 

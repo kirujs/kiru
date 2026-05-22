@@ -9,6 +9,9 @@ const fr: ResolvedFileRoutes = {
   outFile: "./src/routes.gen.ts",
   outFileAbs: "/app/src/routes.gen.ts",
   pageFiles: ["page.tsx"],
+  layoutFiles: ["layout.tsx"],
+  errorFiles: ["error.tsx"],
+  notFoundFiles: ["not-found.tsx"],
   extend: "./src/routes.extend.ts",
   extendAbs: "/app/src/routes.extend.ts",
 }

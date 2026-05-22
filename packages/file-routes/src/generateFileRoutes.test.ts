@@ -125,6 +125,21 @@ export const extendRoutes = [
     assert.equal(admin.route.meta.requiresAuth, true)
   })
 
+  it("accepts custom layout and not-found filename patterns", async () => {
+    const pagesDir = path.join(fixtures, "custom-names", "pages")
+    const outFile = path.join(fixtures, "custom-names", "routes.gen.ts")
+    const { source } = await generateFileRoutes({
+      pagesDir,
+      outFile,
+      layoutFiles: ["_layout.{tsx,ts,jsx,js,mdx}"],
+      notFoundFiles: ["404.{tsx,ts,jsx,js,mdx}"],
+    })
+    assert.ok(source.includes("_layout"))
+    assert.ok(/pages\/404|pages\\404/.test(source))
+    assert.ok(!/pages\/layout\.|pages\\layout\./.test(source))
+    assert.ok(!/pages\/not-found|pages\\not-found/.test(source))
+  })
+
   it("rejects catch-all not at end of filesystem path", async () => {
     const { mkdtemp, writeFile, mkdir } = await import("node:fs/promises")
     const { tmpdir } = await import("node:os")

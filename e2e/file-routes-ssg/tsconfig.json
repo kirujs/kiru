@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node", "cypress", "vite/client", "kiru"],
+    "strict": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "kiru",
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"]
+}

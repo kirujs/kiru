@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url"
 import { describe, it } from "node:test"
 import assert from "node:assert"
 import { promises as fs } from "node:fs"
+import { DEFAULT_ERROR_FILES, DEFAULT_LAYOUT_FILES, DEFAULT_NOT_FOUND_FILES } from "@kirujs/file-routes"
 import { writeGeneratedRoutes } from "./fileRoutesCodegen.js"
 
 const fixtures = path.join(
@@ -20,6 +21,9 @@ describe("writeGeneratedRoutes", () => {
         outFile: "./_tmp.routes.gen.ts",
         outFileAbs: outFile,
         pageFiles: ["page.{tsx,ts,jsx,js}", "index.{tsx,ts,jsx,js}"],
+        layoutFiles: [...DEFAULT_LAYOUT_FILES],
+        errorFiles: [...DEFAULT_ERROR_FILES],
+        notFoundFiles: [...DEFAULT_NOT_FOUND_FILES],
       })
       assert.strictEqual(written, true)
       assert.strictEqual(outFileAbs, outFile)

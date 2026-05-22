@@ -16,6 +16,12 @@ export default function Layout({ children }: { children: JSX.Children }) {
         {" | "}
         <Link to="/forbidden">Forbidden</Link>
         {" | "}
+        <Link to="/guarded">Guarded</Link>
+        {" | "}
+        <Link to="/break-leaf">Break</Link>
+        {" | "}
+        <Link to="/invalidate-demo">Invalidate demo</Link>
+        {" | "}
         <Link to="/context">Context</Link>
         {" | "}
         <Link to="/context/admin">Context admin</Link>

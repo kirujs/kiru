@@ -3,6 +3,18 @@ export const DEFAULT_PAGE_FILES = [
   "index.{tsx,ts,jsx,js}",
 ] as const
 
+export const DEFAULT_LAYOUT_FILES = [
+  "layout.{tsx,ts,jsx,js,mdx}",
+] as const
+
+export const DEFAULT_ERROR_FILES = [
+  "error.{tsx,ts,jsx,js,mdx}",
+] as const
+
+export const DEFAULT_NOT_FOUND_FILES = [
+  "not-found.{tsx,ts,jsx,js,mdx}",
+] as const
+
 export type FileRoutesOptions = {
   /** Absolute path to the pages directory. */
   pagesDir: string
@@ -10,6 +22,12 @@ export type FileRoutesOptions = {
   outFile: string
   /** Glob patterns relative to each directory for leaf routes. */
   pageFiles?: string[]
+  /** Glob patterns for layout files in each directory. */
+  layoutFiles?: string[]
+  /** Glob patterns for error boundary files in each directory. */
+  errorFiles?: string[]
+  /** Glob patterns for not-found files in each directory. */
+  notFoundFiles?: string[]
 }
 
 export type FileRouteDirNode = {

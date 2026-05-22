@@ -254,6 +254,18 @@ const fileRoutesTest = task({
   cwd: "e2e/file-routes",
 })
 
+const fileRoutesSsrTest = task({
+  ...sharedE2EConfig,
+  name: "e2e:file-routes-ssr",
+  cwd: "e2e/file-routes-ssr",
+})
+
+const fileRoutesSsgTest = task({
+  ...sharedE2EConfig,
+  name: "e2e:file-routes-ssg",
+  cwd: "e2e/file-routes-ssg",
+})
+
 const ssrMatrixTest = task({
   name: "e2e:ssr-matrix",
   cwd: "e2e/ssr-matrix",
@@ -282,6 +294,8 @@ const e2e = pipeline([
   ssgTest,
   ssrTest,
   fileRoutesTest,
+  fileRoutesSsrTest,
+  fileRoutesSsgTest,
   ssrMatrixTest,
 ]).toTask({
   name: "e2e",

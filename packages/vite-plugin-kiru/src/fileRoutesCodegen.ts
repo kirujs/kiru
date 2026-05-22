@@ -10,6 +10,9 @@ export async function writeGeneratedRoutes(
     pagesDir: fileRoutes.pagesDirAbs,
     outFile: fileRoutes.outFileAbs,
     pageFiles: fileRoutes.pageFiles,
+    layoutFiles: fileRoutes.layoutFiles,
+    errorFiles: fileRoutes.errorFiles,
+    notFoundFiles: fileRoutes.notFoundFiles,
     extend: fileRoutes.extendAbs,
   })
 

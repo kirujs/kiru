@@ -9,12 +9,14 @@ import {
 } from "./pathFromSegments.js"
 import { fileNameMatchesPagePattern } from "./pageFileMatch.js"
 import type { FileRouteDirNode, FileRoutesOptions, ScanPagesResult } from "./types.js"
-import { DEFAULT_PAGE_FILES } from "./types.js"
+import {
+  DEFAULT_ERROR_FILES,
+  DEFAULT_LAYOUT_FILES,
+  DEFAULT_NOT_FOUND_FILES,
+  DEFAULT_PAGE_FILES,
+} from "./types.js"
 
-const LAYOUT_RE = /^layout\.(tsx|ts|jsx|js|mdx)$/
 const MIDDLEWARE_RE = /^middleware\.ts$/
-const ERROR_RE = /^error\.(tsx|ts|jsx|js|mdx)$/
-const NOT_FOUND_RE = /^not-found\.(tsx|ts|jsx|js|mdx)$/
 const SCOPE_CONFIG_RE = /^scope\.config\.(ts|js)$/
 const PAGE_CONFIG_RE = /^(.+)\.config\.(ts|js)$/
 
@@ -70,12 +72,14 @@ export async function scanPagesDir(
 ): Promise<ScanPagesResult> {
   const pagesDir = path.resolve(options.pagesDir).replace(/\\/g, "/")
   const pageFiles = options.pageFiles ?? [...DEFAULT_PAGE_FILES]
+  const layoutFiles = options.layoutFiles ?? [...DEFAULT_LAYOUT_FILES]
+  const errorFiles = options.errorFiles ?? [...DEFAULT_ERROR_FILES]
+  const notFoundFiles = options.notFoundFiles ?? [...DEFAULT_NOT_FOUND_FILES]
   const root = createDirNode("", pagesDir, [])
 
   const patterns = [
     "**/*",
     "!**/_*/**",
-    "!**/_*",
   ]
 
   const files = await glob(patterns, {
@@ -118,7 +122,7 @@ export async function scanPagesDir(
       continue
     }
 
-    if (LAYOUT_RE.test(fileName)) {
+    if (fileNameMatchesPagePattern(fileName, layoutFiles)) {
       if (node.layout) {
         throw new Error(`[file-routes] Multiple layout files in ${node.dirPath}`)
       }
@@ -134,7 +138,7 @@ export async function scanPagesDir(
       continue
     }
 
-    if (ERROR_RE.test(fileName)) {
+    if (fileNameMatchesPagePattern(fileName, errorFiles)) {
       if (node.error) {
         throw new Error(`[file-routes] Multiple error files in ${node.dirPath}`)
       }
@@ -142,7 +146,7 @@ export async function scanPagesDir(
       continue
     }
 
-    if (NOT_FOUND_RE.test(fileName)) {
+    if (fileNameMatchesPagePattern(fileName, notFoundFiles)) {
       if (node.notFound) {
         throw new Error(`[file-routes] Multiple not-found files in ${node.dirPath}`)
       }
