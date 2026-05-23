@@ -49,7 +49,7 @@ const addTodoSchema: Schema<{ text: string }> = {
 export const addTodo = action({
   type: "form",
   validation: { body: addTodoSchema },
-  handler: async ({ body, context }) => {
+  handler: async ({ request, context }) => {
     const user = context.user
     if (!user) {
       return {
@@ -59,7 +59,7 @@ export const addTodo = action({
     }
     const todo: TodoItem = {
       id: crypto.randomUUID(),
-      text: body.text,
+      text: request.body.text,
       completed: false,
     }
     todosFor(user.id).push(todo)
@@ -81,9 +81,9 @@ const toggleSchema: Schema<{ id: string }> = {
 /** JSON POST — toggle completed (remote fetch, not a native form). */
 export const toggleTodo = action({
   validation: { body: toggleSchema },
-  handler: async ({ body, context }) => {
+  handler: async ({ request, context }) => {
     const user = requireUser(context.user)
-    const todo = todosFor(user.id).find((t) => t.id === body.id)
+    const todo = todosFor(user.id).find((t) => t.id === request.body.id)
     if (!todo) {
       throw new RemoteError("Todo not found", "NOT_FOUND", { status: 404 })
     }
@@ -99,10 +99,10 @@ const deleteSchema: Schema<{ id: string }> = {
 /** JSON POST — delete a todo. */
 export const deleteTodo = action({
   validation: { body: deleteSchema },
-  handler: async ({ body, context }) => {
+  handler: async ({ request, context }) => {
     const user = requireUser(context.user)
     const list = todosFor(user.id)
-    const idx = list.findIndex((t) => t.id === body.id)
+    const idx = list.findIndex((t) => t.id === request.body.id)
     if (idx < 0) {
       throw new RemoteError("Todo not found", "NOT_FOUND", { status: 404 })
     }
@@ -125,13 +125,13 @@ const updateSchema: Schema<{ id: string; text: string }> = {
 /** JSON POST — update todo text. */
 export const updateTodo = action({
   validation: { body: updateSchema },
-  handler: async ({ body, context }) => {
+  handler: async ({ request, context }) => {
     const user = requireUser(context.user)
-    const todo = todosFor(user.id).find((t) => t.id === body.id)
+    const todo = todosFor(user.id).find((t) => t.id === request.body.id)
     if (!todo) {
       throw new RemoteError("Todo not found", "NOT_FOUND", { status: 404 })
     }
-    todo.text = body.text
+    todo.text = request.body.text
     return todo
   },
 })

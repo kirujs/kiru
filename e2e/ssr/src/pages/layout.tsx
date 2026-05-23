@@ -34,6 +34,8 @@ export default function Layout({ children }: { children: JSX.Children }) {
         {" | "}
         <Link to="/nested-streaming-test">Nested streaming</Link>
         {" | "}
+        <Link to="/action-middleware-demo">Action middleware</Link>
+        {" | "}
         <Link to="/ssr-break">SSR break</Link>
         {" | "}
         <Link to="/ssr-break-leaf">SSR break (leaf)</Link>

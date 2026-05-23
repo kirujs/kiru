@@ -31,20 +31,20 @@ Use `action` from `kiru/remote` — a **single callable** (no `action.get` / `ac
 
 ```ts
 // Shorthand
-export const updateUser = action(async ({ body, context, cookies, headers }) => {
+export const updateUser = action(async ({ request, response, context }) => {
   if (!context.user) {
     return { ok: false, error: { message: "Sign in required", code: "UNAUTHORIZED" } }
   }
   context.user = updated
-  cookies.set("session", sessionId, { path: "/" })
-  headers.set("x-custom", "1")
+  response.cookies.set("session", sessionId, { path: "/" })
+  response.headers.set("x-custom", "1")
   return { user: updated }
 })
 
 // Config object (validation, middleware, invalidate meta)
 export const search = action({
   validation: { query: searchQuerySchema },
-  handler: async ({ query }) => findItems(query),
+  handler: async ({ request }) => findItems(request.query),
 })
 ```
 
@@ -53,15 +53,16 @@ export const search = action({
 - **Thrown `RemoteError`:** framework responds with **HTTP status only** (empty body). Client `dispatch` throws `ActionDispatchError`.
 - **Response side effects** on handler args (committed on normal return, rolled back on throw):
   - `context` — mutable clone of request context; diff → `x-kiru-token` refresh header.
-  - `headers` — outgoing `Headers` for the action response.
-  - `cookies` — `ActionCookies` (`set` / `get` / `delete`) with overridable defaults.
+  - `response.headers` — outgoing `Headers` for the action response.
+  - `response.cookies` — `ActionCookies` (`set` / `get` / `delete`) with overridable defaults.
+  - `request.headers` — incoming request headers (lowercase key map) for auth/guards/metadata.
 
 #### Form actions (multipart / urlencoded POST)
 
 ```ts
 export const login = action({
   type: "form",
-  handler: async ({ formData, context, cookies, redirect }) => {
+  handler: async ({ request, context, response, redirect }) => {
     // ...
     return redirect(303, "/todos")
   },
@@ -70,7 +71,7 @@ export const login = action({
 export const addTodo = action({
   type: "form",
   validation: { body: addTodoSchema },
-  handler: async ({ body, context }) => ({ todo: body }),
+  handler: async ({ request, context }) => ({ todo: request.body }),
 })
 ```
 
@@ -87,6 +88,7 @@ export const addTodo = action({
 - **HTTP `POST`** `/?action=<encodedActionId>[&query params]`
 - **JSON body** — `null` when empty (`JSON.stringify` on the client)
 - Query parameters still used when `validation.query` is configured
+- Optional `headers` in action call options: `myAction({ headers: { "x-trace": "1" } })`
 - Response: **HTTP 200** + `JSON.stringify(handlerReturn)` (except redirects)
 - Low-level `dispatch(id, call?)` — no HTTP method argument
 - Typed action stubs return **`Promise<Output>`** directly from codegen
@@ -102,6 +104,7 @@ Client dispatch ([`routerHydrate.ts`](../../packages/lib/src/ssr/routerHydrate.t
 
 - Header `x-kiru-token` — signed request context
 - `Content-Type: application/json` on RPC calls
+- Call options may include custom headers; Kiru reserved headers (`x-kiru-token`, `content-type`, etc.) are not overrideable
 - Parses JSON body or redirect marker; applies `applyActionResponseHeaders` for invalidate + token refresh
 
 Server: `createRemoteActionHandler` in renderer `prepareRenderer` when `actions: { secret, allowedOrigins?, exposeErrors? }` is set.

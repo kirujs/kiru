@@ -7,9 +7,10 @@ import {
   type KiruSetCookie,
 } from "./action.js"
 import type { CommittedResponseMeta } from "./actionResponseScope.js"
+import { KIRU_TOKEN_RESPONSE_HEADER } from "./actionHeaders.js"
 import { makeKiruContextToken, makeKiruContextTokenAsync } from "./token.js"
 
-export const KIRU_TOKEN_RESPONSE_HEADER = "x-kiru-token" as const
+export { KIRU_TOKEN_RESPONSE_HEADER } from "./actionHeaders.js"
 
 export function serializeSetCookie(c: KiruSetCookie): string {
   const parts = [

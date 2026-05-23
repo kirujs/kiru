@@ -254,7 +254,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/post-via-get"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action(async ({ body }) => body),
+      fn: action(async ({ request }) => request.body),
     })
     const req = makeGetRequest(`${routeId}:fn`, token)
     assert.strictEqual((await handler(req))?.status, 405)
@@ -265,7 +265,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/wrong-content-type"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      fn: action(async ({ body }) => body),
+      fn: action(async ({ request }) => request.body),
     })
     const req = new Request(`http://localhost/?action=${routeId}:fn`, {
       method: "POST",
@@ -376,7 +376,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/dispatch"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      greet: action(async ({ body: name }) => `hello ${name}`),
+      greet: action(async ({ request }) => `hello ${request.body}`),
     })
     const req = makePostRequest(`${routeId}:greet`, token, "world")
     const res = await handler(req)
@@ -393,8 +393,8 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/tuple-input"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      add: action(async ({ body }) => {
-        const tuple = body as readonly [number, number]
+      add: action(async ({ request }) => {
+        const tuple = request.body as readonly [number, number]
         return tuple[0]! + tuple[1]!
       }),
     })
@@ -451,15 +451,21 @@ describe("remote / handler", () => {
     await handler(req)
     assert.ok(captured && typeof captured === "object")
     const handlerArgs = captured as {
-      body: undefined
-      query: undefined
-      headers: Headers
+      request: {
+        body: undefined
+        query: undefined
+        headers: Record<string, string>
+      }
+      response: {
+        headers: Headers
+      }
       context: typeof ctx
       signal: AbortSignal
     }
     assert.deepStrictEqual(handlerArgs.context, ctx)
     assert.strictEqual(handlerArgs.signal, req.signal)
-    assert.ok(handlerArgs.headers instanceof Headers)
+    assert.strictEqual(typeof handlerArgs.request.headers, "object")
+    assert.ok(handlerArgs.response.headers instanceof Headers)
     assert.ok(capturedCtx)
   })
 
@@ -514,7 +520,8 @@ describe("remote / handler", () => {
             },
           },
         },
-        handler: async ({ body }) => `hello ${(body as { name: string }).name}`,
+        handler: async ({ request }) =>
+          `hello ${(request.body as { name: string }).name}`,
       }),
     })
     const req = makePostRequest(`${routeId}:greet`, token, { wrong: true })
@@ -544,7 +551,7 @@ describe("remote / handler", () => {
             },
           },
         },
-        handler: async ({ query }) => ({ q: query }),
+        handler: async ({ request }) => ({ q: request.query }),
       }),
     })
     const ok = await handler(
@@ -683,7 +690,7 @@ describe("remote / handler", () => {
     const token = validToken()
     const routeId = "test/delete-verb"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      remove: action(async ({ body: id }) => ({ removed: id })),
+      remove: action(async ({ request }) => ({ removed: request.body })),
     })
     const req = makePostRequest(`${routeId}:remove`, token, "item-1")
     const res = await handler(req)

@@ -30,4 +30,25 @@ describe("remote action on ssr bundle", () => {
       )
     })
   })
+
+  it("merges custom request headers for dispatch", async () => {
+    await withJSDOM(async () => {
+      let capturedHeaders: HeadersInit | undefined
+      globalThis.fetch = async (_input, init) => {
+        capturedHeaders = init?.headers
+        return new Response(JSON.stringify({ ok: true }), { status: 200 })
+      }
+      const data = await __kiruEnsureRemoteDispatch()("test:action", {
+        headers: {
+          "x-test": "1",
+          "x-kiru-token": "ignore-me",
+        },
+      })
+      assert.deepStrictEqual(data, { ok: true })
+      const headers = new Headers(capturedHeaders)
+      assert.equal(headers.get("x-test"), "1")
+      assert.notEqual(headers.get("x-kiru-token"), "ignore-me")
+      assert.equal(headers.get("content-type"), "application/json")
+    })
+  })
 })

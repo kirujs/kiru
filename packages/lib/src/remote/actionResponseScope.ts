@@ -60,10 +60,15 @@ export function createActionResponseScope(
     entryContextSnapshot,
     toHandlerArgs<Body, Query>(body: Body, query: Query) {
       return {
-        body,
-        query,
-        headers,
-        cookies,
+        request: {
+          body,
+          query,
+          headers: requestHeadersRecord(execution),
+        },
+        response: {
+          headers,
+          cookies,
+        },
         context,
         signal: execution.request.signal,
       }

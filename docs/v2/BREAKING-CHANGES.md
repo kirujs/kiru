@@ -26,7 +26,7 @@ See [17-package-exports-and-import-guide.md](./17-package-exports-and-import-gui
 |--------|--------|
 | `RemoteResult`, `fail()`, `RemoteTuple`, framework envelopes | **Passthrough JSON** — handler return value is the wire body (except `redirect(...)`) |
 | `dispatch` / callables never throw | **`dispatch` throws `ActionDispatchError` on non-2xx**; callables return `Promise<Output>` |
-| `actionResult()`, `setContext` / `setCookie` helpers | Mutate **`context`**, **`cookies`**, **`headers`** on handler args |
+| `actionResult()`, `setContext` / `setCookie` helpers | Handler args are split into `request` / `response`; mutate **`context`**, **`response.cookies`**, **`response.headers`** |
 | `exposeErrors` JSON error bodies | Thrown / framework errors → **HTTP status only**, empty body |
 | `createFormController` `fieldErrors` / `message` | **`result`** + **`error`** (transport only); read validation from your return shape |
 | `action.get` / `action.post` / `action.put` / … | Single **`action()`** — RPC model, not HTTP verbs |

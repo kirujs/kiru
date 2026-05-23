@@ -7,6 +7,7 @@ import {
   type CreateActionExecutionOptions,
 } from "./actionExecution.js"
 import { ActionCookies } from "./actionCookies.js"
+import { requestHeadersRecord } from "./actionResponseScope.js"
 import { getActionResponseScope } from "./actionResponseScope.js"
 
 const actionExecutionAls = new AsyncLocalStorage<ActionExecution>()
@@ -25,10 +26,15 @@ export function toRemoteActionHandlerArgs<Body, Query = void>(
     return scope.toHandlerArgs(body, query)
   }
   return {
-    body,
-    query,
-    headers: new Headers(),
-    cookies: new ActionCookies(),
+    request: {
+      body,
+      query,
+      headers: requestHeadersRecord(execution),
+    },
+    response: {
+      headers: new Headers(),
+      cookies: new ActionCookies(),
+    },
     context: execution.request.context,
     signal: execution.request.signal,
   }

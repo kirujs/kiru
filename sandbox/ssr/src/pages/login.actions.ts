@@ -1,4 +1,4 @@
-import { action, getActionExecutionContext } from "kiru/remote"
+import { action } from "kiru/remote"
 import {
   clearSessionCookieSpec,
   createSession,
@@ -11,9 +11,9 @@ import {
 /** Form action: validate credentials, set session cookie, redirect to todos. */
 export const login = action({
   type: "form",
-  handler: async ({ formData, context, cookies, redirect }) => {
-    const username = String(formData.get("username") ?? "").trim()
-    const password = String(formData.get("password") ?? "")
+  handler: async ({ request, response, context, redirect }) => {
+    const username = String(request.formData.get("username") ?? "").trim()
+    const password = String(request.formData.get("password") ?? "")
 
     if (!username || !password) {
       return {
@@ -37,7 +37,7 @@ export const login = action({
 
     const sessionId = createSession(user.id)
     const spec = sessionCookieSpec(sessionId)
-    cookies.set(spec.name, spec.value, spec)
+    response.cookies.set(spec.name, spec.value, spec)
     context.user = user
     return redirect(303, "/todos")
   },
@@ -46,13 +46,12 @@ export const login = action({
 /** Form action: revoke session, clear cookie, redirect to login. */
 export const logoutForm = action({
   type: "form",
-  handler: async ({ context, cookies, redirect }) => {
-    const execution = getActionExecutionContext()
-    const cookieHeader = execution?.request.headers.get("cookie") ?? ""
+  handler: async ({ request, context, response, redirect }) => {
+    const cookieHeader = request.headers.cookie ?? ""
     const sessionId = getSessionIdFromCookieHeader(cookieHeader)
     if (sessionId) revokeSession(sessionId)
     const clear = clearSessionCookieSpec()
-    cookies.set(clear.name, clear.value, clear)
+    response.cookies.set(clear.name, clear.value, clear)
     context.user = null
     return redirect(303, "/login")
   },

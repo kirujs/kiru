@@ -217,9 +217,9 @@ describe("action.post (form) / wrapper", () => {
     let receivedCtx: unknown = null
     let receivedFormData: unknown = null
 
-    const formRef = action({ type: "form", handler: async ({ context, formData, signal }) => {
+    const formRef = action({ type: "form", handler: async ({ context, request, signal }) => {
       receivedCtx = { context, signal }
-      receivedFormData = formData
+      receivedFormData = request.formData
       return { success: true }
     },
     })
@@ -252,10 +252,10 @@ describe("action.post (form) / wrapper", () => {
   })
 
   it("should handle async callbacks correctly", async () => {
-    const formRef = action({ type: "form", handler: async ({ formData }) => {
+    const formRef = action({ type: "form", handler: async ({ request }) => {
       // Simulate async operation
       await new Promise((resolve) => setTimeout(resolve, 10))
-      const name = formData.get("name")
+      const name = request.formData.get("name")
       return { message: `Hello, ${name}` }
     },
     })
@@ -269,8 +269,8 @@ describe("action.post (form) / wrapper", () => {
   })
 
   it("should handle synchronous callbacks by wrapping in Promise", async () => {
-    const formRef = action({ type: "form", handler: ({ formData }) => {
-      const name = formData.get("name")
+    const formRef = action({ type: "form", handler: ({ request }) => {
+      const name = request.formData.get("name")
       return { message: `Hello, ${name}` }
     },
     })
@@ -315,8 +315,8 @@ describe("action.post (form + schema)", () => {
     const formRef = action({
       type: "form",
       validation: { body: messageSchema },
-      handler: async ({ body }) => {
-        received = body
+      handler: async ({ request }) => {
+        received = request.body
         return { ok: true }
       },
     })
@@ -332,10 +332,10 @@ describe("action.post (form + schema)", () => {
     const formRef = action({
       type: "form",
       validation: { body: contactSchema },
-      handler: async ({ body }) => ({
-        email: body.email,
-        hasAvatar: body.avatar instanceof File,
-        avatarName: body.avatar?.name,
+      handler: async ({ request }) => ({
+        email: request.body.email,
+        hasAvatar: request.body.avatar instanceof File,
+        avatarName: request.body.avatar?.name,
       }),
     })
 
@@ -360,7 +360,7 @@ describe("action.post (form + schema)", () => {
       submit: action({
         type: "form",
         validation: { body: messageSchema },
-        handler: async ({ body }) => ({ message: body.message }),
+        handler: async ({ request }) => ({ message: request.body.message }),
       }),
     })
 
@@ -384,7 +384,7 @@ describe("action.post (form + schema)", () => {
       submit: action({
         type: "form",
         validation: { body: messageSchema },
-        handler: async ({ body }) => ({ message: body.message }),
+        handler: async ({ request }) => ({ message: request.body.message }),
       }),
     })
 
@@ -405,10 +405,10 @@ describe("action.post (form + schema)", () => {
       submit: action({
         type: "form",
         validation: { body: contactSchema },
-        handler: async ({ body }) => ({
-          email: body.email,
-          hasAvatar: body.avatar instanceof File,
-          avatarName: body.avatar?.name,
+        handler: async ({ request }) => ({
+          email: request.body.email,
+          hasAvatar: request.body.avatar instanceof File,
+          avatarName: request.body.avatar?.name,
         }),
       }),
     })
@@ -673,8 +673,8 @@ describe("action.post (form) / native submission", () => {
 
     let receivedContext: unknown = null
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: action({ type: "form", handler: async ({ context, signal, headers }) => {
-        receivedContext = { context, signal, headers }
+      testAction: action({ type: "form", handler: async ({ context, signal, request }) => {
+        receivedContext = { context, signal, requestHeaders: request.headers }
         return { success: true }
       },
       }),
@@ -701,11 +701,11 @@ describe("action.post (form) / native submission", () => {
     const handlerCtx = receivedContext as {
       context: typeof expectedContext
       signal: AbortSignal
-      headers: Record<string, string>
+      requestHeaders: Record<string, string>
     }
     assert.deepStrictEqual(handlerCtx.context, expectedContext)
     assert.strictEqual(handlerCtx.signal, req.signal)
-    assert.ok(handlerCtx.headers)
+    assert.ok(handlerCtx.requestHeaders)
   })
 
   it("should return null when action query parameter is missing", async () => {
@@ -898,8 +898,8 @@ describe("action.post (form) / redirect handling", () => {
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       go: action({
         type: "form",
-        handler: async ({ cookies }) => {
-          cookies.set("sid", "1", { path: "/" })
+        handler: async ({ response }) => {
+          response.cookies.set("sid", "1", { path: "/" })
           return { saved: true }
         },
       }),

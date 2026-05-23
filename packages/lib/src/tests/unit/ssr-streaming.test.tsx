@@ -1,7 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert"
 import * as kiru from "../../index.js"
-import { action } from "../../remote/action.js"
+import { action, RemoteActionHandlerArgs } from "../../remote/action.js"
 import { renderToReadableStream } from "../../ssr/server.js"
 import { Derive } from "../../components/derive.js"
 import { resource } from "../../resource.js"
@@ -129,16 +129,16 @@ describe("renderToReadableStream speculative Derive traversal", () => {
       return { id: "p1", name: "Streaming Product" }
     })
 
-    const getStreamingReviews = action(async ({
-      body,
-      context,
-    }: import("../../remote/action.js").RemoteActionHandlerArgs<{
-      productId: string
-    }>) => {
-      assert.equal((context as { user?: { name: string } }).user?.name, "Ada")
-      await new Promise((r) => setTimeout(r, 50))
-      return [{ id: "r1", text: `Review for ${body.productId}` }]
-    })
+    const getStreamingReviews = action(
+      async ({
+        request,
+        context,
+      }: RemoteActionHandlerArgs<{ productId: string }>) => {
+        assert.equal((context as { user?: { name: string } }).user?.name, "Ada")
+        await new Promise((r) => setTimeout(r, 50))
+        return [{ id: "r1", text: `Review for ${request.body.productId}` }]
+      }
+    )
 
     function ProductCard({ product }: { product: Product }) {
       const reviews = resource(({ signal }) =>
@@ -187,7 +187,10 @@ describe("renderToReadableStream speculative Derive traversal", () => {
 
     const html = await readStream(stream)
 
-    assert.ok(!html.includes('"error"'), `stream should not contain action errors: ${html}`)
+    assert.ok(
+      !html.includes('"error"'),
+      `stream should not contain action errors: ${html}`
+    )
     assert.ok(
       html.includes("Review for p1"),
       "nested remote action should resolve during speculative SSR"

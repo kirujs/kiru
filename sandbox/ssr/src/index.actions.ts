@@ -19,8 +19,8 @@ export const getSandboxServerEcho = action(async ({ context }) => {
 
 export const getServerEcho = action({
   validation: { body: mySchema },
-  handler: async ({ body }) => {
-    return `Echo ${body.name}`
+  handler: async ({ request }) => {
+    return `Echo ${request.body.name}`
   },
 })
 
@@ -34,20 +34,20 @@ export const users = {
     return demoUsers.get(id) ?? null
   }),
   rename: action(
-    async ({ body }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
-      const u = demoUsers.get(body.id)
+    async ({ request }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
+      const u = demoUsers.get(request.body.id)
       if (!u) throw new Error("User not found")
-      u.name = body.name
+      u.name = request.body.name
       return u
     }
   ),
 }
 
 export const renameUserViaNamespace = action(
-  async ({ body }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
+  async ({ request }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
     const before = await users.get()
     try {
-      const updated = await users.rename({ body })
+      const updated = await users.rename({ body: request.body })
       return { before, updated }
     } catch (e) {
       return {

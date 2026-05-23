@@ -62,7 +62,7 @@ Used by `devWarnings.*.test.ts` and env guards.
 
 | Area | Files |
 |------|-------|
-| Remote / actions | `remote.test.ts`, `formActions.test.ts`, `formController.*.test.ts` |
+| Remote / actions | `remote.test.ts`, `actionMiddleware.test.ts`, `formActions.test.ts`, `formController.*.test.ts` |
 | Loaders cache | `loaderCache.test.ts`, `loaderStale.test.ts`, `loaderRegistry.test.ts` |
 | i18n | `i18n.test.ts`, `localeRouting.test.ts` |
 | Routing | `manifest-routing.test.ts`, `routePaths.test.ts`, `pathPolicy.test.ts` |

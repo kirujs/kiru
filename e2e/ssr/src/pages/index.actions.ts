@@ -50,9 +50,9 @@ const streamingReviewsInputSchema: Schema<{ productId: string }> = {
 
 export const getStreamingReviews = action({
   validation: { body: streamingReviewsInputSchema },
-  handler: async ({ body }): Promise<StreamingReview[]> => {
+  handler: async ({ request }): Promise<StreamingReview[]> => {
     console.log("action: get streaming reviews")
     await new Promise((r) => setTimeout(r, 1000))
-    return [{ id: "r1", text: `Review for ${body.productId}` }]
+    return [{ id: "r1", text: `Review for ${request.body.productId}` }]
   },
 })

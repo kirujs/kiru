@@ -26,7 +26,12 @@ import { formatRouterSearch } from "../router/navigation.js"
 import { tryClearClientNavigation } from "../router/outletNavigation.js"
 import { requestToken } from "../globals.js"
 import { applyActionResponseHeaders } from "../router/routerGlobal.js"
-import { isKiruRedirect, serializeActionCallQuery } from "../remote/action.js"
+import {
+  isKiruRedirect,
+  serializeActionCallQuery,
+  type RemoteActionCallOptions,
+} from "../remote/action.js"
+import { buildActionRpcHeaders } from "../remote/actionRequestHeaders.js"
 import { ActionDispatchError } from "../remote/errors.js"
 import { __DEV__, __KIRU_PURE_CLIENT__ } from "../env.js"
 import { REMOTE_ACTION_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
@@ -34,14 +39,11 @@ import { ensureLoaderClient } from "../router/loaderClient.js"
 import { loadClientHydrationChunksManifest } from "../router/hydrationChunks.js"
 import { getRouterRuntime } from "../router/routerRuntime.js"
 
-type RemoteActionCallEnvelope = {
-  body?: unknown
-  query?: Record<string, unknown>
-  signal?: AbortSignal
-}
-
 type ServerActionsClient = {
-  dispatch: (id: string, call?: RemoteActionCallEnvelope) => Promise<unknown>
+  dispatch: (
+    id: string,
+    call?: RemoteActionCallOptions<unknown, Record<string, unknown>>
+  ) => Promise<unknown>
 }
 
 function ensureServerActionsClient() {
@@ -58,10 +60,10 @@ function ensureServerActionsClient() {
         throw new ActionDispatchError(500, REMOTE_ACTION_PURE_CLIENT_DEV_MSG)
       }
       const callEnvelope = call ?? {}
-      const headers: Record<string, string> = {
-        "x-kiru-token": requestToken.current,
-        "Content-Type": "application/json",
-      }
+      const headers = buildActionRpcHeaders(
+        requestToken.current,
+        callEnvelope.headers
+      )
       const init: RequestInit = {
         method: "POST",
         signal: callEnvelope.signal,

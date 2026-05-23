@@ -2,8 +2,8 @@ import { action } from "kiru/remote"
 
 export const submitValidation = action({
   type: "form",
-  handler: async ({ formData }) => {
-    const message = String(formData.get("message") ?? "").trim()
+  handler: async ({ request }) => {
+    const message = String(request.formData.get("message") ?? "").trim()
     if (!message) {
       return { ok: false as const, errors: { message: "Required" } }
     }
@@ -13,8 +13,8 @@ export const submitValidation = action({
 
 export const submitMessage = action({
   type: "form",
-  handler: async ({ formData }) => {
-    const message = String(formData.get("message") ?? "").trim()
+  handler: async ({ request }) => {
+    const message = String(request.formData.get("message") ?? "").trim()
     return { message: message || "empty" }
   },
 })

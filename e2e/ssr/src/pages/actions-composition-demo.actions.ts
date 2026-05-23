@@ -6,7 +6,8 @@ export const api = {
   getEcho: action(async ({ context }) => {
     return `echo:${context.user?.name ?? "unknown"}`
   }),
-  removeLabel: action(async ({ body: id }: RemoteActionHandlerArgs<string>) => {
+  removeLabel: action(async ({ request }: RemoteActionHandlerArgs<string>) => {
+    const id = request.body
     const had = labels.has(id)
     labels.delete(id)
     return { removed: id, had }

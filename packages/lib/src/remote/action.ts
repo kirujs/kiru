@@ -76,22 +76,29 @@ export { getActionExecutionContext } from "./actionInvokeScope.js"
 
 export type { RemoteActionMethod }
 
-/** Flat input for action handlers (not the ALS object). */
-export type RemoteActionInput<Body = unknown, Query = void> = {
+export type ActionRequest<Body = unknown, Query = void> = {
   body: Body
   query: Query
+  /** Incoming request headers (lowercase keys; first value wins). */
+  headers: Record<string, string>
+}
+
+export type ActionResponse = {
   /** Outgoing response headers for this action. */
   headers: Headers
   cookies: ActionCookies
-  context: CustomRequestContext
-  signal: AbortSignal
 }
 
 /** Arguments passed to remote action handlers. */
 export type RemoteActionHandlerArgs<
   Body,
   Query = void,
-> = RemoteActionInput<Body, Query>
+> = {
+  request: ActionRequest<Body, Query>
+  response: ActionResponse
+  context: CustomRequestContext
+  signal: AbortSignal
+}
 
 /** Registry / HTTP entry invoke shape (unknown at the boundary). */
 export type RemoteActionInvokeArgs = {
@@ -110,10 +117,15 @@ export function buildRemoteActionHandlerArgs<Body, Query = void>(
   query: Query
 ): RemoteActionHandlerArgs<Body, Query> {
   return {
-    body,
-    query,
-    headers: new Headers(),
-    cookies: new ActionCookies(),
+    request: {
+      body,
+      query,
+      headers: {},
+    },
+    response: {
+      headers: new Headers(),
+      cookies: new ActionCookies(),
+    },
     context,
     signal,
   }
@@ -182,6 +194,7 @@ export type RemoteActionCallOptions<Body = void, Query = void> = {
   signal?: AbortSignal
   body?: Body
   query?: Query
+  headers?: Record<string, string>
 }
 
 function resolveCallableHandlerArgs<Body, Query>(
@@ -190,16 +203,18 @@ function resolveCallableHandlerArgs<Body, Query>(
   call?: RemoteActionCallOptions<Body, Query>
 ): Pick<
   RemoteActionHandlerArgs<Body, Query>,
-  "body" | "query" | "headers" | "cookies" | "context" | "signal"
+  "request" | "response" | "context" | "signal"
 > {
   const active = getActiveActionContext()
   if (active) {
     const signal = call?.signal ?? active.signal
     return {
-      body,
-      query,
-      headers: active.headers,
-      cookies: active.cookies,
+      request: {
+        body,
+        query,
+        headers: active.request.headers,
+      },
+      response: active.response,
       context: active.context,
       signal,
     }
@@ -259,7 +274,8 @@ async function dispatchCallableInvoke<Body, Query, Output>(
     return runWithActionFrame(actionId, async () => {
       const { handlerResult } = await runWithActionResponseScope(
         execution,
-        (scope) => runHandler(scope.toHandlerArgs(args.body, args.query))
+        (scope) =>
+          runHandler(scope.toHandlerArgs(args.request.body, args.request.query))
       )
       return handlerResult as Output
     })
@@ -352,9 +368,11 @@ export type InferActionConfigOutput<T> = T extends {
 
 /** Form handler when `validation.body` parses FormData into `body`. */
 export type RemoteFormActionHandlerWithBody<Input, Output> = (
-  args: Omit<RemoteFormActionHandlerArgs, "body" | "query"> & {
-    body: Input
-    query: void
+  args: Omit<RemoteFormActionHandlerArgs, "request"> & {
+    request: Omit<RemoteFormActionHandlerArgs["request"], "body" | "query"> & {
+      body: Input
+      query: void
+    }
   }
 ) =>
   | Promise<KiruActionServerResult<Output>>
@@ -459,9 +477,11 @@ function createRemoteAction<Body, Query, Output>(
     return runWithActionResponseScope(execution, async (scope) => {
       const reqHeaders = requestHeadersRecord(execution)
       await runActionMiddleware(middleware, {
-        body: args.body,
-        query: args.query,
-        headers: reqHeaders,
+        request: {
+          body: args.body,
+          query: args.query,
+          headers: reqHeaders,
+        },
         context: execution.request.context,
         signal: args.signal,
       })
@@ -489,15 +509,18 @@ function createRemoteAction<Body, Query, Output>(
     ) as Query
     const args = resolveCallableHandlerArgs(body, query, call)
     const validated = await validateActionPayload(validation, {
-      body: args.body,
-      query: args.query,
+      body: args.request.body,
+      query: args.request.query,
     })
     return dispatchCallableInvoke(
       runAction,
       {
         ...args,
-        body: validated.body,
-        query: validated.query,
+        request: {
+          ...args.request,
+          body: validated.body,
+          query: validated.query,
+        },
       },
       wrapped.__kiruActionId
     )
@@ -538,10 +561,16 @@ function createFormPostAction<Input, Output>(
       )
     }
     return runWithActionResponseScope(execution, async (scope) => {
+      const scopedArgs = scope.toHandlerArgs(undefined as void, undefined as void)
       const handlerArgs: RemoteFormActionHandlerArgs = {
-        formData: args.formData,
+        request: {
+          ...scopedArgs.request,
+          formData: args.formData,
+        },
+        response: scopedArgs.response,
+        context: scopedArgs.context,
+        signal: scopedArgs.signal,
         redirect,
-        ...scope.toHandlerArgs(undefined as void, undefined as void),
       }
       if (bodySchema) {
         const raw = formDataToInput(args.formData)
@@ -556,8 +585,11 @@ function createFormPostAction<Input, Output>(
         }
         const withBody = {
           ...handlerArgs,
-          body,
-          query: undefined as void,
+          request: {
+            ...handlerArgs.request,
+            body,
+            query: undefined as void,
+          },
         } as Parameters<RemoteFormActionHandlerWithBody<Input, Output>>[0]
         return (runHandler as RemoteFormActionHandlerWithBody<Input, Output>)(withBody)
       }
@@ -574,26 +606,14 @@ function createFormPostAction<Input, Output>(
   }
 }
 
-function actionFromJsonConfig<Config extends RemoteJsonActionConfig<unknown, void, unknown>>(
-  config: Config
-): RemoteAction<
-  InferActionConfigBody<Config>,
-  InferActionConfigQuery<Config>,
-  InferActionConfigOutput<Config>
-> {
+function actionFromJsonConfig<Body, Query, Output>(
+  config: RemoteJsonActionConfig<Body, Query, Output>
+): RemoteAction<Body, Query, Output> {
   return createRemoteAction({
-    handler: config.handler as RemoteActionHandler<
-      InferActionConfigBody<Config>,
-      InferActionConfigQuery<Config>,
-      InferActionConfigOutput<Config>
-    >,
+    handler: config.handler,
     validation: {
-      bodySchema: config.validation?.body as
-        | Schema<InferActionConfigBody<Config>>
-        | undefined,
-      querySchema: config.validation?.query as
-        | Schema<InferActionConfigQuery<Config>>
-        | undefined,
+      bodySchema: config.validation?.body,
+      querySchema: config.validation?.query,
     },
     middleware: config.middleware,
     meta: metaFromJsonConfig(config),
@@ -609,13 +629,9 @@ function actionImpl<Input, Output>(
 function actionImpl<Output>(
   config: RemoteFormActionConfig<Output>
 ): RemoteFormActionFunction<Output>
-function actionImpl<Config extends RemoteJsonActionConfig<unknown, void, unknown>>(
-  config: Config
-): RemoteAction<
-  InferActionConfigBody<Config>,
-  InferActionConfigQuery<Config>,
-  InferActionConfigOutput<Config>
->
+function actionImpl<Body, Query = void, Output = unknown>(
+  config: RemoteJsonActionConfig<Body, Query, Output>
+): RemoteAction<Body, Query, Output>
 function actionImpl(
   handlerOrConfig:
     | RemoteActionHandler<unknown, unknown, unknown>
@@ -720,8 +736,13 @@ export function isRemoteFormAction(
   )
 }
 
-export type RemoteFormActionHandlerArgs = RemoteActionInput<void, void> & {
-  formData: FormData
+export type RemoteFormActionHandlerArgs = {
+  request: ActionRequest<void, void> & {
+    formData: FormData
+  }
+  response: ActionResponse
+  context: CustomRequestContext
+  signal: AbortSignal
   redirect: (
     status: number,
     location: string,

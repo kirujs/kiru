@@ -1,5 +1,6 @@
 import type { RemoteActionHandlerArgs } from "./action.js"
 import { ActionCookies } from "./actionCookies.js"
+import { headersToValidationInput } from "./actionExecution.js"
 import type {
   ActionExecution,
   CreateActionExecutionOptions,
@@ -22,10 +23,15 @@ export function toRemoteActionHandlerArgs<Body, Query = void>(
   query: Query
 ): RemoteActionHandlerArgs<Body, Query> {
   return {
-    body,
-    query,
-    headers: new Headers(),
-    cookies: new ActionCookies(),
+    request: {
+      body,
+      query,
+      headers: headersToValidationInput(execution.request.headers),
+    },
+    response: {
+      headers: new Headers(),
+      cookies: new ActionCookies(),
+    },
     context: execution.request.context,
     signal: execution.request.signal,
   }

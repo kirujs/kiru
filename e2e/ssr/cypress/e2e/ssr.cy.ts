@@ -230,6 +230,51 @@ describe("SSR server", () => {
     )
   })
 
+  describe("action middleware", () => {
+    const visitMiddlewareDemo = () => {
+      const port = Cypress.env("port")
+      cy.visit(`http://127.0.0.1:${port}/action-middleware-demo`)
+      cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
+      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    }
+
+    it("returns 403 when middleware header gate is missing", () => {
+      visitMiddlewareDemo()
+      cy.intercept("POST", /\?action=/).as("middlewareDenied")
+      cy.get('[data-testid="mw-gated-denied"]').click()
+      cy.wait("@middlewareDenied").its("response.statusCode").should("eq", 403)
+      cy.get('[data-testid="mw-gated-denied-result"]').should(
+        "contain",
+        "Action failed"
+      )
+    })
+
+    it("passes custom request headers through client dispatch", () => {
+      visitMiddlewareDemo()
+      cy.intercept("POST", /\?action=/).as("middlewareAllowed")
+      cy.get('[data-testid="mw-gated-allowed"]').click()
+      cy.wait("@middlewareAllowed").then(({ request, response }) => {
+        expect(request.headers["x-e2e-action-secret"]).to.eq("open-sesame")
+        expect(response?.statusCode).to.eq(200)
+      })
+      cy.get('[data-testid="mw-gated-result"]').should(
+        "have.text",
+        '{"echo":"open-sesame"}'
+      )
+    })
+
+    it("allows context-based middleware guard with SSR token context", () => {
+      visitMiddlewareDemo()
+      cy.intercept("POST", /\?action=/).as("middlewareAuth")
+      cy.get('[data-testid="mw-auth"]').click()
+      cy.wait("@middlewareAuth").its("response.statusCode").should("eq", 200)
+      cy.get('[data-testid="mw-auth-result"]').should(
+        "have.text",
+        '{"user":"E2E User"}'
+      )
+    })
+  })
+
   it("hydrates the hello route on full load", () => {
     const port = Cypress.env("port")
     cy.visit(`http://127.0.0.1:${port}/hello`)

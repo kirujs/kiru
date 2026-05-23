@@ -7,11 +7,13 @@ export type RemoteActionMethod =
   | "PATCH"
   | "DELETE"
 
-/** Pre-validation input shared with action handlers (flat surface). */
+/** Pre-validation input shared with action handlers (request-shaped surface). */
 export type ActionMiddlewareContext = {
-  body: unknown
-  query: Record<string, string | string[]>
-  headers: Record<string, string>
+  request: {
+    body: unknown
+    query: Record<string, string | string[]>
+    headers: Record<string, string>
+  }
   context: CustomRequestContext
   signal: AbortSignal
 }

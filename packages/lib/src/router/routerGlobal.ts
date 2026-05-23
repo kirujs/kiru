@@ -1,5 +1,8 @@
 import { requestToken } from "../globals.js"
-import { KIRU_TOKEN_RESPONSE_HEADER } from "../remote/actionResponse.js"
+import {
+  KIRU_INVALIDATE_RESPONSE_HEADER,
+  KIRU_TOKEN_RESPONSE_HEADER,
+} from "../remote/actionHeaders.js"
 import type { Router } from "./csr.js"
 
 const ROUTER_GLOBAL_KEY = "__kiru_router"
@@ -30,7 +33,9 @@ export function applyInvalidateResponseHeader(header: string | null): void {
 
 /** Apply framework action response headers (invalidate routes, refreshed context token). */
 export function applyActionResponseHeaders(headers: Headers): void {
-  applyInvalidateResponseHeader(headers.get("x-kiru-invalidate"))
+  applyInvalidateResponseHeader(
+    headers.get(KIRU_INVALIDATE_RESPONSE_HEADER)
+  )
   const token = headers.get(KIRU_TOKEN_RESPONSE_HEADER)
   if (token) {
     requestToken.setCurrent(token)

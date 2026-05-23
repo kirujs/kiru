@@ -29,7 +29,7 @@ const profileSchema: Schema<{ name: string; email: string }> = {
 export const updateProfile = action({
   type: "form",
   validation: { body: profileSchema },
-  handler: async ({ body, context }) => {
+  handler: async ({ request, context }) => {
     const user = context.user
     if (!user) {
       return {
@@ -37,7 +37,7 @@ export const updateProfile = action({
         message: "Sign in required",
       }
     }
-    const updated = updateUserProfile(user.id, body)
+    const updated = updateUserProfile(user.id, request.body)
     if (!updated) {
       return {
         ok: false as const,
