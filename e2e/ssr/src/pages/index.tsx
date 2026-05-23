@@ -18,7 +18,11 @@ export default function Home() {
       <button
         data-testid="ssr-remote-button"
         onclick={async () => {
-          remoteResult.value = await getServerMessage()
+          try {
+            remoteResult.value = await getServerMessage()
+          } catch (e) {
+            remoteResult.value = e instanceof Error ? e.message : "failed"
+          }
         }}
       >
         Call remote

@@ -49,11 +49,13 @@ function assertIsolation(name, body, allNames) {
 async function invokeEchoAction(origin, token, name) {
   const url = `${origin}/?action=${encodeURIComponent(echoContextActionId)}`
   const res = await fetch(url, {
-    method: "GET",
+    method: "POST",
     headers: {
+      "content-type": "application/json",
       "x-kiru-token": token,
       Origin: origin,
     },
+    body: JSON.stringify(null),
   })
   if (!res.ok) {
     throw new Error(`action RPC failed for ${name}: ${res.status}`)

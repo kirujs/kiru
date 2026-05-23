@@ -13,7 +13,11 @@ export default function ActionsCompositionDemoPage() {
         data-testid="namespace-get"
         type="button"
         onclick={async () => {
-          namespaceGetResult.value = await api.getEcho()
+          try {
+            namespaceGetResult.value = await api.getEcho()
+          } catch (e) {
+            namespaceGetResult.value = e instanceof Error ? e.message : "failed"
+          }
         }}
       >
         Namespace GET
@@ -24,8 +28,11 @@ export default function ActionsCompositionDemoPage() {
         data-testid="compose-run"
         type="button"
         onclick={async () => {
-          const out = await runPipeline()
-          composeResult.value = JSON.stringify(out)
+          try {
+            composeResult.value = JSON.stringify(await runPipeline())
+          } catch (e) {
+            composeResult.value = e instanceof Error ? e.message : "failed"
+          }
         }}
       >
         Run composed pipeline
@@ -36,8 +43,13 @@ export default function ActionsCompositionDemoPage() {
         data-testid="namespace-delete"
         type="button"
         onclick={async () => {
-          const out = await api.removeLabel({ body: "demo" })
-          deleteResult.value = JSON.stringify(out)
+          try {
+            deleteResult.value = JSON.stringify(
+              await api.removeLabel({ body: "demo" })
+            )
+          } catch (e) {
+            deleteResult.value = e instanceof Error ? e.message : "failed"
+          }
         }}
       >
         Namespace DELETE

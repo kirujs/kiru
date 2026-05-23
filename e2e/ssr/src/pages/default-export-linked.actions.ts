@@ -1,14 +1,15 @@
 import { action } from "kiru/remote"
 
 const catalog = {
-  getEcho: action.get(async ({ context }) => {
+  getEcho: action(async ({ context }) => {
     return `linked-default:${context.user?.name ?? "unknown"}`
   }),
+  x: action(({body}) => {}),
 }
 
 export default catalog
 
-export const runPipeline = action.post(async () => {
+export const runPipeline = action(async () => {
   const echo = await catalog.getEcho()
   return { echo, linked: true }
 })

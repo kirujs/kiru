@@ -15,7 +15,11 @@ export default function DefaultExportDemoPage() {
         data-testid="literal-default-get"
         type="button"
         onclick={async () => {
-          literalResult.value = await literal.getEcho()
+          try {
+            literalResult.value = await literal.getEcho()
+          } catch (e) {
+            literalResult.value = e instanceof Error ? e.message : "failed"
+          }
         }}
       >
         Literal default GET
@@ -26,7 +30,11 @@ export default function DefaultExportDemoPage() {
         data-testid="linked-default-get"
         type="button"
         onclick={async () => {
-          linkedResult.value = await linked.getEcho()
+          try {
+            linkedResult.value = await linked.getEcho()
+          } catch (e) {
+            linkedResult.value = e instanceof Error ? e.message : "failed"
+          }
         }}
       >
         Linked default GET
@@ -37,8 +45,11 @@ export default function DefaultExportDemoPage() {
         data-testid="linked-compose-run"
         type="button"
         onclick={async () => {
-          const out = await runPipeline()
-          composeResult.value = JSON.stringify(out)
+          try {
+            composeResult.value = JSON.stringify(await runPipeline())
+          } catch (e) {
+            composeResult.value = e instanceof Error ? e.message : "failed"
+          }
         }}
       >
         Linked compose POST

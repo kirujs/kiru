@@ -1,25 +1,22 @@
-import { headersToValidationInput } from "./actionExecution.js"
 import type {
   RemoteActionInvokeArgs,
   RemoteFormActionFunction,
-  RemoteFormActionHandlerArgs,
+  RemoteFormActionInvokeArgs,
 } from "./action.js"
 import {
-  isRemoteActionBodyMethod,
   KIRU_FORM_TOKEN_FIELD,
   parseActionQueryFromUrl,
 } from "./action.js"
 import { buildActionHttpResponse, normalizeActionResult } from "./actionResponse.js"
+import type { HandlerWithScopeResult } from "./actionResponseScope.js"
 import {
   createActionExecutionForRequest,
   runInActionExecution,
 } from "./actionInvokeScope.js"
 import { isAbortError } from "../router/navigationScope.js"
-import { fail } from "./actionFail.js"
-import { isRemoteError, type RemoteError } from "./errors.js"
+import { isRemoteError } from "./errors.js"
 import { unwrapKiruToken } from "./token.js"
 
-export { ActionFailure, isActionFailure } from "./actionFailure.js"
 export {
   makeKiruContextToken,
   makeKiruContextTokenAsync,
@@ -31,34 +28,23 @@ export type { TokenHeader, TokenPayload } from "./token.js"
 export {
   action,
   redirect,
-  actionResult,
-  fail,
-  isKiruActionFail,
   isKiruRedirect,
-  isKiruActionResult,
   KIRU_FORM_TOKEN_FIELD,
-  type KiruActionFail,
-  type KiruActionFailWire,
   type KiruSetCookie,
   type KiruActionResponseOptions,
-  type KiruActionResult,
-  type UnwrapKiruActionOutput,
   type RemoteActionFunction,
-  type RemoteGetAction,
-  type RemoteBodyAction,
+  type RemoteAction,
   type RemoteJsonActionConfig,
   type RemoteFormActionConfig,
-  type RemoteActionMethod,
-  isRemoteActionBodyMethod,
-  isRemoteGetAction,
-  isRemoteBodyAction,
+  type RemoteFormActionConfigWithBody,
+  type RemoteFormActionHandlerWithBody,
+  isRemoteJsonAction,
   isRemoteFormAction,
   type RemoteActionHandler,
   type RemoteActionHandlerArgs,
   type RemoteActionInvokeArgs,
   type RemoteActionCallOptions,
   type RemoteActionValidationConfig,
-  type RemoteGetActionConfig,
   type InferActionConfigBody,
   type InferActionConfigQuery,
   type InferActionConfigOutput,
@@ -69,6 +55,7 @@ export {
   serializeActionCallQuery,
   type RemoteFormActionHandler,
   type RemoteFormActionHandlerArgs,
+  type RemoteFormActionInvokeArgs,
   type ActionSchema,
   type Schema,
   type StandardJSONSchema,
@@ -104,6 +91,10 @@ export {
   formDataToInput,
   buildRemoteActionHandlerArgs,
   type RemoteActionInput,
+  type ActionCookies,
+  type ActionCookieDefaults,
+  type ActionCookieSetOptions,
+  type FormActionClientOutput,
 } from "./action.js"
 
 export {
@@ -127,12 +118,18 @@ export {
   type CreateFormControllerResult,
 } from "./formController.js"
 
+export {
+  ActionDispatchError,
+  isActionDispatchError,
+  RemoteError,
+  isRemoteError,
+} from "./errors.js"
+
 type RegisteredRemoteAction = {
   __kiruRemoteAction: true
-  __kiruRemoteMethod: import("./action.js").RemoteActionMethod
   __kiruInvalidateRoutes?: string[]
   __kiruRevalidate?: import("./action.js").RemoteRevalidateMeta
-  __kiruInvoke: (args: RemoteActionInvokeArgs) => Promise<unknown>
+  __kiruInvoke: (args: RemoteActionInvokeArgs) => Promise<HandlerWithScopeResult>
 }
 
 type AnyRegisteredAction =
@@ -150,19 +147,9 @@ export const __INTERNAL_REMOTE_REGISTRY = {
   },
 }
 
-const jsonHeaders = {
-  "content-type": "application/json; charset=utf-8",
-} as const
-
 export type CreateRemoteActionHandlerOptions = {
-  /**
-   * If non-empty, require `Origin` or `Referer` to match one of these strings
-   * (exact origin, e.g. `https://app.example.com`). Use `"*"` to disable the check.
-   */
   allowedOrigins?: string[]
-  /** When true, internal {@link RemoteError} throws map to `__kiruFail` JSON (legacy migration). */
   exposeErrors?: boolean
-  /** Used for async context token signing on edge runtimes. @default "node" */
   deployTarget?: import("@kirujs/runtime").KiruDeployTarget
 }
 
@@ -188,16 +175,11 @@ function isAllowedOrigin(
 function isWrappedRemoteAction(
   value: unknown
 ): value is RegisteredRemoteAction {
-  if (!value || typeof value !== "function" || !("__kiruRemoteAction" in value)) {
-    return false
-  }
-  const method = (value as unknown as RegisteredRemoteAction).__kiruRemoteMethod
   return (
-    method === "GET" ||
-    method === "POST" ||
-    method === "PUT" ||
-    method === "PATCH" ||
-    method === "DELETE"
+    !!value &&
+    typeof value === "function" &&
+    "__kiruRemoteAction" in value &&
+    (value as unknown as RegisteredRemoteAction).__kiruRemoteAction === true
   )
 }
 
@@ -220,19 +202,9 @@ function invalidateHeadersForAction(
   return { "x-kiru-invalidate": routes.join(",") }
 }
 
-/** Map legacy internal throws to {@link fail} wire shape. */
-function failFromRemoteError(e: RemoteError) {
-  const details = e.details as { fieldErrors?: Record<string, string> } | undefined
-  return fail({
-    message: e.message,
-    status: e.status,
-    code: e.code,
-    fields: details?.fieldErrors,
-  })
-}
-
-async function responseFromThrownRemoteError(
-  e: RemoteError,
+async function buildResponseFromInvoke(
+  handlerResult: unknown,
+  meta: import("./actionResponseScope.js").CommittedResponseMeta,
   secret: string,
   options: CreateRemoteActionHandlerOptions | undefined,
   init: {
@@ -241,7 +213,7 @@ async function responseFromThrownRemoteError(
     extraHeaders?: Record<string, string>
   }
 ): Promise<Response> {
-  const normalized = normalizeActionResult(failFromRemoteError(e))
+  const normalized = normalizeActionResult(handlerResult, meta)
   return buildActionHttpResponse({
     normalized,
     secret,
@@ -249,6 +221,7 @@ async function responseFromThrownRemoteError(
     isEnhanced: init.isEnhanced,
     referer: init.referer,
     extraHeaders: init.extraHeaders,
+    committed: meta,
   })
 }
 
@@ -283,16 +256,12 @@ async function invokeJsonRemoteAction(
     if (request.signal.aborted) {
       return new Response(null, { status: 499 })
     }
-    const result = await runInActionExecution(execution, () =>
+    const { handlerResult, meta } = await runInActionExecution(execution, () =>
       handler.__kiruInvoke(handlerArgs)
     )
     const { applyServerRevalidate } = await import("../router/revalidate.js")
     await applyServerRevalidate(handler.__kiruRevalidate)
-    const normalized = normalizeActionResult(result)
-    return buildActionHttpResponse({
-      normalized,
-      secret,
-      deployTarget: options?.deployTarget,
+    return buildResponseFromInvoke(handlerResult, meta, secret, options, {
       isEnhanced: true,
       extraHeaders: invalidateHeadersForAction(handler),
     })
@@ -300,11 +269,8 @@ async function invokeJsonRemoteAction(
     if (isAbortError(e) || request.signal.aborted) {
       return new Response(null, { status: 499 })
     }
-    if (isRemoteError(e) && options?.exposeErrors) {
-      return responseFromThrownRemoteError(e, secret, options, {
-        isEnhanced: true,
-        extraHeaders: invalidateHeadersForAction(handler),
-      })
+    if (isRemoteError(e)) {
+      return new Response(null, { status: e.status })
     }
     return new Response(null, { status: 500 })
   }
@@ -320,9 +286,6 @@ export function createRemoteActionHandler(
       const actionId = url.searchParams.get("action")
       const contentType = request.headers.get("content-type") ?? ""
 
-      // -----------------------------------------------------------------------
-      // Form action: multipart/form-data or application/x-www-form-urlencoded
-      // -----------------------------------------------------------------------
       if (
         actionId &&
         request.method === "POST" &&
@@ -372,27 +335,22 @@ export function createRemoteActionHandler(
           body: formData,
           entryActionId: rpcActionId,
         })
-        const formArgs: RemoteFormActionHandlerArgs = {
+        const formArgs: RemoteFormActionInvokeArgs = {
           formData,
-          headers: headersToValidationInput(execution.request.headers),
-          context: execution.request.context,
           signal: execution.request.signal,
         }
         try {
           if (request.signal.aborted) {
             return new Response(null, { status: 499 })
           }
-          const result = await runInActionExecution(execution, () =>
-            handler.__kiruInvoke(formArgs)
+          const { handlerResult, meta } = await runInActionExecution(
+            execution,
+            () => handler.__kiruInvoke(formArgs)
           )
           const { applyServerRevalidate } = await import("../router/revalidate.js")
           await applyServerRevalidate(handler.__kiruRevalidate)
           const isEnhanced = !!request.headers.get("x-kiru-form")
-          const normalized = normalizeActionResult(result)
-          return buildActionHttpResponse({
-            normalized,
-            secret,
-            deployTarget: options?.deployTarget,
+          return buildResponseFromInvoke(handlerResult, meta, secret, options, {
             isEnhanced,
             referer: request.headers.get("referer") ?? "/",
             extraHeaders: invalidateHeadersForAction(handler),
@@ -401,20 +359,13 @@ export function createRemoteActionHandler(
           if (isAbortError(e) || request.signal.aborted) {
             return new Response(null, { status: 499 })
           }
-          if (isRemoteError(e) && options?.exposeErrors) {
-            return responseFromThrownRemoteError(e, secret, options, {
-              isEnhanced: !!request.headers.get("x-kiru-form"),
-              referer: request.headers.get("referer") ?? "/",
-              extraHeaders: invalidateHeadersForAction(handler),
-            })
+          if (isRemoteError(e)) {
+            return new Response(null, { status: e.status })
           }
           return new Response(null, { status: 500 })
         }
       }
 
-      // -----------------------------------------------------------------------
-      // JSON remote action (GET, POST, PUT, PATCH, DELETE)
-      // -----------------------------------------------------------------------
       if (!actionId) return null
 
       const token = request.headers.get("x-kiru-token")
@@ -429,62 +380,36 @@ export function createRemoteActionHandler(
 
       const allowed = options?.allowedOrigins
       if (allowed && allowed.length > 0 && !isAllowedOrigin(request, allowed)) {
-        return new Response(
-          options?.exposeErrors
-            ? JSON.stringify({
-                error: {
-                  code: "FORBIDDEN_ORIGIN",
-                  message: "Request origin is not allowed",
-                },
-              })
-            : null,
-          {
-            status: 403,
-            headers: options?.exposeErrors ? jsonHeaders : {},
-          }
-        )
+        return new Response(null, { status: 403 })
       }
 
       const context = unwrapKiruToken(token, secret)
-      if (!context) {
-        return new Response(null, { status: 500 })
-      }
+      if (!context) return new Response(null, { status: 400 })
 
       const handler = registry[routeId]?.[actionName]
       if (!isWrappedRemoteAction(handler)) {
         return new Response(null, { status: 500 })
       }
 
-      if (request.method !== handler.__kiruRemoteMethod) {
-        return null
+      if (request.method !== "POST") {
+        return new Response(null, { status: 405 })
       }
 
-      if (
-        isRemoteActionBodyMethod(handler.__kiruRemoteMethod) &&
-        contentType !== "application/json"
-      ) {
-        return null
+      let body: unknown = undefined
+      try {
+        body = await request.json()
+      } catch {
+        body = null
       }
 
       const query = parseActionQueryFromUrl(url)
-
-      let body: unknown
-      if (isRemoteActionBodyMethod(handler.__kiruRemoteMethod)) {
-        try {
-          body = await request.json()
-        } catch {
-          return new Response(null, { status: 500 })
-        }
-      }
-
-      const rpcActionId = `${routeId}:${actionName}`
       return invokeJsonRemoteAction(
         handler,
         request,
         context,
         body,
         query,
-        rpcActionId,
+        actionId,
         secret,
         options
       )

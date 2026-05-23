@@ -26,8 +26,8 @@ export default function HomePage() {
           </>
         ) : (
           <>
-            Sign in to try cookie sessions, profile updates, and todo CRUD backed
-            by remote actions.
+            Sign in to try cookie sessions, profile updates, and todo CRUD
+            backed by remote actions.
           </>
         )}
       </p>
@@ -40,12 +40,12 @@ export default function HomePage() {
         </li>
         <li>
           <strong className="text-slate-200">Account</strong> — update name and
-          email; <code className="text-cyan-200">actionResult</code> refreshes{" "}
-          <code className="text-cyan-200">x-kiru-token</code>
+          email; updating <code className="text-cyan-200">context</code>{" "}
+          refreshes <code className="text-cyan-200">x-kiru-token</code>
         </li>
         <li>
-          <strong className="text-slate-200">Todos</strong> — add (form), toggle /
-          edit / delete (JSON)
+          <strong className="text-slate-200">Todos</strong> — add (form), toggle
+          / edit / delete (JSON)
         </li>
       </ul>
 
@@ -79,7 +79,8 @@ export default function HomePage() {
         type="button"
         className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-cyan-500"
         onclick={async () => {
-          echo.value = await getSandboxServerEcho()
+          const [err, data] = await getSandboxServerEcho()
+          echo.value = err ? err.message : data
         }}
       >
         Call JSON action (GET echo)

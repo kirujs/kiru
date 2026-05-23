@@ -32,7 +32,7 @@ describe("createFormController on csr bundle", () => {
       const prevFormData = globalThis.FormData
       globalThis.FormData = window.FormData as typeof FormData
 
-      const ref = action.post({ type: "form" }, async () => ({}))
+      const ref = action({ type: "form", handler: async () => ({}) })
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
       document.body.appendChild(form)

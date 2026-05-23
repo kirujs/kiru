@@ -1,6 +1,6 @@
 import { action, type Schema } from "kiru/remote"
 
-export const getServerMessage = action.get(async ({ context }) => {
+export const getServerMessage = action(async ({ context }) => {
   return `hello from server (${context.user?.name ?? "unknown"})`
 })
 
@@ -13,7 +13,7 @@ const todos: TodoItem[] = [
   { id: "1", text: "buy coffee" },
   { id: "2", text: "write tests" },
 ]
-export const getStreamingTodos = action.get(async () => {
+export const getStreamingTodos = action(async () => {
   await new Promise((r) => setTimeout(r, 4000))
   return todos
 })
@@ -28,12 +28,12 @@ export interface StreamingReview {
   text: string
 }
 
-export const getPost = action.get(async (): Promise<StreamingProduct> => {
+export const getPost = action(async (): Promise<StreamingProduct> => {
   await new Promise((r) => setTimeout(r, 1000))
   return { id: "p1", name: "Streaming Product" }
 })
 
-export const getStreamingProduct = action.get(async (): Promise<StreamingProduct> => {
+export const getStreamingProduct = action(async (): Promise<StreamingProduct> => {
   console.log("action: get streaming product")
   await new Promise((r) => setTimeout(r, 1000))
   return { id: "p1", name: "Streaming Product" }
@@ -48,7 +48,7 @@ const streamingReviewsInputSchema: Schema<{ productId: string }> = {
   },
 }
 
-export const getStreamingReviews = action.post({
+export const getStreamingReviews = action({
   validation: { body: streamingReviewsInputSchema },
   handler: async ({ body }): Promise<StreamingReview[]> => {
     console.log("action: get streaming reviews")

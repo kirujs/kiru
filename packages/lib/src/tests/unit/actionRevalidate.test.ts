@@ -20,7 +20,7 @@ describe("action revalidate meta", () => {
     })
     setGlobalPrerenderCache(store)
 
-    const bump = action.post({
+    const bump = action({
       revalidate: { paths: ["/a"], tags: ["blog"] },
       handler: async () => ({ ok: true }),
     })

@@ -74,7 +74,26 @@ Streaming primitives (`renderToReadableStream`, `hydrate`) — advanced.
 ### `kiru/remote`
 
 ```typescript
-import { /* action helpers */ } from "kiru/remote"
+import {
+  action,
+  redirect, // JSON RPC handlers only
+  createFormController,
+  type RemoteAction,
+  type RemoteFormActionHandlerArgs,
+} from "kiru/remote"
+
+// JSON RPC
+export const ping = action(async ({ context }) => ({ ok: true }))
+export const save = action({
+  validation: { body: saveSchema },
+  handler: async ({ body }) => persist(body),
+})
+
+// Form action — redirect on handler args, not imported
+export const login = action({
+  type: "form",
+  handler: async ({ formData, redirect }) => redirect(303, "/app"),
+})
 ```
 
 Browser field may point to `remote/browser.js` for client stubs.

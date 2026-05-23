@@ -24,8 +24,16 @@ See [17-package-exports-and-import-guide.md](./17-package-exports-and-import-gui
 
 | Before | After |
 |--------|--------|
-| Ad-hoc failure envelopes | **`ActionFailure`** + `isActionFailure` from `kiru/remote` |
-| `actionFail` / `__kiruFail` | Still accepted on the wire for migration; prefer `fail()` / `ActionFailure` in new code |
+| `RemoteResult`, `fail()`, `RemoteTuple`, framework envelopes | **Passthrough JSON** — handler return value is the wire body (except `redirect(...)`) |
+| `dispatch` / callables never throw | **`dispatch` throws `ActionDispatchError` on non-2xx**; callables return `Promise<Output>` |
+| `actionResult()`, `setContext` / `setCookie` helpers | Mutate **`context`**, **`cookies`**, **`headers`** on handler args |
+| `exposeErrors` JSON error bodies | Thrown / framework errors → **HTTP status only**, empty body |
+| `createFormController` `fieldErrors` / `message` | **`result`** + **`error`** (transport only); read validation from your return shape |
+| `action.get` / `action.post` / `action.put` / … | Single **`action()`** — RPC model, not HTTP verbs |
+| JSON RPC via GET / verb-matched methods | **Always `POST`** + JSON body (`null` when empty); query via URL search params |
+| `action.post({ type: "form" }, handler)` | **`action({ type: "form", handler })`** — one config object |
+| Form `schema:` option | **`validation: { body: schema }`** |
+| Import `redirect` in form handlers | **`redirect` on form handler args** only; JSON handlers still `import { redirect }` |
 
 Patterns now supported and covered in e2e:
 

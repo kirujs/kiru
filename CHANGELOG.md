@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Router bootstrap entry points: `kiru/router/csr`, `kiru/router/ssr`, `kiru/router/ssg` with `createRouterApp` per rendering mode.
 - File-based routes (`@kirujs/file-routes`, `router.fileRoutes` in vite-plugin): layouts, errors, not-found, route groups, `extendRoutes`.
 - Configurable FBR special filenames: `layoutFiles`, `errorFiles`, `notFoundFiles` (in addition to `pageFiles`).
-- Remote actions: default-export action objects, linked `*.actions.ts`, `ActionFailure`, `actionResponse` cookies, `x-kiru-invalidate`.
+- Remote actions: default-export action objects, linked `*.actions.ts`, passthrough handler JSON, handler `context` / `cookies` / `headers` scope, `x-kiru-invalidate`.
 - Hybrid ISR / PPR on Node and Bun (`defineISR`, cache tags, on-demand revalidation).
 - Route middleware with redirect, abort, and HTTP error results (SSR and CSR after P0-1 fix).
 - `@kirujs/runtime` deploy capabilities and `assertISRAllowed` for edge targets.
@@ -23,7 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Breaking:** Client apps must import `createRouterApp` from the bootstrap path matching the document (`csr` | `ssr` | `ssg`). See [docs/v2/BREAKING-CHANGES.md](./docs/v2/BREAKING-CHANGES.md).
-- **Breaking:** Prefer `ActionFailure` / `fail()` from `kiru/remote` over legacy `actionFail` / `__kiruFail` wire envelopes.
+- **Breaking:** Remote actions serialize handler return values as-is (no `{ ok, data }` envelope). Removed `RemoteResult`, `fail()`, `RemoteTuple`. Client `dispatch` throws `ActionDispatchError` on non-2xx; `createFormController` uses `result` + `error` signals.
+- **Breaking:** Single `action()` API — removed `action.get` / `action.post` / etc. JSON RPC is always **POST** with a JSON body. Form actions use `action({ type: "form", handler, validation? })`; form `redirect` is on handler args only.
 - CSR middleware `{ error: status }` renders the error outlet instead of redirecting to `/login`.
 - `packages/lib` test runner executes `*.test.tsx` (router, hydration, dev warnings).
 - `prepareAppForUrl` split into `prepareAppLocale`, `prepareAppMatch`, `prepareAppHead`, `prepareAppTypes` (Sprint 5).

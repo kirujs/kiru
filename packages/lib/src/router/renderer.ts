@@ -117,7 +117,7 @@ export type RendererActionsOptions = {
    * (exact origin). Use `"*"` to disable the check.
    */
   allowedOrigins?: string[]
-  /** When true, internal `RemoteError` throws map to `__kiruFail` JSON (legacy migration). */
+  /** When true, internal `RemoteError` throws map to `{ ok: false, error }` JSON. */
   exposeErrors?: boolean
 }
 

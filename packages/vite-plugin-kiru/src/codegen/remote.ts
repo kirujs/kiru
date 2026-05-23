@@ -6,8 +6,6 @@ import { MagicString, TransformCTX, createAliasHandler } from "./shared.js"
 
 type AstNode = AST.AstNode
 
-type JsonActionMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
-
 const DEFAULT_EXPORT_BINDING = "__kiru_default"
 const DEFAULT_RPC_PREFIX = "default"
 
@@ -21,7 +19,6 @@ interface ActionMatch {
   /** Server registry value expression (`users.get`, `__kiru_default.get`). */
   ref: string
   kind: "action" | "form"
-  method?: JsonActionMethod
   /** Approach B: top-level `const` linked by `export default id`. */
   linkedDeclaration?: AstNode
   /** Approach B: binding name of the linked const (`users`). */
@@ -63,30 +60,19 @@ function clientStubForMatch(match: ActionMatch): string {
     }
     return `export const ${match.name} = ${formObj};`
   }
-  const method = match.method ?? "POST"
   if (match.replaceNode.type === "Property") {
     const key = propertyKeyName(match.replaceNode)
-    if (method === "GET") {
-      return `${key}: async (options) => __$dispatch()(${id}, "GET", options ?? {})`
-    }
-    return `${key}: async (options) => __$dispatch()(${id}, "${method}", options ?? {})`
+    return `${key}: async (options) => __$dispatch()(${id}, options ?? {})`
   }
-  if (method === "GET") {
-    return `export async function ${match.name}(options) { return __$dispatch()(${id}, "GET", options ?? {}); }`
-  }
-  return `export async function ${match.name}(options) { return __$dispatch()(${id}, "${method}", options ?? {}); }`
+  return `export async function ${match.name}(options) { return __$dispatch()(${id}, options ?? {}); }`
 }
 
 function clientDefaultFlatStub(match: ActionMatch): string {
   const id = `\`\${__$r__}:${match.name}\``
-  const method = match.method ?? "POST"
   if (match.kind === "form") {
     return `export default { __kiruFormAction: true, __kiruFormActionId: ${id} };`
   }
-  if (method === "GET") {
-    return `export default async (options) => __$dispatch()(${id}, "GET", options ?? {});`
-  }
-  return `export default async (options) => __$dispatch()(${id}, "${method}", options ?? {});`
+  return `export default async (options) => __$dispatch()(${id}, options ?? {});`
 }
 
 function propertyKeyName(prop: AstNode): string {
@@ -186,11 +172,7 @@ function clientStubExpression(match: ActionMatch): string {
   if (match.kind === "form") {
     return `{ __kiruFormAction: true, __kiruFormActionId: ${id} }`
   }
-  const method = match.method ?? "POST"
-  if (method === "GET") {
-    return `async (options) => __$dispatch()(${id}, "GET", options ?? {})`
-  }
-  return `async (options) => __$dispatch()(${id}, "${method}", options ?? {})`
+  return `async (options) => __$dispatch()(${id}, options ?? {})`
 }
 
 function rewriteDefaultExportForSsr(code: MagicString, matches: ActionMatch[]): void {
@@ -375,41 +357,16 @@ function collectActionsFromObject(
       continue
     }
 
-    const remoteMethod = getActionMemberMethod(value, actionAliases)
-    if (remoteMethod === "GET") {
+    if (isActionCall(value, actionAliases)) {
       matches.push({
         replaceNode: prop,
         exportNode,
         name: namePath,
         ref: refPath,
-        kind: "action",
-        method: "GET",
+        kind: isFormActionConfig(value) ? "form" : "action",
         linkedDeclaration: options?.linkedDeclaration,
         linkedBinding: options?.linkedBinding,
       })
-    } else if (remoteMethod) {
-      if (isPostFormConfig(value)) {
-        matches.push({
-          replaceNode: prop,
-          exportNode,
-          name: namePath,
-          ref: refPath,
-          kind: "form",
-          linkedDeclaration: options?.linkedDeclaration,
-          linkedBinding: options?.linkedBinding,
-        })
-      } else {
-        matches.push({
-          replaceNode: prop,
-          exportNode,
-          name: namePath,
-          ref: refPath,
-          kind: "action",
-          method: remoteMethod,
-          linkedDeclaration: options?.linkedDeclaration,
-          linkedBinding: options?.linkedBinding,
-        })
-      }
     }
   }
 }
@@ -459,35 +416,14 @@ function collectNamedExportMatches(
     return
   }
 
-  const remoteMethod = getActionMemberMethod(init, actionAliases)
-  if (remoteMethod === "GET") {
+  if (isActionCall(init, actionAliases)) {
     matches.push({
       replaceNode: node,
       exportNode: node,
       name: binding,
       ref: binding,
-      kind: "action",
-      method: "GET",
+      kind: isFormActionConfig(init) ? "form" : "action",
     })
-  } else if (remoteMethod) {
-    if (isPostFormConfig(init)) {
-      matches.push({
-        replaceNode: node,
-        exportNode: node,
-        name: binding,
-        ref: binding,
-        kind: "form",
-      })
-    } else {
-      matches.push({
-        replaceNode: node,
-        exportNode: node,
-        name: binding,
-        ref: binding,
-        kind: "action",
-        method: remoteMethod,
-      })
-    }
   }
 }
 
@@ -537,56 +473,27 @@ function collectDefaultExportMatches(
       return
     }
 
-    const remoteMethod = getActionMemberMethod(linked.init, actionAliases)
-    if (!remoteMethod) return
-    const base = {
+    if (!isActionCall(linked.init, actionAliases)) return
+    matches.push({
       replaceNode: linked.declarationNode,
       exportNode: node,
       name: DEFAULT_RPC_PREFIX,
       ref: linked.binding,
       linkedDeclaration: linked.declarationNode,
       linkedBinding: linked.binding,
-    }
-    if (remoteMethod === "GET") {
-      matches.push({ ...base, kind: "action", method: "GET" })
-    } else if (isPostFormConfig(linked.init)) {
-      matches.push({ ...base, kind: "form" })
-    } else {
-      matches.push({ ...base, kind: "action", method: remoteMethod })
-    }
+      kind: isFormActionConfig(linked.init) ? "form" : "action",
+    })
     return
   }
 
-  const remoteMethod = getActionMemberMethod(decl, actionAliases)
-  if (remoteMethod === "GET") {
-    matches.push({
-      replaceNode: node,
-      exportNode: node,
-      name: DEFAULT_RPC_PREFIX,
-      ref: DEFAULT_EXPORT_BINDING,
-      kind: "action",
-      method: "GET",
-    })
-  } else if (remoteMethod) {
-    if (isPostFormConfig(decl)) {
-      matches.push({
-        replaceNode: node,
-        exportNode: node,
-        name: DEFAULT_RPC_PREFIX,
-        ref: DEFAULT_EXPORT_BINDING,
-        kind: "form",
-      })
-    } else {
-      matches.push({
-        replaceNode: node,
-        exportNode: node,
-        name: DEFAULT_RPC_PREFIX,
-        ref: DEFAULT_EXPORT_BINDING,
-        kind: "action",
-        method: remoteMethod,
-      })
-    }
-  }
+  if (!isActionCall(decl, actionAliases)) return
+  matches.push({
+    replaceNode: node,
+    exportNode: node,
+    name: DEFAULT_RPC_PREFIX,
+    ref: DEFAULT_EXPORT_BINDING,
+    kind: isFormActionConfig(decl) ? "form" : "action",
+  })
 }
 
 function assertNoDefaultNameCollisions(matches: ActionMatch[]): void {
@@ -641,7 +548,17 @@ function findExportedActionCalls(bodyNodes: AstNode[]): ActionMatch[] {
   return matches
 }
 
-function isPostFormConfig(node: AstNode): boolean {
+function isActionCall(node: AstNode, actionAliases: Set<string>): boolean {
+  if (node.type !== "CallExpression") return false
+  const callee = node.callee
+  return (
+    callee?.type === "Identifier" &&
+    typeof callee.name === "string" &&
+    actionAliases.has(callee.name)
+  )
+}
+
+function isFormActionConfig(node: AstNode): boolean {
   if (node.type !== "CallExpression") return false
   const args = node.arguments ?? []
   const first = args[0]
@@ -668,30 +585,6 @@ function isPostFormConfig(node: AstNode): boolean {
     }
   }
   return false
-}
-
-function getActionMemberMethod(
-  node: AstNode,
-  actionAliases: Set<string>
-): JsonActionMethod | null {
-  if (node.type !== "CallExpression") return null
-  const callee = node.callee
-  if (callee?.type !== "MemberExpression") return null
-  if (
-    callee.object?.type !== "Identifier" ||
-    typeof callee.object.name !== "string" ||
-    !actionAliases.has(callee.object.name)
-  ) {
-    return null
-  }
-  if (callee.property?.type !== "Identifier") return null
-  const name = callee.property.name
-  if (name === "get") return "GET"
-  if (name === "post") return "POST"
-  if (name === "put") return "PUT"
-  if (name === "patch") return "PATCH"
-  if (name === "delete") return "DELETE"
-  return null
 }
 
 function generateRouteId(filePath: string, projectRoot: string): string {

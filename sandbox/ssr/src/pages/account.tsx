@@ -1,4 +1,4 @@
-import { Derive, onMount, resource } from "kiru"
+import { Derive, effect, resource } from "kiru"
 import { createFormController } from "kiru/remote"
 import { Link, useRequestContext } from "kiru/router"
 import { getProfile, updateProfile } from "./account.actions.js"
@@ -10,12 +10,10 @@ export default function AccountPage() {
   const form = createFormController(updateProfile)
   const logout = createFormController(logoutForm)
 
-  onMount(() => {
-    return form.result.subscribe((result) => {
-      if (!result?.ok) return
-      void profile.refetch()
-      form.result.value = null
-    })
+  effect([form.result], (res) => {
+    if (!res || res.ok !== true) return
+    profile.refetch()
+    form.result.value = null
   })
 
   return () => (
@@ -43,9 +41,11 @@ export default function AccountPage() {
       </div>
 
       <p className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-400">
-        Profile updates use a <strong className="text-slate-200">form action</strong> with{" "}
-        <code className="text-cyan-200">actionResult</code> so the server returns a fresh{" "}
-        <code className="text-cyan-200">x-kiru-token</code> without a full page redirect.
+        Profile updates use a{" "}
+        <strong className="text-slate-200">form action</strong> with mutating{" "}
+        <code className="text-cyan-200">context</code> so the server returns a
+        fresh <code className="text-cyan-200">x-kiru-token</code> without a full
+        page redirect.
       </p>
 
       <Derive
@@ -65,28 +65,20 @@ export default function AccountPage() {
                 className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
                 name="name"
                 type="text"
-                defaultValue={user.name}
+                value={user.name}
                 autocomplete="name"
               />
             </label>
-            <p className="text-xs text-rose-300">
-              {form.fieldErrors.value?.name ?? ""}
-            </p>
-
             <label className="block text-sm text-slate-300">
               Email
               <input
                 className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
                 name="email"
                 type="email"
-                defaultValue={user.email}
+                value={user.email}
                 autocomplete="email"
               />
             </label>
-            <p className="text-xs text-rose-300">
-              {form.fieldErrors.value?.email ?? ""}
-            </p>
-
             <button
               type="submit"
               className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-600 disabled:opacity-50"
@@ -94,7 +86,7 @@ export default function AccountPage() {
             >
               {form.isPending.value ? "Saving…" : "Save profile"}
             </button>
-            {form.result.value?.ok ? (
+            {form.result.value?.ok === true ? (
               <p className="text-xs text-emerald-300">Profile saved.</p>
             ) : null}
           </form>

@@ -124,12 +124,12 @@ describe("renderToReadableStream speculative Derive traversal", () => {
   })
 
   it("streams nested remote actions with SSR request context during speculation", async () => {
-    const getStreamingProduct = action.get(async () => {
+    const getStreamingProduct = action(async () => {
       await new Promise((r) => setTimeout(r, 50))
       return { id: "p1", name: "Streaming Product" }
     })
 
-    const getStreamingReviews = action.post(async ({
+    const getStreamingReviews = action(async ({
       body,
       context,
     }: import("../../remote/action.js").RemoteActionHandlerArgs<{

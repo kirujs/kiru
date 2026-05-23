@@ -1,12 +1,11 @@
-import { action, actionResult, fail, type Schema } from "kiru/remote"
-import type { SandboxUser } from "../server/auth.js"
+import { action, RemoteError, type Schema } from "kiru/remote"
 import { updateUserProfile } from "../server/auth.js"
 
 /** JSON GET — current profile from signed context. */
-export const getProfile = action.get(async ({ context }) => {
+export const getProfile = action(async ({ context }) => {
   const user = context.user
   if (!user) {
-    return fail({ message: "Sign in required", status: 401, code: "UNAUTHORIZED" })
+    throw new RemoteError("Sign in required", "UNAUTHORIZED", { status: 401 })
   }
   return user
 })
@@ -27,20 +26,25 @@ const profileSchema: Schema<{ name: string; email: string }> = {
 }
 
 /** Form POST — update display name and email; refresh signed context. */
-export const updateProfile = action.post(
-  { type: "form", schema: profileSchema },
-  async ({ body, context }) => {
+export const updateProfile = action({
+  type: "form",
+  validation: { body: profileSchema },
+  handler: async ({ body, context }) => {
     const user = context.user
     if (!user) {
-      return fail({ message: "Sign in required", status: 401, code: "UNAUTHORIZED" })
+      return {
+        ok: false as const,
+        message: "Sign in required",
+      }
     }
     const updated = updateUserProfile(user.id, body)
     if (!updated) {
-      throw new Error("Could not update profile")
+      return {
+        ok: false as const,
+        message: "Could not update profile",
+      }
     }
-    return actionResult(
-      { ok: true as const, user: updated },
-      { context: { user: updated } }
-    )
-  }
-)
+    context.user = updated
+    return { ok: true as const, user: updated }
+  },
+})

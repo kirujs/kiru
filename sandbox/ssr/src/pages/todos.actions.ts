@@ -1,4 +1,4 @@
-import { action, fail, type Schema } from "kiru/remote"
+import { action, RemoteError, type Schema } from "kiru/remote"
 import type { SandboxUser } from "../server/auth.js"
 
 export interface TodoItem {
@@ -21,12 +21,16 @@ function todosFor(userId: string): TodoItem[] {
   return list
 }
 
-/** JSON GET — list todos for the signed-in user. */
-export const listTodos = action.get(async ({ context }) => {
-  const user = context.user
+function requireUser(user: SandboxUser | null | undefined): SandboxUser {
   if (!user) {
-    return fail({ message: "Sign in required", status: 401, code: "UNAUTHORIZED" })
+    throw new RemoteError("Sign in required", "UNAUTHORIZED", { status: 401 })
   }
+  return user
+}
+
+/** JSON GET — list todos for the signed-in user. */
+export const listTodos = action(async ({ context }) => {
+  const user = requireUser(context.user)
   return todosFor(user.id)
 })
 
@@ -42,12 +46,16 @@ const addTodoSchema: Schema<{ text: string }> = {
 }
 
 /** Form POST — add a todo (progressive enhancement via createFormController). */
-export const addTodo = action.post(
-  { type: "form", schema: addTodoSchema },
-  async ({ body, context }) => {
+export const addTodo = action({
+  type: "form",
+  validation: { body: addTodoSchema },
+  handler: async ({ body, context }) => {
     const user = context.user
     if (!user) {
-      return fail({ message: "Sign in required", status: 401, code: "UNAUTHORIZED" })
+      return {
+        ok: false as const,
+        error: { message: "Sign in required", code: "UNAUTHORIZED" },
+      }
     }
     const todo: TodoItem = {
       id: crypto.randomUUID(),
@@ -56,8 +64,8 @@ export const addTodo = action.post(
     }
     todosFor(user.id).push(todo)
     return { todo }
-  }
-)
+  },
+})
 
 const toggleSchema: Schema<{ id: string }> = {
   parse: (input) => {
@@ -71,16 +79,13 @@ const toggleSchema: Schema<{ id: string }> = {
 }
 
 /** JSON POST — toggle completed (remote fetch, not a native form). */
-export const toggleTodo = action.post({
+export const toggleTodo = action({
   validation: { body: toggleSchema },
   handler: async ({ body, context }) => {
-    const user = context.user
-    if (!user) {
-      return fail({ message: "Sign in required", status: 401, code: "UNAUTHORIZED" })
-    }
+    const user = requireUser(context.user)
     const todo = todosFor(user.id).find((t) => t.id === body.id)
     if (!todo) {
-      return fail({ message: "Todo not found", status: 404, code: "NOT_FOUND" })
+      throw new RemoteError("Todo not found", "NOT_FOUND", { status: 404 })
     }
     todo.completed = !todo.completed
     return todo
@@ -92,17 +97,14 @@ const deleteSchema: Schema<{ id: string }> = {
 }
 
 /** JSON POST — delete a todo. */
-export const deleteTodo = action.post({
+export const deleteTodo = action({
   validation: { body: deleteSchema },
   handler: async ({ body, context }) => {
-    const user = context.user
-    if (!user) {
-      return fail({ message: "Sign in required", status: 401, code: "UNAUTHORIZED" })
-    }
+    const user = requireUser(context.user)
     const list = todosFor(user.id)
     const idx = list.findIndex((t) => t.id === body.id)
     if (idx < 0) {
-      return fail({ message: "Todo not found", status: 404, code: "NOT_FOUND" })
+      throw new RemoteError("Todo not found", "NOT_FOUND", { status: 404 })
     }
     list.splice(idx, 1)
     return { ok: true as const }
@@ -121,16 +123,13 @@ const updateSchema: Schema<{ id: string; text: string }> = {
 }
 
 /** JSON POST — update todo text. */
-export const updateTodo = action.post({
+export const updateTodo = action({
   validation: { body: updateSchema },
   handler: async ({ body, context }) => {
-    const user = context.user
-    if (!user) {
-      return fail({ message: "Sign in required", status: 401, code: "UNAUTHORIZED" })
-    }
+    const user = requireUser(context.user)
     const todo = todosFor(user.id).find((t) => t.id === body.id)
     if (!todo) {
-      return fail({ message: "Todo not found", status: 404, code: "NOT_FOUND" })
+      throw new RemoteError("Todo not found", "NOT_FOUND", { status: 404 })
     }
     todo.text = body.text
     return todo

@@ -27,8 +27,7 @@ import { tryClearClientNavigation } from "../router/outletNavigation.js"
 import { requestToken } from "../globals.js"
 import { applyActionResponseHeaders } from "../router/routerGlobal.js"
 import { isKiruRedirect, serializeActionCallQuery } from "../remote/action.js"
-import { isKiruActionFail } from "../remote/actionFail.js"
-import { ActionFailure } from "../remote/actionFailure.js"
+import { ActionDispatchError } from "../remote/errors.js"
 import { __DEV__, __KIRU_PURE_CLIENT__ } from "../env.js"
 import { REMOTE_ACTION_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
 import { ensureLoaderClient } from "../router/loaderClient.js"
@@ -42,11 +41,7 @@ type RemoteActionCallEnvelope = {
 }
 
 type ServerActionsClient = {
-  dispatch: (
-    id: string,
-    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
-    call?: RemoteActionCallEnvelope
-  ) => Promise<unknown>
+  dispatch: (id: string, call?: RemoteActionCallEnvelope) => Promise<unknown>
 }
 
 function ensureServerActionsClient() {
@@ -58,58 +53,55 @@ function ensureServerActionsClient() {
   if (g.__kiru_serverActions) return
 
   g.__kiru_serverActions = {
-    dispatch: async (id, method, call) => {
+    dispatch: async (id, call) => {
       if (__DEV__ && __KIRU_PURE_CLIENT__) {
-        return Promise.reject(new Error(REMOTE_ACTION_PURE_CLIENT_DEV_MSG))
+        throw new ActionDispatchError(500, REMOTE_ACTION_PURE_CLIENT_DEV_MSG)
       }
-      const envelope = call ?? {}
+      const callEnvelope = call ?? {}
       const headers: Record<string, string> = {
         "x-kiru-token": requestToken.current,
+        "Content-Type": "application/json",
       }
       const init: RequestInit = {
-        method,
-        signal: envelope.signal,
+        method: "POST",
+        signal: callEnvelope.signal,
         headers,
-      }
-      if (method !== "GET") {
-        headers["Content-Type"] = "application/json"
-        const body = envelope.body
-        init.body = JSON.stringify(body === undefined ? null : body)
+        body: JSON.stringify(
+          callEnvelope.body === undefined ? null : callEnvelope.body
+        ),
       }
       const queryString =
-        envelope.query && Object.keys(envelope.query).length > 0
-          ? serializeActionCallQuery(envelope.query)
+        callEnvelope.query && Object.keys(callEnvelope.query).length > 0
+          ? serializeActionCallQuery(callEnvelope.query)
           : ""
       const actionUrl = queryString
         ? `/?action=${encodeURIComponent(id)}&${queryString}`
         : `/?action=${encodeURIComponent(id)}`
       const r = await fetch(actionUrl, init)
       applyActionResponseHeaders(r.headers)
-      const text = await r.text()
-      let data: unknown = null
-      if (text) {
-        try {
-          data = JSON.parse(text) as unknown
-        } catch {
-          data = null
-        }
-      }
-      if (isKiruActionFail(data)) {
-        throw ActionFailure.fromWire(data)
-      }
+
       if (!r.ok) {
-        const legacy =
-          ActionFailure.fromLegacyEnvelope(data) ?? ActionFailure.fromWire(data)
-        if (legacy) throw legacy
-        throw new Error("Action failed")
+        throw new ActionDispatchError(r.status || 500, "Action failed")
       }
+
+      const text = await r.text()
+      if (!text) return undefined
+
+      let data: unknown
+      try {
+        data = JSON.parse(text) as unknown
+      } catch {
+        throw new ActionDispatchError(500, "Invalid action response")
+      }
+
       if (isKiruRedirect(data)) {
         window.location.assign(
           new URL((data as { location: string }).location, window.location.href)
             .href
         )
-        return data
+        return undefined
       }
+
       return data
     },
   }

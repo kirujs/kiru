@@ -31,7 +31,7 @@ describe("prepareRemoteFunctions — default export (approach A)", () => {
       `
 import { action } from "kiru/remote"
 export default {
-  get: action.get(async () => "ok"),
+  get: action(async () => "ok"),
 }
 `,
       false
@@ -47,7 +47,7 @@ export default {
       `
 import { action } from "kiru/remote"
 export default {
-  get: action.get(async () => "ok"),
+  get: action(async () => "ok"),
 }
 `,
       true
@@ -62,7 +62,7 @@ export default {
     const client = transformRemote(
       `
 import { action } from "kiru/remote"
-export default action.get(async () => "flat")
+export default action(async () => "flat")
 `,
       false
     )
@@ -72,11 +72,11 @@ export default action.get(async () => "flat")
     const server = transformRemote(
       `
 import { action } from "kiru/remote"
-export default action.get(async () => "flat")
+export default action(async () => "flat")
 `,
       true
     )
-    assert.match(server, /const __kiru_default = action\.get/)
+    assert.match(server, /const __kiru_default = action\(/)
     assert.match(server, /"default": __kiru_default/)
   })
 
@@ -84,8 +84,8 @@ export default action.get(async () => "flat")
     const out = transformRemote(
       `
 import { action } from "kiru/remote"
-export const foo = action.get(async () => "foo")
-export default { get: action.get(async () => "d") }
+export const foo = action(async () => "foo")
+export default { get: action(async () => "d") }
 `,
       true
     )
@@ -101,7 +101,7 @@ describe("prepareRemoteFunctions — default export (approach B)", () => {
       `
 import { action } from "kiru/remote"
 const users = {
-  get: action.get(async () => "u"),
+  get: action(async () => "u"),
 }
 export default users
 `,
@@ -118,7 +118,7 @@ export default users
       `
 import { action } from "kiru/remote"
 const users = {
-  get: action.get(async () => "u"),
+  get: action(async () => "u"),
 }
 export default users
 `,
@@ -135,10 +135,10 @@ export default users
       `
 import { action } from "kiru/remote"
 const users = {
-  get: action.get(async () => "u"),
+  get: action(async () => "u"),
 }
 export default users
-export const run = action.post(async () => users.get())
+export const run = action(async () => users.get())
 `,
       true
     )
@@ -151,7 +151,7 @@ export const run = action.post(async () => users.get())
       `
 import { action } from "kiru/remote"
 export const users = {
-  get: action.get(async () => "u"),
+  get: action(async () => "u"),
 }
 export default users
 `,

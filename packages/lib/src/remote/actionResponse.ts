@@ -1,18 +1,12 @@
 import type { CustomRequestContext } from "../router/types.js"
 import { isEdgeDeployTarget, type KiruDeployTarget } from "@kirujs/runtime"
 import {
-  isKiruActionResult,
   isKiruRedirect,
   type KiruActionResponseOptions,
   type KiruRedirect,
   type KiruSetCookie,
 } from "./action.js"
-import {
-  failWireBody,
-  isKiruActionFail,
-  resolveFailHttpStatus,
-  type KiruActionFail,
-} from "./actionFail.js"
+import type { CommittedResponseMeta } from "./actionResponseScope.js"
 import { makeKiruContextToken, makeKiruContextTokenAsync } from "./token.js"
 
 export const KIRU_TOKEN_RESPONSE_HEADER = "x-kiru-token" as const
@@ -50,24 +44,6 @@ export function appendSetCookies(
   }
 }
 
-export type NormalizedActionResult =
-  | {
-      kind: "redirect"
-      redirect: KiruRedirect
-      jsonBody: KiruRedirectJsonBody
-    }
-  | {
-      kind: "fail"
-      fail: KiruActionFail
-      jsonBody: ReturnType<typeof failWireBody>
-      httpStatus: number
-    }
-  | {
-      kind: "value"
-      value: unknown
-      meta?: KiruActionResponseOptions
-    }
-
 export type KiruRedirectJsonBody = {
   readonly __kiruRedirect: true
   readonly status: number
@@ -82,33 +58,52 @@ export function redirectJsonBody(redirect: KiruRedirect): KiruRedirectJsonBody {
   }
 }
 
-export function normalizeActionResult(result: unknown): NormalizedActionResult {
-  if (isKiruRedirect(result)) {
+export type NormalizedActionResult =
+  | {
+      kind: "redirect"
+      redirect: KiruRedirect
+      jsonBody: KiruRedirectJsonBody
+      meta: KiruActionResponseOptions
+    }
+  | {
+      kind: "json"
+      body: unknown
+      meta: KiruActionResponseOptions
+    }
+
+function metaFromCommitted(scope: CommittedResponseMeta): KiruActionResponseOptions {
+  const hasCookies = scope.cookies.length > 0
+  const hasContext = scope.context !== undefined
+  const hasHeaders = [...scope.responseHeaders.keys()].length > 0
+  if (!hasCookies && !hasContext && !hasHeaders) {
+    return {}
+  }
+  return {
+    cookies: hasCookies ? scope.cookies : undefined,
+    context: scope.context,
+  }
+}
+
+export function normalizeActionResult(
+  handlerResult: unknown,
+  committed: CommittedResponseMeta
+): NormalizedActionResult {
+  const meta = metaFromCommitted(committed)
+
+  if (isKiruRedirect(handlerResult)) {
     return {
       kind: "redirect",
-      redirect: result,
-      jsonBody: redirectJsonBody(result),
+      redirect: handlerResult,
+      jsonBody: redirectJsonBody(handlerResult),
+      meta,
     }
   }
-  if (isKiruActionFail(result)) {
-    return {
-      kind: "fail",
-      fail: result,
-      jsonBody: failWireBody(result),
-      httpStatus: resolveFailHttpStatus(result),
-    }
+
+  return {
+    kind: "json",
+    body: handlerResult,
+    meta,
   }
-  if (isKiruActionResult(result)) {
-    return {
-      kind: "value",
-      value: result.value,
-      meta: {
-        cookies: result.cookies,
-        context: result.context,
-      },
-    }
-  }
-  return { kind: "value", value: result }
 }
 
 async function signContextToken(
@@ -129,25 +124,19 @@ export async function appendActionResponseMetadata(
   headers: Headers,
   meta: KiruActionResponseOptions | undefined,
   secret: string,
-  deployTarget?: KiruDeployTarget
+  deployTarget?: KiruDeployTarget,
+  extraResponseHeaders?: Headers
 ): Promise<void> {
+  if (extraResponseHeaders) {
+    extraResponseHeaders.forEach((value, name) => {
+      headers.append(name, value)
+    })
+  }
   if (!meta) return
   appendSetCookies(headers, meta.cookies)
   if (meta.context !== undefined) {
     const token = await signContextToken(meta.context, secret, deployTarget)
     headers.set(KIRU_TOKEN_RESPONSE_HEADER, token)
-  }
-}
-
-export async function metadataFromRedirect(
-  redirect: KiruRedirect
-): Promise<KiruActionResponseOptions | undefined> {
-  if (!redirect.cookies?.length && redirect.context === undefined) {
-    return undefined
-  }
-  return {
-    cookies: redirect.cookies,
-    context: redirect.context,
   }
 }
 
@@ -160,33 +149,35 @@ export type BuildActionHttpResponseParams = {
   isEnhanced: boolean
   referer?: string
   extraHeaders?: Record<string, string>
+  committed?: CommittedResponseMeta
 }
 
 export async function buildActionHttpResponse(
   params: BuildActionHttpResponseParams
 ): Promise<Response> {
-  const { normalized, secret, deployTarget, isEnhanced, referer, extraHeaders } =
-    params
+  const {
+    normalized,
+    secret,
+    deployTarget,
+    isEnhanced,
+    referer,
+    extraHeaders,
+    committed,
+  } = params
 
-  if (normalized.kind === "fail") {
-    const headers = new Headers({ "content-type": jsonContentType })
-    if (extraHeaders) {
-      for (const [k, v] of Object.entries(extraHeaders)) {
-        headers.set(k, v)
-      }
-    }
-    return new Response(JSON.stringify(normalized.jsonBody), {
-      status: normalized.httpStatus,
-      headers,
-    })
-  }
+  const responseHeaders = committed?.responseHeaders
 
   if (normalized.kind === "redirect") {
-    const { redirect, jsonBody } = normalized
-    const meta = await metadataFromRedirect(redirect)
+    const { redirect, jsonBody, meta } = normalized
     if (isEnhanced) {
       const headers = new Headers({ "content-type": jsonContentType })
-      await appendActionResponseMetadata(headers, meta, secret, deployTarget)
+      await appendActionResponseMetadata(
+        headers,
+        meta,
+        secret,
+        deployTarget,
+        responseHeaders
+      )
       if (extraHeaders) {
         for (const [k, v] of Object.entries(extraHeaders)) {
           headers.set(k, v)
@@ -195,7 +186,13 @@ export async function buildActionHttpResponse(
       return new Response(JSON.stringify(jsonBody), { status: 200, headers })
     }
     const headers = new Headers({ Location: redirect.location })
-    await appendActionResponseMetadata(headers, meta, secret, deployTarget)
+    await appendActionResponseMetadata(
+      headers,
+      meta,
+      secret,
+      deployTarget,
+      responseHeaders
+    )
     if (extraHeaders) {
       for (const [k, v] of Object.entries(extraHeaders)) {
         headers.set(k, v)
@@ -204,23 +201,32 @@ export async function buildActionHttpResponse(
     return new Response(null, { status: redirect.status, headers })
   }
 
-  const meta = normalized.meta
+  const { body, meta } = normalized
   if (isEnhanced) {
     const headers = new Headers({ "content-type": jsonContentType })
-    await appendActionResponseMetadata(headers, meta, secret, deployTarget)
+    await appendActionResponseMetadata(
+      headers,
+      meta,
+      secret,
+      deployTarget,
+      responseHeaders
+    )
     if (extraHeaders) {
       for (const [k, v] of Object.entries(extraHeaders)) {
         headers.set(k, v)
       }
     }
-    return new Response(JSON.stringify(normalized.value), {
-      status: 200,
-      headers,
-    })
+    return new Response(JSON.stringify(body), { status: 200, headers })
   }
 
   const headers = new Headers({ Location: referer ?? "/" })
-  await appendActionResponseMetadata(headers, meta, secret, deployTarget)
+  await appendActionResponseMetadata(
+    headers,
+    meta,
+    secret,
+    deployTarget,
+    responseHeaders
+  )
   if (extraHeaders) {
     for (const [k, v] of Object.entries(extraHeaders)) {
       headers.set(k, v)

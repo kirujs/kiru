@@ -27,7 +27,7 @@ Kiru is **not** aiming for React Server Components or a second server rendering 
 | Preparation | `src/router/prepareAppForUrl.ts` | Match URL → middleware → loaders → JSX app |
 | Client prep | `src/router/clientRoutePrep.ts`, `prepareRoute.ts` | Shared loader/head prep for CSR & SSR client |
 | Hydration | `src/ssr/routerHydrate.ts` | `bootstrapSsrClient`, `bootstrapSsgClient` |
-| Remote | `src/remote/` | Action registry, dispatch, `ActionFailure`, cookies |
+| Remote | `src/remote/` | Unified `action()`, RPC dispatch (POST + JSON), forms, cookies |
 | Env guards | `src/env.ts` | `__KIRU_PURE_CLIENT__`, `__KIRU_SSR__` |
 
 **Exports** (see [17-package-exports-and-import-guide.md](./17-package-exports-and-import-guide.md)):
@@ -123,7 +123,8 @@ sequenceDiagram
 
 | Query | Method | Handler |
 |-------|--------|---------|
-| `?action=<id>` | GET/POST/… | Remote action |
+| `?action=<id>` | POST (+ JSON body) | JSON remote action (RPC) |
+| `?action=<id>` | POST (form) | Form action (multipart / urlencoded) |
 | `?loader=<routeId>:load` | POST | Server loader RPC |
 
 Both use signed context tokens (`k-request-token`) and optional origin allowlists.

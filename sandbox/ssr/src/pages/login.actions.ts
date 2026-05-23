@@ -1,4 +1,4 @@
-import { action, fail, redirect } from "kiru/remote"
+import { action, getActionExecutionContext } from "kiru/remote"
 import {
   clearSessionCookieSpec,
   createSession,
@@ -9,45 +9,51 @@ import {
 } from "../server/auth.js"
 
 /** Form action: validate credentials, set session cookie, redirect to todos. */
-export const login = action.post({ type: "form" }, async ({ formData }) => {
-  const username = String(formData.get("username") ?? "").trim()
-  const password = String(formData.get("password") ?? "")
+export const login = action({
+  type: "form",
+  handler: async ({ formData, context, cookies, redirect }) => {
+    const username = String(formData.get("username") ?? "").trim()
+    const password = String(formData.get("password") ?? "")
 
-  if (!username || !password) {
-    return fail({
-      message: "Invalid login",
-      status: 422,
-      fields: {
-        username: !username ? "Required" : undefined,
-        password: !password ? "Required" : undefined,
-      },
-    })
-  }
+    if (!username || !password) {
+      return {
+        ok: false,
+        errors: {
+          username: !username ? "Required" : undefined,
+          password: !password ? "Required" : undefined,
+        },
+      }
+    }
 
-  const user = validateCredentials(username, password)
-  if (!user) {
-    return fail({
-      message: "Invalid credentials",
-      status: 401,
-      code: "AUTH_FAILED",
-      fields: { username: "Unknown user or wrong password" },
-    })
-  }
+    const user = validateCredentials(username, password)
+    if (!user) {
+      return {
+        ok: false,
+        errors: {
+          username: "Unknown user or wrong password",
+        },
+      }
+    }
 
-  const sessionId = createSession(user.id)
-  return redirect(303, "/todos", {
-    cookies: [sessionCookieSpec(sessionId)],
-    context: { user },
-  })
+    const sessionId = createSession(user.id)
+    const spec = sessionCookieSpec(sessionId)
+    cookies.set(spec.name, spec.value, spec)
+    context.user = user
+    return redirect(303, "/todos")
+  },
 })
 
 /** Form action: revoke session, clear cookie, redirect to login. */
-export const logoutForm = action.post({ type: "form" }, async ({ headers }) => {
-  const cookieHeader = headers.cookie ?? headers.Cookie
-  const sessionId = getSessionIdFromCookieHeader(cookieHeader)
-  if (sessionId) revokeSession(sessionId)
-  return redirect(303, "/login", {
-    cookies: [clearSessionCookieSpec()],
-    context: { user: null },
-  })
+export const logoutForm = action({
+  type: "form",
+  handler: async ({ context, cookies, redirect }) => {
+    const execution = getActionExecutionContext()
+    const cookieHeader = execution?.request.headers.get("cookie") ?? ""
+    const sessionId = getSessionIdFromCookieHeader(cookieHeader)
+    if (sessionId) revokeSession(sessionId)
+    const clear = clearSessionCookieSpec()
+    cookies.set(clear.name, clear.value, clear)
+    context.user = null
+    return redirect(303, "/login")
+  },
 })

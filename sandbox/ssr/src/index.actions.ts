@@ -12,12 +12,12 @@ const mySchema: Schema<{ name: string }> = {
   },
 }
 
-export const getSandboxServerEcho = action.get(async ({ context }) => {
+export const getSandboxServerEcho = action(async ({ context }) => {
   const name = context.user?.name ?? "guest"
   return `Remote OK: ${name} ${test}`
 })
 
-export const getServerEcho = action.post({
+export const getServerEcho = action({
   validation: { body: mySchema },
   handler: async ({ body }) => {
     return `Echo ${body.name}`
@@ -29,11 +29,11 @@ const demoUsers = new Map<string, { id: string; name: string }>([
 ])
 
 export const users = {
-  get: action.get(async ({ context }) => {
+  get: action(async ({ context }) => {
     const id = (context as { userId?: string }).userId ?? "1"
     return demoUsers.get(id) ?? null
   }),
-  rename: action.patch(
+  rename: action(
     async ({ body }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
       const u = demoUsers.get(body.id)
       if (!u) throw new Error("User not found")
@@ -43,10 +43,20 @@ export const users = {
   ),
 }
 
-export const renameUserViaNamespace = action.post(
+export const renameUserViaNamespace = action(
   async ({ body }: RemoteActionHandlerArgs<{ id: string; name: string }>) => {
     const before = await users.get()
-    const updated = await users.rename({ body })
-    return { before, updated }
+    try {
+      const updated = await users.rename({ body })
+      return { before, updated }
+    } catch (e) {
+      return {
+        before,
+        updated: {
+          ok: false as const,
+          error: e instanceof Error ? e.message : "Rename failed",
+        },
+      }
+    }
   }
 )

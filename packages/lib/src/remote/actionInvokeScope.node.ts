@@ -3,10 +3,11 @@ import type { RemoteActionHandlerArgs } from "./action.js"
 import {
   createActionExecution,
   createActionFrame,
-  headersToValidationInput,
   type ActionExecution,
   type CreateActionExecutionOptions,
 } from "./actionExecution.js"
+import { ActionCookies } from "./actionCookies.js"
+import { getActionResponseScope } from "./actionResponseScope.js"
 
 const actionExecutionAls = new AsyncLocalStorage<ActionExecution>()
 
@@ -17,14 +18,17 @@ export function getActionExecutionContext(): ActionExecution | undefined {
 export function toRemoteActionHandlerArgs<Body, Query = void>(
   execution: ActionExecution,
   body: Body,
-  query: Query,
-  headers?: Record<string, string>
+  query: Query
 ): RemoteActionHandlerArgs<Body, Query> {
+  const scope = getActionResponseScope(execution)
+  if (scope) {
+    return scope.toHandlerArgs(body, query)
+  }
   return {
     body,
     query,
-    headers:
-      headers ?? headersToValidationInput(execution.request.headers),
+    headers: new Headers(),
+    cookies: new ActionCookies(),
     context: execution.request.context,
     signal: execution.request.signal,
   }
@@ -37,6 +41,10 @@ export function getActiveActionContext(): RemoteActionHandlerArgs<
 > | undefined {
   const execution = getActionExecutionContext()
   if (!execution) return undefined
+  const scope = getActionResponseScope(execution)
+  if (scope) {
+    return scope.toHandlerArgs(undefined as void, undefined as void)
+  }
   return toRemoteActionHandlerArgs(
     execution,
     undefined as void,

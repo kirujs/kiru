@@ -65,7 +65,7 @@ flowchart TB
 ### Data & auth patterns
 
 5. **[06-loaders-and-data.md](./06-loaders-and-data.md)** — `server` / `static` / `universal` / `client`, RPC, cache, validation.
-6. **[07-remote-actions.md](./07-remote-actions.md)** — Actions, forms, cookies, tokens, `ActionFailure`.
+6. **[07-remote-actions.md](./07-remote-actions.md)** — Unified `action()`, RPC (POST + JSON), forms, cookies, tokens.
 7. **[05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md)** — Route middleware vs component guards; **CSR/SSR parity caveats**.
 
 ### Rendering & deploy

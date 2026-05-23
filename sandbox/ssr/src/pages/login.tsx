@@ -32,7 +32,9 @@ export default function LoginPage() {
           />
         </label>
         <p className="text-xs text-rose-300">
-          {form.fieldErrors.value?.username ?? ""}
+          {form.result.value?.ok === false
+            ? (form.result.value.errors?.username ?? "")
+            : ""}
         </p>
 
         <label className="block text-sm text-slate-300">
@@ -45,12 +47,14 @@ export default function LoginPage() {
           />
         </label>
         <p className="text-xs text-rose-300">
-          {form.fieldErrors.value?.password ?? ""}
+          {form.result.value?.ok === false
+            ? (form.result.value.errors?.password ?? "")
+            : ""}
         </p>
 
-        {form.message.value ? (
+        {form.error.value ? (
           <p className="text-sm text-rose-300" role="alert">
-            {form.message.value}
+            {form.error.value}
           </p>
         ) : null}
 

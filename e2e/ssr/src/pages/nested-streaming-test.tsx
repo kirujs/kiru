@@ -6,9 +6,9 @@ import {
 } from "./index.actions"
 
 export default function NestedStreamingTestPage() {
-  const product = resource(({ signal }) => {
+  const product = resource(async ({ signal }) => {
     console.log("get product")
-    return getStreamingProduct({ signal })
+    return await getStreamingProduct({ signal })
   })
 
   return () => (
@@ -25,9 +25,12 @@ export default function NestedStreamingTestPage() {
 }
 
 function ProductCard({ product }: { product: StreamingProduct }) {
-  const reviews = resource(({ signal }) => {
+  const reviews = resource(async ({ signal }) => {
     console.log("get reviews")
-    return getStreamingReviews({ body: { productId: product.id }, signal })
+    return await getStreamingReviews({
+      body: { productId: product.id },
+      signal,
+    })
   })
 
   return () => (

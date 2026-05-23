@@ -221,7 +221,7 @@ describe("SSR server", () => {
     // Streaming SSR + async entry: `load` fires before hydrate attaches event handlers.
     cy.window().its("__kiruHydratedAt").should("be.a", "number")
     // Wait for the server round-trip explicitly — avoids races under load / parallel CI.
-    cy.intercept("GET", /\?action=/).as("remoteAction")
+    cy.intercept("POST", /\?action=/).as("remoteAction")
     cy.get('[data-testid="ssr-remote-button"]').click()
     cy.wait("@remoteAction").its("response.statusCode").should("eq", 200)
     cy.get('[data-testid="ssr-remote-result"]').should(
@@ -685,13 +685,13 @@ describe("SSR server", () => {
       cy.get('[data-testid="ssr-loader"]').should("exist")
     })
 
-    it("surfaces fieldErrors from validation fail()", () => {
+    it("surfaces validation errors from action return value", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/forms/demo`)
       cy.window().its("__kiruHydratedAt").should("be.a", "number")
       cy.intercept("POST", /\?action=/).as("formValidation")
       cy.get('[data-testid="forms-validation-submit"]').click()
-      cy.wait("@formValidation").its("response.statusCode").should("eq", 422)
+      cy.wait("@formValidation").its("response.statusCode").should("eq", 200)
       cy.get('[data-testid="forms-validation-error"]').should(
         "have.text",
         "Required"
@@ -704,7 +704,7 @@ describe("SSR server", () => {
       cy.window().its("__kiruHydratedAt").should("be.a", "number")
       cy.intercept("POST", /\?action=/).as("formValidation")
       cy.get('[data-testid="forms-validation-submit"]').click()
-      cy.wait("@formValidation").its("response.statusCode").should("eq", 422)
+      cy.wait("@formValidation").its("response.statusCode").should("eq", 200)
       cy.get('[data-testid="forms-validation-error"]').should(
         "have.text",
         "Required"
@@ -770,12 +770,12 @@ describe("SSR server", () => {
       cy.window().its("__kiruHydratedAt").should("be.a", "number")
     }
 
-    it("invokes a namespaced GET action with a dotted RPC id", () => {
+    it("invokes a namespaced RPC action with a dotted RPC id", () => {
       visitActionsDemo()
-      cy.intercept("GET", /\?action=[^&]*api\.getEcho/).as("namespaceGet")
+      cy.intercept("POST", /\?action=[^&]*api\.getEcho/).as("namespaceGet")
       cy.get('[data-testid="namespace-get"]').click()
       cy.wait("@namespaceGet").then(({ request, response }) => {
-        expect(request.method).to.eq("GET")
+        expect(request.method).to.eq("POST")
         expect(response?.statusCode).to.eq(200)
         const actionId = new URL(request.url).searchParams.get("action")
         expect(actionId).to.include("api.getEcho")
@@ -803,14 +803,14 @@ describe("SSR server", () => {
       )
     })
 
-    it("invokes a namespaced DELETE action", () => {
+    it("invokes a namespaced RPC action with a JSON body", () => {
       visitActionsDemo()
-      cy.intercept("DELETE", /\?action=[^&]*api\.removeLabel/).as(
+      cy.intercept("POST", /\?action=[^&]*api\.removeLabel/).as(
         "namespaceDelete"
       )
       cy.get('[data-testid="namespace-delete"]').click()
       cy.wait("@namespaceDelete").then(({ request, response }) => {
-        expect(request.method).to.eq("DELETE")
+        expect(request.method).to.eq("POST")
         expect(response?.statusCode).to.eq(200)
       })
       cy.get('[data-testid="namespace-delete-result"]').should(
@@ -828,12 +828,12 @@ describe("SSR server", () => {
       cy.window().its("__kiruHydratedAt").should("be.a", "number")
     }
 
-    it("invokes literal default export GET with default.getEcho RPC id", () => {
+    it("invokes literal default export RPC with default.getEcho RPC id", () => {
       visitDefaultExportDemo()
-      cy.intercept("GET", /\?action=[^&]*default\.getEcho/).as("literalDefaultGet")
+      cy.intercept("POST", /\?action=[^&]*default\.getEcho/).as("literalDefaultGet")
       cy.get('[data-testid="literal-default-get"]').click()
       cy.wait("@literalDefaultGet").then(({ request, response }) => {
-        expect(request.method).to.eq("GET")
+        expect(request.method).to.eq("POST")
         expect(response?.statusCode).to.eq(200)
         const actionId = new URL(request.url).searchParams.get("action")
         expect(actionId).to.include("default.getEcho")
@@ -844,12 +844,12 @@ describe("SSR server", () => {
       )
     })
 
-    it("invokes linked default export GET with default.getEcho RPC id", () => {
+    it("invokes linked default export RPC with default.getEcho RPC id", () => {
       visitDefaultExportDemo()
-      cy.intercept("GET", /\?action=[^&]*default\.getEcho/).as("linkedDefaultGet")
+      cy.intercept("POST", /\?action=[^&]*default\.getEcho/).as("linkedDefaultGet")
       cy.get('[data-testid="linked-default-get"]').click()
       cy.wait("@linkedDefaultGet").then(({ request, response }) => {
-        expect(request.method).to.eq("GET")
+        expect(request.method).to.eq("POST")
         expect(response?.statusCode).to.eq(200)
         const actionId = new URL(request.url).searchParams.get("action")
         expect(actionId).to.include("default.getEcho")

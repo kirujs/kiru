@@ -57,7 +57,7 @@ Four explicit kinds — `server`, `static`, `universal`, `client` — with compi
 
 ### 4. Remote actions + form controller
 
-Codegen registry, `ActionFailure`, cookie specs on responses, `x-kiru-invalidate` for cache busting, and origin checks are **production-oriented** primitives (see [07-remote-actions.md](./07-remote-actions.md)).
+Codegen registry, passthrough JSON results, `action()` RPC + form actions, cookie specs on responses, `x-kiru-invalidate` for cache busting, and origin checks are **production-oriented** primitives (see [07-remote-actions.md](./07-remote-actions.md)).
 
 ### 5. Signal-first rendering
 

@@ -29,3 +29,18 @@ export class RemoteError extends Error {
 export function isRemoteError(e: unknown): e is RemoteError {
   return e instanceof RemoteError
 }
+
+/** Thrown by client action dispatch on non-2xx HTTP responses (no response body). */
+export class ActionDispatchError extends Error {
+  readonly status: number
+
+  constructor(status: number, message = "Action request failed") {
+    super(message)
+    this.name = "ActionDispatchError"
+    this.status = status
+  }
+}
+
+export function isActionDispatchError(e: unknown): e is ActionDispatchError {
+  return e instanceof ActionDispatchError
+}

@@ -1,4 +1,5 @@
 import type { RemoteActionHandlerArgs } from "./action.js"
+import { ActionCookies } from "./actionCookies.js"
 import type {
   ActionExecution,
   CreateActionExecutionOptions,
@@ -18,13 +19,13 @@ export function getActiveActionContext(): RemoteActionHandlerArgs<
 export function toRemoteActionHandlerArgs<Body, Query = void>(
   execution: ActionExecution,
   body: Body,
-  query: Query,
-  headers?: Record<string, string>
+  query: Query
 ): RemoteActionHandlerArgs<Body, Query> {
   return {
     body,
     query,
-    headers: headers ?? {},
+    headers: new Headers(),
+    cookies: new ActionCookies(),
     context: execution.request.context,
     signal: execution.request.signal,
   }

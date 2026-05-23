@@ -46,9 +46,9 @@ describe("SSR request context scope", () => {
     assert.deepEqual(__getSsrRequestContext(), {})
   })
 
-  it("action.get sees request context during synchronous SSR render", async () => {
+  it("action sees request context during synchronous SSR render", async () => {
     const seen: Array<Record<string, unknown>> = []
-    const probe = action.get(async ({ context }) => {
+    const probe = action(async ({ context }) => {
       seen.push(context as Record<string, unknown>)
       return "ok"
     })
@@ -80,7 +80,7 @@ describe("SSR request context scope", () => {
     const seen = new Map<string, string>()
 
     const makeProbe = (label: string) =>
-      action.get(({ context }) => {
+      action(({ context }) => {
         seen.set(label, String((context as { id?: string }).id ?? ""))
         return label
       })

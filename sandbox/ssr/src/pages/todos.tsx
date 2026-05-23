@@ -1,6 +1,7 @@
 import { Derive, onMount, resource, signal } from "kiru"
 import { createFormController } from "kiru/remote"
 import { Link, useRequestContext } from "kiru/router"
+import { ActionDispatchError } from "kiru/remote"
 import {
   addTodo,
   deleteTodo,
@@ -13,7 +14,14 @@ import { logoutForm } from "./login.actions.js"
 
 export default function TodosPage() {
   const ctx = useRequestContext()
-  const todos = resource(() => listTodos())
+  const todos = resource(async () => {
+    try {
+      return await listTodos()
+    } catch (e) {
+      if (e instanceof ActionDispatchError) throw new Error(e.message)
+      throw e
+    }
+  })
   const addForm = createFormController(addTodo)
   const logout = createFormController(logoutForm)
   const editingId = signal<string | null>(null)
@@ -21,20 +29,28 @@ export default function TodosPage() {
 
   onMount(() => {
     return addForm.result.subscribe((result) => {
-      if (!result?.todo) return
+      if (!result || !("todo" in result) || !result.todo) return
       todos.refetch()
       addForm.result.value = null
     })
   })
 
   async function onToggle(id: string) {
-    await toggleTodo({ body: { id } })
-    todos.refetch()
+    try {
+      await toggleTodo({ body: { id } })
+      todos.refetch()
+    } catch {
+      /* ignore */
+    }
   }
 
   async function onDelete(id: string) {
-    await deleteTodo({ body: { id } })
-    todos.refetch()
+    try {
+      await deleteTodo({ body: { id } })
+      todos.refetch()
+    } catch {
+      /* ignore */
+    }
   }
 
   function startEdit(todo: TodoItem) {
@@ -50,7 +66,11 @@ export default function TodosPage() {
   async function saveEdit(id: string) {
     const text = editText.value.trim()
     if (!text) return
-    await updateTodo({ body: { id, text } })
+    try {
+      await updateTodo({ body: { id, text } })
+    } catch {
+      return
+    }
     editingId.value = null
     editText.value = ""
     todos.refetch()
@@ -187,7 +207,11 @@ export default function TodosPage() {
           {addForm.isPending.value ? "Adding…" : "Add todo"}
         </button>
       </form>
-      <p className="text-xs text-rose-300">{addForm.fieldErrors.value?.text ?? ""}</p>
+      <p className="text-xs text-rose-300">
+        {addForm.result.value?.ok === false
+          ? (addForm.result.value.errors?.text ?? addForm.result.value.error?.message ?? "")
+          : ""}
+      </p>
 
       <p className="text-sm">
         <Link to="/" className="text-cyan-300 hover:underline">
