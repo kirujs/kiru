@@ -279,19 +279,21 @@ const ssrMatrixTest = task({
 })
 
 // `pnpm test` at repo root runs lib unit tests (incl. *.test.tsx) via adapterDeps,
-// then this pipeline: CSR Cypress, SSG/SSR/file-routes/matrix e2e.
-const e2e = pipeline([
+// then Cypress e2e in parallel (e2e/shared/ports.mjs), then ssr-matrix (vite per cell).
+const cypressE2e = pipeline([
   csrTest,
   ssgTest,
   ssrTest,
   fileRoutesTest,
   fileRoutesSsrTest,
   fileRoutesSsgTest,
-  ssrMatrixTest,
 ]).toTask({
+  name: "e2e:cypress",
+  dependencies: adapterDeps,
+})
+
+const e2e = pipeline([cypressE2e, ssrMatrixTest]).toTask({
   name: "e2e",
-  // One Cypress/vite server at a time (avoids port 5173/5174/5192 races on Windows).
-  maxConcurrency: 1,
   dependencies: adapterDeps,
 })
 

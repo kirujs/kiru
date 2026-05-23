@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development vite",
     "build": "vite build",
-    "server:e2e": "cross-env NODE_ENV=production PORT=5193 node dist/server",
+    "server:e2e": "cross-env NODE_ENV=production PORT=5194 node dist/server",
     "cy:run": "cypress run",
     "test": "pnpm exec cypress run"
   },

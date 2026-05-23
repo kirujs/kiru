@@ -2,8 +2,10 @@ import { defineConfig } from "cypress"
 import { createServer, type ViteDevServer } from "vite"
 import { registerHmrFileTasks } from "../shared/cypress-hmr-file-tasks"
 import { freeListeningPort } from "../shared/free-listening-port.mjs"
+import { e2ePorts } from "../shared/ports.mjs"
 
-const port = 5173
+const port = e2ePorts.csr.dev
+const hmrPort = e2ePorts.csr.hmr
 
 async function startServer() {
   const server = await createServer({
@@ -13,7 +15,7 @@ async function startServer() {
       port,
       strictPort: true,
       hmr: {
-        port: 8003,
+        port: hmrPort,
       },
     },
   })
@@ -31,6 +33,7 @@ export default defineConfig({
 
       on("before:run", async () => {
         freeListeningPort(port)
+        freeListeningPort(hmrPort)
         server = await startServer()
       })
       on("after:run", async () => {

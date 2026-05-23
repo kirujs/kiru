@@ -20,7 +20,7 @@ Monorepo: `node builderman.js test` (or `pnpm test` at root) orchestrates packag
 
 1. `packages/lib` — `pnpm test` (all `*.test.ts` + `*.test.tsx`; runs before e2e via `adapterDeps`)
 2. Other package unit tests (`file-routes`, `vite-plugin-kiru`, adapters, …)
-3. E2e pipeline (serial on CI): `e2e/csr` Cypress → `e2e/ssg` → `e2e/ssr` (build + hybrid verify scripts + Cypress tier1/tier3) → `e2e/file-routes` → `e2e/file-routes-ssr` → `e2e/file-routes-ssg` → `e2e/ssr-matrix`
+3. E2e pipeline: Cypress apps in parallel (`e2e/shared/ports.mjs`), then `e2e/ssr-matrix`. Adapter packages are built once via `adapterDeps` before e2e (do not add `prebuild` hooks that rebuild workspace packages).
 
 ---
 

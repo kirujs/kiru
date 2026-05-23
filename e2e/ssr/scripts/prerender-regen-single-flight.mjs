@@ -1,8 +1,10 @@
 /**
  * Smoke test: concurrent GETs to a stale hybrid path should not error.
- * Run after `pnpm run build` with production server on PORT (default 5192).
+ * Run after `pnpm run build` with production server on PORT (default: e2e/ssr prod port).
  */
-const port = Number(process.env.PORT) || 5192
+import { e2ePorts } from "../../shared/ports.mjs"
+
+const port = Number(process.env.PORT) || e2ePorts.ssr.dev
 const url = `http://127.0.0.1:${port}/revalidate-demo`
 
 const responses = await Promise.all(

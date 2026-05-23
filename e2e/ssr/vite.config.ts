@@ -1,9 +1,12 @@
 import { defineConfig } from "vite"
 import kiru from "vite-plugin-kiru"
+import { e2ePorts } from "../shared/ports.mjs"
 
 export default defineConfig({
   server: {
-    hmr: { port: 8022 },
+    port: e2ePorts.ssr.dev,
+    strictPort: true,
+    hmr: { port: e2ePorts.ssr.hmr },
   },
   /** One Node copy of `kiru` so the remote action registry matches `createRenderer({ actions })`. */
   ssr: {

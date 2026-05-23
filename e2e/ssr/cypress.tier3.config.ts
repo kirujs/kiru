@@ -5,8 +5,9 @@ import { fileURLToPath } from "node:url"
 import { defineConfig } from "cypress"
 import { assertServerBundleConsistent } from "./scripts/assert-server-bundle.mjs"
 import { freeListeningPort } from "../shared/free-listening-port.mjs"
+import { e2ePorts } from "../shared/ports.mjs"
 
-const port = 5193
+const port = e2ePorts.ssr.prod
 const root = path.dirname(fileURLToPath(import.meta.url))
 const prodServerEntry = path.join(root, "dist", "server", "index.js")
 const serverOrigin = `http://127.0.0.1:${port}`
