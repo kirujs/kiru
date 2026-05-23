@@ -16,6 +16,23 @@ export async function getDevHtmlTemplate(
   return server.transformIndexHtml(url, source)
 }
 
+const HEAD_CHILD_TAG_RE =
+  /<script\b[\s\S]*?<\/script>|<link\b[^>]*\/?>|<meta\b[^>]*\/?>|<style\b[\s\S]*?<\/style>/gi
+
+function normalizeHeadTag(tag: string): string {
+  return tag.replace(/\s+/g, " ").trim()
+}
+
+function extractHeadTags(headInner: string): string[] {
+  const tags: string[] = []
+  let m: RegExpExecArray | null
+  HEAD_CHILD_TAG_RE.lastIndex = 0
+  while ((m = HEAD_CHILD_TAG_RE.exec(headInner)) !== null) {
+    tags.push(m[0])
+  }
+  return tags
+}
+
 /** Extra `<head>` markup from transformIndexHtml not present in the raw template. */
 export function extractHeadInjection(raw: string, transformed: string): string {
   const rawHead = matchHeadInner(raw)
@@ -25,7 +42,13 @@ export function extractHeadInjection(raw: string, transformed: string): string {
   if (transformedHead.startsWith(rawHead)) {
     return transformedHead.slice(rawHead.length).trim()
   }
-  return transformedHead
+  // Vite may prepend `@vite/client` (or other plugins reorder `<head>`), so compare tags
+  // instead of dumping the full transformed head (which would re-insert `{{kiru_head}}`).
+  const rawTags = new Set(extractHeadTags(rawHead).map(normalizeHeadTag))
+  const added = extractHeadTags(transformedHead).filter(
+    (tag) => !rawTags.has(normalizeHeadTag(tag))
+  )
+  return added.join("\n    ")
 }
 
 function matchHeadInner(html: string): string | null {

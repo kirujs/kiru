@@ -32,7 +32,6 @@ import {
 } from "./resolveModulePattern.js"
 import {
   createDevtoolsHtmlTransform,
-  devtoolsHeadInjectionHtml,
   setupDevtools,
 } from "./devtools.js"
 import {
@@ -477,15 +476,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
                   server,
                   state.projectRoot,
                   templateName,
-                  req.originalUrl ?? "/",
-                  devtoolsEnabled
-                    ? [
-                        devtoolsHeadInjectionHtml(
-                          state.dtClientPathname,
-                          dtHostScriptPath
-                        ),
-                      ]
-                    : []
+                  req.originalUrl ?? "/"
                 )
                 return [extras, preload].filter(Boolean).join("\n    ")
               },
