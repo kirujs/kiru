@@ -29,7 +29,7 @@ interface ResourceState<T> {
   dispose: () => void
 }
 
-export type Resource<T> = Kiru.Signal<T> & ResourceState<T>
+export type Resource<T> = Kiru.Signal<T | null> & ResourceState<T>
 export interface ResourceLoaderContext {
   signal: AbortSignal
 }
@@ -131,7 +131,7 @@ export function resource<T, Source extends ResourceSource>(
     ctx: ResourceLoaderContext
   ) => Promise<T>
 ): Resource<T> {
-  const data = signal(void 0 as T)
+  const data = signal<T | null>(null)
   const error = signal<Error | null>(null)
   const isPending = signal(true)
 
@@ -205,7 +205,7 @@ export function resource<T, Source extends ResourceSource>(
       promise = newPromise
     },
     refetch() {
-      data.value = void 0 as T
+      data.value = null
       resource.promise = createPromise(true)
     },
     dispose,
