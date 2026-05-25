@@ -28,8 +28,8 @@ export function RouterView() {
   const router = useRouter()
   const { match, pathname, loaderEpoch, outletRenderError } = router
   const { getNavGeneration } = getRouterRuntime(router)
-  const children = resource(
-    {
+  const children = resource({
+    source: {
       match,
       pathname,
       loaderEpoch,
@@ -37,7 +37,7 @@ export function RouterView() {
       isNavigating: router.isNavigating,
       currentNavigation: router.currentNavigation,
     },
-    async ({ match, pathname, outletRenderError: err }, { signal }) => {
+    load: async ({ match, pathname, outletRenderError: err }, { signal }) => {
       if (err) {
         router.isLoaderPending.value = true
         try {
@@ -62,8 +62,8 @@ export function RouterView() {
           router.isLoaderPending.value = false
         }
       }
-    }
-  )
+    },
+  })
 
   onMount(() => {
     if (__DEV__) warnRouterViewWithoutSsrBootstrap()

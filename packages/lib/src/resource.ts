@@ -29,7 +29,30 @@ interface ResourceState<T> {
   dispose: () => void
 }
 
-export type Resource<T> = Kiru.Signal<T | null> & ResourceState<T>
+/** A resource that provided a default state. */
+export type NonNullableResource<T> = Kiru.Signal<T> & ResourceState<T>
+/** A resource that may be null until it is resolved. */
+export type NullableResource<T> = Kiru.Signal<T | null> & ResourceState<T>
+export type Resource<T> = NonNullableResource<T> | NullableResource<T>
+
+export type ResourceOptions<
+  T,
+  Source extends ResourceSource | undefined = undefined
+> = Source extends ResourceSource
+  ? {
+      source: Source
+      load: (
+        source: UnwrapResourceSource<Source>,
+        ctx: ResourceLoaderContext
+      ) => Promise<T>
+      defaultState?: T
+    }
+  : {
+      source?: never
+      load: (ctx: ResourceLoaderContext) => Promise<T>
+      defaultState?: T
+    }
+
 export interface ResourceLoaderContext {
   signal: AbortSignal
 }
@@ -116,22 +139,33 @@ function isRelevantStreamId(localId: string, streamId: string): boolean {
 
 export function resource<T>(
   callback: (ctx: ResourceLoaderContext) => Promise<T>
+): NullableResource<T>
+export function resource<T>(
+  options: ResourceOptions<T, undefined>
+): NullableResource<T>
+export function resource<T, Source extends ResourceSource>(
+  options: ResourceOptions<T, Source> & { defaultState: T }
 ): Resource<T>
 export function resource<T, Source extends ResourceSource>(
-  source: Source,
-  callback: (
-    source: UnwrapResourceSource<Source>,
-    ctx: ResourceLoaderContext
-  ) => Promise<T>
-): Resource<T>
+  options: ResourceOptions<T, Source>
+): NullableResource<T>
 export function resource<T, Source extends ResourceSource>(
-  callbackOrSource: Source | ((ctx: ResourceLoaderContext) => Promise<T>),
-  callback?: (
-    source: UnwrapResourceSource<Source>,
-    ctx: ResourceLoaderContext
-  ) => Promise<T>
-): Resource<T> {
-  const data = signal<T | null>(null)
+  callbackOrOptions:
+    | ResourceOptions<T, Source>
+    | ((ctx: ResourceLoaderContext) => Promise<T>)
+): Resource<T> | NullableResource<T> {
+  const options: ResourceOptions<T, Source> =
+    typeof callbackOrOptions === "function"
+      ? ({ load: callbackOrOptions } as ResourceOptions<T, Source>)
+      : callbackOrOptions
+  const defaultState =
+    "defaultState" in options ? options.defaultState : undefined
+  const hasDefaultState = defaultState !== undefined
+  const data = hasDefaultState
+    ? signal(defaultState as T)
+    : signal<T | null>(null)
+  const { load } = options
+  const source = "source" in options ? options.source : undefined
   const error = signal<Error | null>(null)
   const isPending = signal(true)
 
@@ -166,14 +200,14 @@ export function resource<T, Source extends ResourceSource>(
   }
 
   let unsubFromSource: (() => void) | undefined
-  if (typeof callbackOrSource === "object") {
-    if (Signal.isSignal(callbackOrSource)) {
-      unsubFromSource = callbackOrSource.subscribe(updateResource)
+  if (source != null) {
+    if (Signal.isSignal(source)) {
+      unsubFromSource = source.subscribe(updateResource)
     } else {
       const unsubs: (() => void)[] = []
-      for (const key in callbackOrSource) {
-        if (!Signal.isSignal(callbackOrSource[key])) continue
-        unsubs.push(callbackOrSource[key].subscribe(updateResource))
+      for (const key in source) {
+        if (!Signal.isSignal(source[key])) continue
+        unsubs.push(source[key].subscribe(updateResource))
       }
       unsubFromSource = () => {
         unsubs.forEach((unsub) => unsub())
@@ -195,7 +229,7 @@ export function resource<T, Source extends ResourceSource>(
   }
 
   let promise: Kiru.StatefulPromise<T>
-  const resource: Resource<T> = Object.assign(data, {
+  const resource = Object.assign(data, {
     error,
     isPending,
     get promise() {
@@ -205,7 +239,7 @@ export function resource<T, Source extends ResourceSource>(
       promise = newPromise
     },
     refetch() {
-      data.value = null
+      data.value = hasDefaultState ? (defaultState as T) : null
       resource.promise = createPromise(true)
     },
     dispose,
@@ -246,11 +280,16 @@ export function resource<T, Source extends ResourceSource>(
           promise = resolveDeferredPromise<T>(promiseId, ctrl.signal)
         } else {
           // stream / dom / (hydrate + static)
-          if (typeof callbackOrSource === "function") {
-            promise = callbackOrSource({ signal: ctrl.signal })
+          const ctx: ResourceLoaderContext = { signal: ctrl.signal }
+          if (source == null) {
+            promise = (load as (ctx: ResourceLoaderContext) => Promise<T>)(ctx)
           } else {
-            const source = unwrapResourceSource(callbackOrSource)
-            promise = callback!(source, { signal: ctrl.signal })
+            promise = (
+              load as (
+                source: UnwrapResourceSource<ResourceSource>,
+                ctx: ResourceLoaderContext
+              ) => Promise<T>
+            )(unwrapResourceSource(source), ctx)
           }
         }
         return promise
@@ -302,7 +341,7 @@ export function resource<T, Source extends ResourceSource>(
     resource.promise ??= createPromise()
   }
 
-  return resource
+  return resource as Resource<T> | NullableResource<T>
 }
 
 interface DeferredPromiseEventDetail<T> {
@@ -396,7 +435,7 @@ function resolveDeferredPromise<T>(
 }
 
 /**
- * Returns true if the value is a {@link Resource}
+ * Returns true if the value is a {@link Resource} or {@link NullableResource}
  */
 export function isResource(thing: unknown): thing is Resource<unknown> {
   return (

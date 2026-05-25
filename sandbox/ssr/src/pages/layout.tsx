@@ -110,6 +110,12 @@ export default function Layout() {
           >
             Break SSR
           </Link>
+          <Link
+            to="/loaders/server"
+            className="rounded-full border border-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:border-cyan-400 hover:text-cyan-200"
+          >
+            Server loader
+          </Link>
         </nav>
         <p
           data-testid="guard-events"

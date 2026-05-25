@@ -15,10 +15,9 @@ export type Derivable =
 
 type InnerOf<T> = T extends Kiru.Signal<infer V> ? V : never
 
-type UnwrapDerivable<T extends Derivable> =
-  T extends Kiru.Signal<unknown>
-    ? InnerOf<T>
-    : { [K in keyof T]: InnerOf<T[K]> }
+type UnwrapDerivable<T extends Derivable> = T extends Kiru.Signal<unknown>
+  ? InnerOf<T>
+  : { [K in keyof T]: InnerOf<T[K]> }
 
 type RecordHasResource<T extends Record<string, any>> = RecordHas<
   T,
@@ -32,7 +31,7 @@ export type DeriveFallbackMode = "swr" | "fallback"
 
 export interface DeriveProps<
   T extends Derivable,
-  Mode extends DeriveFallbackMode = "fallback",
+  Mode extends DeriveFallbackMode = "fallback"
 > {
   from: T
   mode?: Mode
@@ -41,19 +40,19 @@ export interface DeriveProps<
       ? ChildFnWithStale<U>
       : ChildFn<U>
     : T extends Record<string, any>
-      ? RecordHasResource<T> extends true
-        ? Mode extends "swr"
-          ? ChildFnWithStale<UnwrapDerivable<T>>
-          : ChildFn<UnwrapDerivable<T>>
+    ? RecordHasResource<T> extends true
+      ? Mode extends "swr"
+        ? ChildFnWithStale<UnwrapDerivable<T>>
         : ChildFn<UnwrapDerivable<T>>
       : ChildFn<UnwrapDerivable<T>>
+    : ChildFn<UnwrapDerivable<T>>
   fallback?: T extends Resource<any>
     ? JSX.Element
     : T extends Record<string, any>
-      ? RecordHasResource<T> extends true
-        ? JSX.Element
-        : never
+    ? RecordHasResource<T> extends true
+      ? JSX.Element
       : never
+    : never
 }
 
 type Derive = {
@@ -63,9 +62,6 @@ type Derive = {
 }
 
 function readDerivableValue(from: Derivable): unknown {
-  if (isResource(from)) {
-    return from.value as unknown
-  }
   if (Signal.isSignal(from)) {
     return from.value as unknown
   }
@@ -117,7 +113,10 @@ export const Derive: Derive = () => {
           fallback,
           data: pending,
           continue: () =>
-            (children as ChildFnWithStale<unknown>)(readDerivableValue(from), false),
+            (children as ChildFnWithStale<unknown>)(
+              readDerivableValue(from),
+              false
+            ),
         },
       } satisfies StreamDataThrowValue
     }
