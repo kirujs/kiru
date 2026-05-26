@@ -1,31 +1,48 @@
 import fs from "node:fs"
-import * as AST from "./ast.js"
-import type { FileLinkFormatter } from "../types.js"
+import type { AstNode } from "./ast.js"
 import {
   findNodeName,
   isComponent,
   MagicString,
   TransformCTX,
 } from "./shared.js"
-import {
-  bindingKindAtDepth,
-  buildModuleImportScope,
-  isImportedCall,
-  registerImportDeclaration,
-} from "./scope.js"
-
-type AstNode = AST.AstNode
+import { isImportedCall } from "./scope.js"
+import { walkProgramBody } from "./scopeWalk.js"
 
 type HotVarDesc = {
   type: string
   name: string
 }
 
+const HOT_API_NAMES = [
+  "signal",
+  "resource",
+  "computed",
+  "effect",
+  "createContext",
+  "lazy",
+] as const
+
 const UNNAMED_EFFECT_PREAMBLE = `\n
 if (import.meta.hot && "window" in globalThis) {
   window.__kiru.HMRContext?.moduleEffects.registerNext();
 }
 `
+
+/**
+ * Valid ancestor stacks for a hot-bound call. After the prefix, only
+ * `ObjectExpression` / `Property` nodes may appear before the call.
+ */
+const exprAssign = [
+  "ExpressionStatement",
+  "AssignmentExpression",
+] as const satisfies AstNode["type"][]
+const allowedHotVarParentStacks: Array<AstNode["type"][]> = [
+  ["VariableDeclaration", "VariableDeclarator"],
+  exprAssign,
+  ["ExportNamedDeclaration", "VariableDeclaration", "VariableDeclarator"],
+]
+
 export function prepareHMR(ctx: TransformCTX) {
   const { code, ast, fileLinkFormatter, filePath } = ctx
 
@@ -56,7 +73,7 @@ if (import.meta.hot && "window" in globalThis) {
 
 function createHMRRegistrationBlurb(
   hotVars: Set<HotVarDesc>,
-  fileLinkFormatter: FileLinkFormatter,
+  fileLinkFormatter: TransformCTX["fileLinkFormatter"],
   filePath: string
 ) {
   const src = fs.readFileSync(filePath, "utf-8")
@@ -99,147 +116,79 @@ function findHotVarLineInSrc(src: string, name: string) {
   return 0
 }
 
-/**
- * These represent the valid parent stack of a hot var. After the parents,
- * any combination of Property or ObjectExpression is allowed until the CallExpression.
- */
-const exprAssign = [
-  "ExpressionStatement",
-  "AssignmentExpression",
-] as const satisfies AstNode["type"][]
-const allowedHotVarParentStacks: Array<AstNode["type"][]> = [
-  ["VariableDeclaration", "VariableDeclarator"],
-  exprAssign,
-  ["ExportNamedDeclaration", "VariableDeclaration", "VariableDeclarator"],
-]
-
-function findHotVars(
+/** Collect HMR-bound names from module AST (exported for tests). */
+export function findHotVars(
   code: MagicString,
   bodyNodes: AstNode[],
   _id: string
 ): Set<HotVarDesc> {
   const hotVars = new Set<HotVarDesc>()
 
-  const hotApiNames = [
-    "signal",
-    "resource",
-    "computed",
-    "effect",
-    "createContext",
-    "lazy",
-  ] as const
-
-  const scope = buildModuleImportScope(bodyNodes)
-  let fnDepth = 0
-
-  const resolve = (name: string) => scope.resolve(name)
-
-  const enterFunction = () => {
-    fnDepth++
-    scope.push()
-  }
-  const exitFunction = () => {
-    scope.pop()
-    fnDepth--
-  }
-
   for (const node of bodyNodes) {
-    if (node.type === "ImportDeclaration") {
-      registerImportDeclaration(node, scope)
-      continue
-    }
-
-    /**
-     * TODO: refactor to support finding components declared in
-     * var > object expressions
-     */
     if (isComponent(node, bodyNodes)) {
       addHotVarDesc(node, hotVars, "component")
-      continue
     }
-
-    AST.walk(node, {
-      FunctionDeclaration: () => {
-        enterFunction()
-        return exitFunction
-      },
-      FunctionExpression: () => {
-        enterFunction()
-        return exitFunction
-      },
-      ArrowFunctionExpression: () => {
-        enterFunction()
-        return exitFunction
-      },
-      VariableDeclarator: (decl) => {
-        const id = decl.id
-        if (id?.type === "Identifier" && id.name) {
-          scope.declare(id.name, {
-            kind: bindingKindAtDepth(fnDepth, decl.init as AstNode, resolve),
-            name: id.name,
-          })
-        }
-      },
-      CallExpression: (node, ctx) => {
-        const apiName = hotApiNames.find((name) =>
-          isImportedCall(node, resolve, { imported: name, namespace: "kiru" })
-        )
-        if (!apiName) {
-          return ctx.exitBranch()
-        }
-        if (
-          apiName === "effect" &&
-          ctx.stack.length === 1 &&
-          ctx.stack[0].type === "ExpressionStatement"
-        ) {
-          code.appendRight(node.start, UNNAMED_EFFECT_PREAMBLE)
-          return ctx.exit()
-        }
-
-        const matchingParentStack = allowedHotVarParentStacks.find((stack) => {
-          return stack.every((type, i) => ctx.stack[i]?.type === type)
-        })
-        if (!matchingParentStack) {
-          return ctx.exitBranch()
-        }
-        if (matchingParentStack === exprAssign) {
-          const [_expr, assign] = ctx.stack
-          const name = assign.left?.name
-          if (!name) return ctx.exit()
-          hotVars.add({
-            type: apiName,
-            name,
-          })
-          return ctx.exit()
-        }
-
-        const remainingStack = ctx.stack.slice(matchingParentStack.length)
-        if (
-          remainingStack.some(
-            (n) => n.type !== "ObjectExpression" && n.type !== "Property"
-          )
-        ) {
-          return ctx.exitBranch()
-        }
-
-        const name = ctx.stack.reduce((acc, item) => {
-          switch (item.type) {
-            case "VariableDeclarator":
-              return item.id!.name
-            case "Property":
-              if (!item.key) return acc
-              if (item.key.name) return `${acc}.${item.key.name}`
-              if (item.key.raw) return `${acc}[${item.key.raw}]`
-              return acc
-          }
-          return acc
-        }, "")
-
-        hotVars.add({ type: apiName, name })
-        ctx.exitBranch()
-      },
-    })
   }
+
+  walkProgramBody(bodyNodes, {
+    onCallExpression: (node, ctx) => {
+      const apiName = HOT_API_NAMES.find((name) =>
+        isImportedCall(node, ctx.resolve, { imported: name, namespace: "kiru" })
+      )
+      if (!apiName) {
+        return ctx.exitBranch()
+      }
+
+      if (
+        apiName === "effect" &&
+        ctx.stack.length === 1 &&
+        ctx.stack[0].type === "ExpressionStatement"
+      ) {
+        code.appendRight(node.start, UNNAMED_EFFECT_PREAMBLE)
+        return ctx.exit()
+      }
+
+      const matchingParentStack = allowedHotVarParentStacks.find((stack) =>
+        stack.every((type, i) => ctx.stack[i]?.type === type)
+      )
+      if (!matchingParentStack) {
+        return ctx.exitBranch()
+      }
+
+      if (matchingParentStack === exprAssign) {
+        const assign = ctx.stack[1]
+        const name = assign?.left?.name
+        if (!name) return ctx.exit()
+        hotVars.add({ type: apiName, name })
+        return ctx.exit()
+      }
+
+      const remainingStack = ctx.stack.slice(matchingParentStack.length)
+      if (
+        remainingStack.some(
+          (n) => n.type !== "ObjectExpression" && n.type !== "Property"
+        )
+      ) {
+        return ctx.exitBranch()
+      }
+
+      const name = ctx.stack.reduce((acc, item) => {
+        switch (item.type) {
+          case "VariableDeclarator":
+            return item.id!.name ?? acc
+          case "Property":
+            if (!item.key) return acc
+            if (item.key.name) return `${acc}.${item.key.name}`
+            if (item.key.raw) return `${acc}[${item.key.raw}]`
+            return acc
+        }
+        return acc
+      }, "")
+
+      hotVars.add({ type: apiName, name })
+      ctx.exitBranch()
+    },
+  })
 
   return hotVars
 }

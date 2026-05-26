@@ -6,12 +6,14 @@ import {
   walkProgramBody,
 } from "./scopeWalk.js"
 import { isKiruJsxFactoryCall } from "./scope.js"
+import { formatRegionsLiteral } from "./compileRegions.js"
 import {
   isTemplateShellEligibleCall,
   selectMaximalTemplateShellCalls,
   type TemplateSerializeCtx,
   type TemplateShellCallSite,
 } from "./templateHTML.js"
+import type { CompileRegion } from "kiru/template"
 
 type AstNode = AST.AstNode
 
@@ -22,6 +24,7 @@ type TemplateBinding = {
   html: string
   holeCount: number
   holeNodes: AstNode[]
+  regions: CompileRegion[]
   varName: string
 }
 
@@ -66,6 +69,7 @@ export function prepareJSXTemplates(ctx: TransformCTX) {
       html: result.html,
       holeCount: result.holeCount,
       holeNodes: result.holeNodes,
+      regions: result.regions,
       varName: `$t${counter++}`,
     })
   }
@@ -138,7 +142,9 @@ function templateDeclExpr(b: TemplateBinding): string {
 function templateUse(b: TemplateBinding, origSrc: string): string {
   if (b.holeCount === 0) return `${b.varName}()`
   const parts = b.holeNodes.map((n) => origSrc.slice(n.start, n.end))
-  return `createHoledTemplate(${b.varName}, [${parts.join(", ")}])`
+  const regionsLit = formatRegionsLiteral(b.regions)
+  const regionsArg = regionsLit ? `, ${regionsLit}` : ""
+  return `createHoledTemplate(${b.varName}, [${parts.join(", ")}]${regionsArg})`
 }
 
 function templateUseIdentifier(b: TemplateBinding, origSrc: string): string {

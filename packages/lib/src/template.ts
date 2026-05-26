@@ -1,6 +1,9 @@
 import { $STATIC_CHILDREN_LIST } from "./constants.js"
+import type { CompileRegion } from "./compileRegions.js"
 import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
+
+export type { CompileRegion, CompileRegionKind } from "./compileRegions.js"
 
 export const $KIRU_TEMPLATE = Symbol.for("kiru.template")
 
@@ -12,6 +15,7 @@ export type TemplateRoot = {
   readonly html: string
   readonly holeCount: number
   readonly holeChildren?: readonly unknown[]
+  readonly regions?: readonly CompileRegion[]
 }
 
 export type TemplateFactory = () => TemplateRoot
@@ -46,7 +50,8 @@ export function tagStaticChildrenList<T>(children: T[]): T[] {
 /** Attach runtime hole children to a template factory product. */
 export function createHoledTemplate(
   factory: TemplateFactory,
-  holeChildren: unknown[]
+  holeChildren: unknown[],
+  regions?: readonly CompileRegion[]
 ): TemplateRoot {
   const base = factory()
   const count = base.holeCount
@@ -55,11 +60,17 @@ export function createHoledTemplate(
       message: `[kiru]: createHoledTemplate expected ${count} hole children, got ${holeChildren.length}`,
     })
   }
+  if (__DEV__ && regions !== undefined && regions.length !== count) {
+    throw new KiruError({
+      message: `[kiru]: createHoledTemplate expected ${count} regions, got ${regions.length}`,
+    })
+  }
   return {
     __kiruTemplate: $KIRU_TEMPLATE,
     html: base.html,
     holeCount: count,
     holeChildren,
+    regions,
   }
 }
 

@@ -14,6 +14,7 @@ This folder documents how Kiru uses **compiler hints** (JSX factories, Vite tran
 
 | Doc | Contents |
 |-----|----------|
+| [Compiler philosophy](./PHILOSOPHY.md) | Constitution: DOM shells + typed regions (read before changing codegen) |
 | [Static children and JSX hoisting](./static-children-and-jsx-hoisting.md) | Full roadmap: phases 1–2D, 2E design, research, acceptance criteria |
 | [Phase 2E status](./phase-2e-status.md) | Shipped status and verification evidence for static-children/hoisting follow-ups |
 

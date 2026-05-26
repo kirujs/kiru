@@ -347,10 +347,10 @@ declare global {
       | typeof $ERROR_BOUNDARY
       | typeof $INLINE_FN
 
-    /** Compile-time metadata from vite-plugin-kiru (hoisting, mixed static children). */
+    /** Compile-time metadata from vite-plugin-kiru (hoisting, templates, mixed static children). */
     interface ElementCompileMeta {
       flags?: number
-      dynamicIndices?: readonly number[]
+      regions?: readonly import("./compileRegions.js").CompileRegion[]
     }
 
     /** Build-time `_template("...")()` handle (codegen-only). */
@@ -403,8 +403,10 @@ declare global {
       render?: (props: VNode["props"]) => unknown
       /** Set when reconciling `jsxs` children; used for dev contract checks. */
       staticChildCount?: number
-      /** Copied from `element.meta.dynamicIndices` at vnode creation. */
-      dynamicChildIndices?: readonly number[]
+      /** Copied from `element.meta.regions` at vnode creation (mixed static layouts). */
+      compileRegions?: readonly import("./compileRegions.js").CompileRegion[]
+      /** Copied from `TemplateRoot.regions` for template hosts. */
+      templateRegions?: readonly import("./compileRegions.js").CompileRegion[]
       /** Cloned template HTML; used to reuse the same shell on updates. */
       templateHtml?: string
       /** Structural holes in a cloned template (`<!--#-->`). */

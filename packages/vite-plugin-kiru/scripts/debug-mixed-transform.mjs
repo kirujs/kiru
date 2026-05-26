@@ -29,7 +29,7 @@ const Mixed = () =>
       void 0,
       this
     ),
-    { meta: { dynamicIndices: [1] } }
+    { meta: { regions: [{ kind: "insert", slot: 1 }] } }
   )
 `
 

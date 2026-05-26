@@ -36,13 +36,13 @@ This document records **what landed in the repo** for phase 2E (static children 
 | `isFullyStaticHoistRoot` | [`packages/vite-plugin-kiru/src/codegen/hoistJSX.ts`](../../packages/vite-plugin-kiru/src/codegen/hoistJSX.ts) |
 | Meta on element | `$kN.meta = { flags: 32 }` after hoisted declarations |
 
-### PR2 — `dynamicChildIndices`
+### PR2 — mixed static layouts (`compileRegions`, formerly `dynamicIndices`)
 
 | Piece | Location |
 |-------|----------|
-| Types | [`packages/lib/src/types.ts`](../../packages/lib/src/types.ts) — `Element.meta`, `VNode.dynamicChildIndices` |
-| Runtime | `patchStaticChildrenMasked` in [`reconciler.ts`](../../packages/lib/src/reconciler.ts) |
-| Compiler | `$kN.meta = { dynamicIndices: [...] }` or `Object.assign(..., { meta: { dynamicIndices } })` |
+| Types | [`packages/lib/src/types.ts`](../../packages/lib/src/types.ts) — `Element.meta.regions`, `VNode.compileRegions` / `templateRegions` |
+| Runtime | `patchStaticChildrenMasked` + `dynamicSlotsFromRegions` in [`reconciler.ts`](../../packages/lib/src/reconciler.ts) |
+| Compiler | `meta.regions` on hoisted roots / `createHoledTemplate(..., regions)` — see [`compileRegions.ts`](../../packages/vite-plugin-kiru/src/codegen/compileRegions.ts) |
 
 ### PR3 — Hydration
 

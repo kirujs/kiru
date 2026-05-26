@@ -183,6 +183,39 @@ export default function Layout() {
     assert.strictEqual(result!.holeNodes[0]?.type, "ArrayExpression")
     const markerCount = (result!.html.match(/<!--#-->/g) ?? []).length
     assert.strictEqual(markerCount, 1)
+    assert.strictEqual(result!.regions[0]?.kind, "fragment")
+  })
+
+  it("classifies conditional children as conditional regions", () => {
+    const source = `
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+export function Page({ ok }) {
+  return jsxDEV("div", { children: ok ? jsxDEV("p", { children: "yes" }, void 0, false, void 0, void 0) : jsxDEV("p", { children: "no" }, void 0, false, void 0, void 0) }, void 0, false, void 0, void 0)
+}
+`
+    const ctx = buildCtx(source)
+    const call = findFirstJsxCall(source, ctx)
+    const result = serializeJsxCallToTemplate(call, ctx)
+    assert.ok(result)
+    assert.strictEqual(result!.holeCount, 1)
+    assert.strictEqual(result!.regions[0]?.kind, "conditional")
+  })
+
+  it("classifies reactive text children as text regions", () => {
+    const source = `
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { signal } from "kiru"
+const guardEvents = signal([])
+export function Page() {
+  return jsxDEV("p", { children: ["Guard: ", () => guardEvents().join(", ")] }, void 0, true, void 0, void 0)
+}
+`
+    const ctx = buildCtx(source)
+    const call = findFirstJsxCall(source, ctx)
+    const result = serializeJsxCallToTemplate(call, ctx)
+    assert.ok(result)
+    assert.strictEqual(result!.holeCount, 1)
+    assert.strictEqual(result!.regions[0]?.kind, "text")
   })
 
   it("uses innerHTML instead of children when both are present", () => {

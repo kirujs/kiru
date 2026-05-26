@@ -11,6 +11,10 @@ import {
   svgTags,
 } from "./constants.js"
 import {
+  dynamicSlotsFromRegions,
+  type CompileRegion,
+} from "./compileRegions.js"
+import {
   cloneTemplateDom,
   findTemplateHoleAnchors,
   isTemplateRoot,
@@ -130,9 +134,12 @@ function assertStaticChildrenContract(parent: VNode, children: unknown[]) {
 function patchStaticChildren(parent: VNode, children: unknown[]) {
   assertStaticChildrenContract(parent, children)
 
-  const dynamicMask = parent.dynamicChildIndices
-  if (dynamicMask !== undefined && dynamicMask.length > 0) {
-    return patchStaticChildrenMasked(parent, children, dynamicMask)
+  const regions = parent.compileRegions
+  if (regions !== undefined && regions.length > 0) {
+    const dynamicSlots = dynamicSlotsFromRegions(regions)
+    if (dynamicSlots.length > 0) {
+      return patchStaticChildrenMasked(parent, children, dynamicSlots)
+    }
   }
 
   if (parent.child !== null) {
@@ -190,9 +197,9 @@ function patchStaticChildren(parent: VNode, children: unknown[]) {
 function patchStaticChildrenMasked(
   parent: VNode,
   children: unknown[],
-  dynamicChildIndices: readonly number[]
+  dynamicSlots: readonly number[]
 ) {
-  const dynamicSet = new Set(dynamicChildIndices)
+  const dynamicSet = new Set(dynamicSlots)
   if (parent.child !== null) {
     let canShortCircuit = true
     for (let i = 0; i < children.length; i++) {
@@ -786,9 +793,9 @@ function applyElementFlags(node: VNode, element: KElement) {
   } else {
     node.flags &= ~FLAG_HOISTED
   }
-  const dynamicIndices = element.meta?.dynamicIndices
-  if (dynamicIndices !== undefined) {
-    node.dynamicChildIndices = dynamicIndices
+  const regions = element.meta?.regions
+  if (regions !== undefined) {
+    node.compileRegions = regions
   }
 }
 
@@ -801,6 +808,9 @@ function refreshReusedTemplateHoles(
   vNode.templateHoleCount = count
   if (template.holeChildren !== undefined) {
     vNode.templateHoleChildren = template.holeChildren
+  }
+  if (template.regions !== undefined) {
+    vNode.templateRegions = template.regions
   }
   if (count > 0 && vNode.dom) {
     reconcileTemplateHoles(vNode)
@@ -855,6 +865,35 @@ function templateHoleTail(
   return tail
 }
 
+function templateHoleRegion(
+  vNode: VNode,
+  index: number
+): CompileRegion {
+  return vNode.templateRegions?.[index] ?? { kind: "insert", anchor: index }
+}
+
+function reconcileTemplateHoleContent(
+  slotParent: VNode,
+  holeChild: unknown,
+  region: CompileRegion,
+  existing: VNode | null
+): VNode | null {
+  if (existing) {
+    slotParent.child = existing
+  }
+  switch (region.kind) {
+    case "text":
+      return reconcileChildren(slotParent, holeChild)
+    case "conditional":
+    case "children":
+    case "component":
+    case "fragment":
+    case "insert":
+    default:
+      return reconcileChildren(slotParent, holeChild)
+  }
+}
+
 export function reconcileTemplateHoles(vNode: VNode): VNode | null {
   const root = vNode.dom
   if (!(root instanceof Element)) return null
@@ -891,9 +930,11 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
     slotParent.templateHoleAnchor = anchor
 
     const holeChild = holeChildren[i]
+    const region = templateHoleRegion(vNode, i)
     if (
-      Array.isArray(holeChild) &&
-      $STATIC_CHILDREN_LIST in (holeChild as object)
+      region.kind === "fragment" ||
+      (Array.isArray(holeChild) &&
+        $STATIC_CHILDREN_LIST in (holeChild as object))
     ) {
       slotParent.flags |= FLAG_STATIC_CHILDREN
     }
@@ -901,7 +942,6 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
     const existing = vNode.templateHoleHeads?.[i] ?? null
     if (existing) {
       unlinkTemplateHoleWeave(existing, nextStoredHead)
-      slotParent.child = existing
     }
     const hydrating = renderMode.current === "hydrate"
     if (hydrating) {
@@ -913,7 +953,12 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
         hydrationStack.setChildIndex(nodeIndex + 1)
       }
     }
-    const head = reconcileChildren(slotParent, holeChild)
+    const head = reconcileTemplateHoleContent(
+      slotParent,
+      holeChild,
+      region,
+      existing
+    )
     adoptTemplateHoleDeletions(vNode, slotParent)
     if (hydrating) {
       hydrationStack.pop()
@@ -966,6 +1011,9 @@ function createTemplateVNode(parent: VNode, template: TemplateRoot): VNode {
     if (holeCount > 0 && template.holeChildren) {
       node.templateHoleChildren = template.holeChildren
     }
+    if (template.regions) {
+      node.templateRegions = template.regions
+    }
     node.dom = dom as Kiru.VNode["dom"]
     if (__DEV__) {
       ;(dom as Element).__kiruNode = node
@@ -979,6 +1027,9 @@ function createTemplateVNode(parent: VNode, template: TemplateRoot): VNode {
   node.templateHoleCount = holeCount
   if (holeCount > 0 && template.holeChildren) {
     node.templateHoleChildren = template.holeChildren
+  }
+  if (template.regions) {
+    node.templateRegions = template.regions
   }
   return node
 }

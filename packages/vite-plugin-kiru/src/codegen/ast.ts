@@ -93,17 +93,34 @@ export function findNode(
   return res
 }
 
-type VisitorCTX = {
-  stack: AstNode[]
+export type WalkContext = {
+  readonly stack: readonly AstNode[]
+  /** Stop the entire walk. */
   exit: () => never
+  /** Skip descending into the current node's children. */
   exitBranch: () => never
+  /** Alias for `exitBranch`. */
+  skipDescent: () => never
+  /** Direct parent on the ancestor stack (not yet including the current node). */
+  parent: () => AstNode | null
+  /** Grandparent on the ancestor stack. */
+  grandparent: () => AstNode | null
+  /** Descend into `CallExpression` arguments only (pushes the call onto the stack). */
+  walkArguments: (node: AstNode & { arguments?: (AstNode | null | undefined)[] }) => void
+  /** Descend into a single child with correct stack ancestry. */
+  walkChild: (node: AstNode) => void
 }
+
+type VisitorCTX = WalkContext & {
+  stack: AstNode[]
+}
+
 type VisitorNodeCallback = (
   node: AstNode,
-  ctx: VisitorCTX
+  ctx: WalkContext
 ) => void | (() => void)
 
-type AstVisitor = {
+export type AstVisitor = {
   [key in AstNode["type"]]?: VisitorNodeCallback
 } & {
   "*"?: VisitorNodeCallback
@@ -117,17 +134,38 @@ export function walk(
     typeof visitorOrCallback === "function"
       ? { "*": visitorOrCallback }
       : visitorOrCallback
-  const ctx: VisitorCTX = {
-    stack: [],
-    exit: exitWalk,
-    exitBranch: exitBranch,
-  }
+  const stack: AstNode[] = []
+  const ctx = createWalkContext(stack, visitor)
   try {
     walk_impl(node, visitor, ctx)
   } catch (error) {
     if (error === "walk:exit") return
     throw error
   }
+}
+
+function createWalkContext(stack: AstNode[], visitor: AstVisitor): VisitorCTX {
+  const ctx: VisitorCTX = {
+    stack,
+    exit: exitWalk,
+    exitBranch: exitBranch,
+    skipDescent: exitBranch,
+    parent: () => stack[stack.length - 1] ?? null,
+    grandparent: () => stack[stack.length - 2] ?? null,
+    walkArguments: (node) => {
+      stack.push(node)
+      for (const arg of node.arguments ?? []) {
+        if (isAstExpression(arg)) {
+          walk_impl(arg, visitor, ctx)
+        }
+      }
+      stack.pop()
+    },
+    walkChild: (node) => {
+      walk_impl(node, visitor, ctx)
+    },
+  }
+  return ctx
 }
 
 const exitWalk = () => {

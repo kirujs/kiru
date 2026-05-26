@@ -1,12 +1,23 @@
 import { describe, it } from "node:test"
 import assert from "node:assert"
-import { createElement } from "../../element.js"
+import { createElement, Fragment } from "../../element.js"
 import { headlessRender } from "../../headlessRender.js"
 import { _template, createHoledTemplate } from "../../template.js"
 import { KIRU_HOLE_MARKER } from "../../utils/staticHtml.js"
 import { renderToString } from "../../renderToString.js"
 import { hydrate } from "../../ssr/client.js"
+import { Link } from "../../router/link.js"
+import { RouterProvider } from "../../router/routerContext.js"
+import { createStaticRouter } from "../../router/csr.js"
+import { createRoute, createRouteTree } from "../../router/createRouteTree.js"
+import { compileRouteTree } from "../../router/manifest.js"
 import { withJSDOM } from "./jsdom.js"
+
+const linkManifest = compileRouteTree(
+  createRouteTree({
+    children: [createRoute("/", async () => ({ default: () => null }))],
+  })
+)
 
 describe("template holes", () => {
   it("headlessRender writes hole markers when there are no hole children", () => {
@@ -50,6 +61,25 @@ describe("template holes", () => {
         )
       )
     })
+  })
+
+  it("headlessRender resolves router context for Link children in template holes", () => {
+    const router = createStaticRouter({ manifest: linkManifest, pathname: "/" })
+    const Nav = () =>
+      createHoledTemplate(_template(`<nav>${KIRU_HOLE_MARKER}</nav>`, 1), [
+        createElement(Link, { to: "/", children: "Home" }),
+      ])
+    const app = createElement(RouterProvider, {
+      router,
+      children: createElement(Nav),
+    })
+    let out = ""
+    headlessRender(
+      { write: (chunk) => (out += chunk) },
+      Fragment({ children: app })
+    )
+    assert.ok(out.includes("Home"))
+    assert.ok(out.includes('href="/"'))
   })
 
   it("headlessRender inlines array region at a single hole", () => {

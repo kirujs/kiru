@@ -77,7 +77,7 @@ export function headlessRender(
     )
   }
   if (isTemplateRoot(el)) {
-    return renderTemplateRoot(ctx, el)
+    return renderTemplateRoot(ctx, el, parent)
   }
   if (isSignal(el)) {
     const value = el.peek()
@@ -191,7 +191,8 @@ export function headlessRender(
 
 function renderTemplateRoot(
   ctx: HeadlessRenderContext,
-  template: TemplateRoot
+  template: TemplateRoot,
+  parent: Kiru.VNode | null
 ): void {
   const holeCount = template.holeCount ?? 0
   const holeChildren = template.holeChildren
@@ -211,7 +212,7 @@ function renderTemplateRoot(
       break
     }
     ctx.write(template.html.slice(pos, markerAt + KIRU_HOLE_MARKER.length))
-    headlessRender(ctx, holeChildren[i], undefined, i)
+    headlessRender(ctx, holeChildren[i], parent, i)
     pos = markerAt + KIRU_HOLE_MARKER.length
   }
   ctx.write(template.html.slice(pos))

@@ -1,9 +1,11 @@
+import type { CompileRegion } from "kiru/template"
 import {
   encodeStaticText,
   KIRU_HOLE_MARKER,
   serializeStaticElementToHtml,
 } from "kiru/utils"
 import * as AST from "./ast.js"
+import { classifyTemplateHoleRegion } from "./compileRegions.js"
 import {
   blocksModuleHoist,
   isKiruJsxFactoryCall,
@@ -27,6 +29,7 @@ export type TemplateSerializeResult = {
   holeCount: number
   /** Dynamic child expression nodes (for codegen source slices). */
   holeNodes: AstNode[]
+  regions: CompileRegion[]
 }
 
 function isAnyJsxFactoryCall(
@@ -92,7 +95,6 @@ export function serializeJsxCallToTemplate(
 ): TemplateSerializeResult | null {
   if (!isAnyJsxFactoryCall(callNode, ctx)) return null
   if (!isTemplateShellEligibleJsxCall(callNode, ctx)) return null
-  if (subtreeHasImpureCallInStaticRegions(callNode, ctx)) return null
   const typeArg = callNode.arguments?.[0]
   if (
     !typeArg ||
@@ -104,8 +106,14 @@ export function serializeJsxCallToTemplate(
   const tag = typeArg.value as string
   const propsArg = callNode.arguments?.[1]
   const holeNodes: AstNode[] = []
+  const regions: CompileRegion[] = []
   const props = collectStaticProps(propsArg, ctx)
-  const innerHtml = serializeChildrenToInnerHtml(propsArg, ctx, holeNodes)
+  const innerHtml = serializeChildrenToInnerHtml(
+    propsArg,
+    ctx,
+    holeNodes,
+    regions
+  )
   const html = serializeStaticElementToHtml(tag, props, innerHtml)
   if (
     ctx.strictHoledShell &&
@@ -114,7 +122,7 @@ export function serializeJsxCallToTemplate(
   ) {
     return null
   }
-  return { html, holeCount: holeNodes.length, holeNodes }
+  return { html, holeCount: holeNodes.length, holeNodes, regions }
 }
 
 /** Serialize-first, then outermost among successful shells (failed parents do not suppress children). */
@@ -391,24 +399,51 @@ function collectStaticProps(
 function serializeChildrenToInnerHtml(
   propsArg: AstNode | undefined | null,
   ctx: TemplateSerializeCtx,
-  holeNodes: AstNode[]
+  holeNodes: AstNode[],
+  regions: CompileRegion[]
 ): string {
   if (propsHasInnerHTML(propsArg)) {
     return serializeInnerHTMLValue(
       findObjectPropValue(propsArg, "innerHTML"),
       ctx,
-      holeNodes
+      holeNodes,
+      regions
     )
   }
   const childrenNode = findObjectPropValue(propsArg, "children")
   if (!childrenNode) return ""
-  return serializeChildInner(childrenNode, ctx, holeNodes)
+  return serializeChildInner(childrenNode, ctx, holeNodes, regions)
+}
+
+function pushTemplateHole(
+  node: AstNode,
+  ctx: TemplateSerializeCtx,
+  holeNodes: AstNode[],
+  regions: CompileRegion[]
+): void {
+  const anchor = holeNodes.length
+  holeNodes.push(node)
+  regions.push(classifyTemplateHoleRegion(node, ctx, anchor))
+}
+
+function mergeInnerTemplateHoles(
+  inner: TemplateSerializeResult,
+  holeNodes: AstNode[],
+  regions: CompileRegion[]
+): void {
+  const base = holeNodes.length
+  for (let i = 0; i < inner.holeNodes.length; i++) {
+    holeNodes.push(inner.holeNodes[i]!)
+    const r = inner.regions[i]!
+    regions.push({ ...r, anchor: base + (r.anchor ?? i) })
+  }
 }
 
 function serializeInnerHTMLValue(
   node: AstNode | undefined,
   ctx: TemplateSerializeCtx,
-  holeNodes: AstNode[]
+  holeNodes: AstNode[],
+  regions: CompileRegion[]
 ): string {
   if (!node) return ""
   if (isStaticLiteral(node)) {
@@ -423,7 +458,7 @@ function serializeInnerHTMLValue(
       return ""
     }
   }
-  holeNodes.push(node)
+  pushTemplateHole(node, ctx, holeNodes, regions)
   return KIRU_HOLE_MARKER
 }
 
@@ -499,37 +534,42 @@ function isRegionEligibleChildArray(
 function serializeChildInner(
   node: AstNode,
   ctx: TemplateSerializeCtx,
-  holeNodes: AstNode[]
+  holeNodes: AstNode[],
+  regions: CompileRegion[]
 ): string {
   if (isStaticLiteral(node)) {
     return encodeStaticText(String(node.value ?? ""))
+  }
+  if (node.type === "ConditionalExpression" || node.type === "LogicalExpression") {
+    pushTemplateHole(node, ctx, holeNodes, regions)
+    return KIRU_HOLE_MARKER
   }
   if (node.type === "CallExpression" && isAnyJsxFactoryCall(node, ctx)) {
     const inner = serializeJsxCallToTemplate(node, ctx)
     if (inner && inner.holeCount === 0) return inner.html
     if (inner && inner.holeCount > 0) {
-      for (const hole of inner.holeNodes) holeNodes.push(hole)
+      mergeInnerTemplateHoles(inner, holeNodes, regions)
       return inner.html
     }
-    holeNodes.push(node)
+    pushTemplateHole(node, ctx, holeNodes, regions)
     return KIRU_HOLE_MARKER
   }
   if (node.type === "ArrayExpression") {
     if (arrayExpressionHasMixedTextAndBinding(node, ctx)) {
-      holeNodes.push(node)
+      pushTemplateHole(node, ctx, holeNodes, regions)
       return KIRU_HOLE_MARKER
     }
     if (isRegionEligibleChildArray(node, ctx)) {
-      holeNodes.push(node)
+      pushTemplateHole(node, ctx, holeNodes, regions)
       return KIRU_HOLE_MARKER
     }
     return ((node as { elements?: (AstNode | null)[] }).elements ?? [])
       .filter(Boolean)
-      .map((e) => serializeChildInner(e as AstNode, ctx, holeNodes))
+      .map((e) => serializeChildInner(e as AstNode, ctx, holeNodes, regions))
       .join("")
   }
   if (!isAnyJsxFactoryCall(node, ctx)) {
-    holeNodes.push(node)
+    pushTemplateHole(node, ctx, holeNodes, regions)
     return KIRU_HOLE_MARKER
   }
   return ""

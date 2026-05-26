@@ -55,12 +55,13 @@ const Mixed = () =>
       void 0,
       this
     ),
-    { meta: { dynamicIndices: [1] } }
+    { meta: { regions: [{ kind: "insert", slot: 1 }] } }
   )
 `)
     assert.match(out, /import \{ _template, createHoledTemplate \} from "kiru\/template"/)
     assert.match(out, /_template\([^)]*<!--#-->/)
-    assert.match(out, /createHoledTemplate\(\$t\d+,/)
+    assert.match(out, /createHoledTemplate\(\$t\d+,[^)]+\[\{kind:/)
+    assert.doesNotMatch(out, /dynamicIndices/)
     assert.doesNotMatch(out, /jsxDEV\("span", \{ children: "A" \}/)
   })
 
@@ -125,7 +126,7 @@ export function App() {
     assert.match(out, /jsxDEV\(\s*Counter/)
   })
 
-  it("templates layout shell with region nav, outlet, and module-hoisted link list", () => {
+  it("templates layout shell with region nav, outlet, and inline component links", () => {
     const out = transform(`
 import { jsxDEV } from "kiru/jsx-dev-runtime"
 import { Link } from "kiru/router"
@@ -145,7 +146,7 @@ export default function Layout({ children }) {
 }
 `)
     assert.match(out, /import \{[^}]*createHoledTemplate[^}]*\} from "kiru\/template"/)
-    assert.match(out, /tagStaticChildrenList/)
+    assert.doesNotMatch(out, /tagStaticChildrenList/)
     assert.match(out, /\$t\d+ = _template\([^)]*<h1>Title<\/h1>/)
     assert.match(out, /_template\([^)]*, 2\)/)
     assert.match(out, /_template\([^)]*class=\\"outlet\\"/)
@@ -154,16 +155,12 @@ export default function Layout({ children }) {
     )?.[1]
     assert.ok(navMarkers)
     assert.strictEqual((navMarkers.match(/<!--#-->/g) ?? []).length, 1)
-    assert.match(out, /const \$k\d+ = tagStaticChildrenList\(\[/)
-    assert.match(out, /createHoledTemplate\(\$t\d+, \[\$k\d+, children\]\)/)
-    assert.doesNotMatch(
+    assert.match(
       out,
-      /return[\s\S]*jsxDEV\(Link/
+      /createHoledTemplate\(\$t\d+,[\s\S]*\{kind:"fragment",anchor:0\}[\s\S]*\{kind:"children",anchor:1\}/
     )
-    assert.doesNotMatch(
-      out,
-      /const \$k1 = jsxDEV\(Link/
-    )
+    assert.match(out, /return[\s\S]*jsxDEV\(Link/)
+    assert.doesNotMatch(out, /const \$k\d+ = jsxDEV\(Link/)
     assert.doesNotMatch(
       out,
       /createHoledTemplate\(\$t\d+,[\s\S]*jsxDEV\("div", \{ className: "outlet"/
@@ -172,6 +169,41 @@ export default function Layout({ children }) {
       out,
       /return[\s\S]*jsxDEV\("h1", \{ children: "Title" \}/
     )
+  })
+
+  it("templates layout-scale shell with conditional, nav region, text, and outlet", () => {
+    const out = transform(`
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { signal } from "kiru"
+import { Link } from "kiru/router"
+
+const guardEvents = signal([])
+
+export default function Layout({ children, signedIn }) {
+  return jsxDEV("main", {
+    className: "layout",
+    children: [
+      jsxDEV("h1", { children: "Title" }, void 0, false, void 0, this),
+      signedIn ? jsxDEV("p", { children: "in" }, void 0, false, void 0, this) : jsxDEV("p", { children: "out" }, void 0, false, void 0, this),
+      jsxDEV("nav", { children: [
+        jsxDEV(Link, { to: "/", children: "Home" }, void 0, false, void 0, this),
+        jsxDEV(Link, { to: "/about", children: "About" }, void 0, false, void 0, this),
+      ] }, void 0, true, void 0, this),
+      jsxDEV("p", { children: ["Guard: ", () => guardEvents().join(", ")] }, void 0, true, void 0, this),
+      jsxDEV("section", { children }, void 0, false, void 0, this),
+    ],
+  }, void 0, true, void 0, this)
+}
+`)
+    assert.match(out, /const \$t0 = _template\([^)]*<main/)
+    assert.match(out, /createHoledTemplate\(\$t0,/)
+    assert.match(out, /\{kind:"conditional"/)
+    assert.match(out, /\{kind:"text"/)
+    assert.match(out, /\{kind:"children"/)
+    assert.doesNotMatch(out, /tagStaticChildrenList/)
+    assert.doesNotMatch(out, /dynamicIndices/)
+    const mainTemplates = (out.match(/\$t\d+ = _template\([^)]*<main/g) ?? []).length
+    assert.strictEqual(mainTemplates, 1)
   })
 
   it("does not template Counter render tree with signals", () => {

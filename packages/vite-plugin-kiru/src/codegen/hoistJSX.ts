@@ -1,15 +1,16 @@
 import * as AST from "./ast.js"
-import { MagicString, TransformCTX } from "./shared.js"
 import {
-  bindingKindAtDepth,
+  formatRegionsLiteral,
+  getCompileRegionsForJsxs,
+} from "./compileRegions.js"
+import { MagicString, TransformCTX } from "./shared.js"
+import { walkProgramBody } from "./scopeWalk.js"
+import {
   blocksModuleHoist,
-  buildModuleImportScope,
-  declareFunctionParamBindings,
   isKiruJsxFactoryCall,
   isModuleSignalBinding,
   isSignalFactoryCall,
   isStaticLiteral,
-  registerImportDeclaration,
   type BindingInfo,
 } from "./scope.js"
 
@@ -28,6 +29,19 @@ type AnalysisCtx = {
   isJsxDev: (node: AstNode) => boolean
 }
 
+function createAnalysisCtx(
+  resolve: (name: string) => BindingInfo | null
+): AnalysisCtx {
+  return {
+    resolve,
+    isJsxProd: (node) =>
+      isKiruJsxFactoryCall(node, resolve, "jsx") ||
+      isKiruJsxFactoryCall(node, resolve, "jsxs"),
+    isJsxs: (node) => isKiruJsxFactoryCall(node, resolve, "jsxs"),
+    isJsxDev: (node) => isKiruJsxFactoryCall(node, resolve, "jsxDEV"),
+  }
+}
+
 const NON_TRACKING_SIGNAL_METHODS = new Set(["peek", "set", "sneak"])
 
 /** Matches `FLAG_HOISTED` in packages/lib/src/constants.ts (1 << 5). */
@@ -37,232 +51,41 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
   const { code, ast } = ctx
   const bodyNodes = ast.body as AstNode[]
 
-  const scope = buildModuleImportScope(bodyNodes)
-  const resolve = (name: string) => scope.resolve(name)
-
-  const analysis: AnalysisCtx = {
-    resolve,
-    isJsxProd: (node) =>
-      isKiruJsxFactoryCall(node, resolve, "jsx") ||
-      isKiruJsxFactoryCall(node, resolve, "jsxs"),
-    isJsxs: (node) => isKiruJsxFactoryCall(node, resolve, "jsxs"),
-    isJsxDev: (node) => isKiruJsxFactoryCall(node, resolve, "jsxDEV"),
-  }
-
   const hoistableCalls: AstNode[] = []
   const hoistableRegionArrays: AstNode[] = []
-  const dynamicSlotCalls: { node: AstNode; indices: number[] }[] = []
+  const dynamicSlotCalls: {
+    node: AstNode
+    regions: import("kiru/template").CompileRegion[]
+  }[] = []
 
-  let fnDepth = 0
-
-  const enterFunction = (node: AstNode) => {
-    fnDepth++
-    scope.push()
-    declareFunctionParamBindings(
-      (node as { params?: AstNode[] }).params,
-      scope,
-      fnDepth >= 2 ? "renderLocal" : "param"
-    )
-  }
-
-  const exitFunction = () => {
-    scope.pop()
-    fnDepth--
-  }
-
-  const declareVariable = (name: string, init?: AstNode) => {
-    scope.declare(name, {
-      kind: bindingKindAtDepth(fnDepth, init, resolve),
-      name,
-    })
-  }
-
-  const walkStmt = (node: AstNode) => {
-    if (!node || typeof node !== "object" || !("type" in node)) return
-
-    if (node.type === "ImportDeclaration" && fnDepth === 0) {
-      registerImportDeclaration(node, scope)
-      return
-    }
-
-    if (
-      node.type === "FunctionDeclaration" ||
-      node.type === "FunctionExpression" ||
-      node.type === "ArrowFunctionExpression"
-    ) {
-      enterFunction(node)
-      const body = (node as { body?: AstNode }).body
-      if (body?.type === "BlockStatement") {
-        for (const stmt of (body.body as AstNode[]) ?? []) {
-          walkStmt(stmt)
-        }
-      } else if (body && body.type !== "BlockStatement") {
-        walkExpr(body, null, null)
+  const scope = walkProgramBody(bodyNodes, {
+    onCallExpression: (node, walkCtx) => {
+      const analysis = createAnalysisCtx(walkCtx.resolve)
+      if (canHoistToModule(node, analysis)) {
+        hoistableCalls.push(node)
       }
-      exitFunction()
-      return
-    }
-
-    if (node.type === "VariableDeclaration") {
-      for (const decl of node.declarations ?? []) {
-        if (decl.type !== "VariableDeclarator") continue
-        const id = decl.id
-        if (id?.type === "Identifier" && id.name) {
-          declareVariable(id.name, decl.init as AstNode | undefined)
-        }
-        if (decl.init) walkExpr(decl.init as AstNode, null, null)
+      const regions = getCompileRegionsForJsxs(node, analysis)
+      if (regions) {
+        dynamicSlotCalls.push({ node, regions })
       }
-      return
-    }
-
-    if (node.type === "ReturnStatement") {
-      const arg = node.argument
+    },
+    onArrayExpression: (node, walkCtx) => {
+      const analysis = createAnalysisCtx(walkCtx.resolve)
       if (
-        arg &&
-        (arg.type === "ArrowFunctionExpression" ||
-          arg.type === "FunctionExpression")
-      ) {
-        enterFunction(arg)
-        const renderBody = (arg as { body?: AstNode }).body
-        if (renderBody?.type === "BlockStatement") {
-          for (const stmt of (renderBody.body as AstNode[]) ?? []) {
-            walkStmt(stmt)
-          }
-        } else if (renderBody) {
-          walkExpr(renderBody, null, null)
-        }
-        exitFunction()
-        return
-      }
-      if (arg) walkExpr(arg, null, null)
-      return
-    }
-
-    if (node.type === "ExportNamedDeclaration" && node.declaration) {
-      walkStmt(node.declaration)
-      return
-    }
-    if (node.type === "ExportDefaultDeclaration" && node.declaration) {
-      walkStmt(node.declaration)
-      return
-    }
-
-    if (node.type === "ExpressionStatement" && node.expression) {
-      walkExpr(node.expression as AstNode, null, null)
-    }
-  }
-
-  const walkExpr = (
-    node: AstNode,
-    parent: AstNode | null = null,
-    grandparent: AstNode | null = null
-  ) => {
-    if (!node || typeof node !== "object" || !("type" in node)) return
-
-    if (
-      node.type === "ArrowFunctionExpression" ||
-      node.type === "FunctionExpression"
-    ) {
-      enterFunction(node)
-      const body = (node as { body?: AstNode }).body
-      if (body?.type === "BlockStatement") {
-        for (const stmt of (body.body as AstNode[]) ?? []) {
-          walkStmt(stmt)
-        }
-      } else if (body) {
-        walkExpr(body, parent, grandparent)
-      }
-      exitFunction()
-      return
-    }
-
-    if (node.type === "ArrayExpression") {
-      if (
-        isCreateHoledTemplateRegionHole(node, parent, grandparent) &&
+        isCreateHoledTemplateRegionHole(
+          node,
+          walkCtx.parent(),
+          walkCtx.grandparent()
+        ) &&
         canHoistRegionArray(node, analysis)
       ) {
         hoistableRegionArrays.push(node)
       }
-    }
+    },
+  })
 
-    if (node.type === "CallExpression") {
-      if (canHoistToModule(node, analysis)) {
-        hoistableCalls.push(node)
-      }
-      const dynamic = getDynamicChildIndices(node, analysis)
-      if (dynamic) {
-        dynamicSlotCalls.push({ node, indices: dynamic })
-      }
-      walkCallChildren(node, node, parent)
-      return
-    }
-
-    walkExprChildren(node, parent, grandparent)
-  }
-
-  const walkCallChildren = (
-    node: AstNode,
-    parent: AstNode,
-    grandparent: AstNode | null
-  ) => {
-    for (const arg of node.arguments ?? []) {
-      if (arg) walkExpr(arg as AstNode, parent, grandparent)
-    }
-  }
-
-  const walkExprChildren = (
-    node: AstNode,
-    parent: AstNode | null,
-    grandparent: AstNode | null
-  ) => {
-    const keys: (keyof AstNode)[] = [
-      "arguments",
-      "properties",
-      "expressions",
-      "left",
-      "right",
-      "callee",
-      "object",
-      "property",
-    ]
-    for (const key of keys) {
-      const val = node[key]
-      if (!val) continue
-      if (Array.isArray(val)) {
-        for (const c of val) {
-          if (c && typeof c === "object" && "type" in c) {
-            walkExpr(c as AstNode, node, parent)
-          }
-        }
-      } else if (typeof val === "object" && "type" in val) {
-        walkExpr(val as AstNode, node, parent)
-      }
-    }
-    if (node.type === "ArrayExpression") {
-      for (const c of (node as { elements?: (AstNode | null)[] }).elements ??
-        []) {
-        if (c && typeof c === "object" && "type" in c) {
-          walkExpr(c as AstNode, node, parent)
-        }
-      }
-    }
-    if (
-      node.type === "Property" &&
-      node.value != null &&
-      typeof node.value === "object" &&
-      "type" in node.value
-    ) {
-      walkExpr(node.value as AstNode, node, parent)
-    }
-  }
-
-  for (const stmt of bodyNodes) {
-    if (stmt.type === "ImportDeclaration") {
-      registerImportDeclaration(stmt, scope)
-      continue
-    }
-    walkStmt(stmt)
-  }
+  const resolve = (name: string) => scope.resolve(name)
+  const analysis = createAnalysisCtx(resolve)
 
   if (
     hoistableCalls.length === 0 &&
@@ -339,13 +162,15 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
   const sortedDynamicSlots = [...dynamicSlotCalls].sort(
     (a, b) => b.node.start - a.node.start
   )
-  for (const { node, indices } of sortedDynamicSlots) {
+  for (const { node, regions } of sortedDynamicSlots) {
     if (hoistedNodes.has(node)) continue
     const current = code.slice(node.start, node.end)
     code.update(
       node.start,
       node.end,
-      `Object.assign(${current},{meta:{dynamicIndices:[${indices.join(",")}]}})`
+      `Object.assign(${current},{meta:{regions:${formatRegionsLiteral(
+        regions
+      )}}})`
     )
   }
 
@@ -408,6 +233,7 @@ function isFullyStaticRegionArray(
   ).filter(Boolean) as AstNode[]
   for (const elem of elems) {
     if (!isJsxFactoryCall(elem, ctx)) return false
+    if (!isIntrinsicJsxTag(elem.arguments?.[0])) return false
     if (!isHoistableJsxCall(elem, ctx, true)) return false
     if (subtreeHasImpureCall(elem, ctx)) return false
   }
@@ -481,8 +307,13 @@ function filterMaximalHoistCandidates(calls: AstNode[]): AstNode[] {
   )
 }
 
+function isIntrinsicJsxTag(typeArg: AstNode | null | undefined): boolean {
+  return typeArg?.type === "Literal" && typeof typeArg.value === "string"
+}
+
 function canHoistToModule(callNode: AstNode, ctx: AnalysisCtx): boolean {
   if (!isJsxFactoryCall(callNode, ctx)) return false
+  if (!isIntrinsicJsxTag(callNode.arguments?.[0])) return false
   if (!isHoistableJsxCall(callNode, ctx, false)) return false
   if (expressionReferencesBlockedBinding(callNode, ctx)) return false
   if (subtreeHasImpureCall(callNode, ctx)) return false
@@ -755,120 +586,6 @@ function isHoistableJsxDevSelfArg(node: AstNode): boolean {
   return false
 }
 
-function getDynamicChildIndices(
-  callNode: AstNode,
-  ctx: AnalysisCtx
-): number[] | null {
-  if (!ctx.isJsxs(callNode) && !ctx.isJsxDev(callNode)) return null
-
-  if (ctx.isJsxDev(callNode)) {
-    const isStaticChildrenArg = callNode.arguments?.[3]
-    if (
-      isStaticChildrenArg?.type !== "Literal" ||
-      isStaticChildrenArg.value !== true
-    ) {
-      return null
-    }
-  }
-
-  const elems = getChildrenArrayElements(callNode.arguments?.[1])
-  if (!elems?.length) return null
-
-  const dynamic: number[] = []
-  for (let i = 0; i < elems.length; i++) {
-    if (isDynamicChildSlot(elems[i] as AstNode, ctx)) {
-      dynamic.push(i)
-    }
-  }
-  if (dynamic.length === 0 || dynamic.length === elems.length) return null
-  return dynamic
-}
-
-function getChildrenArrayElements(
-  propsArg: AstNode | undefined | null
-): (AstNode | null)[] | null {
-  if (!propsArg || propsArg.type !== "ObjectExpression") return null
-  for (const prop of propsArg.properties ?? []) {
-    if (prop.type !== "Property") continue
-    const keyName =
-      prop.key?.name ??
-      (typeof prop.key?.value === "string" ? prop.key.value : undefined)
-    if (keyName !== "children") continue
-    const value = prop.value as AstNode
-    if (value?.type === "ArrayExpression") {
-      return (value as { elements?: (AstNode | null)[] }).elements ?? []
-    }
-  }
-  return null
-}
-
-function isDynamicChildSlot(
-  node: AstNode | null | undefined,
-  ctx: AnalysisCtx
-): boolean {
-  if (!node) return false
-  if (node.type === "Identifier") {
-    const name = node.name
-    if (!name || name === "undefined") return false
-    const binding = ctx.resolve(name)
-    if (isModuleSignalBinding(binding)) return true
-    if (binding?.kind === "setupConst") return true
-    return binding != null && blocksModuleHoist(binding)
-  }
-  if (isStaticLiteral(node)) return false
-  if (node.type === "CallExpression") {
-    if (isJsxFactoryCall(node, ctx)) {
-      return jsxFactoryCallHasDynamicChildSlot(node, ctx)
-    }
-    if (isReactiveSignalRead(node, ctx)) return true
-    if (isNonTrackingSignalMemberCall(node, ctx)) return false
-    if (isImpureCall(node, ctx)) return true
-    return true
-  }
-  return true
-}
-
-function jsxFactoryCallHasDynamicChildSlot(
-  callNode: AstNode,
-  ctx: AnalysisCtx
-): boolean {
-  const propsArg = callNode.arguments?.[1]
-  if (!propsArg || propsArg.type !== "ObjectExpression") return true
-  for (const prop of propsArg.properties ?? []) {
-    if (prop.type !== "Property") continue
-    const keyName =
-      prop.key?.name ??
-      (typeof prop.key?.value === "string" ? prop.key.value : undefined)
-    if (keyName !== "children") continue
-    return isDynamicChildContent(prop.value as AstNode, ctx)
-  }
-  return false
-}
-
-function isDynamicChildContent(node: AstNode, ctx: AnalysisCtx): boolean {
-  if (!node) return false
-  if (node.type === "Identifier") {
-    const binding = ctx.resolve(node.name!)
-    if (isModuleSignalBinding(binding)) return true
-    if (binding?.kind === "setupConst") return true
-    return binding != null && blocksModuleHoist(binding)
-  }
-  if (node.type === "CallExpression") {
-    if (isReactiveSignalRead(node, ctx)) return true
-    if (isNonTrackingSignalMemberCall(node, ctx)) return false
-    if (isImpureCall(node, ctx)) return true
-    return false
-  }
-  if (node.type === "ArrayExpression") {
-    for (const elem of (node as { elements?: (AstNode | null)[] }).elements ??
-      []) {
-      if (elem && isDynamicChildContent(elem as AstNode, ctx)) return true
-    }
-    return false
-  }
-  return false
-}
-
 function isHoistedCallNestedIn(
   candidate: Hoistable,
   allHoistables: Hoistable[]
@@ -956,16 +673,20 @@ function buildElementMetaLiteral(
   const parts: string[] = []
   const flagsBase = `(${varName}.meta?.flags??0)`
   let flagsExpr: string | null = null
-  if (isHoistableJsxCall(node, ctx, true) && !subtreeHasImpureCall(node, ctx)) {
+  if (
+    isIntrinsicJsxTag(node.arguments?.[0]) &&
+    isHoistableJsxCall(node, ctx, true) &&
+    !subtreeHasImpureCall(node, ctx)
+  ) {
     flagsExpr = `${flagsBase}|${FLAG_HOISTED_BIT}`
   }
-  const dynamic = getDynamicChildIndices(node, ctx)
-  if (dynamic) {
-    parts.push(`dynamicIndices: [${dynamic.join(",")}]`)
+  const regions = getCompileRegionsForJsxs(node, ctx)
+  if (regions) {
+    parts.push(`regions: ${formatRegionsLiteral(regions)}`)
   }
   if (flagsExpr) {
     parts.unshift(`flags: ${flagsExpr}`)
-  } else if (dynamic) {
+  } else if (regions) {
     parts.unshift(`flags: ${flagsBase}`)
   }
   if (parts.length === 0) return null

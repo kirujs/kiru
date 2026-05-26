@@ -1,4 +1,5 @@
-import type { AstNode } from "./ast.js"
+import * as AST from "./ast.js"
+import type { AstNode, WalkContext } from "./ast.js"
 import {
   ScopeStack,
   bindingKindAtDepth,
@@ -8,11 +9,21 @@ import {
   type BindingInfo,
 } from "./scope.js"
 
+export type ScopeWalkContext = {
+  resolve: (name: string) => BindingInfo | null
+  fnDepth: number
+  parent: () => AstNode | null
+  grandparent: () => AstNode | null
+  /** Ancestors for the node being visited (excludes that node). */
+  readonly stack: readonly AstNode[]
+} & Pick<
+  WalkContext,
+  "exit" | "exitBranch" | "skipDescent" | "walkArguments" | "walkChild"
+>
+
 export type ScopeWalkHooks = {
-  onCallExpression?: (
-    node: AstNode,
-    ctx: { resolve: (name: string) => BindingInfo | null; fnDepth: number }
-  ) => void
+  onCallExpression?: (node: AstNode, ctx: ScopeWalkContext) => void
+  onArrayExpression?: (node: AstNode, ctx: ScopeWalkContext) => void
 }
 
 /** Resolve bindings after walking imports, functions, and nested scopes. */
@@ -23,170 +34,124 @@ export function buildProgramBindingResolve(
   return (name: string) => scope.resolve(name)
 }
 
+function toScopeWalkContext(
+  walkCtx: WalkContext,
+  resolve: (name: string) => BindingInfo | null,
+  fnDepth: number
+): ScopeWalkContext {
+  return {
+    resolve,
+    fnDepth,
+    stack: walkCtx.stack,
+    parent: () => walkCtx.parent(),
+    grandparent: () => walkCtx.grandparent(),
+    exit: walkCtx.exit,
+    exitBranch: walkCtx.exitBranch,
+    skipDescent: walkCtx.skipDescent,
+    walkArguments: walkCtx.walkArguments,
+    walkChild: walkCtx.walkChild,
+  }
+}
+
+function createScopedProgramVisitor(
+  scope: ScopeStack,
+  fnDepthRef: { current: number },
+  hooks: ScopeWalkHooks
+): AST.AstVisitor {
+  const resolve = (name: string) => scope.resolve(name)
+
+  const enterFunction = (node: AstNode) => {
+    fnDepthRef.current++
+    scope.push()
+    declareFunctionParamBindings(
+      (node as { params?: AstNode[] }).params,
+      scope,
+      fnDepthRef.current >= 2 ? "renderLocal" : "param"
+    )
+    return () => {
+      scope.pop()
+      fnDepthRef.current--
+    }
+  }
+
+  const visitor: AST.AstVisitor = {
+    ImportDeclaration: (node, ctx) => {
+      if (fnDepthRef.current === 0) {
+        registerImportDeclaration(node, scope)
+      }
+      ctx.skipDescent()
+    },
+
+    FunctionDeclaration: (node) => enterFunction(node),
+    FunctionExpression: (node) => enterFunction(node),
+    ArrowFunctionExpression: (node) => enterFunction(node),
+
+    VariableDeclaration: (node) => {
+      for (const decl of node.declarations ?? []) {
+        if (decl.type !== "VariableDeclarator") continue
+        const id = decl.id
+        if (id?.type === "Identifier" && id.name) {
+          scope.declare(id.name, {
+            kind: bindingKindAtDepth(
+              fnDepthRef.current,
+              decl.init as AstNode,
+              resolve
+            ),
+            name: id.name,
+          })
+        }
+      }
+    },
+
+    CallExpression: (node, ctx) => {
+      hooks.onCallExpression?.(
+        node,
+        toScopeWalkContext(ctx, resolve, fnDepthRef.current)
+      )
+      ctx.walkArguments(node)
+      ctx.skipDescent()
+    },
+
+    ArrayExpression: (node, ctx) => {
+      hooks.onArrayExpression?.(
+        node,
+        toScopeWalkContext(ctx, resolve, fnDepthRef.current)
+      )
+    },
+
+    ExportNamedDeclaration: (node, ctx) => {
+      if (node.declaration) {
+        AST.walk(node.declaration, visitor)
+      }
+      ctx.skipDescent()
+    },
+
+    ExportDefaultDeclaration: (node, ctx) => {
+      if (node.declaration) {
+        AST.walk(node.declaration, visitor)
+      }
+      ctx.skipDescent()
+    },
+  }
+
+  return visitor
+}
+
 /** Walk module body with lexical scope (imports, functions, blocks, setup/render). */
 export function walkProgramBody(
   bodyNodes: AstNode[],
   hooks: ScopeWalkHooks
 ): ScopeStack {
   const scope = buildModuleImportScope(bodyNodes)
-  const resolve = (name: string) => scope.resolve(name)
-  let fnDepth = 0
-
-  const enterFunction = (node: AstNode) => {
-    fnDepth++
-    scope.push()
-    declareFunctionParamBindings(
-      (node as { params?: AstNode[] }).params,
-      scope,
-      fnDepth >= 2 ? "renderLocal" : "param"
-    )
-  }
-
-  const exitFunction = () => {
-    scope.pop()
-    fnDepth--
-  }
-
-  const walkStmt = (node: AstNode) => {
-    if (!node || typeof node !== "object" || !("type" in node)) return
-
-    if (node.type === "ImportDeclaration" && fnDepth === 0) {
-      registerImportDeclaration(node, scope)
-      return
-    }
-
-    if (
-      node.type === "FunctionDeclaration" ||
-      node.type === "FunctionExpression" ||
-      node.type === "ArrowFunctionExpression"
-    ) {
-      enterFunction(node)
-      const body = (node as { body?: AstNode }).body
-      if (body?.type === "BlockStatement") {
-        for (const stmt of (body.body as AstNode[]) ?? []) walkStmt(stmt)
-      } else if (body) {
-        walkExpr(body)
-      }
-      exitFunction()
-      return
-    }
-
-    if (node.type === "VariableDeclaration") {
-      for (const decl of node.declarations ?? []) {
-        if (decl.type !== "VariableDeclarator") continue
-        const id = decl.id
-        if (id?.type === "Identifier" && id.name) {
-          scope.declare(id.name, {
-            kind: bindingKindAtDepth(fnDepth, decl.init as AstNode, resolve),
-            name: id.name,
-          })
-        }
-        if (decl.init) walkExpr(decl.init as AstNode)
-      }
-      return
-    }
-
-    if (node.type === "ReturnStatement") {
-      const arg = node.argument
-      if (
-        arg &&
-        (arg.type === "ArrowFunctionExpression" ||
-          arg.type === "FunctionExpression")
-      ) {
-        enterFunction(arg)
-        const renderBody = (arg as { body?: AstNode }).body
-        if (renderBody?.type === "BlockStatement") {
-          for (const stmt of (renderBody.body as AstNode[]) ?? []) walkStmt(stmt)
-        } else if (renderBody) {
-          walkExpr(renderBody)
-        }
-        exitFunction()
-        return
-      }
-      if (arg) walkExpr(arg)
-      return
-    }
-
-    if (node.type === "ExportNamedDeclaration" && node.declaration) {
-      walkStmt(node.declaration)
-      return
-    }
-    if (node.type === "ExportDefaultDeclaration" && node.declaration) {
-      walkStmt(node.declaration)
-      return
-    }
-
-    if (node.type === "ExpressionStatement" && node.expression) {
-      walkExpr(node.expression as AstNode)
-    }
-  }
-
-  const walkExpr = (node: AstNode) => {
-    if (!node || typeof node !== "object" || !("type" in node)) return
-
-    if (
-      node.type === "ArrowFunctionExpression" ||
-      node.type === "FunctionExpression"
-    ) {
-      enterFunction(node)
-      const body = (node as { body?: AstNode }).body
-      if (body?.type === "BlockStatement") {
-        for (const stmt of (body.body as AstNode[]) ?? []) walkStmt(stmt)
-      } else if (body) {
-        walkExpr(body)
-      }
-      exitFunction()
-      return
-    }
-
-    if (node.type === "CallExpression") {
-      hooks.onCallExpression?.(node, { resolve, fnDepth })
-      for (const arg of node.arguments ?? []) {
-        if (arg) walkExpr(arg)
-      }
-      return
-    }
-    walkExprChildren(node)
-  }
-
-  const walkExprChildren = (node: AstNode) => {
-    for (const key of [
-      "arguments",
-      "properties",
-      "elements",
-      "expressions",
-      "left",
-      "right",
-      "callee",
-      "object",
-      "property",
-    ] as const) {
-      const val = node[key]
-      if (!val) continue
-      if (Array.isArray(val)) {
-        for (const c of val) {
-          if (c && typeof c === "object" && "type" in c) walkExpr(c as AstNode)
-        }
-      } else if (typeof val === "object" && "type" in val) {
-        walkExpr(val as AstNode)
-      }
-    }
-    if (
-      node.type === "Property" &&
-      node.value != null &&
-      typeof node.value === "object" &&
-      "type" in node.value
-    ) {
-      walkExpr(node.value as AstNode)
-    }
-  }
+  const fnDepthRef = { current: 0 }
+  const visitor = createScopedProgramVisitor(scope, fnDepthRef, hooks)
 
   for (const stmt of bodyNodes) {
     if (stmt.type === "ImportDeclaration") {
       registerImportDeclaration(stmt, scope)
       continue
     }
-    walkStmt(stmt)
+    AST.walk(stmt, visitor)
   }
   return scope
 }

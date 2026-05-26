@@ -13,5 +13,5 @@ const $t0 = _template("<div><span>A</span><!--#--></div>", 1)
 const Mixed = () =>
   Object.assign(
     createHoledTemplate($t0, [$k0]),
-    { meta: { dynamicIndices: [1] } }
+    { meta: { regions: [{ kind: "insert", slot: 1 }] } }
   )

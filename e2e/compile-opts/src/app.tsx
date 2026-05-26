@@ -48,7 +48,7 @@ interface CounterProps {
   items: number[]
 }
 
-/** Dynamic render tree — must stay on jsx + dynamicIndices, not templates. */
+/** Dynamic render tree — must stay on jsx + compile regions, not templates. */
 const Counter: Kiru.Component<CounterProps> = () => {
   const { derive } = setup<typeof Counter>()
   const count = derive((props) => props.foo.initialCount)

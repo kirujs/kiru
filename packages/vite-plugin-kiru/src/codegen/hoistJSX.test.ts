@@ -53,11 +53,10 @@ const Badge = () =>
   it("inserts hoisted declarations after imports before first use", () => {
     const out = transformHoist(`
 import { mount } from "kiru"
-import { App } from "./app"
 import { jsxDEV } from "kiru/jsx-dev-runtime"
 
 mount(
-  jsxDEV(App, {}, void 0, false, {
+  jsxDEV("div", { id: "app", children: "loading" }, void 0, false, {
     fileName: "main.tsx",
     lineNumber: 5,
     columnNumber: 3,
@@ -228,7 +227,7 @@ export function Page({ label }) {
     assert.doesNotMatch(out, /\$k\d+\.meta=\{ flags: \(\$k\d+\.meta\?\.flags\?\?0\)\|32/)
   })
 
-  it("emits dynamicChildIndices for mixed static hoisted jsxs children", () => {
+  it("emits compile regions for mixed static hoisted jsxs children", () => {
     const out = transformHoist(`
 import { jsxs, jsx } from "kiru/jsx-runtime"
 import { signal } from "kiru"
@@ -244,7 +243,7 @@ export function Page() {
   })
 }
 `)
-    assert.match(out, /dynamicIndices:\s*\[1\]/)
+    assert.match(out, /regions:\s*\[\{kind:"insert",slot:1\}\]/)
   })
 
   it("does not mark FLAG_HOISTED when a child uses count()", () => {
@@ -296,7 +295,7 @@ export function Page() {
     assert.match(out, /\$k\d+\.meta=\{ flags: \(\$k\d+\.meta\?\.flags\?\?0\)\|32/)
   })
 
-  it("marks dynamicChildIndices for count() in a mixed jsxs children array", () => {
+  it("marks compile regions for count() in a mixed jsxs children array", () => {
     const out = transformHoist(`
 import { jsxs, jsx } from "kiru/jsx-runtime"
 import { signal } from "kiru"
@@ -312,7 +311,7 @@ export function Page() {
   })
 }
 `)
-    assert.match(out, /dynamicIndices:\s*\[1\]/)
+    assert.match(out, /regions:\s*\[\{kind:"insert",slot:1\}\]/)
   })
 
   it("does not treat shadowed signal import as a signal factory", () => {
@@ -396,7 +395,7 @@ const Counter = () => {
     assert.doesNotMatch(out, /const \$k\d+ = jsxs\(/)
   })
 
-  it("assigns dynamicIndices via Object.assign inside render arrow", () => {
+  it("assigns compile regions via Object.assign inside render arrow", () => {
     const out = transformHoist(`
 import { jsxDEV } from "kiru/jsx-dev-runtime"
 import { setup } from "kiru"
@@ -415,7 +414,7 @@ const Counter = () => {
 `)
     assert.doesNotMatch(out, /const \$__jsx\d+ = jsxDEV/)
     assert.match(out, /return \(props\) =>/)
-    assert.match(out, /Object\.assign\([\s\S]*meta:\{dynamicIndices:\[[^\]]+\]\}/)
+    assert.match(out, /Object\.assign\([\s\S]*meta:\{regions:\[[^\]]+\]\}/)
   })
 
   it("hoists when jsxDEV is imported from a Vite-resolved kiru jsx module", () => {
@@ -546,7 +545,7 @@ export function App() {
     assert.match(out, /children: count\(\)/)
   })
 
-  it("hoists template region array to module and skips per-link hoists", () => {
+  it("does not hoist template region arrays of component jsx", () => {
     const out = transformHoist(`
 import { jsxDEV } from "kiru/jsx-dev-runtime"
 import { _template, createHoledTemplate } from "kiru/template"
@@ -564,10 +563,45 @@ export default function Layout({ children }) {
   ])
 }
 `)
+    assert.doesNotMatch(out, /tagStaticChildrenList/)
+    assert.doesNotMatch(out, /const \$k\d+ = jsxDEV\(Link/)
+    assert.match(out, /createHoledTemplate\(\$t0,\s*\[\s*\[/)
+    assert.match(out, /return[\s\S]*jsxDEV\(Link/)
+  })
+
+  it("hoists template region arrays of intrinsic static jsx", () => {
+    const out = transformHoist(`
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { _template, createHoledTemplate } from "kiru/template"
+
+const $t0 = _template("<nav><!--#--></nav>", 1)
+
+export default function Layout({ children }) {
+  return createHoledTemplate($t0, [
+    [
+      jsxDEV("a", { href: "/", children: "Home" }, void 0, false, void 0, this),
+      jsxDEV("a", { href: "/about", children: "About" }, void 0, false, void 0, this),
+    ],
+    children,
+  ])
+}
+`)
     assert.match(out, /const \$k0 = tagStaticChildrenList\(\[/)
     assert.match(out, /createHoledTemplate\(\$t0,\s*\[\s*\$k0,\s*children\s*,?\s*\]/)
-    assert.doesNotMatch(out, /const \$k1 = jsxDEV\(Link/)
-    assert.doesNotMatch(out, /return[\s\S]*jsxDEV\(Link/)
+    assert.doesNotMatch(out, /return[\s\S]*jsxDEV\("a"/)
+  })
+
+  it("does not module-hoist component jsx calls", () => {
+    const out = transformHoist(`
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { Link } from "kiru/router"
+
+export function Nav() {
+  return jsxDEV(Link, { to: "/", children: "Home" }, void 0, false, void 0, this)
+}
+`)
+    assert.doesNotMatch(out, /const \$k\d+ = jsxDEV\(Link/)
+    assert.match(out, /return jsxDEV\(Link/)
   })
 
   it("does not hoist layout shell when children is a destructured param", () => {
@@ -591,7 +625,7 @@ export default function Layout({ children }) {
       /const \$k\d+ = jsxDEV\("div", \{[\s\S]*\bchildren \}/
     )
     assert.match(out, /className: "outlet", children \}/)
-    assert.match(out, /dynamicIndices:\[1\]/)
+    assert.match(out, /regions:\[\{kind:"insert",slot:1\}\]/)
     assert.match(out, /children: \[\s*\$k0,/)
     assert.doesNotMatch(
       out,

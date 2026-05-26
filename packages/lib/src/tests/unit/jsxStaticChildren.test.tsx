@@ -195,7 +195,7 @@ describe("jsx static children", () => {
     assert.ok(isSignal(host.child?.props.children))
   })
 
-  it("dynamicChildIndices only reconciles dynamic slots", () => {
+  it("compileRegions only reconciles dynamic slots", () => {
     const count = signal(0)
     const children = [
       jsx("span", { children: "static" }),
@@ -203,7 +203,7 @@ describe("jsx static children", () => {
     ]
     const host = createVNode("div")
     host.flags |= FLAG_STATIC_CHILDREN
-    host.dynamicChildIndices = [1]
+    host.compileRegions = [{ kind: "insert", slot: 1 }]
 
     host.child = reconcileChildren(host, children)
     commitChildren(host)
