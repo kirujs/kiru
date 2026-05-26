@@ -83,7 +83,7 @@ export function lazy<T extends LazyImportValue>(
   if (__DEV__) {
     LazyWrapper.displayName = "Kiru.lazy"
   }
-  return LazyWrapper
+  return LazyWrapper as Kiru.Component<LazyComponentProps<T>>
 }
 
 /**

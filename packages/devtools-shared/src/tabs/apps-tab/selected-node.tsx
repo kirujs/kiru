@@ -4,10 +4,10 @@ import { ChevronRightIcon } from "../../components/icons/chevron-right-icon"
 import { selectedNodeViewData } from "./selected-node-state"
 
 export function SelectedNodeView() {
-  const nodeViewData = selectedNodeViewData.value
+  const nodeViewData = selectedNodeViewData()
   if (!nodeViewData) return null
   const { name, props } = nodeViewData
-  const arePropsCollapsed = props.collapsed.value
+  const arePropsCollapsed = props.collapsed()
 
   return (
     <div className="flex-grow p-2 sticky top-0">
@@ -16,7 +16,9 @@ export function SelectedNodeView() {
       </h2>
       <div className="flex flex-col">
         <button
-          onclick={() => (props.collapsed.value = !props.collapsed.value)}
+          onclick={() => {
+            props.collapsed.set(!props.collapsed())
+          }}
           className={
             props.root.children.length === 0
               ? "opacity-50 cursor-default"

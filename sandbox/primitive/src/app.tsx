@@ -1,14 +1,16 @@
 import { signal, setup } from "kiru"
 
 const initialCount = signal(0)
+
 export function App() {
-  console.log(initialCount.value)
+  console.log(initialCount())
   return (
     <div>
       <input bind:value={initialCount} type="number" />
+      {initialCount()}
       <Counter
-        foo={{ initialCount: initialCount.value }}
-        items={[initialCount.value, 2, 3]}
+        foo={{ initialCount: initialCount() }}
+        items={[initialCount(), 2, 3]}
       />
     </div>
   )
@@ -21,15 +23,17 @@ interface CounterProps {
   items: number[]
 }
 
+const StaticBadge = () => <span className="badge">OK</span>
+
 const Counter: Kiru.Component<CounterProps> = () => {
-  const { derive, props } = setup<typeof Counter>()
+  const { derive } = setup<typeof Counter>()
   const count = derive((props) => props.foo.initialCount)
 
-  return () => (
+  return (props) => (
     <div>
       <p>Items: {JSON.stringify(props.items)}</p>
       <h1>Count: {count}</h1>
-      <button onclick={() => count.value++}>Increment</button>
+      <button onclick={() => count.set((c) => c + 1)}>Increment</button>
     </div>
   )
 }

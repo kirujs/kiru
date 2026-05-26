@@ -14,9 +14,9 @@ export default function ActionsCompositionDemoPage() {
         type="button"
         onclick={async () => {
           try {
-            namespaceGetResult.value = await api.getEcho()
+            namespaceGetResult.set(await api.getEcho())
           } catch (e) {
-            namespaceGetResult.value = e instanceof Error ? e.message : "failed"
+            namespaceGetResult.set(e instanceof Error ? e.message : "failed")
           }
         }}
       >
@@ -29,9 +29,9 @@ export default function ActionsCompositionDemoPage() {
         type="button"
         onclick={async () => {
           try {
-            composeResult.value = JSON.stringify(await runPipeline())
+            composeResult.set(JSON.stringify(await runPipeline()))
           } catch (e) {
-            composeResult.value = e instanceof Error ? e.message : "failed"
+            composeResult.set(e instanceof Error ? e.message : "failed")
           }
         }}
       >
@@ -44,11 +44,11 @@ export default function ActionsCompositionDemoPage() {
         type="button"
         onclick={async () => {
           try {
-            deleteResult.value = JSON.stringify(
-              await api.removeLabel({ body: "demo" })
+            deleteResult.set(
+              JSON.stringify(await api.removeLabel({ body: "demo" }))
             )
           } catch (e) {
-            deleteResult.value = e instanceof Error ? e.message : "failed"
+            deleteResult.set(e instanceof Error ? e.message : "failed")
           }
         }}
       >

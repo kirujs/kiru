@@ -1,4 +1,4 @@
-import { signal, Signal } from "../signals/base.js"
+import { isSignal, signal, SignalHelpers, type Signal } from "../signals/base.js"
 import { createVNodeId, isVNodeDeleted } from "../utils/vdom.js"
 import { $INLINE_FN } from "../constants.js"
 import { __DEV__ } from "../env.js"
@@ -86,7 +86,7 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
     derive<T>(
       selector: (props: Props extends Kiru.Component<infer P> ? P : Props) => T
     ) {
-      const resultSig = signal(undefined!) as Signal<T>
+      const resultSig = signal<T>(undefined!)
       const unsubs = new Map<string, () => void>()
       const accessedPaths = new Set<string[]>()
 
@@ -98,12 +98,14 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
           currentProps.current as Record<string, unknown>
         ) as InferredProps
 
-        resultSig.value = executeWithTracking({
-          id: Signal.id(resultSig),
-          fn: () => selector(propsProxy),
-          onDepChanged: sync,
-          subs: unsubs,
-        })
+        resultSig.set(
+          executeWithTracking({
+            id: SignalHelpers.id(resultSig),
+            fn: () => selector(propsProxy),
+            onDepChanged: sync,
+            subs: unsubs,
+          })
+        )
         currentAccessedPaths = null
       }
 
@@ -128,14 +130,14 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
         if (node.current !== vNode) {
           registerVNodeCleanup(
             vNode,
-            Signal.id(id),
-            Signal.dispose.bind(null, id)
+            SignalHelpers.id(id),
+            SignalHelpers.dispose.bind(null, id)
           )
         }
         prevIndex = vNode.index
         propSyncs.push(() => {
           if (prevIndex !== vNode.index) {
-            id.value = createVNodeId(vNode)
+            id.set(createVNodeId(vNode))
             prevIndex = vNode.index
           }
         })
@@ -151,7 +153,7 @@ function createSetup<Props extends {}>(vNode: Kiru.VNode): Setup<Props> {
             if (typeof key === "symbol")
               return Reflect.get(currentProps.current as any, key)
             const v = (currentProps.current as any)[key]
-            if (v !== null && typeof v === "object" && !Signal.isSignal(v)) {
+            if (v !== null && typeof v === "object" && !isSignal(v)) {
               return createProxy(v)
             }
             return v
@@ -236,7 +238,7 @@ function createProxy<P extends Record<string, unknown>>(
         const keyPath = [...path, key as string]
         const v = holder[key as string]
 
-        if (v !== null && typeof v === "object" && !Signal.isSignal(v)) {
+        if (v !== null && typeof v === "object" && !isSignal(v)) {
           return createProxy(v as Record<string, unknown>, keyPath)
         }
 

@@ -1,6 +1,6 @@
 import { Link } from "kiru/router"
 
-export default function Layout({ children }: { children: JSX.Children }) {
+export default function Layout({ children }: { children: JSX.Element }) {
   return (
     <main data-testid="ssr-layout">
       <nav>
@@ -8,7 +8,9 @@ export default function Layout({ children }: { children: JSX.Children }) {
         {" | "}
         <Link to="/loaders/server">Server loader</Link>
         {" | "}
-        <Link to="/loaders/server-immediate-shell">Server loader immediate shell</Link>
+        <Link to="/loaders/server-immediate-shell">
+          Server loader immediate shell
+        </Link>
         {" | "}
         <Link to="/forms/demo">Form action</Link>
         {" | "}

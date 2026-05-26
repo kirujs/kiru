@@ -13,12 +13,15 @@ export default function NavigationPage() {
   const getMatches = useMatches()
 
   return () => {
-    const nav = router.currentNavigation.value
+    const nav = router.currentNavigation()
     return (
       <div className="space-y-3 text-slate-700">
         <p>
-          Uses <code className="rounded bg-slate-100 px-1">await router.navigate()</code>,{" "}
-          <code className="rounded bg-slate-100 px-1">useMatches()</code>,{" "}
+          Uses{" "}
+          <code className="rounded bg-slate-100 px-1">
+            await router.navigate()
+          </code>
+          , <code className="rounded bg-slate-100 px-1">useMatches()</code>,{" "}
           <code className="rounded bg-slate-100 px-1">isNavigating</code>, and{" "}
           <code className="rounded bg-slate-100 px-1">currentNavigation</code>.
         </p>
@@ -27,13 +30,13 @@ export default function NavigationPage() {
           className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
           onclick={async () => {
             const r = await router.navigate("/about")
-            lastNav.value = r.status
+            lastNav.set(r.status)
           }}
         >
           Programmatic navigate to About
         </button>
         <p>
-          Last result: <strong>{() => lastNav.value}</strong>
+          Last result: <strong>{() => lastNav()}</strong>
         </p>
         <p>
           Active match depth:{" "}
@@ -41,7 +44,7 @@ export default function NavigationPage() {
         </p>
         <p>
           Navigating:{" "}
-          <strong>{() => (router.isNavigating.value ? "yes" : "no")}</strong>
+          <strong>{() => (router.isNavigating() ? "yes" : "no")}</strong>
         </p>
         <p>
           From:{" "}
@@ -49,16 +52,16 @@ export default function NavigationPage() {
             {() =>
               nav?.from
                 ? formatSnapshot(nav.from.pathname, nav.from.params)
-                : "—"}
+                : "—"
+            }
           </strong>
         </p>
         <p>
           To:{" "}
           <strong>
             {() =>
-              nav?.to
-                ? formatSnapshot(nav.to.pathname, nav.to.params)
-                : "—"}
+              nav?.to ? formatSnapshot(nav.to.pathname, nav.to.params) : "—"
+            }
           </strong>
         </p>
       </div>

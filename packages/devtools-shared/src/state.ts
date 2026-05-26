@@ -1,4 +1,4 @@
-import { Signal, signal, type AppHandle } from "kiru"
+import { SignalHelpers, signal, type AppHandle, type Signal } from "kiru"
 import { assert, isDevtoolsApp } from "./utils"
 import { APP_TABS } from "./constants"
 import { getVNodeApp } from "kiru/utils"
@@ -46,21 +46,20 @@ function createSyncedState<T extends Record<string, unknown>>(
     [K in keyof T & string]: (data: SyncedStateBroadcastData<T>) => void
   }
 
-  for (const key in initial) {
-    const state: Signal<T[keyof T & string]> = (syncedState[key] = signal(
-      initial[key]
-    ))
+  const bindKey = <K extends keyof T & string>(key: K) => {
+    const state = signal(initial[key]) as SyncedState<T>[K]
+    syncedState[key] = state
     versions[key] = 0
 
     messageHandlers[key] = (data) => {
       if (data.type === "GET") {
-        const value = state.value
+        const value = state()
         const version = versions[key]
         return emit({ type: "SET", key, version }, value)
       }
 
       if (data.version > versions[key]) {
-        state.value = stateRegister[key]
+        state.set(stateRegister[key] as T[K])
         versions[key] = data.version
       }
     }
@@ -69,6 +68,10 @@ function createSyncedState<T extends Record<string, unknown>>(
       const version = ++versions[key]
       emit({ type: "SET", key, version }, value)
     })
+  }
+
+  for (const key in initial) {
+    bindKey(key as keyof T & string)
   }
 
   broadcastChannel.addEventListener(
@@ -82,7 +85,7 @@ function createSyncedState<T extends Record<string, unknown>>(
 
   const dispose = () => {
     broadcastChannel.close()
-    Object.values(syncedState).forEach((s) => Signal.dispose(s))
+    Object.values(syncedState).forEach((s) => SignalHelpers.dispose(s))
   }
 
   return [syncedState, dispose]
@@ -118,14 +121,14 @@ if ("window" in globalThis) {
   } = devtoolsState
 
   window.addEventListener("kiru:ready", () => {
-    apps.value = [...kiruGlobal().apps]
+    apps.set([...kiruGlobal().apps])
     kiruGlobal().on("mount", (app) => {
       if (isDevtoolsApp(app)) return
-      apps.value = [...apps.value, app]
+      apps.set((prev) => [...prev, app])
     })
     kiruGlobal().on("unmount", (app) => {
       if (isDevtoolsApp(app)) return
-      apps.value = apps.value.filter((a) => a !== app)
+      apps.set((prev) => prev.filter((a) => a !== app))
     })
   }, { once: true })
 
@@ -160,8 +163,8 @@ if ("window" in globalThis) {
   }
 
   componentSelection.subscribe(({ componentNode }) => {
-    selectedNode.value = componentNode
-    selectedApp.value = componentNode ? getVNodeApp(componentNode) : null
+    selectedNode.set(componentNode)
+    selectedApp.set(componentNode ? getVNodeApp(componentNode) : null)
   })
 }
 

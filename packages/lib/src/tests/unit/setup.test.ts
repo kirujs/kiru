@@ -18,7 +18,7 @@ describe("setup", () => {
     const { derive } = first
     const count = derive((props) => props.count * 2)
 
-    assert.strictEqual(count.value, 2, "derived signal should use initial props")
+    assert.strictEqual(count(), 2, "derived signal should use initial props")
 
     const propSyncs = vNode.propSyncs as ((props: { count: number }) => void)[]
     assert.ok(
@@ -32,7 +32,7 @@ describe("setup", () => {
     }
 
     assert.strictEqual(
-      count.value,
+      count(),
       10,
       "derived signal should update when propSyncs are invoked"
     )
@@ -47,7 +47,7 @@ describe("setup", () => {
 
     const { id } = setup<{ value: number }>()
 
-    const initialId = id.value
+    const initialId = id()
     assert.strictEqual(
       initialId,
       createVNodeId(vNode),
@@ -68,12 +68,12 @@ describe("setup", () => {
     }
 
     assert.notStrictEqual(
-      id.value,
+      id(),
       initialId,
       "id signal should update when the vNode index changes"
     )
     assert.strictEqual(
-      id.value,
+      id(),
       createVNodeId(vNode),
       "updated id should reflect the new vNode position"
     )

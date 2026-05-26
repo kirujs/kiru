@@ -247,7 +247,7 @@ export function createRouter({
   const match = signal(
     matchRoute(manifest, initialSplit.pathname, resolvedPathPolicy)
   )
-  const params = signal(match.value?.params ?? {})
+  const params = signal(match()?.params ?? {})
   const matches = signal(buildMatchSegments(match.peek()))
   const isNavigating = signal(false)
   const currentNavigation = signal<CurrentNavigation | null>(null)
@@ -280,8 +280,8 @@ export function createRouter({
       hash: hash.peek(),
     })
     if (check.ok) {
-      validatedQuery.value = check.validatedQuery ?? null
-      validatedRouteParams.value = check.params
+      validatedQuery.set(check.validatedQuery ?? null)
+      validatedRouteParams.set(check.params)
     }
   }
   void validateInitialSearch()
@@ -391,7 +391,7 @@ export function createRouter({
   }
 
   const commitLocation = (next: RouteLocationParts) => {
-    outletRenderError.value = null
+    outletRenderError.set(null)
     const prevPath = pathname.peek()
     if (next.pathname !== prevPath) {
       resetHydratedPageData()
@@ -400,13 +400,13 @@ export function createRouter({
         invalidateLoaderCache({ pathname: prevPath })
       }
     }
-    pathname.value = next.pathname
-    hash.value = next.hash
-    query.value = next.query
+    pathname.set(next.pathname)
+    hash.set(next.hash)
+    query.set(next.query)
     const nextMatch = matchRoute(manifest, next.pathname, resolvedPathPolicy)
-    match.value = nextMatch
-    params.value = nextMatch?.params ?? {}
-    matches.value = buildMatchSegments(nextMatch)
+    match.set(nextMatch)
+    params.set(nextMatch?.params ?? {})
+    matches.set(buildMatchSegments(nextMatch))
     if (typeof document !== "undefined" && nextMatch) {
       void syncDocumentHeadAfterCommit(nextMatch, next)
     }
@@ -447,10 +447,10 @@ export function createRouter({
       saveScrollAt,
       commitLocation: (next) => commitLocation(next),
       setValidatedQuery: (data) => {
-        validatedQuery.value = data
+        validatedQuery.set(data)
       },
       setValidatedRouteParams: (data) => {
-        validatedRouteParams.value = data
+        validatedRouteParams.set(data)
       },
       buildMatchSegments,
       locationFromMatch,
@@ -460,7 +460,7 @@ export function createRouter({
         lastNavigationHolder.entry = entry
       },
       setOutletRenderError: (err) => {
-        outletRenderError.value = err
+        outletRenderError.set(err)
       },
       localeRouting,
       locale,
@@ -582,8 +582,8 @@ export function createRouter({
       }
       resetHydratedPageData()
       clearStreamedSsrClientState()
-      forceLoaderReload.value = true
-      loaderEpoch.value += 1
+      forceLoaderReload.set(true)
+      loaderEpoch.set(loaderEpoch.peek() + (1))
     },
     navigationMode: "history",
     requestContext,
@@ -701,7 +701,7 @@ export function createRouter({
     resolveHref(to, hrefOpts) {
       const resolved = resolveNavigateTarget(to, hrefOpts?.params)
       return resolveRouterHref(
-        pathname.value,
+        pathname(),
         resolved,
         hrefOpts,
         localeRouting,
@@ -718,7 +718,7 @@ export function createRouter({
             if (typeof document !== "undefined") {
               document.cookie = `${i18n.localeCookie}=${encodeURIComponent(nextLocale)}; path=/; max-age=31536000; samesite=lax`
             }
-            locale.value = nextLocale
+            locale.set(nextLocale)
             i18nRuntime.setLocale(nextLocale, i18nRuntime.data.peek())
             void loadI18nMessages(i18n, nextLocale).then((data) => {
               if (i18nRuntime.locale.peek() === nextLocale) {
@@ -824,7 +824,7 @@ export function createStaticRouter({
   const hashSignal = signal(hash)
   const querySignal = signal(query)
   const match = signal(matchRoute(manifest, pathname, resolvedPathPolicy))
-  params.value = match.value?.params ?? {}
+  params.set(match()?.params ?? {})
   const matches = signal(buildMatchSegments(match.peek()))
   const isNavigating = signal(false)
   const currentNavigation = signal<CurrentNavigation | null>(null)
@@ -849,8 +849,8 @@ export function createStaticRouter({
     isLoaderPending: signal(false),
     isLoaderStale: signal(false),
     outletRenderError: signal<Error | null>(null),
-    validatedQuery: signal(null),
-    validatedRouteParams: signal(null),
+    validatedQuery: signal<unknown | null>(null),
+    validatedRouteParams: signal<Record<string, unknown> | null>(null),
     async invalidate() {},
     navigationMode: "static",
     navigate() {
@@ -864,7 +864,7 @@ export function createStaticRouter({
     },
     resolveHref(to, hrefOpts) {
       return resolveRouterHref(
-        path.value,
+        path(),
         to,
         hrefOpts,
         localeRouting,
@@ -897,7 +897,7 @@ export function createStaticRouter({
 /** Active route match segments (scopes + leaf), for breadcrumbs and `meta`. */
 export function useMatches(): () => RouteTreeMatchSegment[] {
   const router = useRouter()
-  return () => router.matches.value
+  return () => router.matches()
 }
 
 /** Validated query when the route `load` defines `validation.query`. */

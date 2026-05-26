@@ -2,7 +2,12 @@ import path from "node:path"
 import { createHash } from "node:crypto"
 import * as AST from "./ast.js"
 import { isAstExpression } from "./ast.js"
-import { MagicString, TransformCTX, createAliasHandler } from "./shared.js"
+import { MagicString, TransformCTX } from "./shared.js"
+import {
+  buildModuleImportScope,
+  isImportedCall,
+  type BindingInfo,
+} from "./scope.js"
 
 type AstNode = AST.AstNode
 
@@ -324,7 +329,7 @@ function collectActionsFromObject(
   objectNode: AstNode,
   exportNode: AstNode,
   namePrefix: string,
-  actionAliases: Set<string>,
+  resolve: (name: string) => BindingInfo | null,
   matches: ActionMatch[],
   refPrefix?: string,
   options?: {
@@ -349,7 +354,7 @@ function collectActionsFromObject(
         value,
         exportNode,
         namePath,
-        actionAliases,
+        resolve,
         matches,
         refPath,
         options
@@ -357,7 +362,7 @@ function collectActionsFromObject(
       continue
     }
 
-    if (isActionCall(value, actionAliases)) {
+    if (isActionCall(value, resolve)) {
       matches.push({
         replaceNode: prop,
         exportNode,
@@ -393,7 +398,7 @@ function resolveLinkedBinding(
 
 function collectNamedExportMatches(
   node: AstNode,
-  actionAliases: Set<string>,
+  resolve: (name: string) => BindingInfo | null,
   matches: ActionMatch[]
 ): void {
   if (
@@ -412,11 +417,11 @@ function collectNamedExportMatches(
   if (!init) return
 
   if (init.type === "ObjectExpression") {
-    collectActionsFromObject(init, node, binding, actionAliases, matches)
+    collectActionsFromObject(init, node, binding, resolve, matches)
     return
   }
 
-  if (isActionCall(init, actionAliases)) {
+  if (isActionCall(init, resolve)) {
     matches.push({
       replaceNode: node,
       exportNode: node,
@@ -431,7 +436,7 @@ function collectDefaultExportMatches(
   node: AstNode,
   nodeIndex: number,
   bodyNodes: AstNode[],
-  actionAliases: Set<string>,
+  resolve: (name: string) => BindingInfo | null,
   matches: ActionMatch[],
   namedBindings: Set<string>
 ): void {
@@ -444,7 +449,7 @@ function collectDefaultExportMatches(
       decl,
       node,
       DEFAULT_RPC_PREFIX,
-      actionAliases,
+      resolve,
       matches,
       DEFAULT_EXPORT_BINDING
     )
@@ -462,7 +467,7 @@ function collectDefaultExportMatches(
         linked.init,
         node,
         DEFAULT_RPC_PREFIX,
-        actionAliases,
+        resolve,
         matches,
         linked.binding,
         {
@@ -473,7 +478,7 @@ function collectDefaultExportMatches(
       return
     }
 
-    if (!isActionCall(linked.init, actionAliases)) return
+    if (!isActionCall(linked.init, resolve)) return
     matches.push({
       replaceNode: linked.declarationNode,
       exportNode: node,
@@ -486,7 +491,7 @@ function collectDefaultExportMatches(
     return
   }
 
-  if (!isActionCall(decl, actionAliases)) return
+  if (!isActionCall(decl, resolve)) return
   matches.push({
     replaceNode: node,
     exportNode: node,
@@ -509,15 +514,10 @@ function assertNoDefaultNameCollisions(matches: ActionMatch[]): void {
 }
 
 function findExportedActionCalls(bodyNodes: AstNode[]): ActionMatch[] {
-  const actionAliasHandler = createAliasHandler("action", "kiru/remote")
+  const scope = buildModuleImportScope(bodyNodes)
+  const resolve = (name: string) => scope.resolve(name)
   const matches: ActionMatch[] = []
   const namedBindings = new Set<string>()
-
-  for (const node of bodyNodes) {
-    if (node.type === "ImportDeclaration") {
-      actionAliasHandler.addAliases(node)
-    }
-  }
 
   for (const node of bodyNodes) {
     if (node.type === "ImportDeclaration") continue
@@ -527,7 +527,7 @@ function findExportedActionCalls(bodyNodes: AstNode[]): ActionMatch[] {
     ) {
       const binding = node.declaration.declarations?.[0]?.id?.name
       if (binding) namedBindings.add(binding)
-      collectNamedExportMatches(node, actionAliasHandler.aliases, matches)
+      collectNamedExportMatches(node, resolve, matches)
     }
   }
 
@@ -538,7 +538,7 @@ function findExportedActionCalls(bodyNodes: AstNode[]): ActionMatch[] {
       node,
       i,
       bodyNodes,
-      actionAliasHandler.aliases,
+      resolve,
       matches,
       namedBindings
     )
@@ -548,14 +548,14 @@ function findExportedActionCalls(bodyNodes: AstNode[]): ActionMatch[] {
   return matches
 }
 
-function isActionCall(node: AstNode, actionAliases: Set<string>): boolean {
-  if (node.type !== "CallExpression") return false
-  const callee = node.callee
-  return (
-    callee?.type === "Identifier" &&
-    typeof callee.name === "string" &&
-    actionAliases.has(callee.name)
-  )
+function isActionCall(
+  node: AstNode,
+  resolve: (name: string) => BindingInfo | null
+): boolean {
+  return isImportedCall(node, resolve, {
+    imported: "action",
+    namespace: "kiru/remote",
+  })
 }
 
 function isFormActionConfig(node: AstNode): boolean {

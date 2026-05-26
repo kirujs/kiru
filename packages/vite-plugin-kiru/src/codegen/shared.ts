@@ -1,9 +1,4 @@
-/**
- * We're explicitly importing the CJS version of MagicString
- * in order to prevent pollution caused by the UMD version
- */
-// @ts-expect-error
-import MagicString from "../../node_modules/magic-string/dist/magic-string.cjs"
+import MagicString from "magic-string"
 import type { ProgramNode } from "rollup"
 import { FileLinkFormatter } from "../types.js"
 import * as AST from "./ast.js"
@@ -18,13 +13,13 @@ export type TransformCTX = {
   ast: ProgramNode
   fileLinkFormatter: FileLinkFormatter
   isBuild: boolean
+  /** Set by applyJsxHoistAndTemplates when output differs from input. */
+  didTransform?: boolean
   filePath: string
 }
 
-export function createAliasHandler(
-  name: string,
-  namespace: string = "kiru"
-) {
+/** Prefer {@link isImportedCall} from `./scope.js` when callee may be shadowed by locals. */
+export function createAliasHandler(name: string, namespace: string = "kiru") {
   const aliases = new Set<string>()
 
   const isMatchingCallExpression = (node: AstNode) =>
@@ -33,12 +28,14 @@ export function createAliasHandler(
     typeof node.callee.name === "string" &&
     aliases.has(node.callee.name)
 
+  const matchesNamespace = (src: string) =>
+    src === namespace ||
+    src.endsWith(`/${namespace}`) ||
+    src.startsWith(`${namespace}/`)
+
   const addAliases = (node: AstNode): boolean => {
     const src = node.source?.value
-    if (
-      typeof src !== "string" ||
-      (src !== namespace && !src.endsWith(`/${namespace}`))
-    ) {
+    if (typeof src !== "string" || !matchesNamespace(src)) {
       return false
     }
     let didAdd = false

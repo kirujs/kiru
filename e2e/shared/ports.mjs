@@ -9,4 +9,6 @@ export const e2ePorts = {
   fileRoutes: { dev: 5175, hmr: 8015 },
   fileRoutesSsr: { dev: 5194, hmr: 8024, prod: 5194 },
   fileRoutesSsg: { dev: 5176, hmr: 8016 },
+  compileOpts: { dev: 5177, hmr: 8017 },
+  primitive: { dev: 5178, hmr: 8018 },
 }

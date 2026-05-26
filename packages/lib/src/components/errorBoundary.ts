@@ -2,10 +2,8 @@ import { $ERROR_BOUNDARY } from "../constants.js"
 import { createElement } from "../index.js"
 
 export interface ErrorBoundaryProps {
-  children?: JSX.Children
-  fallback?:
-    | Exclude<JSX.Element, (props: any) => JSX.Element>
-    | ((error: Error) => JSX.Element)
+  children?: JSX.Element
+  fallback?: JSX.Element | ((error: Error) => JSX.Element)
   onError?: (error: Error) => void
 }
 

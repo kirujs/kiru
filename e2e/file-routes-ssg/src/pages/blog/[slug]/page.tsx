@@ -7,6 +7,6 @@ export async function generateStaticParams() {
 export default function BlogPost() {
   const router = useRouter()
   return () => (
-    <h2 data-testid="fbr-blog">Post: {() => router.params.value.slug}</h2>
+    <h2 data-testid="fbr-blog">Post: {() => router.params().slug}</h2>
   )
 }

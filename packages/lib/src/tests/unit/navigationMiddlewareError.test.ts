@@ -47,8 +47,8 @@ describe("CSR navigation middleware errors", () => {
     })
     const result = await router.navigate("/forbidden")
     assert.strictEqual(result.status, "errored")
-    assert.strictEqual(router.path.value, "/forbidden")
-    assert.notStrictEqual(router.path.value, "/login")
+    assert.strictEqual(router.path(), "/forbidden")
+    assert.notStrictEqual(router.path(), "/login")
     const err = router.outletRenderError.peek()
     assert.ok(err instanceof RouteMiddlewareHttpError)
     assert.strictEqual(err.status, 403)
@@ -129,7 +129,7 @@ describe("CSR navigation middleware errors", () => {
       location: { pathname: "/" } as Location,
     })
     await router.navigate("/about")
-    assert.strictEqual(router.path.value, "/login")
+    assert.strictEqual(router.path(), "/login")
     assert.ok(historyEvents.some((e) => e.to.includes("/login")))
   })
 
@@ -151,7 +151,7 @@ describe("CSR navigation middleware errors", () => {
     })
     const result = await router.navigate("/about")
     assert.strictEqual(result.status, "cancelled")
-    assert.strictEqual(router.path.value, "/")
+    assert.strictEqual(router.path(), "/")
     assert.strictEqual(historyEvents.length, 0)
   })
 })

@@ -79,11 +79,11 @@ export function trapFocus(
 }
 
 export function devtoolsAppRootHasFocus() {
-  return devtoolsState.rootRef.value?.matches(":focus-within, :focus")
+  return devtoolsState.rootRef()?.matches(":focus-within, :focus")
 }
 
 export function ifDevtoolsAppRootHasFocus<T>(callback: (el: Element) => T) {
-  const root = devtoolsState.rootRef.value
+  const root = devtoolsState.rootRef()
   if (root?.matches(":focus-within, :focus")) {
     return callback(root)
   }

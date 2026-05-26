@@ -33,19 +33,19 @@ type DiffMapEntry = {
 type DiffMap = Map<Kiru.VNode, DiffMapEntry>
 
 kiru.effect(() => {
-  const app = selectedApp.value
-  const search = appSearchTerm.value
+  const app = selectedApp()
+  const search = appSearchTerm()
   if (!app) {
     disposeGraph(appGraph.peek())
-    appGraph.value = createGraphRoot()
+    appGraph.set(createGraphRoot())
     return
   }
-  appGraph.value = reconcileGraph(app, search, appGraph.peek())
+  appGraph.set(reconcileGraph(app, search, appGraph.peek()))
   expandParentsOfSelectedNode(appGraph.peek())
 
   const onAppUpdate = (updatedApp: kiru.AppHandle) => {
     if (updatedApp !== app) return
-    appGraph.value = reconcileGraph(updatedApp, search, appGraph.peek())
+    appGraph.set(reconcileGraph(updatedApp, search, appGraph.peek()))
     expandParentsOfSelectedNode(appGraph.peek())
   }
   kiruGlobal().on("update", onAppUpdate)
@@ -80,7 +80,7 @@ function reconcileGraph(
 
   // Dispose collapsed signals for nodes that are no longer in the graph
   for (const { collapsed } of existing.values()) {
-    kiru.Signal.dispose(collapsed)
+    kiru.SignalHelpers.dispose(collapsed)
   }
 
   return newGraph
@@ -172,7 +172,7 @@ function expandParentsOfSelectedNode(graph: GraphRoot) {
   if (!graphNode) return
   let p = graphNode.parent
   while (p) {
-    p.collapsed.value = false
+    p.collapsed.set(false)
     p = p.parent
   }
 }
@@ -188,15 +188,15 @@ const handleKeyDown = (e: KeyboardEvent) => {
   ifDevtoolsAppRootHasFocus((el) => {
     if (e.key === "l" && e.ctrlKey) {
       e.preventDefault()
-      devtoolsState.appSearchInput.value?.focus()
-      devtoolsState.appSearchInput.value?.select()
+      devtoolsState.appSearchInput()?.focus()
+      devtoolsState.appSearchInput()?.select()
       return
     }
     if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
       return
     }
 
-    if (devtoolsState.appSearchInput.value?.matches(":focus")) {
+    if (devtoolsState.appSearchInput()?.matches(":focus")) {
       if (!e.altKey) return
       e.preventDefault()
     }
@@ -223,7 +223,7 @@ function setCollapsed(collapsed: boolean) {
   if (!currentVNode) return
   const graphNode = findGraphNodeByVNode(appGraph.peek(), currentVNode)
   if (!graphNode?.child) return
-  graphNode.collapsed.value = collapsed
+  graphNode.collapsed.set(collapsed)
 }
 
 function handleNavigation(el: Element, dir: "up" | "down") {

@@ -8,10 +8,7 @@ import { hydrate } from "../../ssr/client.js"
 import { createSsrRouterShell } from "../../router/routerShell.js"
 import { createRouter, createStaticRouter } from "../../router/csr.js"
 import { buildRoutedSubtree } from "../../router/routeTree.js"
-import {
-  createRoute,
-  createRouteTree,
-} from "../../router/createRouteTree.js"
+import { createRoute, createRouteTree } from "../../router/createRouteTree.js"
 import { compileRouteTree, matchRoute } from "../../router/manifest.js"
 import { createI18nConfig } from "../../router/i18n/index.js"
 import { createI18nRuntime } from "../../router/i18nContext.js"
@@ -24,17 +21,20 @@ function SetupIdProbe({ name }: { name: string }) {
   return () =>
     createElement("span", {
       "data-probe": name,
-      "data-setup-id": $.id.value,
+      "data-setup-id": $.id(),
     })
 }
 
-function TestLayout({ children }: { children?: JSX.Children }) {
-  const $ = setup<{ children?: JSX.Children }>()
+function TestLayout({ children }: { children?: JSX.Element }) {
+  const $ = setup<{ children?: JSX.Element }>()
   return () =>
     createElement("div", {
       "data-probe": "layout",
-      "data-setup-id": $.id.value,
-      children: [createElement(SetupIdProbe, { name: "layout-inner" }), children],
+      "data-setup-id": $.id(),
+      children: [
+        createElement(SetupIdProbe, { name: "layout-inner" }),
+        children,
+      ],
     })
 }
 
@@ -43,9 +43,9 @@ function TestPage() {
 }
 
 const routes = createRouteTree({
-    layout: async () => ({ default: TestLayout }),
-    children: [createRoute("/", async () => ({ default: TestPage }))],
-  })
+  layout: async () => ({ default: TestLayout }),
+  children: [createRoute("/", async () => ({ default: TestPage }))],
+})
 const manifest = compileRouteTree(routes)
 
 function buildShellSubtree() {
@@ -58,10 +58,8 @@ function buildShellSubtree() {
 
 function parseProbeIds(html: string): Record<string, string> {
   const probes: Record<string, string> = {}
-  const forward =
-    /data-probe="([^"]+)"[^>]*data-setup-id="([^"]+)"/g
-  const backward =
-    /data-setup-id="([^"]+)"[^>]*data-probe="([^"]+)"/g
+  const forward = /data-probe="([^"]+)"[^>]*data-setup-id="([^"]+)"/g
+  const backward = /data-setup-id="([^"]+)"[^>]*data-probe="([^"]+)"/g
   let m: RegExpExecArray | null
   while ((m = forward.exec(html))) {
     probes[m[1]] = m[2]
@@ -161,7 +159,9 @@ function assertSameProbeIds(
   assert.deepEqual(
     a,
     b,
-    `${label}: setup().id map should match (${JSON.stringify(a)} vs ${JSON.stringify(b)})`
+    `${label}: setup().id map should match (${JSON.stringify(
+      a
+    )} vs ${JSON.stringify(b)})`
   )
 }
 
@@ -173,7 +173,11 @@ describe("SSR router shell ($INLINE_FN outlet)", () => {
 
     await withJSDOM(async (container) => {
       mount(root, container)
-      assertSameProbeIds(stringIds, probeIdsFromDom(container), "string vs mount")
+      assertSameProbeIds(
+        stringIds,
+        probeIdsFromDom(container),
+        "string vs mount"
+      )
 
       const hydrateContainer = document.createElement("div")
       document.body.appendChild(hydrateContainer)

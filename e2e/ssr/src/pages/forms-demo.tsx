@@ -33,10 +33,10 @@ export default function FormsDemo() {
         </button>
       </form>
       <p data-testid="forms-demo-result">
-        {messageForm.isPending.value
+        {messageForm.isPending()
           ? "pending…"
-          : (messageForm.result.value && "message" in messageForm.result.value
-              ? messageForm.result.value.message
+          : (messageForm.result() && "message" in messageForm.result()
+              ? messageForm.result().message
               : "")}
       </p>
       <form
@@ -59,8 +59,8 @@ export default function FormsDemo() {
         </button>
       </form>
       <p data-testid="forms-validation-error">
-        {validationForm.result.value?.ok === false
-          ? (validationForm.result.value.errors?.message ?? "")
+        {validationForm.result()?.ok === false
+          ? (validationForm.result().errors?.message ?? "")
           : ""}
       </p>
       <form

@@ -53,7 +53,7 @@ export function createReactiveI18nTranslator<
   Data extends Record<string, unknown>,
 >(data: Signal<Data>): I18nTranslator<Data> {
   return (key: DotPath<Data>) => {
-    const value = getByPath(data.value, key)
+    const value = getByPath(data(), key)
     if (typeof value !== "string") {
       throw new Error(
         `[kiru/i18n] Missing or non-string translation for "${key}"`

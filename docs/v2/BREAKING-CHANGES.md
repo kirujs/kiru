@@ -78,6 +78,26 @@ See [14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md), 
 
 ---
 
+## Signals (callable API)
+
+| Before | After |
+|--------|--------|
+| `count.value` | `count()` — reactive read (tracks / entangles) |
+| `count.value = n` | `count.set(n)` or `count.set((prev) => prev + 1)` |
+| `++count.value` / `count.value++` | `count.set(count.peek() + 1)` (or read then `set`) |
+| `count.peek` as property | `count.peek()` — non-tracking read |
+| `new Signal(initial)` / class instances | `signal(initial)` / `computed(() => …)` return **callable** objects |
+| `isSignal(x)` (`typeof x === "object"`) | `typeof x === "function" && $SIGNAL in x` |
+
+**Unchanged (still supported):**
+
+- **Signal-as-child:** `jsx("span", { children: count })` — pass the signal object; reconciler binds `nodeValue` and subscribes (no need to switch to `count()` or an inline fn).
+- **Inline fn children:** `children: () => count()` for fine-grained updates when the parent re-runs.
+
+Compile-time hoisting (`FLAG_HOISTED`, `dynamicChildIndices`) treats `count()` like any other non-static call; `count.peek()` does not force a dynamic slot. See [../compile-time-optimizations/static-children-and-jsx-hoisting.md](../compile-time-optimizations/static-children-and-jsx-hoisting.md).
+
+---
+
 ## Images (v2.0)
 
 | Before | After |

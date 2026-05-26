@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { createElement, Fragment } from "./element.js"
+import { createJsxElement, Fragment } from "./element.js"
 export { Fragment }
 
 export function jsx(
@@ -7,19 +7,18 @@ export function jsx(
   props: Kiru.Element["props"] | null,
   key?: JSX.ElementKey
 ): Kiru.Element {
-  return createElement(type, { ...props, key })
+  return createJsxElement(type, props, key, false)
 }
 
-// TODO: use static children inference for performance
 export function jsxs(
   type: Kiru.Element["type"],
   props: Kiru.Element["props"] | null,
   key?: JSX.ElementKey
 ): Kiru.Element {
-  return createElement(type, { ...props, key })
+  return createJsxElement(type, props, key, true)
 }
 
-// TODO: use extra parameters for dev move
+// TODO: use extra parameters for dev mode
 export function jsxDEV(
   type: Kiru.Element["type"],
   props: Kiru.Element["props"] | null,
@@ -28,5 +27,5 @@ export function jsxDEV(
   source?: { fileName: string; lineNumber: number; columnNumber: number },
   self?: unknown
 ): Kiru.Element {
-  return createElement(type, { ...props, key })
+  return createJsxElement(type, props, key, !!isStaticChildren)
 }

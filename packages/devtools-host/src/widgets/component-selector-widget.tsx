@@ -41,11 +41,11 @@ export const ComponentSelectorWidget: Kiru.Component<
   let pendingAnimationFrame: number | null = null
 
   const runUpdateCurrentComponentHover = () => {
-    const enabled = isComponentSelectorEnabled.value,
-      { x, y } = mousePos.value
+    const enabled = isComponentSelectorEnabled(),
+      { x, y } = mousePos()
 
     if (!enabled) {
-      currentComponentHover.value = null
+      currentComponentHover.set(null)
       return
     }
 
@@ -59,7 +59,7 @@ export const ComponentSelectorWidget: Kiru.Component<
       if (searchResult) break
     }
     if (!searchResult) {
-      currentComponentHover.value = null
+      currentComponentHover.set(null)
       return
     }
 
@@ -85,7 +85,7 @@ export const ComponentSelectorWidget: Kiru.Component<
     const width = maxRight - minLeft
     const height = maxBottom - minTop
 
-    currentComponentHover.value = {
+    currentComponentHover.set({
       name: getNodeName(searchResult.component),
       top: minTop,
       left: minLeft,
@@ -93,7 +93,7 @@ export const ComponentSelectorWidget: Kiru.Component<
       height: height,
       link: searchResult.link,
       component: searchResult.component,
-    }
+    })
   }
 
   const updateCurrentComponentHover = () => {
@@ -113,43 +113,40 @@ export const ComponentSelectorWidget: Kiru.Component<
     e.preventDefault()
     e.stopPropagation()
     e.stopImmediatePropagation()
-    if (!isComponentSelectorEnabled.value || !currentComponentHover.value)
-      return
-    const { name, link, component } = currentComponentHover.value
+    const hover = currentComponentHover()
+    if (!isComponentSelectorEnabled() || !hover) return
+    const { name, link, component } = hover
     if (!link) return
     const hash = computeComponentHash(component)
-    isComponentSelectorEnabled.value = false
+    isComponentSelectorEnabled.set(false)
 
-    const panels = componentInfoPanels.value
-    const existingIndex = panels.findIndex(
-      (panel) => panel.hash === hash && panel.link === link
-    )
-
-    if (existingIndex !== -1) {
-      const existing = panels[existingIndex]
-      const updated = {
-        ...existing,
-        pulseGeneration: (existing.pulseGeneration ?? 0) + 1,
+    componentInfoPanels.set((prev) => {
+      const existingIndex = prev.findIndex(
+        (panel) => panel.hash === hash && panel.link === link
+      )
+      if (existingIndex !== -1) {
+        const existing = prev[existingIndex]
+        const updated = {
+          ...existing,
+          pulseGeneration: (existing.pulseGeneration ?? 0) + 1,
+        }
+        const others = prev.filter((p) => p.id !== existing.id)
+        return [...others, updated]
       }
-      const others = panels.filter((p) => p.id !== existing.id)
-      componentInfoPanels.value = [...others, updated]
-      widgetStackTop.value = "componentInfo"
-      return
-    }
-
-    componentInfoPanels.value = [
-      ...panels,
-      {
-        id: crypto.randomUUID(),
-        name,
-        link,
-        component,
-        unmounted: false,
-        hash,
-        pulseGeneration: 0,
-      },
-    ]
-    widgetStackTop.value = "componentInfo"
+      return [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          name,
+          link,
+          component,
+          unmounted: false,
+          hash,
+          pulseGeneration: 0,
+        },
+      ]
+    })
+    widgetStackTop.set("componentInfo")
   }
 
   const onAppUpdate = (updatedApp: kiru.AppHandle) => {
@@ -177,8 +174,8 @@ export const ComponentSelectorWidget: Kiru.Component<
   })
 
   return ({ state }) => {
-    const enabled = isComponentSelectorEnabled.value,
-      info = currentComponentHover.value
+    const enabled = isComponentSelectorEnabled(),
+      info = currentComponentHover()
     if (!enabled || !info || state === "exited") return null
 
     return (

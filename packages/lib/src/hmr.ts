@@ -2,7 +2,7 @@ import { $HMR_ACCEPT, $DEV_FILE_LINK } from "./constants.js"
 import { traverseApply } from "./utils/index.js"
 import { latest } from "./utils/runtime.js"
 import { flushSync, requestUpdate } from "./scheduler.js"
-import { Signal } from "./signals/base.js"
+import type { Signal } from "./signals/base.js"
 import type { Effect } from "./signals/effect.js"
 
 export type HMRAccept<T = {}> = {
@@ -57,10 +57,7 @@ function vNodeMatchesHotComponent(
   hotValue: HotVar
 ): boolean {
   if (vnodeType === hotValue) return true
-  if (
-    typeof vnodeType === "function" &&
-    typeof hotValue === "function"
-  ) {
+  if (typeof vnodeType === "function" && typeof hotValue === "function") {
     return latest(vnodeType) === latest(hotValue)
   }
   return false

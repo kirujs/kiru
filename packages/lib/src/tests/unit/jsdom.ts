@@ -75,6 +75,8 @@ export async function withJSDOM(
   try {
     await testBody(container, kiru)
   } finally {
+    const { resetSchedulerForTests } = await import("../../scheduler.js")
+    resetSchedulerForTests()
     container.remove()
     dom.window.close()
     for (const [key, state] of previous) {

@@ -3,7 +3,7 @@ import { devtoolsState } from "./state"
 import { APP_TABS } from "./constants"
 
 const selectedTab = kiru.computed(
-  () => APP_TABS[devtoolsState.devtoolsTab.value]
+  () => APP_TABS[devtoolsState.devtoolsTab()]
 )
 
 export function DevtoolsApp() {
@@ -30,12 +30,12 @@ function TabButton({ id }: { id: keyof typeof APP_TABS }) {
   return (
     <button
       key={id}
-      onclick={() => (devtoolsState.devtoolsTab.value = id)}
+      onclick={() => { devtoolsState.devtoolsTab.set(id) }}
       className={
         "flex items-center px-2 py-1 gap-2 rounded border text-xs border-white border-opacity-10" +
-        (devtoolsState.devtoolsTab.value === id
+        (devtoolsState.devtoolsTab() === id)
           ? " bg-white bg-opacity-5 text-neutral-100"
-          : " hover:bg-white hover:bg-opacity-10 text-neutral-400")
+          : " hover:bg-white hover:bg-opacity-10 text-neutral-400"
       }
       title={id}
     >

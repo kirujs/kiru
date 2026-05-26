@@ -8,15 +8,20 @@ export {
   $ERROR_BOUNDARY,
   $STREAM_DATA,
   $DEV_FILE_LINK,
+  $STATIC_CHILDREN_LIST,
   CONSECUTIVE_DIRTY_LIMIT,
   STREAMED_DATA_EVENT,
   STREAMED_DATA_DESCENDANTS,
   EVENT_PREFIX_REGEX,
+  FLAG_STATIC_CHILDREN,
   FLAG_UPDATE,
   FLAG_PLACEMENT,
   FLAG_DELETION,
   FLAG_STATIC_DOM,
+  FLAG_HOISTED,
+  FLAG_TEMPLATE,
   FLAG_DIRTY,
+  FLAG_TEMPLATE_HOLES_SYNCED,
 }
 
 export { voidElements, svgTags, booleanAttributes, snakeCaseAttributes }
@@ -30,16 +35,22 @@ const $HMR_ACCEPT = Symbol.for("kiru.hmrAccept")
 const $ERROR_BOUNDARY = Symbol.for("kiru.errorBoundary")
 const $STREAM_DATA = Symbol.for("kiru.streamData")
 const $DEV_FILE_LINK = Symbol.for("kiru.devFileLink")
+const $STATIC_CHILDREN_LIST = Symbol.for("kiru.staticChildrenList")
 
 const CONSECUTIVE_DIRTY_LIMIT = 50
 const STREAMED_DATA_EVENT = "kiru:deferred"
 const STREAMED_DATA_DESCENDANTS = "kiru:streamDescendants"
 
+const FLAG_STATIC_CHILDREN = 1 << 0
 const FLAG_UPDATE = 1 << 1
 const FLAG_PLACEMENT = 1 << 2
 const FLAG_DELETION = 1 << 3
 const FLAG_STATIC_DOM = 1 << 4
+const FLAG_HOISTED = 1 << 5
+const FLAG_TEMPLATE = 1 << 6
 const FLAG_DIRTY = 1 << 7
+/** Holes were reconciled during parent refresh; descend without a second reconcile. */
+const FLAG_TEMPLATE_HOLES_SYNCED = 1 << 8
 
 const EVENT_PREFIX_REGEX = /^on:?/
 

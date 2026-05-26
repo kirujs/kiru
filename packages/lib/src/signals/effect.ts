@@ -16,7 +16,7 @@ import { KiruError } from "../error.js"
 
 type EffectCallbackReturn = (() => void) | void
 
-export class Effect<const Deps extends readonly Signal<unknown>[] = []> {
+export class Effect<const Deps extends readonly Signal<any>[] = []> {
   protected id: string
   protected callback: (...values: SignalValues<Deps>) => EffectCallbackReturn
   protected deps?: Deps
@@ -97,11 +97,11 @@ export class Effect<const Deps extends readonly Signal<unknown>[] = []> {
 }
 
 export function effect(callback: () => EffectCallbackReturn): Effect
-export function effect<const Deps extends readonly Signal<unknown>[]>(
+export function effect<const Deps extends readonly Signal<any>[]>(
   dependencies: Deps,
   callback: (...values: SignalValues<Deps>) => EffectCallbackReturn
 ): Effect<Deps>
-export function effect<const Deps extends readonly Signal<unknown>[]>(
+export function effect<const Deps extends readonly Signal<any>[]>(
   depsOrGetter: Deps | (() => EffectCallbackReturn),
   callback?: (...values: SignalValues<Deps>) => EffectCallbackReturn
 ): Effect<Deps> | Effect {

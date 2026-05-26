@@ -1,6 +1,6 @@
 import { Link } from "kiru/router"
 
-export default function Layout({ children }: { children: JSX.Children }) {
+export default function Layout({ children }: { children: JSX.Element }) {
   return (
     <main data-testid="ssg-layout">
       <nav>

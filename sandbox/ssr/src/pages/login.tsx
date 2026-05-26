@@ -11,8 +11,8 @@ export default function LoginPage() {
     <div className="space-y-4">
       <h2 className="text-xl font-semibold text-slate-100">Sign in</h2>
       <p className="text-sm text-slate-400">
-        Credentials are checked on the server. On success the login action sets an
-        HttpOnly session cookie and redirects to your todos.
+        Credentials are checked on the server. On success the login action sets
+        an HttpOnly session cookie and redirects to your todos.
       </p>
 
       <form
@@ -32,9 +32,10 @@ export default function LoginPage() {
           />
         </label>
         <p className="text-xs text-rose-300">
-          {form.result.value?.ok === false
-            ? (form.result.value.errors?.username ?? "")
-            : ""}
+          {() => {
+            const result = form.result()
+            return result?.ok === false ? result.errors?.username ?? "" : ""
+          }}
         </p>
 
         <label className="block text-sm text-slate-300">
@@ -47,23 +48,24 @@ export default function LoginPage() {
           />
         </label>
         <p className="text-xs text-rose-300">
-          {form.result.value?.ok === false
-            ? (form.result.value.errors?.password ?? "")
-            : ""}
+          {() => {
+            const result = form.result()
+            return result?.ok === false ? result.errors?.password ?? "" : ""
+          }}
         </p>
 
-        {form.error.value ? (
+        {form.error() ? (
           <p className="text-sm text-rose-300" role="alert">
-            {form.error.value}
+            {form.error()}
           </p>
         ) : null}
 
         <button
           type="submit"
           className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-600 disabled:opacity-50"
-          disabled={form.isPending.value}
+          disabled={form.isPending}
         >
-          {form.isPending.value ? "Signing in…" : "Sign in"}
+          {() => (form.isPending() ? "Signing in…" : "Sign in")}
         </button>
       </form>
 

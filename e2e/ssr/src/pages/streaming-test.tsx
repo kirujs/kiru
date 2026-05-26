@@ -11,7 +11,7 @@ export default function StreamingTestPage() {
     <section className="space-y-3" data-testid="streaming-page">
       <button
         data-testid="streaming-counter"
-        onclick={() => count.value++}
+        onclick={() => count.set((count()) + 1)}
       >
         Count: {count}
       </button>

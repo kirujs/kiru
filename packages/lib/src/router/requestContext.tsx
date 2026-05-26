@@ -10,7 +10,7 @@ export function RequestContextProvider({
   children,
 }: {
   value: CustomRequestContext
-  children?: JSX.Children
+  children?: JSX.Element
 }) {
   return createElement(RequestContext, { value, children })
 }

@@ -34,7 +34,7 @@ describe("resource streamed SSR client hydration", () => {
           return Promise.resolve(["client fetch"])
         })
         return () => (
-          <span data-testid="reviews">{reviews.value?.[0] ?? ""}</span>
+          <span data-testid="reviews">{reviews()?.[0] ?? ""}</span>
         )
       }
 
@@ -45,7 +45,7 @@ describe("resource streamed SSR client hydration", () => {
       for (let i = 0; i < 5; i++) await waitForMicrotask()
 
       assert.strictEqual(loaderCalls, 0)
-      assert.strictEqual(reviews.value?.[0], "from server")
+      assert.strictEqual(reviews()?.[0], "from server")
       renderMode.current = prev
     })
   })
@@ -65,7 +65,7 @@ describe("resource streamed SSR client hydration", () => {
           return Promise.resolve(["client fetch"])
         })
         return () => (
-          <span data-testid="reviews">{reviews.value?.[0] ?? ""}</span>
+          <span data-testid="reviews">{reviews()?.[0] ?? ""}</span>
         )
       }
 
@@ -93,7 +93,7 @@ describe("resource streamed SSR client hydration", () => {
       for (let i = 0; i < 5; i++) await waitForMicrotask()
 
       assert.strictEqual(loaderCalls, 0)
-      assert.strictEqual(reviews.value?.[0], "Review for p1")
+      assert.strictEqual(reviews()?.[0], "Review for p1")
       assert.strictEqual(
         container.querySelector('[data-testid="reviews"]')?.textContent,
         "Review for p1"
@@ -126,7 +126,7 @@ describe("resource streamed SSR client hydration", () => {
           return Promise.resolve(["fresh"])
         })
         return () => (
-          <span data-testid="reviews">{reviews.value?.[0] ?? ""}</span>
+          <span data-testid="reviews">{reviews()?.[0] ?? ""}</span>
         )
       }
 
@@ -139,7 +139,7 @@ describe("resource streamed SSR client hydration", () => {
       for (let i = 0; i < 5; i++) await waitForMicrotask()
 
       assert.strictEqual(loaderCalls, 1)
-      assert.strictEqual(reviews.value?.[0], "fresh")
+      assert.strictEqual(reviews()?.[0], "fresh")
       renderMode.current = prev
     })
   })

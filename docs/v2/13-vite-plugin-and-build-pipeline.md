@@ -4,6 +4,8 @@
 
 Package: `packages/vite-plugin-kiru/`.
 
+For **static JSX hoisting** (`experimental.staticHoisting`), `jsxs` / `jsxDEV` behavior, and the phase 2E roadmap, see [Compile-time optimizations](../compile-time-optimizations/).
+
 ---
 
 ## Installation

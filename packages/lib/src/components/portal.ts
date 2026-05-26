@@ -5,7 +5,7 @@ import { node, renderMode } from "../globals.js"
 import { nextIdle, requestUpdate } from "../scheduler.js"
 
 interface PortalProps {
-  children?: JSX.Children
+  children?: JSX.Element
   container: HTMLElement | (() => HTMLElement)
 }
 

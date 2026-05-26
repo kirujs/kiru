@@ -36,11 +36,11 @@ export function createResizableController(
     e.stopPropagation()
     e.preventDefault()
 
-    isResizing.value = true
+    isResizing.set(true)
     document.body.style.cursor = "se-resize"
     document.body.style.userSelect = "none"
 
-    const container = containerRef.value!
+    const container = containerRef()!
     const startX = e.clientX
     const startY = e.clientY
     const startW = container.offsetWidth
@@ -71,7 +71,7 @@ export function createResizableController(
     const onMouseUp = () => {
       window.removeEventListener("mousemove", onMouseMove)
       window.removeEventListener("mouseup", onMouseUp)
-      isResizing.value = false
+      isResizing.set(false)
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
       config.storage.setItem(
@@ -85,9 +85,9 @@ export function createResizableController(
   }
 
   const init = () => {
-    const handle = handleRef.value!
+    const handle = handleRef()!
     if (!handle) return console.error("resize handle not found", new Error().stack)
-    const container = containerRef.value!
+    const container = containerRef()!
     if (!container) return console.error("resize container not found", new Error().stack)
 
     const stored = loadSizeFromStorage(config.storage, config.key)

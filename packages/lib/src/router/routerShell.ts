@@ -16,7 +16,7 @@ import type { CustomRequestContext } from "./types.js"
 export function createSsrRouterShell(
   router: Router,
   requestContext: CustomRequestContext,
-  outlet: () => JSX.Children,
+  outlet: () => JSX.Element,
   i18n?: I18nContextValue | (() => I18nContextValue),
   i18nRuntime?: ReturnType<typeof createI18nRuntime<unknown>>
 ) {

@@ -28,7 +28,7 @@ const showTooltipMenu = kiru.signal(false)
 const tooltipRef = kiru.ref<HTMLDivElement>(null)
 
 const containerOpacity = kiru.computed(() => {
-  return mounted.value ? 1 : 0
+  return mounted() ? 1 : 0
 })
 
 export default function DevtoolsHostApp() {
@@ -38,25 +38,27 @@ export default function DevtoolsHostApp() {
     defaultPosition: { type: "snapped", side: "bottom", percent: 0.5 },
     getPadding: () => [DRAG_SNAP_PADDING, DRAG_SNAP_PADDING],
     getDraggableBounds: () => [window.innerWidth, window.innerHeight],
-    onclick: () => (showTooltipMenu.value = !showTooltipMenu.value),
+    onclick: () => {
+      showTooltipMenu.set(!showTooltipMenu())
+    },
   })
 
   const tooltipFlexDirection = kiru.computed(() => {
-    const snapSide = mainMenuController.snapSide.value
+    const snapSide = mainMenuController.snapSide()
     return snapSide === "left" || snapSide === "right" ? "column" : "row"
   })
 
   const containerFlexDirection = kiru.computed(() => {
-    const snapSide = mainMenuController.snapSide.value
+    const snapSide = mainMenuController.snapSide()
     return snapSide === "left" || snapSide === "right" ? "row" : "column"
   })
 
   kiru.onMount(() => {
     mainMenuController.init()
-    const container = mainMenuController.containerRef.value!
+    const container = mainMenuController.containerRef()!
     const tooltip = tooltipRef.current!
     setTimeout(() => {
-      mounted.value = true
+      mounted.set(true)
     }, 50)
     kiru.effect(
       [
@@ -69,7 +71,7 @@ export default function DevtoolsHostApp() {
           tooltip.offsetWidth,
           tooltip.offsetHeight,
         ]
-        const handleEl = mainMenuController.handleRef.value
+        const handleEl = mainMenuController.handleRef()
         const handleW = handleEl?.offsetWidth ?? 0
         const handleH = handleEl?.offsetHeight ?? 0
 
@@ -158,7 +160,9 @@ export default function DevtoolsHostApp() {
             <TooltipMenuButton
               active={isProfilerShown}
               title="Toggle Profiler"
-              onclick={() => (isProfilerShown.value = !isProfilerShown.value)}
+              onclick={() => {
+                isProfilerShown.set(!isProfilerShown())
+              }}
             >
               <GaugeIcon className="w-4 h-4 pointer-events-none" />
               <small>Profiler</small>
@@ -166,7 +170,9 @@ export default function DevtoolsHostApp() {
             <TooltipMenuButton
               active={isDebuggerShown}
               title="Toggle Debugger"
-              onclick={() => (isDebuggerShown.value = !isDebuggerShown.value)}
+              onclick={() => {
+                isDebuggerShown.set(!isDebuggerShown())
+              }}
             >
               <RadioIcon className="w-4 h-4 pointer-events-none" />
               <small>Tracking</small>
@@ -175,8 +181,7 @@ export default function DevtoolsHostApp() {
               active={isComponentSelectorEnabled}
               title="Select Component"
               onclick={() => {
-                isComponentSelectorEnabled.value =
-                  !isComponentSelectorEnabled.value
+                isComponentSelectorEnabled.set(!isComponentSelectorEnabled())
               }}
             >
               <MouseIcon className="w-4 h-4 pointer-events-none" />
@@ -241,7 +246,7 @@ const TooltipMenuButton: Kiru.Component<TooltipMenuButtonProps> = () => {
   const { derive } = kiru.setup<TooltipMenuButtonProps>()
 
   const $class = derive(({ className, active }) => {
-    const isActive = !!active?.value
+    const isActive = active ? active() : false
     return cls(
       "flex items-center px-1.5 py-0.5 gap-2",
       "text-sm rounded-lg border border-white/10",
@@ -254,7 +259,7 @@ const TooltipMenuButton: Kiru.Component<TooltipMenuButtonProps> = () => {
   })
 
   const background = derive(({ active }) => {
-    const isActive = !!active?.value
+    const isActive = active ? active() : false
     return isActive
       ? "linear-gradient(135deg, rgb(143 1 1 / 75%) 0%, rgba(119, 14, 103, 0.89) 65%)"
       : "transparent"

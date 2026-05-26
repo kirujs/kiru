@@ -16,11 +16,10 @@ export default function DemoRoutePage({ data, error }: PageProps<typeof load>) {
       <h2 className="text-xl font-semibold text-slate-100">Route demo</h2>
       <p className="text-slate-300">
         Current path:{" "}
-        <span className="font-mono text-cyan-200">{() => router.pathname.value}</span>
+        <span className="font-mono text-cyan-200">{router.pathname}</span>
       </p>
       <p className="text-slate-300" data-testid="loader-data">
-        Loader:{" "}
-        {error ? error.message : `${data.pathname} — ${data.note}`}
+        Loader: {error ? error.message : `${data.pathname} — ${data.note}`}
       </p>
     </div>
   )

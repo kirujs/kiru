@@ -55,9 +55,9 @@ describe("createFormController", () => {
         `/?action=${encodeURIComponent(ref.__kiruFormActionId)}`
       )
       assert.equal(ctrl.method, "POST")
-      assert.equal(ctrl.result.value, null)
-      assert.equal(ctrl.error.value, null)
-      assert.equal(ctrl.isPending.value, false)
+      assert.equal(ctrl.result(), null)
+      assert.equal(ctrl.error(), null)
+      assert.equal(ctrl.isPending(), false)
     })
   })
 
@@ -85,8 +85,8 @@ describe("createFormController", () => {
       const headers = capturedInit.headers as Record<string, string>
       assert.equal(headers.Accept, "application/json")
       assert.equal(headers["x-kiru-form"], "1")
-      assert.deepEqual(ctrl.result.value, { message: "hi" })
-      assert.equal(ctrl.isPending.value, false)
+      assert.deepEqual(ctrl.result(), { message: "hi" })
+      assert.equal(ctrl.isPending(), false)
       restoreFormData()
       form.remove()
     })
@@ -108,11 +108,11 @@ describe("createFormController", () => {
 
       const pending = dispatchSubmit(form, ctrl.onsubmit)
       await new Promise((r) => setTimeout(r, 0))
-      assert.equal(ctrl.isPending.value, true)
+      assert.equal(ctrl.isPending(), true)
 
       resolveFetch(new Response(JSON.stringify({}), { status: 200 }))
       await pending
-      assert.equal(ctrl.isPending.value, false)
+      assert.equal(ctrl.isPending(), false)
       restoreFormData()
       form.remove()
     })
@@ -126,8 +126,8 @@ describe("createFormController", () => {
       const form = document.createElement("form")
       document.body.appendChild(form)
 
-      ctrl.result.value = { message: "old" }
-      ctrl.error.value = "old error"
+      ctrl.result.set({ message: "old" })
+      ctrl.error.set("old error")
 
       let resolveFetch!: (value: Response) => void
       globalThis.fetch = () =>
@@ -138,8 +138,8 @@ describe("createFormController", () => {
       const pending = dispatchSubmit(form, ctrl.onsubmit)
       await new Promise((r) => setTimeout(r, 0))
 
-      assert.equal(ctrl.result.value, null)
-      assert.equal(ctrl.error.value, null)
+      assert.equal(ctrl.result(), null)
+      assert.equal(ctrl.error(), null)
 
       resolveFetch(new Response(JSON.stringify({}), { status: 200 }))
       await pending
@@ -164,12 +164,12 @@ describe("createFormController", () => {
 
       await dispatchSubmit(form, ctrl.onsubmit)
 
-      assert.deepEqual(ctrl.result.value, {
+      assert.deepEqual(ctrl.result(), {
         ok: false,
         errors: { message: "Required" },
       })
-      assert.equal(ctrl.error.value, null)
-      assert.equal(ctrl.isPending.value, false)
+      assert.equal(ctrl.error(), null)
+      assert.equal(ctrl.isPending(), false)
       restoreFormData()
       form.remove()
     })
@@ -187,9 +187,9 @@ describe("createFormController", () => {
 
       await dispatchSubmit(form, ctrl.onsubmit)
 
-      assert.equal(ctrl.result.value, null)
-      assert.equal(ctrl.error.value, "Form action failed")
-      assert.equal(ctrl.isPending.value, false)
+      assert.equal(ctrl.result(), null)
+      assert.equal(ctrl.error(), "Form action failed")
+      assert.equal(ctrl.isPending(), false)
       restoreFormData()
       form.remove()
     })
@@ -215,8 +215,8 @@ describe("createFormController", () => {
 
       await dispatchSubmit(form, ctrl.onsubmit)
 
-      assert.equal(ctrl.result.value, null)
-      assert.equal(ctrl.isPending.value, false)
+      assert.equal(ctrl.result(), null)
+      assert.equal(ctrl.isPending(), false)
       restoreFormData()
       form.remove()
     })

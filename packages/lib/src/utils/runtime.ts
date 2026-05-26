@@ -1,4 +1,4 @@
-import { Signal } from "../signals/base.js"
+import { isSignal } from "../signals/base.js"
 import { __DEV__ } from "../env.js"
 import { renderMode } from "../globals.js"
 
@@ -38,12 +38,12 @@ function composeRefs<T>(...refs: Array<Kiru.Ref<T>>): Kiru.RefCallback<T> {
  * Sets the value of a ref.
  */
 function setRef<T>(ref: Kiru.Ref<T>, value: T): void {
-  if (typeof ref === "function") {
-    ref(value)
+  if (isSignal(ref)) {
+    ref.set(value)
     return
   }
-  if (Signal.isSignal(ref)) {
-    ref.value = value
+  if (typeof ref === "function") {
+    ref(value)
     return
   }
   ref.current = value

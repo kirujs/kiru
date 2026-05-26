@@ -24,9 +24,9 @@ export default function NavigationDemoPage() {
   const getMatches = useMatches()
 
   const syncNavProbe = () => {
-    const nav = router.currentNavigation.value
+    const nav = router.currentNavigation()
     window.__KIRU_NAV__ = {
-      isNavigating: router.isNavigating.value,
+      isNavigating: router.isNavigating(),
       from: nav?.from ? formatSnapshot(nav.from.pathname, nav.from.params) : "",
       to: nav?.to ? formatSnapshot(nav.to.pathname, nav.to.params) : "",
     }
@@ -42,7 +42,7 @@ export default function NavigationDemoPage() {
           data-testid="nav-programmatic"
           onclick={async () => {
             const r = await router.navigate("/about")
-            lastNav.value = r.status
+            lastNav.set(r.status)
             window.__KIRU_NAV_RESULT__ = r.status
           }}
         >
@@ -57,20 +57,20 @@ export default function NavigationDemoPage() {
         >
           Navigate to slow route
         </button>
-        <p data-testid="nav-result">{() => lastNav.value}</p>
+        <p data-testid="nav-result">{() => lastNav()}</p>
         <p data-testid="match-depth">{() => String(getMatches().length)}</p>
         <p data-testid="nav-in-progress">
-          {() => (router.isNavigating.value ? "yes" : "no")}
+          {() => (router.isNavigating() ? "yes" : "no")}
         </p>
         <p data-testid="nav-from">
           {() => {
-            const from = router.currentNavigation.value?.from
+            const from = router.currentNavigation()?.from
             return from ? formatSnapshot(from.pathname, from.params) : ""
           }}
         </p>
         <p data-testid="nav-to">
           {() => {
-            const to = router.currentNavigation.value?.to
+            const to = router.currentNavigation()?.to
             return to ? formatSnapshot(to.pathname, to.params) : ""
           }}
         </p>

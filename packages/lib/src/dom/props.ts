@@ -6,7 +6,7 @@ import {
   latest,
 } from "../utils/index.js"
 import { isHmrUpdate } from "../hmr.js"
-import { Signal } from "../signals/base.js"
+import { isSignal, type Signal } from "../signals/base.js"
 import { unwrap } from "../signals/utils.js"
 import { booleanAttributes, EVENT_PREFIX_REGEX } from "../constants.js"
 import { __DEV__, isBrowser } from "../env.js"
@@ -50,9 +50,9 @@ function updateDomProps(vNode: DomVNode) {
 
   if (isTextNode(dom)) {
     let nextVal = nextProps.nodeValue
-    if (__DEV__ && Signal.isSignal(nextVal)) nextVal = latest(nextVal)
+    if (__DEV__ && isSignal(nextVal)) nextVal = latest(nextVal)
 
-    if (!Signal.isSignal(nextVal)) {
+    if (!isSignal(nextVal)) {
       if (dom.nodeValue !== nextVal) {
         dom.nodeValue = nextVal
       }
@@ -126,7 +126,7 @@ function updateDomProps(vNode: DomVNode) {
     }
 
     // Cleanup previous signals
-    if (Signal.isSignal(prevVal) && cleanups?.[key]) {
+    if (isSignal(prevVal) && cleanups?.[key]) {
       cleanups[key]()
       delete cleanups[key]
     }
@@ -229,7 +229,7 @@ function updateDomProps(vNode: DomVNode) {
     }
 
     // Signal
-    if (Signal.isSignal(nextVal)) {
+    if (isSignal(nextVal)) {
       setSignalProp(vNode, dom, key, nextVal, prevVal)
       continue
     }
@@ -307,7 +307,7 @@ function unmountDomProps(
     }
 
     // Signals (including bind: props) – invoke their registered cleanups.
-    if (Signal.isSignal(prevVal) && cleanups?.[key]) {
+    if (isSignal(prevVal) && cleanups?.[key]) {
       cleanups[key]!()
       delete cleanups[key]
       continue
@@ -385,7 +385,7 @@ function mountDomProps(
     }
 
     // Signals
-    if (Signal.isSignal(value)) {
+    if (isSignal(value)) {
       setSignalProp(vNode, dom as Exclude<SomeDom, Text>, key, value, undefined)
       continue
     }
@@ -739,7 +739,7 @@ function setStyleProp(
       const k = nextKeys[i]
       const rawNext = nextStyle[k as keyof StyleObject]
       const nextVal = unwrap(rawNext)
-      if (trackSignals && Signal.isSignal(rawNext)) {
+      if (trackSignals && isSignal(rawNext)) {
         styleKeyToSignal.set(k, rawNext)
       }
       if (k.startsWith("--")) {
@@ -770,7 +770,7 @@ function setStyleProp(
     const rawNext = nextStyle[k as keyof StyleObject]
     const prevVal = unwrap(prevStyle[k as keyof StyleObject])
     const nextVal = unwrap(rawNext)
-    if (trackSignals && Signal.isSignal(rawNext)) {
+    if (trackSignals && isSignal(rawNext)) {
       styleKeyToSignal.set(k, rawNext)
     }
     if (prevVal === nextVal) continue
@@ -823,7 +823,10 @@ function createElementValueReader(dom: Exclude<SomeDom, Text>) {
 function createInputValueReader(dom: HTMLInputElement): () => any {
   const t = dom.type
   if (numericValueInputTypes.has(t)) {
-    return () => dom.valueAsNumber
+    return () => {
+      const value = dom.valueAsNumber
+      return isNaN(value) ? 0 : value
+    }
   }
   return () => dom.value
 }

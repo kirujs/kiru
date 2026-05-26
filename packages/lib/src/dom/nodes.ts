@@ -1,5 +1,5 @@
 import { svgTags, FLAG_PLACEMENT, FLAG_STATIC_DOM } from "../constants.js"
-import { Signal } from "../signals/base.js"
+import { isSignal, type Signal } from "../signals/base.js"
 import { unwrap } from "../signals/utils.js"
 import { hydrationStack } from "../hydration.js"
 import {
@@ -33,8 +33,8 @@ function createDom(vNode: DomVNode): SomeDom {
     t == "#text"
       ? createTextNode(vNode)
       : svgTags.has(t)
-        ? document.createElementNS("http://www.w3.org/2000/svg", t)
-        : document.createElement(t)
+      ? document.createElementNS("http://www.w3.org/2000/svg", t)
+      : document.createElement(t)
 
   return dom
 }
@@ -68,7 +68,7 @@ function hydrateDom(vNode: VNode) {
     updateDomProps(vNode as DomVNode)
     return
   }
-  if (Signal.isSignal(vNode.props.nodeValue)) {
+  if (isSignal(vNode.props.nodeValue)) {
     subTextNode(vNode, dom as Text, vNode.props.nodeValue)
   }
 
@@ -80,7 +80,7 @@ function hydrateDom(vNode: VNode) {
     const prevText = String(unwrap(prev.props.nodeValue) ?? "")
     const dom = (prev.dom as Text).splitText(prevText.length)
     sib.dom = dom
-    if (Signal.isSignal(sib.props.nodeValue)) {
+    if (isSignal(sib.props.nodeValue)) {
       subTextNode(sib, dom, sib.props.nodeValue)
     }
     prev = sibling
@@ -112,6 +112,11 @@ function getDomParent(vNode: VNode): ElementVNode {
 function placeDom(vNode: DomVNode, hostNode: HostNode) {
   const { node: parentVNodeWithDom, lastChild } = hostNode
   const dom = vNode.dom
+  const holeAnchor = parentVNodeWithDom.templateHoleAnchor
+  if (holeAnchor?.parentNode === parentVNodeWithDom.dom) {
+    parentVNodeWithDom.dom.insertBefore(dom, holeAnchor)
+    return
+  }
   if (lastChild) {
     lastChild.after(dom)
     return
@@ -160,7 +165,7 @@ function findFirstHostDom(vNode: VNode): MaybeDom {
 
 function getOrCreateTextNode(vNode: VNode): MaybeDom {
   const sig = vNode.props.nodeValue
-  if (!Signal.isSignal(sig)) {
+  if (!isSignal(sig)) {
     return hydrationStack.getCurrentChild()
   }
 
@@ -197,7 +202,7 @@ function subTextNode(vNode: VNode, textNode: Text, signal: Signal<string>) {
 
 function createTextNode(vNode: VNode): Text {
   const { nodeValue } = vNode.props
-  if (Signal.isSignal(nodeValue)) {
+  if (isSignal(nodeValue)) {
     return createSignalTextNode(vNode, nodeValue)
   }
 

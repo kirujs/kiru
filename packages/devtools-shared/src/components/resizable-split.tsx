@@ -33,38 +33,40 @@ export const ResizableSplit: Kiru.Component<ResizableSplitProps> = (props) => {
 
   const onMouseDown = (e: Kiru.MouseEvent) => {
     e.preventDefault()
-    startMouse.value = { ...mouse.value }
-    prevFirstContainerWidth.value = firstContainerWidth.value
+    startMouse.set({ ...mouse() })
+    prevFirstContainerWidth.set(firstContainerWidth())
     console.log("onMouseDown", {
-      startMouse: startMouse.value,
-      prevFirstContainerWidth: prevFirstContainerWidth.value,
-      firstContainerWidth: firstContainerWidth.value,
+      startMouse: startMouse(),
+      prevFirstContainerWidth: prevFirstContainerWidth(),
+      firstContainerWidth: firstContainerWidth(),
     })
   }
 
-  const onMouseUp = () => (startMouse.value = null)
+  const onMouseUp = () => (startMouse.set(null))
   const onMouseMove = (e: MouseEvent) => {
-    if (startMouse.value == null || mainContainer.current == null) return
+    const mouse = startMouse()
+    if (mouse === null || mainContainer.current == null) return
 
     const max = Math.max(
-      prevFirstContainerWidth.value + e.x - startMouse.value.x,
+      prevFirstContainerWidth() + e.x - mouse.x,
       minContainerWidth
     )
-    firstContainerWidth.value = Math.min(
-      max,
-      mainContainer.current.clientWidth - minContainerWidth
+    firstContainerWidth.set(
+      Math.min(max, mainContainer.current.clientWidth - minContainerWidth)
     )
-    console.log("onMouseMove", max, firstContainerWidth.value)
+    console.log("onMouseMove", max, firstContainerWidth())
   }
   const onResize = () => {
     if (mainContainer.current == null) return
     if (
       mainContainer.current.clientWidth - minContainerWidth <
-      firstContainerWidth.value
+      firstContainerWidth()
     ) {
-      firstContainerWidth.value = Math.max(
-        mainContainer.current.clientWidth - minContainerWidth,
-        minContainerWidth
+      firstContainerWidth.set(
+        Math.max(
+          mainContainer.current.clientWidth - minContainerWidth,
+          minContainerWidth
+        )
       )
     }
   }
@@ -80,7 +82,7 @@ export const ResizableSplit: Kiru.Component<ResizableSplitProps> = (props) => {
 
   kiru.onBeforeMount(() => {
     if (!mainContainer.current) return
-    firstContainerWidth.value = mainContainer.current.clientWidth / 2
+    firstContainerWidth.set(mainContainer.current.clientWidth / 2)
 
     firstViewContainerBounding.init()
     return () => {
@@ -100,7 +102,11 @@ export const ResizableSplit: Kiru.Component<ResizableSplitProps> = (props) => {
       <div
         className={cls(
           "flex-grow grid gap-2 items-start w-full relative",
-          kiru.unwrap(className)
+          className != null
+            ? kiru.isSignal(className)
+              ? className()
+              : className
+            : undefined
         )}
         ref={mainContainer}
         style={{ gridTemplateColumns: `${firstContainerWidth}px 1fr` }}
@@ -109,11 +115,11 @@ export const ResizableSplit: Kiru.Component<ResizableSplitProps> = (props) => {
         <div ref={firstViewContainer} className="firstContainer w-full h-full">
           {firstView}
         </div>
-        {firstViewContainerBounding.state.width.value != 0 && (
+        {firstViewContainerBounding.state.width() != 0 && (
           <div
             className="w-8 flex justify-center h-full absolute top-0 -translate-x-1/2 cursor-col-resize z-[9999]"
             style={{
-              left: `${firstViewContainerBounding.state.width.value}px`,
+              left: `${firstViewContainerBounding.state.width()}px`,
             }}
             onmousedown={onMouseDown}
           >

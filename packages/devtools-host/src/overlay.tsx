@@ -26,7 +26,7 @@ export const EmbeddedOverlay: Kiru.Component<EmbeddedOverlayProps> = () => {
     snapDistance: 50,
   })
   const componentSelectionEnabled = kiru.computed(
-    () => devtoolsState.componentSelection.value.enabled
+    () => devtoolsState.componentSelection().enabled
   )
 
   kiru.onMount(() => {
@@ -54,14 +54,14 @@ export const EmbeddedOverlay: Kiru.Component<EmbeddedOverlayProps> = () => {
           onclick={hideOverlay}
           style={{
             opacity:
-              isOverlayShown.value && !componentSelectionEnabled.value ? 1 : 0,
+              isOverlayShown() && !componentSelectionEnabled() ? 1 : 0,
             transition: "150ms ease-in-out",
             pointerEvents:
-              isOverlayShown.value && !componentSelectionEnabled.value
+              isOverlayShown() && !componentSelectionEnabled()
                 ? "auto"
                 : "none",
             visibility:
-              isOverlayShown.value && !componentSelectionEnabled.value
+              isOverlayShown() && !componentSelectionEnabled()
                 ? "visible"
                 : "hidden",
           }}
@@ -70,9 +70,9 @@ export const EmbeddedOverlay: Kiru.Component<EmbeddedOverlayProps> = () => {
           <div
             style={{
               scale,
-              opacity: componentSelectionEnabled.value ? 0 : opacity,
+              opacity: componentSelectionEnabled() ? 0 : opacity,
               transition: "150ms ease-in-out",
-              pointerEvents: componentSelectionEnabled.value ? "none" : "auto",
+              pointerEvents: componentSelectionEnabled() ? "none" : "auto",
             }}
             className="rounded-sm z-50 bg-neutral-900/30 hover:bg-neutral-900 border border-white/10"
           >

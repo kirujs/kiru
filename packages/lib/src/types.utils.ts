@@ -4,7 +4,6 @@ import type {
   $FRAGMENT,
   $INLINE_FN,
 } from "./constants.js"
-import type { Signal } from "./signals/base.js"
 import type { ErrorBoundaryProps } from "./components/errorBoundary.js"
 
 export type {
@@ -76,7 +75,7 @@ type Prettify<T> = {
   [K in keyof T]: T[K]
 } & {}
 
-type Signalable<T> = T | Signal<T>
+type Signalable<T> = T | Kiru.Signal<T>
 
 type AsyncTaskState<T, E extends Error = Error> =
   | {
@@ -104,7 +103,7 @@ type ArrayHas<T extends any[], U> =
   Extract<T[number], U> extends never ? false : true
 
 type RecordHas<T extends Record<string, any>, U> = [
-  Extract<T[keyof T], U>,
+  Extract<T[keyof T], U>
 ] extends [never]
   ? false
   : true

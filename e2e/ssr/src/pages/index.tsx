@@ -19,9 +19,9 @@ export default function Home() {
         data-testid="ssr-remote-button"
         onclick={async () => {
           try {
-            remoteResult.value = await getServerMessage()
+            remoteResult.set(await getServerMessage())
           } catch (e) {
-            remoteResult.value = e instanceof Error ? e.message : "failed"
+            remoteResult.set(e instanceof Error ? e.message : "failed")
           }
         }}
       >

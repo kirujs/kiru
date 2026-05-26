@@ -13,7 +13,7 @@ export default function AccountPage() {
   effect([form.result], (res) => {
     if (!res || res.ok !== true) return
     profile.refetch()
-    form.result.value = null
+    form.result.set(null)
   })
 
   return () => (
@@ -82,11 +82,11 @@ export default function AccountPage() {
             <button
               type="submit"
               className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-600 disabled:opacity-50"
-              disabled={form.isPending.value}
+              disabled={form.isPending()}
             >
-              {form.isPending.value ? "Saving…" : "Save profile"}
+              {form.isPending() ? "Saving…" : "Save profile"}
             </button>
-            {form.result.value?.ok === true ? (
+            {form.result()?.ok === true ? (
               <p className="text-xs text-emerald-300">Profile saved.</p>
             ) : null}
           </form>

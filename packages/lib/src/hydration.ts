@@ -28,4 +28,7 @@ export const hydrationStack = {
     parents.push(el)
     childIdx.push(0)
   },
+  setChildIndex(index: number) {
+    childIdx[childIdx.length - 1] = index
+  },
 }

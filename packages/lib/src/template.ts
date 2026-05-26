@@ -1,0 +1,124 @@
+import { $STATIC_CHILDREN_LIST } from "./constants.js"
+import { __DEV__ } from "./env.js"
+import { KiruError } from "./error.js"
+
+export const $KIRU_TEMPLATE = Symbol.for("kiru.template")
+
+/** Comment `data` for structural holes (`<!--#-->`). */
+export const KIRU_HOLE_COMMENT_DATA = "#"
+
+export type TemplateRoot = {
+  readonly __kiruTemplate: typeof $KIRU_TEMPLATE
+  readonly html: string
+  readonly holeCount: number
+  readonly holeChildren?: readonly unknown[]
+}
+
+export type TemplateFactory = () => TemplateRoot
+
+const fragmentCache = new Map<string, DocumentFragment>()
+
+export function isTemplateRoot(thing: unknown): thing is TemplateRoot {
+  return (
+    typeof thing === "object" &&
+    thing !== null &&
+    (thing as TemplateRoot).__kiruTemplate === $KIRU_TEMPLATE
+  )
+}
+
+export function _template(html: string, holeCount = 0): TemplateFactory {
+  return () => ({
+    __kiruTemplate: $KIRU_TEMPLATE,
+    html,
+    holeCount,
+  })
+}
+
+/** Tag a hoisted region children array for static list reconciliation. */
+export function tagStaticChildrenList<T>(children: T[]): T[] {
+  Object.defineProperty(children, $STATIC_CHILDREN_LIST, {
+    value: true,
+    enumerable: false,
+  })
+  return children
+}
+
+/** Attach runtime hole children to a template factory product. */
+export function createHoledTemplate(
+  factory: TemplateFactory,
+  holeChildren: unknown[]
+): TemplateRoot {
+  const base = factory()
+  const count = base.holeCount
+  if (__DEV__ && holeChildren.length !== count) {
+    throw new KiruError({
+      message: `[kiru]: createHoledTemplate expected ${count} hole children, got ${holeChildren.length}`,
+    })
+  }
+  return {
+    __kiruTemplate: $KIRU_TEMPLATE,
+    html: base.html,
+    holeCount: count,
+    holeChildren,
+  }
+}
+
+export function getTemplateFragment(html: string): DocumentFragment {
+  let fragment = fragmentCache.get(html)
+  if (!fragment) {
+    fragment = parseHtmlToFragment(html)
+    fragmentCache.set(html, fragment)
+  }
+  return fragment
+}
+
+function hasBrowserDocument(): boolean {
+  return typeof document !== "undefined"
+}
+
+export function cloneTemplateDom(html: string): Element {
+  if (!hasBrowserDocument()) {
+    if (__DEV__) {
+      throw new KiruError({
+        message:
+          "[kiru]: cloneTemplateDom requires a browser environment (use SSR HTML + hydrate for templates).",
+      })
+    }
+    throw new Error("cloneTemplateDom requires a browser environment")
+  }
+  const fragment = getTemplateFragment(html)
+  const root = fragment.firstElementChild
+  if (!root) {
+    throw new KiruError({
+      message: `[kiru]: template HTML must contain a single root element: ${html.slice(0, 80)}`,
+    })
+  }
+  if (fragment.childElementCount > 1) {
+    throw new KiruError({
+      message: `[kiru]: template HTML must have only one root element.`,
+    })
+  }
+  return root.cloneNode(true) as Element
+}
+
+export function findTemplateHoleAnchors(root: Element): Comment[] {
+  const anchors: Comment[] = []
+  const walk = (node: Node) => {
+    if (
+      node.nodeType === Node.COMMENT_NODE &&
+      (node as Comment).data === KIRU_HOLE_COMMENT_DATA
+    ) {
+      anchors.push(node as Comment)
+    }
+    node.childNodes.forEach((c) => walk(c))
+  }
+  walk(root)
+  return anchors
+}
+
+function parseHtmlToFragment(html: string): DocumentFragment {
+  const tpl = document.createElement("template")
+  tpl.innerHTML = html
+  return tpl.content
+}
+

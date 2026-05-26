@@ -4,7 +4,13 @@ import {
   STREAMED_DATA_EVENT,
 } from "./constants.js"
 import { hydrationMode, node, renderMode } from "./globals.js"
-import { Signal, signal } from "./signals/base.js"
+import {
+  SignalHelpers,
+  getSignalState,
+  isSignal,
+  signal,
+  type Signal,
+} from "./signals/base.js"
 import { executeWithTracking } from "./signals/tracking.js"
 import { createVNodeId, registerVNodeCleanup } from "./utils/vdom.js"
 import { generateRandomID } from "./utils/generateId.js"
@@ -12,7 +18,7 @@ import { __DEV__, isBrowser } from "./env.js"
 import { GenericHMRAcceptor, performHmrAccept } from "./hmr.js"
 import { isInitialSsrStreamPending } from "./router/pageData.js"
 
-export type ResourceSource = Record<string, Signal<unknown>> | Signal<unknown>
+export type ResourceSource = Record<string, Signal<any>> | Signal<any>
 
 type InnerOf<T> = T extends Kiru.Signal<infer V> ? V : never
 
@@ -196,17 +202,17 @@ export function resource<T, Source extends ResourceSource>(
 
   const updateResource = () => {
     resource.promise = createPromise()
-    resource.notify()
+    data.notify()
   }
 
   let unsubFromSource: (() => void) | undefined
   if (source != null) {
-    if (Signal.isSignal(source)) {
+    if (isSignal(source)) {
       unsubFromSource = source.subscribe(updateResource)
     } else {
       const unsubs: (() => void)[] = []
       for (const key in source) {
-        if (!Signal.isSignal(source[key])) continue
+        if (!isSignal(source[key])) continue
         unsubs.push(source[key].subscribe(updateResource))
       }
       unsubFromSource = () => {
@@ -218,8 +224,8 @@ export function resource<T, Source extends ResourceSource>(
   const observedSignalUnsubs = new Map<string, () => void>()
   const dispose = () => {
     if (!controller.signal.aborted) controller.abort()
-    Signal.dispose(data)
-    Signal.dispose(isPending)
+    SignalHelpers.dispose(data)
+    SignalHelpers.dispose(isPending)
     observedSignalUnsubs.forEach((unsub) => unsub())
     unsubFromSource?.()
   }
@@ -239,14 +245,20 @@ export function resource<T, Source extends ResourceSource>(
       promise = newPromise
     },
     refetch() {
-      data.value = hasDefaultState ? (defaultState as T) : null
+      if (hasDefaultState) {
+        ;(data as Signal<T>).set(defaultState as T)
+      } else {
+        ;(data as Signal<T | null>).set(null)
+      }
       resource.promise = createPromise(true)
     },
     dispose,
   })
 
   if (__DEV__) {
-    const { inject: baseInject, destroy: baseDestroy } = data[$HMR_ACCEPT]!
+    const { inject: baseInject, destroy: baseDestroy } = getSignalState(
+      data as Signal<T | null>
+    )[$HMR_ACCEPT]!
 
     ;(resource as any as GenericHMRAcceptor<Resource<T>>)[$HMR_ACCEPT] = {
       provide: () => {
@@ -257,11 +269,17 @@ export function resource<T, Source extends ResourceSource>(
         controller.abort()
       },
       inject: (prev) => {
-        baseInject(prev)
+        baseInject(getSignalState(prev as Signal<T | null>))
         const { isPending: prevPending, error: prevError } = prev
         const { isPending, error } = resource
-        performHmrAccept(prevPending[$HMR_ACCEPT]!, isPending[$HMR_ACCEPT]!)
-        performHmrAccept(prevError[$HMR_ACCEPT]!, error[$HMR_ACCEPT]!)
+        performHmrAccept(
+          getSignalState(prevPending)[$HMR_ACCEPT]!,
+          getSignalState(isPending)[$HMR_ACCEPT]!
+        )
+        performHmrAccept(
+          getSignalState(prevError)[$HMR_ACCEPT]!,
+          getSignalState(error)[$HMR_ACCEPT]!
+        )
       },
     }
   }
@@ -269,7 +287,7 @@ export function resource<T, Source extends ResourceSource>(
   function createPromise(forceFetch = false): Kiru.StatefulPromise<T> {
     controller.abort()
     const ctrl = (controller = new AbortController())
-    isPending.value = true
+    isPending.set(true)
     const newPromise = executeWithTracking({
       fn: () => {
         let promise: Promise<T>
@@ -294,7 +312,7 @@ export function resource<T, Source extends ResourceSource>(
         }
         return promise
       },
-      id: Signal.id(data),
+      id: SignalHelpers.id(data),
       onDepChanged: updateResource,
       subs: observedSignalUnsubs,
     })
@@ -320,17 +338,17 @@ export function resource<T, Source extends ResourceSource>(
         statefulPromise.value = value
 
         if (ctrl !== controller) return
-        data.value = value
-        isPending.value = false
-        error.value = null
+        data.set(value)
+        isPending.set(false)
+        error.set(null)
       })
       .catch((e) => {
         statefulPromise.state = "rejected"
         statefulPromise.error = e instanceof Error ? e : new Error(e)
 
         if (ctrl !== controller) return
-        error.value = statefulPromise.error
-        isPending.value = false
+        error.set(statefulPromise.error)
+        isPending.set(false)
       })
     return statefulPromise
   }
@@ -439,7 +457,7 @@ function resolveDeferredPromise<T>(
  */
 export function isResource(thing: unknown): thing is Resource<unknown> {
   return (
-    Signal.isSignal(thing) &&
+    isSignal(thing) &&
     "promise" in thing &&
     thing["promise"] instanceof Promise
   )
@@ -448,12 +466,12 @@ export function isResource(thing: unknown): thing is Resource<unknown> {
 function unwrapResourceSource<T extends ResourceSource>(
   source: T
 ): UnwrapResourceSource<T> {
-  if (Signal.isSignal(source)) {
+  if (isSignal(source)) {
     return source.peek() as UnwrapResourceSource<T>
   }
   const out: Record<string, unknown> = {}
   for (const key in source) {
-    if (Signal.isSignal(source[key])) {
+    if (isSignal(source[key])) {
       out[key] = source[key].peek()
     }
   }

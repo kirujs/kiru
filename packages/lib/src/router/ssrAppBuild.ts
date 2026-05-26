@@ -100,7 +100,7 @@ export function buildAppElement(
     localeRouting: options?.localeRouting,
     locale: options?.i18n?.locale,
   })
-  staticRouter.params.value = params
+  staticRouter.params.set(params)
   const subtree = buildRoutedSubtree(layoutModules, routeModule, leafProps)
   const i18nRuntime = options?.i18n
     ? createI18nRuntime({

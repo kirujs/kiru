@@ -2,12 +2,17 @@ import fs from "node:fs"
 import * as AST from "./ast.js"
 import type { FileLinkFormatter } from "../types.js"
 import {
-  createAliasHandler,
   findNodeName,
   isComponent,
   MagicString,
   TransformCTX,
 } from "./shared.js"
+import {
+  bindingKindAtDepth,
+  buildModuleImportScope,
+  isImportedCall,
+  registerImportDeclaration,
+} from "./scope.js"
 
 type AstNode = AST.AstNode
 
@@ -115,20 +120,32 @@ function findHotVars(
 ): Set<HotVarDesc> {
   const hotVars = new Set<HotVarDesc>()
 
-  const aliasHandlers = [
+  const hotApiNames = [
     "signal",
     "resource",
     "computed",
     "effect",
     "createContext",
     "lazy",
-  ].map((name) => createAliasHandler(name))
+  ] as const
+
+  const scope = buildModuleImportScope(bodyNodes)
+  let fnDepth = 0
+
+  const resolve = (name: string) => scope.resolve(name)
+
+  const enterFunction = () => {
+    fnDepth++
+    scope.push()
+  }
+  const exitFunction = () => {
+    scope.pop()
+    fnDepth--
+  }
 
   for (const node of bodyNodes) {
     if (node.type === "ImportDeclaration") {
-      for (const aliasHandler of aliasHandlers) {
-        aliasHandler.addAliases(node)
-      }
+      registerImportDeclaration(node, scope)
       continue
     }
 
@@ -141,70 +158,87 @@ function findHotVars(
       continue
     }
 
-    for (const aliasHandler of aliasHandlers) {
-      AST.walk(node, {
-        CallExpression: (node, ctx) => {
-          if (!aliasHandler.isMatchingCallExpression(node)) {
-            //log("not matching call expression", node, ctx.stack)
-            return ctx.exitBranch()
-          }
-          if (
-            aliasHandler.name === "effect" &&
-            ctx.stack.length === 1 &&
-            ctx.stack[0].type === "ExpressionStatement"
-          ) {
-            code.appendRight(node.start, UNNAMED_EFFECT_PREAMBLE)
-            return ctx.exit()
-          }
+    AST.walk(node, {
+      FunctionDeclaration: () => {
+        enterFunction()
+        return exitFunction
+      },
+      FunctionExpression: () => {
+        enterFunction()
+        return exitFunction
+      },
+      ArrowFunctionExpression: () => {
+        enterFunction()
+        return exitFunction
+      },
+      VariableDeclarator: (decl) => {
+        const id = decl.id
+        if (id?.type === "Identifier" && id.name) {
+          scope.declare(id.name, {
+            kind: bindingKindAtDepth(fnDepth, decl.init as AstNode, resolve),
+            name: id.name,
+          })
+        }
+      },
+      CallExpression: (node, ctx) => {
+        const apiName = hotApiNames.find((name) =>
+          isImportedCall(node, resolve, { imported: name, namespace: "kiru" })
+        )
+        if (!apiName) {
+          return ctx.exitBranch()
+        }
+        if (
+          apiName === "effect" &&
+          ctx.stack.length === 1 &&
+          ctx.stack[0].type === "ExpressionStatement"
+        ) {
+          code.appendRight(node.start, UNNAMED_EFFECT_PREAMBLE)
+          return ctx.exit()
+        }
 
-          const matchingParentStack = allowedHotVarParentStacks.find(
-            (stack) => {
-              return stack.every((type, i) => ctx.stack[i]?.type === type)
-            }
+        const matchingParentStack = allowedHotVarParentStacks.find((stack) => {
+          return stack.every((type, i) => ctx.stack[i]?.type === type)
+        })
+        if (!matchingParentStack) {
+          return ctx.exitBranch()
+        }
+        if (matchingParentStack === exprAssign) {
+          const [_expr, assign] = ctx.stack
+          const name = assign.left?.name
+          if (!name) return ctx.exit()
+          hotVars.add({
+            type: apiName,
+            name,
+          })
+          return ctx.exit()
+        }
+
+        const remainingStack = ctx.stack.slice(matchingParentStack.length)
+        if (
+          remainingStack.some(
+            (n) => n.type !== "ObjectExpression" && n.type !== "Property"
           )
-          if (!matchingParentStack) {
-            //log("no matching parent stack", node, ctx.stack)
-            return ctx.exitBranch()
-          }
-          if (matchingParentStack === exprAssign) {
-            const [_expr, assign] = ctx.stack
-            const name = assign.left?.name
-            if (!name) return ctx.exit()
-            hotVars.add({
-              type: aliasHandler.name,
-              name,
-            })
-            return ctx.exit()
-          }
+        ) {
+          return ctx.exitBranch()
+        }
 
-          const remainingStack = ctx.stack.slice(matchingParentStack.length)
-          if (
-            remainingStack.some(
-              (n) => n.type !== "ObjectExpression" && n.type !== "Property"
-            )
-          ) {
-            //log("no matching parent stack", node, ctx.stack)
-            return ctx.exitBranch()
+        const name = ctx.stack.reduce((acc, item) => {
+          switch (item.type) {
+            case "VariableDeclarator":
+              return item.id!.name
+            case "Property":
+              if (!item.key) return acc
+              if (item.key.name) return `${acc}.${item.key.name}`
+              if (item.key.raw) return `${acc}[${item.key.raw}]`
+              return acc
           }
+          return acc
+        }, "")
 
-          const name = ctx.stack.reduce((acc, item) => {
-            switch (item.type) {
-              case "VariableDeclarator":
-                return item.id!.name
-              case "Property":
-                if (!item.key) return acc
-                if (item.key.name) return `${acc}.${item.key.name}`
-                if (item.key.raw) return `${acc}[${item.key.raw}]`
-                return acc
-            }
-            return acc
-          }, "")
-
-          hotVars.add({ type: aliasHandler.name, name })
-          ctx.exitBranch()
-        },
-      })
-    }
+        hotVars.add({ type: apiName, name })
+        ctx.exitBranch()
+      },
+    })
   }
 
   return hotVars

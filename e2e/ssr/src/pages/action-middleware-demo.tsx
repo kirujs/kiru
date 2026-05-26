@@ -16,42 +16,48 @@ export default function ActionMiddlewareDemoPage() {
         data-testid="mw-gated-denied"
         type="button"
         onclick={async () => {
-          gatedDenied.value = await gatedEcho()
-            .then((res) => JSON.stringify(res))
-            .catch((e) => (e instanceof Error ? e.message : "failed"))
+          gatedDenied.set(
+            await gatedEcho()
+              .then((res) => JSON.stringify(res))
+              .catch((e) => (e instanceof Error ? e.message : "failed"))
+          )
         }}
       >
         Gated action (without header)
       </button>
-      <p data-testid="mw-gated-denied-result">{gatedDenied}</p>
+      <p data-testid="mw-gated-denied-result">{gatedDenied()}</p>
 
       <button
         data-testid="mw-gated-allowed"
         type="button"
         onclick={async () => {
-          gatedResult.value = await gatedEcho({
-            headers: { [middlewareHeader]: middlewareHeaderValue },
-          })
-            .then((res) => JSON.stringify(res))
-            .catch((e) => (e instanceof Error ? e.message : "failed"))
+          gatedResult.set(
+            await gatedEcho({
+              headers: { [middlewareHeader]: middlewareHeaderValue },
+            })
+              .then((res) => JSON.stringify(res))
+              .catch((e) => (e instanceof Error ? e.message : "failed"))
+          )
         }}
       >
         Gated action (with header)
       </button>
-      <p data-testid="mw-gated-result">{gatedResult}</p>
+      <p data-testid="mw-gated-result">{gatedResult()}</p>
 
       <button
         data-testid="mw-auth"
         type="button"
         onclick={async () => {
-          authResult.value = await authedOnly()
-            .then((res) => JSON.stringify(res))
-            .catch((e) => (e instanceof Error ? e.message : "failed"))
+          authResult.set(
+            await authedOnly()
+              .then((res) => JSON.stringify(res))
+              .catch((e) => (e instanceof Error ? e.message : "failed"))
+          )
         }}
       >
         Auth-only action
       </button>
-      <p data-testid="mw-auth-result">{authResult}</p>
+      <p data-testid="mw-auth-result">{authResult()}</p>
     </section>
   )
 }

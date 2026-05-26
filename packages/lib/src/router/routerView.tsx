@@ -39,14 +39,14 @@ export function RouterView() {
     },
     load: async ({ match, pathname, outletRenderError: err }, { signal }) => {
       if (err) {
-        router.isLoaderPending.value = true
+        router.isLoaderPending.set(true)
         try {
           return await renderClientErrorOutlet(router.manifest, match, err)
         } finally {
-          if (!signal.aborted) router.isLoaderPending.value = false
+          if (!signal.aborted) router.isLoaderPending.set(false)
         }
       }
-      router.isLoaderPending.value = true
+      router.isLoaderPending.set(true)
       try {
         return await buildClientOutletSubtree({
           router: asClientOutletRouter(router),
@@ -59,7 +59,7 @@ export function RouterView() {
         })
       } finally {
         if (!signal.aborted) {
-          router.isLoaderPending.value = false
+          router.isLoaderPending.set(false)
         }
       }
     },
@@ -82,11 +82,11 @@ export function RouterView() {
   })
 
   return () => {
-    const content = children.value
+    const content = children()
     if (outletRenderError.peek()) return content
     return createElement(ErrorBoundary, {
       fallback: (error: Error) => {
-        outletRenderError.value = error
+        outletRenderError.set(error)
         return null
       },
       children: content,

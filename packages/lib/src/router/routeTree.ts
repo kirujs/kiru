@@ -8,6 +8,7 @@ import type {
   RouteModule,
 } from "./types.js"
 import { toRenderError } from "./types.js"
+import { ErrorBoundary } from "../components/index.js"
 
 export type LeafRouteProps =
   | ErrorPageProps
@@ -86,30 +87,6 @@ export async function loadRootErrorRouteTree(
   return { layoutModules, routeModule }
 }
 
-function wrapComponentWithRenderErrorCapture(
-  component: Kiru.Component<any>,
-  onError: (err: unknown) => void
-): Kiru.Component<any> {
-  return function Wrapped(props: Record<string, unknown>) {
-    try {
-      const result = component(props)
-      if (typeof result !== "function") return result
-      const render = result as (props: Record<string, unknown>) => JSX.Element
-      return (innerProps: Record<string, unknown>) => {
-        try {
-          return render(innerProps)
-        } catch (err) {
-          onError(err)
-          return null
-        }
-      }
-    } catch (err) {
-      onError(err)
-      return null
-    }
-  }
-}
-
 export type BuildRoutedSubtreeOptions = {
   /** Client-only: route render throws invoke this instead of bubbling to Cypress. */
   onLeafRenderError?: (err: unknown) => void
@@ -122,11 +99,17 @@ export function buildRoutedSubtree(
   leafProps?: LeafRouteProps,
   options?: BuildRoutedSubtreeOptions
 ) {
-  let leaf = asComponent(routeModule)
+  let leaf = createElement(
+    asComponent(routeModule),
+    (leafProps ?? {}) as Record<string, unknown>
+  )
+  let app = leaf
   if (options?.onLeafRenderError) {
-    leaf = wrapComponentWithRenderErrorCapture(leaf, options.onLeafRenderError)
+    app = createElement(ErrorBoundary, {
+      children: leaf,
+      onError: options.onLeafRenderError,
+    })
   }
-  let app = createElement(leaf, (leafProps ?? {}) as Record<string, unknown>)
   for (const module of layoutModules.slice().reverse()) {
     if (!module) continue
     app = createElement(asComponent(module), { children: app })

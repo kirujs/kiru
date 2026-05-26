@@ -1,6 +1,17 @@
 import esbuild from "esbuild"
 import fs from "node:fs"
 
+const pkg = JSON.parse(fs.readFileSync("./package.json", "utf8")) as {
+  dependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+}
+
+const external = [
+  ...Object.keys(pkg.dependencies ?? {}),
+  ...Object.keys(pkg.peerDependencies ?? {}),
+  "rollup/parseAst",
+]
+
 await esbuild
   .context({
     entryPoints: ["src/index.ts"],
@@ -9,7 +20,8 @@ await esbuild
     target: "esnext",
     format: "esm",
     outfile: "./dist/index.js",
-    external: ["kiru", "vite"],
+    packages: "external",
+    external,
     write: true,
     plugins: [
       {

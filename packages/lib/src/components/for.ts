@@ -1,21 +1,21 @@
-import { unwrap, type Signal } from "../signals/index.js"
+import { unwrap, type Signal as SignalType } from "../signals/index.js"
 
-type InferArraySignalItemType<T extends Signal<any[]> | readonly unknown[]> =
-  T extends Signal<infer V>
-    ? V extends Array<infer W>
-      ? W
-      : never
-    : T extends unknown[]
+type ForEachInput = SignalType<readonly any[]> | readonly any[]
+
+type InferArraySignalItemType<T extends ForEachInput> =
+  T extends SignalType<infer V extends readonly any[]>
+    ? V[number]
+    : T extends readonly any[]
       ? T[number]
       : never
 
 type ForProps<
-  T extends Signal<any[]> | readonly unknown[],
+  T extends ForEachInput,
   U = InferArraySignalItemType<T>,
 > = {
   each: T
   fallback?: JSX.Element
-  children: (value: U, index: number, array: U[]) => JSX.Element
+  children: (value: U, index: number, array: readonly U[]) => JSX.Element
 }
 
 /**
@@ -23,7 +23,7 @@ type ForProps<
  * If the list is empty, the fallback is rendered.
  * @see https://kirujs.dev/docs/components/for
  */
-export function For<T extends Signal<any[]> | unknown[]>({
+export function For<T extends ForEachInput>({
   each,
   fallback,
   children,

@@ -12,6 +12,14 @@ This folder documents **Kiru v2** — the router, rendering modes (CSR / SSR / S
 | **Release planning / sprints** | **[v2/18-release-sprint-todos.md](./v2/18-release-sprint-todos.md)** |
 | Auth / forms / mutations | [v2/07-remote-actions.md](./v2/07-remote-actions.md) |
 | QA / CI | [v2/15-testing.md](./v2/15-testing.md) |
+| Compile-time optimizations (static children, JSX hoisting) | [compile-time-optimizations/](./compile-time-optimizations/) |
+
+## Compile-time optimizations
+
+Deep dive on **static children**, **JSX hoisting**, and the phase 2E roadmap:
+
+- [compile-time-optimizations/README.md](./compile-time-optimizations/README.md)
+- [Static children and JSX hoisting](./compile-time-optimizations/static-children-and-jsx-hoisting.md)
 
 ## v2 topic index
 

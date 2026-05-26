@@ -24,7 +24,7 @@ export function tryClearClientNavigation(
   router: ClientNavigationEndRouter
 ): void {
   if (router.isNavigating.peek() && canEndClientNavigation(router)) {
-    router.isNavigating.value = false
-    router.currentNavigation.value = null
+    router.isNavigating.set(false)
+    router.currentNavigation.set(null)
   }
 }

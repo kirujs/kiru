@@ -1,7 +1,7 @@
 import { Link } from "kiru/router"
 import { routeLinks } from "../routes"
 
-export default function RootLayout({ children }: { children: JSX.Children }) {
+export default function RootLayout({ children }: { children: JSX.Element }) {
   return (
     <main>
       <header>

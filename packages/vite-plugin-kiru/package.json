@@ -30,8 +30,9 @@
     "@kirujs/adapter-node": "workspace:^",
     "@kirujs/file-routes": "workspace:^",
     "@kirujs/runtime": "workspace:^",
-    "tinyglobby": "0.2.15",
     "magic-string": "0.30.21",
-    "mime": "4.1.0"
+    "mime": "4.1.0",
+    "rollup": "^4.57.1",
+    "tinyglobby": "0.2.15"
   }
 }

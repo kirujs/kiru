@@ -6,5 +6,5 @@ import type { AppRoutePath, RouteParams } from "./routePaths.js"
  */
 export function useParams<const P extends AppRoutePath>(): RouteParams<P> {
   const router = useRouter()
-  return router.params.value as RouteParams<P>
+  return router.params() as RouteParams<P>
 }

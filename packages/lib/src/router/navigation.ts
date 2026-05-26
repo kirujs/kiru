@@ -111,7 +111,9 @@ export function formatNavigationSnapshotLabel(
   if (!snap) return ""
   const keys = Object.keys(snap.params)
   if (!keys.length) return snap.pathname
-  return `${snap.pathname}?${keys.map((k) => `${k}=${snap.params[k]}`).join("&")}`
+  return `${snap.pathname}?${keys
+    .map((k) => `${k}=${snap.params[k]}`)
+    .join("&")}`
 }
 
 export async function runTransition(
@@ -176,7 +178,7 @@ export type NavigationPipelineDeps = {
   matches: Signal<RouteTreeMatchSegment[]>
   isNavigating: Signal<boolean>
   currentNavigation: Signal<CurrentNavigation | null>
-  requestContext: { value: CustomRequestContext }
+  requestContext: Signal<CustomRequestContext>
   afterEachHooks: AfterEachHook[]
   leaveByRoute: Map<string, NavigationGuard[]>
   updateByRoute: Map<string, NavigationGuard[]>
@@ -263,7 +265,7 @@ export function createNavigateInternal(
     const navAbort = new AbortController()
     navAbortController.current = navAbort
     const token = ++navToken.value
-    isNavigating.value = true
+    isNavigating.set(true)
     const resolved = localeRouting
       ? parseAppLocation(
           targetUrl,
@@ -279,20 +281,14 @@ export function createNavigateInternal(
               AppPathSplitResult,
               { kind: "invalid-locale" }
             >
-            wrongDomain?: Extract<
-              AppPathSplitResult,
-              { kind: "wrong-domain" }
-            >
+            wrongDomain?: Extract<AppPathSplitResult, { kind: "wrong-domain" }>
           }
         ).invalidLocale
       : undefined
     const wrongDomain = localeRouting
       ? (
           resolved as {
-            wrongDomain?: Extract<
-              AppPathSplitResult,
-              { kind: "wrong-domain" }
-            >
+            wrongDomain?: Extract<AppPathSplitResult, { kind: "wrong-domain" }>
           }
         ).wrongDomain
       : undefined
@@ -316,7 +312,9 @@ export function createNavigateInternal(
         )
         const target = location.startsWith("http")
           ? location
-          : addBase(location, normalizedBaseUrl) + targetUrl.search + targetUrl.hash
+          : addBase(location, normalizedBaseUrl) +
+            targetUrl.search +
+            targetUrl.hash
         return navigateInternal(new URL(target, origin), {
           replace: true,
           fromPopstate: false,
@@ -325,7 +323,7 @@ export function createNavigateInternal(
     }
     if (localeRouting && locale && resolved.locale) {
       if (locale.peek() !== resolved.locale) {
-        locale.value = resolved.locale
+        locale.set(resolved.locale)
         onLocaleChange?.(resolved.locale)
       }
     }
@@ -339,10 +337,8 @@ export function createNavigateInternal(
       ? locationFromMatch(toMatch)!
       : { pathname: targetPath, params: {} }
 
-    currentNavigation.value = {
-      from: fromMatch
-        ? snapshotFromParts(fromParts, fromMatch.params)
-        : null,
+    currentNavigation.set({
+      from: fromMatch ? snapshotFromParts(fromParts, fromMatch.params) : null,
       to: snapshotFromParts(
         {
           pathname: resolved.pathname,
@@ -351,7 +347,7 @@ export function createNavigateInternal(
         },
         toMatch?.params ?? {}
       ),
-    }
+    })
 
     let failure: NavigationFailure | undefined
     let navResult: NavigationResult = { status: "committed" }
@@ -386,7 +382,7 @@ export function createNavigateInternal(
         !!fromMatch && (!toMatch || fromMatch.route.id !== toMatch.route.id)
       const leaveList =
         isLeavingRoute && fromMatch
-          ? (leaveByRoute.get(fromMatch.route.id) ?? [])
+          ? leaveByRoute.get(fromMatch.route.id) ?? []
           : []
       if (leaveList.length) {
         const g0 = await runGuards(leaveList, to, from)
@@ -406,7 +402,7 @@ export function createNavigateInternal(
         JSON.stringify(fromMatch.params) !== JSON.stringify(toMatch.params)
       const updateList =
         isUpdatingRoute && fromMatch
-          ? (updateByRoute.get(fromMatch.route.id) ?? [])
+          ? updateByRoute.get(fromMatch.route.id) ?? []
           : []
       if (updateList.length) {
         const gu = await runGuards(updateList, to, from)
@@ -459,7 +455,7 @@ export function createNavigateInternal(
         const mw = await runRouteMiddleware({
           to: mwTo,
           from: mwFrom,
-          context: requestContext.value,
+          context: requestContext.peek(),
           match: toMatch,
         })
         if (mw.type === "redirect") {
@@ -508,9 +504,13 @@ export function createNavigateInternal(
       }
 
       if (toMatch) {
-        const searchCheck = await validateSearchForMatch(toMatch, resolved.query, {
-          hash: resolved.hash,
-        })
+        const searchCheck = await validateSearchForMatch(
+          toMatch,
+          resolved.query,
+          {
+            hash: resolved.hash,
+          }
+        )
         if (!searchCheck.ok) {
           if (searchCheck.failure.kind === "redirect") {
             return runRedirect(searchCheck.failure.location)
@@ -568,8 +568,8 @@ export function createNavigateInternal(
     } finally {
       if (token === navToken.value) {
         if (navResult.status !== "committed") {
-          isNavigating.value = false
-          currentNavigation.value = null
+          isNavigating.set(false)
+          currentNavigation.set(null)
         }
         setLastNavigation({ to, from, failure })
         for (const hook of afterEachHooks) {

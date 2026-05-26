@@ -47,12 +47,12 @@ function GraphNodeItem({
   node: GraphNode
   traverseSiblings?: boolean
 }) {
-  const isCollapsed = node.collapsed.value
-  const isSelected = selectedNode.value === node.kiruNode
+  const isCollapsed = node.collapsed()
+  const isSelected = selectedNode() === node.kiruNode
   const toggleCollapsed = (e: Kiru.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    node.collapsed.value = !node.collapsed.value
+    node.collapsed.set(!node.collapsed())
   }
 
   return (
@@ -63,7 +63,9 @@ function GraphNodeItem({
             "flex gap-2 items-center px-2 py-0.5 w-full",
             isSelected ? "bg-crimson text-white" : ""
           )}
-          onclick={() => (selectedNode.value = node.kiruNode)}
+          onclick={() => {
+            selectedNode.set(node.kiruNode)
+          }}
         >
           {node.child && (
             <ChevronRightIcon

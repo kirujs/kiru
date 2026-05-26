@@ -9,7 +9,7 @@ export default function CommentPage() {
   const router = useRouter()
   return (
     <p data-testid="comment">
-      {router.params.value.slug}:{router.params.value.id}
+      {router.params().slug}:{router.params().id}
     </p>
   )
 }

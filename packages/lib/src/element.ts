@@ -1,5 +1,43 @@
-import { $FRAGMENT } from "./constants.js"
+import {
+  $FRAGMENT,
+  $STATIC_CHILDREN_LIST,
+  FLAG_STATIC_CHILDREN,
+} from "./constants.js"
 import { normalizeElementKey } from "./utils/index.js"
+
+function markStaticChildrenList(children: unknown) {
+  if (Array.isArray(children)) {
+    Object.defineProperty(children, $STATIC_CHILDREN_LIST, {
+      value: true,
+      enumerable: false,
+    })
+  }
+}
+
+export function createJsxElement(
+  type: Kiru.Element["type"],
+  props: Kiru.Element["props"] | null,
+  key: JSX.ElementKey | undefined,
+  staticChildren: boolean
+): Kiru.Element {
+  if ((type as unknown) === Fragment) {
+    type = $FRAGMENT as Kiru.Element["type"]
+  }
+  const p: Record<string, unknown> =
+    props === null ? {} : { ...props, ...(key !== undefined ? { key } : {}) }
+  if (staticChildren) {
+    markStaticChildrenList(p.children)
+  }
+  const el: Kiru.Element = {
+    type,
+    key: normalizeElementKey(p.key),
+    props: p,
+  }
+  if (staticChildren) {
+    el.meta = { flags: FLAG_STATIC_CHILDREN }
+  }
+  return el
+}
 
 export function createElement<T extends Kiru.VNode["type"]>(
   type: T,
@@ -30,7 +68,7 @@ export function Fragment({
   children,
   key,
 }: {
-  children: JSX.Children
+  children: JSX.Element
   key?: JSX.ElementKey
 }): Kiru.Element {
   return {

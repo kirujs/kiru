@@ -1,4 +1,4 @@
-import { ref, signal, computed, effect } from "kiru"
+import { ref, signal, computed, effect, For } from "kiru"
 
 // Global signals for testing global state
 const globalCounter = signal(0)
@@ -9,19 +9,18 @@ const globalUsers = signal([
 ])
 
 // Global computed
-const globalCounterSquared = computed(() => globalCounter.value ** 2)
+const globalCounterSquared = computed(() => globalCounter() ** 2)
 const onlineUsersCount = computed(
-  () => globalUsers.value.filter((u) => u.online).length
+  () => globalUsers().filter((u) => u.online).length
 )
 
 // Global watch for testing
 const globalLogs = signal<string[]>([])
 effect([globalCounter], (counter) => {
   const timestamp = new Date().toLocaleTimeString()
-  globalLogs.value = [
-    ...globalLogs.peek(),
-    `[${timestamp}] Global counter: ${counter}`,
-  ].slice(-5)
+  globalLogs.set((prev) =>
+    [...prev, `[${timestamp}] Global counter: ${counter}`].slice(-5)
+  )
 })
 
 export default function SignalsTest() {
@@ -37,10 +36,10 @@ export default function SignalsTest() {
   const logs = signal<string[]>([])
 
   // Computed signals
-  const area = computed(() => width.value * height.value)
-  const perimeter = computed(() => 2 * (width.value + height.value))
-  const totalPrice = computed(() => area.value * price.value)
-  const isValidUsername = computed(() => username.value.length >= 3)
+  const area = computed(() => width() * height())
+  const perimeter = computed(() => 2 * (width() + height()))
+  const totalPrice = computed(() => area() * price())
+  const isValidUsername = computed(() => username().length >= 3)
 
   // Shopping cart state
   const products = signal([
@@ -52,21 +51,21 @@ export default function SignalsTest() {
   const notifications = signal<string[]>([])
 
   // Shopping cart computed
-  const cartItems = computed(() => products.value.filter((p) => p.quantity > 0))
+  const cartItems = computed(() => products().filter((p) => p.quantity > 0))
   const itemCount = computed(() =>
-    cartItems.value.reduce((sum, item) => sum + item.quantity, 0)
+    cartItems().reduce((sum, item) => sum + item.quantity, 0)
   )
   const subtotal = computed(() =>
-    cartItems.value.reduce((sum, item) => sum + item.price * item.quantity, 0)
+    cartItems().reduce((sum, item) => sum + item.price * item.quantity, 0)
   )
   const discount = computed(() => {
-    const code = discountCode.value.toUpperCase()
+    const code = discountCode().toUpperCase()
     if (code === "SAVE10") return 0.1
     if (code === "SAVE20") return 0.2
     return 0
   })
-  const discountAmount = computed(() => subtotal.value * discount.value)
-  const total = computed(() => subtotal.value - discountAmount.value)
+  const discountAmount = computed(() => subtotal() * discount())
+  const total = computed(() => subtotal() - discountAmount())
 
   // Refs for testing DOM interactions
   const logRef = ref<HTMLDivElement>(null)
@@ -74,24 +73,28 @@ export default function SignalsTest() {
   // Helper functions
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString()
-    logs.value = [...logs.peek(), `[${timestamp}] ${message}`].slice(-10)
+    logs.set((prev) => [...prev, `[${timestamp}] ${message}`].slice(-10))
   }
 
   const addNotification = (message: string) => {
-    notifications.value = [...notifications.peek(), message].slice(-5)
+    notifications.set((prev) => [...prev, message].slice(-5))
   }
 
   const updateQuantity = (productId: number, delta: number) => {
-    products.value = products.value.map((p) =>
-      p.id === productId
-        ? { ...p, quantity: Math.max(0, p.quantity + delta) }
-        : p
+    products.set((prev) =>
+      prev.map((p) =>
+        p.id === productId
+          ? { ...p, quantity: Math.max(0, p.quantity + delta) }
+          : p
+      )
     )
   }
 
   const toggleUserStatus = (userId: number) => {
-    globalUsers.value = globalUsers.value.map((user) =>
-      user.id === userId ? { ...user, online: !user.online } : user
+    globalUsers.set((prev) =>
+      prev.map((user) =>
+        user.id === userId ? { ...user, online: !user.online } : user
+      )
     )
   }
 
@@ -102,7 +105,7 @@ export default function SignalsTest() {
   })
 
   effect(() => {
-    addLog(`Theme changed to: ${theme}`)
+    addLog(`Theme changed to: ${theme()}`)
   })
 
   effect([clickCount], (clickCount) => {
@@ -135,11 +138,11 @@ export default function SignalsTest() {
 
         <div id="counter-signal">
           <h3>Counter Signal</h3>
-          <button id="decrement" onclick={() => count.value--}>
+          <button id="decrement" onclick={() => count.set((c) => c - 1)}>
             -
           </button>
-          <span id="count-display">{count.value}</span>
-          <button id="increment" onclick={() => count.value++}>
+          <span id="count-display">{count()}</span>
+          <button id="increment" onclick={() => count.set((c) => c + 1)}>
             +
           </button>
         </div>
@@ -152,7 +155,7 @@ export default function SignalsTest() {
             bind:value={name}
             placeholder="Enter your name"
           />
-          <p id="greeting">Hello, {name.value}!</p>
+          <p id="greeting">Hello, {name}!</p>
         </div>
       </section>
 
@@ -171,7 +174,7 @@ export default function SignalsTest() {
               max="20"
               bind:value={width}
             />
-            <span id="width-display">{width.value}</span>
+            <span id="width-display">{width}</span>
           </div>
           <div>
             <label>Height: </label>
@@ -182,37 +185,34 @@ export default function SignalsTest() {
               max="20"
               bind:value={height}
             />
-            <span id="height-display">{height.value}</span>
+            <span id="height-display">{height}</span>
           </div>
           <div>
             <label>Price per sq unit: </label>
-            <input
-              id="price-input"
-              type="number"
-              value={price}
-              oninput={(e) => (price.value = Number(e.target.value))}
-            />
+            <input id="price-input" type="number" bind:value={price} />
           </div>
         </div>
 
         <div id="computed-results">
           <h3>Computed Results</h3>
-          <div id="area-result">Area: {area.value} sq units</div>
-          <div id="perimeter-result">Perimeter: {perimeter.value} units</div>
-          <div id="total-price-result">Total Price: ${totalPrice.value}</div>
+          <div id="area-result">Area: {area} sq units</div>
+          <div id="perimeter-result">Perimeter: {perimeter} units</div>
+          <div id="total-price-result">Total Price: ${totalPrice}</div>
         </div>
 
         <div id="visual-rectangle">
           <h3>Visual</h3>
-          <div
-            id="rectangle"
-            style={{
-              width: `${width.value * 10}px`,
-              height: `${height.value * 10}px`,
-              backgroundColor: "blue",
-              border: "2px solid darkblue",
-            }}
-          />
+          {() => (
+            <div
+              id="rectangle"
+              style={{
+                width: `${width() * 10}px`,
+                height: `${height() * 10}px`,
+                backgroundColor: "blue",
+                border: "2px solid darkblue",
+              }}
+            />
+          )}
         </div>
       </section>
 
@@ -230,16 +230,18 @@ export default function SignalsTest() {
               bind:value={username}
               placeholder="Enter username (3+ chars)"
             />
-            {username.value && (
-              <span
-                id="username-validation"
-                className={isValidUsername.value ? "valid" : "invalid"}
-              >
-                {isValidUsername.value
-                  ? "✓ Valid username"
-                  : "✗ Username too short"}
-              </span>
-            )}
+            {() => {
+              if (!username()) return null
+              const isValid = isValidUsername()
+              return (
+                <span
+                  id="username-validation"
+                  className={isValid ? "valid" : "invalid"}
+                >
+                  {isValid ? "✓ Valid username" : "✗ Username too short"}
+                </span>
+              )
+            }}
           </div>
 
           <div>
@@ -250,25 +252,22 @@ export default function SignalsTest() {
             </select>
           </div>
 
-          <button id="click-counter" onclick={() => clickCount.value++}>
-            Click me! ({clickCount.value})
+          <button
+            id="click-counter"
+            onclick={() => clickCount.set((c) => c + 1)}
+          >
+            Click me! ({clickCount})
           </button>
         </div>
 
         <div id="watch-log">
           <h3>Watch Effect Log</h3>
           <div ref={logRef} id="log-output">
-            {logs.value.length === 0 ? (
-              <div>No logs yet...</div>
-            ) : (
-              logs.value.map((log, index) => (
-                <div key={index} className="log-entry">
-                  {log}
-                </div>
-              ))
-            )}
+            <For each={logs} fallback={<div>No logs yet...</div>}>
+              {(log) => <div className="log-entry">{log}</div>}
+            </For>
           </div>
-          <button id="clear-log" onclick={() => (logs.value = [])}>
+          <button id="clear-log" onclick={() => logs.set([])}>
             Clear Log
           </button>
         </div>
@@ -280,51 +279,84 @@ export default function SignalsTest() {
 
         <div id="products">
           <h3>Products</h3>
-          {products.value.map((product) => (
-            <div key={product.id} id={`product-${product.id}`}>
-              <span>
-                {product.name} - ${product.price}
-              </span>
-              <button
-                className="remove-item"
-                onclick={() => updateQuantity(product.id, -1)}
-                disabled={product.quantity === 0}
-              >
-                -
-              </button>
-              <span className="quantity">{product.quantity}</span>
-              <button
-                className="add-item"
-                onclick={() => updateQuantity(product.id, 1)}
-              >
-                +
-              </button>
-            </div>
-          ))}
+          <For each={products}>
+            {(product) => (
+              <div key={product.id} id={`product-${product.id}`}>
+                <span>
+                  {product.name} - ${product.price}
+                </span>
+                <button
+                  className="remove-item"
+                  onclick={() => updateQuantity(product.id, -1)}
+                  disabled={product.quantity === 0}
+                >
+                  -
+                </button>
+                <span className="quantity">{product.quantity}</span>
+                <button
+                  className="add-item"
+                  onclick={() => updateQuantity(product.id, 1)}
+                >
+                  +
+                </button>
+              </div>
+            )}
+          </For>
         </div>
 
         <div id="cart-summary">
-          <h3>Cart Summary ({itemCount.value} items)</h3>
-          {cartItems.value.length === 0 ? (
+          <h3>Cart Summary ({itemCount} items)</h3>
+          {() => {
+            const items = cartItems()
+            const _discount = discount()
+            const placeholders = {
+              subtotal: subtotal().toFixed(2),
+              discountAmount: discountAmount().toFixed(2),
+              total: total().toFixed(2),
+            }
+            if (items.length === 0)
+              return <div id="empty-cart">Your cart is empty</div>
+
+            return (
+              <div>
+                {items.map((item) => (
+                  <div key={item.id} className="cart-item">
+                    {item.name} x{item.quantity} - $
+                    {(item.price * item.quantity).toFixed(2)}
+                  </div>
+                ))}
+                <div id="subtotal">Subtotal: ${placeholders.subtotal}</div>
+                {_discount > 0 && (
+                  <div id="discount-display">
+                    Discount ({Math.round(_discount * 100)}%): -$
+                    {placeholders.discountAmount}
+                  </div>
+                )}
+                <div id="total">Total: ${placeholders.total}</div>
+              </div>
+            )
+          }}
+
+          {/* {cartItems().length === 0 ? (
             <div id="empty-cart">Your cart is empty</div>
           ) : (
             <div>
-              {cartItems.value.map((item) => (
+              {cartItems().map((item) => (
                 <div key={item.id} className="cart-item">
                   {item.name} x{item.quantity} - $
                   {(item.price * item.quantity).toFixed(2)}
                 </div>
               ))}
-              <div id="subtotal">Subtotal: ${subtotal.value.toFixed(2)}</div>
-              {discount.value > 0 && (
+              <div id="subtotal">Subtotal: ${subtotal().toFixed(2)}</div>
+              {discount() > 0 && (
                 <div id="discount-display">
-                  Discount ({Math.round(discount.value * 100)}%): -$
-                  {discountAmount.value.toFixed(2)}
+                  Discount ({Math.round(discount() * 100)}%): -$
+                  {discountAmount().toFixed(2)}
                 </div>
               )}
-              <div id="total">Total: ${total.value.toFixed(2)}</div>
+              <div id="total">Total: ${total().toFixed(2)}</div>
             </div>
-          )}
+          )} */}
         </div>
 
         <div id="discount-section">
@@ -335,25 +367,23 @@ export default function SignalsTest() {
             bind:value={discountCode}
             placeholder="Try: SAVE10, SAVE20"
           />
-          {discount.value > 0 && (
-            <div id="discount-applied">
-              ✓ {Math.round(discount.value * 100)}% discount applied!
-            </div>
-          )}
+          {() =>
+            discount() > 0 && (
+              <div id="discount-applied">
+                ✓ {Math.round(discount() * 100)}% discount applied!
+              </div>
+            )
+          }
         </div>
 
         <div id="notifications-section">
           <h3>Notifications</h3>
           <div id="notifications-list">
-            {notifications.value.length === 0 ? (
-              <div>No notifications</div>
-            ) : (
-              notifications.value.map((notification, index) => (
-                <div key={index} className="notification">
-                  {notification}
-                </div>
-              ))
-            )}
+            <For each={notifications} fallback={<div>No notifications</div>}>
+              {(notification) => (
+                <div className="notification">{notification}</div>
+              )}
+            </For>
           </div>
         </div>
       </section>
@@ -364,14 +394,20 @@ export default function SignalsTest() {
 
         <div id="global-counter">
           <h3>Global Counter Widget</h3>
-          <button id="global-decrement" onclick={() => globalCounter.value--}>
+          <button
+            id="global-decrement"
+            onclick={() => globalCounter.set((c) => c - 1)}
+          >
             -
           </button>
-          <span id="global-count">{globalCounter.value}</span>
-          <button id="global-increment" onclick={() => globalCounter.value++}>
+          <span id="global-count">{globalCounter}</span>
+          <button
+            id="global-increment"
+            onclick={() => globalCounter.set((c) => c + 1)}
+          >
             +
           </button>
-          <div id="global-squared">Squared: {globalCounterSquared.value}</div>
+          <div id="global-squared">Squared: {globalCounterSquared}</div>
         </div>
 
         <div id="global-message">
@@ -382,59 +418,58 @@ export default function SignalsTest() {
             bind:value={globalMessage}
             placeholder="Global message"
           />
-          <div id="global-message-display">"{globalMessage.value}"</div>
+          <div id="global-message-display">"{globalMessage}"</div>
         </div>
 
         <div id="global-users">
           <h3>Global Users Widget</h3>
-          {globalUsers.value.map((user) => (
-            <div key={user.id} id={`user-${user.id}`}>
-              <span
-                className={`user-status ${user.online ? "online" : "offline"}`}
-              >
-                {user.name} ({user.online ? "Online" : "Offline"})
-              </span>
-              <button
-                className="toggle-status"
-                onclick={() => toggleUserStatus(user.id)}
-              >
-                Toggle Status
-              </button>
-            </div>
-          ))}
-          <div id="users-stats">Online Users: {onlineUsersCount.value}</div>
+          <For each={globalUsers}>
+            {(user) => (
+              <div key={user.id} id={`user-${user.id}`}>
+                <span
+                  className={`user-status ${
+                    user.online ? "online" : "offline"
+                  }`}
+                >
+                  {user.name} ({user.online ? "Online" : "Offline"})
+                </span>
+                <button
+                  className="toggle-status"
+                  onclick={() => toggleUserStatus(user.id)}
+                >
+                  Toggle Status
+                </button>
+              </div>
+            )}
+          </For>
+          <div id="users-stats">Online Users: {onlineUsersCount}</div>
         </div>
 
         <div id="global-log">
           <h3>Global Activity Log</h3>
           <div id="global-log-output">
-            {globalLogs.value.length === 0 ? (
-              <div>No global activity yet...</div>
-            ) : (
-              globalLogs.value.map((log, index) => (
-                <div key={index} className="global-log-entry">
-                  {log}
-                </div>
-              ))
-            )}
+            <For
+              each={globalLogs}
+              fallback={<div>No global activity yet...</div>}
+            >
+              {(log) => <div className="global-log-entry">{log}</div>}
+            </For>
           </div>
-          <button id="clear-global-log" onclick={() => (globalLogs.value = [])}>
+          <button id="clear-global-log" onclick={() => globalLogs.set([])}>
             Clear Global Log
           </button>
         </div>
 
         <div id="global-overview">
           <h3>Global State Overview</h3>
-          <div id="global-counter-value">Counter: {globalCounter.value}</div>
+          <div id="global-counter-value">Counter: {globalCounter}</div>
           <div id="global-counter-squared-value">
-            Counter²: {globalCounterSquared.value}
+            Counter²: {globalCounterSquared}
           </div>
           <div id="global-message-length">
-            Message Length: {globalMessage.value.length} chars
+            Message Length: {() => globalMessage().length} chars
           </div>
-          <div id="global-online-count">
-            Online Users: {onlineUsersCount.value}
-          </div>
+          <div id="global-online-count">Online Users: {onlineUsersCount}</div>
         </div>
       </section>
     </div>

@@ -2,8 +2,20 @@ import {
   $FRAGMENT,
   $INLINE_FN,
   FLAG_PLACEMENT,
+  FLAG_STATIC_CHILDREN,
+  FLAG_TEMPLATE_HOLES_SYNCED,
+  FLAG_HOISTED,
+  FLAG_TEMPLATE,
   FLAG_UPDATE,
+  $STATIC_CHILDREN_LIST,
+  svgTags,
 } from "./constants.js"
+import {
+  cloneTemplateDom,
+  findTemplateHoleAnchors,
+  isTemplateRoot,
+  type TemplateRoot,
+} from "./template.js"
 import {
   getVNodeApp,
   isElement,
@@ -11,8 +23,10 @@ import {
   latest,
   propsChanged,
 } from "./utils/index.js"
-import { Signal } from "./signals/base.js"
+import { isSignal, type Signal } from "./signals/base.js"
 import { __DEV__, isBrowser } from "./env.js"
+import { hydrationStack } from "./hydration.js"
+import { renderMode } from "./globals.js"
 import type { AppHandle } from "./appHandle.js"
 import { createVNode as createBaseVNode } from "./vNode.js"
 
@@ -35,12 +49,15 @@ export function reconcileChildren(
       }
       checkForDuplicateKeys(parent, children)
     }
-    return reconcileChildrenArray(parent, children)
+    if (parent.flags & FLAG_STATIC_CHILDREN) {
+      return patchStaticChildren(parent, children)
+    }
+    return patchDynamicChildren(parent, children)
   }
-  return reconcileSingleChild(parent, children)
+  return patchSingleChild(parent, children)
 }
 
-function reconcileSingleChild(parent: VNode, child: unknown): VNode | null {
+function patchSingleChild(parent: VNode, child: unknown): VNode | null {
   const oldChild = parent.child
   if (oldChild === null) {
     return createChild(parent, child)
@@ -66,14 +83,207 @@ function reconcileSingleChild(parent: VNode, child: unknown): VNode | null {
         // node persisted, remove it from the list so it doesn't get deleted
         existingChildren.delete(key === null ? prev.index : key)
       }
-      placeChild(newNode, 0, 0)
+      placeChild(parent, newNode, 0, 0)
     }
     existingChildren.forEach((child) => deleteChild(parent, child))
     return newNode
   }
 }
 
-function reconcileChildrenArray(parent: VNode, children: unknown[]) {
+export function tryReconcileStaticChildrenInPlace(
+  parent: VNode,
+  children: unknown[]
+): VNode | null | undefined {
+  let old = parent.child
+  let i = 0
+  while (old !== null && i < children.length) {
+    const next = old.sibling
+    const updated = updateSlot(parent, old, children[i])
+    if (updated === null || updated !== old) {
+      return undefined
+    }
+    old = next
+    i++
+  }
+  if (i === children.length && old === null) {
+    return parent.child
+  }
+  return undefined
+}
+
+function assertStaticChildrenContract(parent: VNode, children: unknown[]) {
+  if (!__DEV__) return
+  if (!($STATIC_CHILDREN_LIST in children)) {
+    console.warn(
+      "[kiru]: reconciling FLAG_STATIC_CHILDREN without a compiler-tagged children array"
+    )
+  }
+  const prev = parent.staticChildCount
+  if (prev !== undefined && prev !== children.length) {
+    console.warn(
+      `[kiru]: static children length changed from ${prev} to ${children.length}`
+    )
+  }
+  parent.staticChildCount = children.length
+}
+
+function patchStaticChildren(parent: VNode, children: unknown[]) {
+  assertStaticChildrenContract(parent, children)
+
+  const dynamicMask = parent.dynamicChildIndices
+  if (dynamicMask !== undefined && dynamicMask.length > 0) {
+    return patchStaticChildrenMasked(parent, children, dynamicMask)
+  }
+
+  if (parent.child !== null) {
+    const inPlace = tryReconcileStaticChildrenInPlace(parent, children)
+    if (inPlace !== undefined) {
+      return inPlace
+    }
+  }
+
+  let resultingChild: VNode | null = null
+  let prevNewChild: VNode | null = null
+
+  let oldChild = parent.child
+  let lastPlacedIndex = 0
+  let newIdx = 0
+
+  for (; oldChild !== null && newIdx < children.length; newIdx++) {
+    const nextOldChild = oldChild.sibling
+    const newChild = updateSlot(parent, oldChild, children[newIdx])
+    if (newChild === null) {
+      return patchDynamicChildren(parent, children)
+    }
+    if (!newChild.prev) {
+      deleteChild(parent, oldChild)
+    }
+    lastPlacedIndex = placeChild(parent, newChild, lastPlacedIndex, newIdx)
+    if (prevNewChild === null) {
+      resultingChild = newChild
+    } else {
+      prevNewChild.sibling = newChild
+    }
+    prevNewChild = newChild
+    oldChild = nextOldChild
+  }
+
+  if (newIdx === children.length) {
+    deleteRemainingChildren(parent, oldChild)
+    return resultingChild
+  }
+
+  for (; newIdx < children.length; newIdx++) {
+    const newNode = createChild(parent, children[newIdx])
+    if (newNode === null) continue
+    lastPlacedIndex = placeChild(parent, newNode, lastPlacedIndex, newIdx)
+    if (prevNewChild === null) {
+      resultingChild = newNode
+    } else {
+      prevNewChild.sibling = newNode
+    }
+    prevNewChild = newNode
+  }
+  return resultingChild
+}
+
+function patchStaticChildrenMasked(
+  parent: VNode,
+  children: unknown[],
+  dynamicChildIndices: readonly number[]
+) {
+  const dynamicSet = new Set(dynamicChildIndices)
+  if (parent.child !== null) {
+    let canShortCircuit = true
+    for (let i = 0; i < children.length; i++) {
+      if (dynamicSet.has(i)) continue
+      const old = staticChildAt(parent, i)
+      if (!old) {
+        canShortCircuit = false
+        break
+      }
+      const updated = updateSlot(parent, old, children[i])
+      if (updated === null || updated !== old) {
+        canShortCircuit = false
+        break
+      }
+    }
+    if (canShortCircuit) {
+      let old: VNode | null = parent.child
+      let i = 0
+      while (old !== null && i < children.length) {
+        if (dynamicSet.has(i)) {
+          const updated = updateSlot(parent, old, children[i])
+          if (updated === null || updated !== old) {
+            return patchDynamicChildren(parent, children)
+          }
+        }
+        old = old.sibling
+        i++
+      }
+      if (i === children.length && old === null) {
+        return parent.child
+      }
+    }
+  }
+
+  let resultingChild: VNode | null = null
+  let prevNewChild: VNode | null = null
+  let oldChild = parent.child
+  let lastPlacedIndex = 0
+
+  for (let newIdx = 0; newIdx < children.length; newIdx++) {
+    const nextOldChild = oldChild?.sibling ?? null
+    const isDynamic = dynamicSet.has(newIdx)
+
+    if (!isDynamic && oldChild !== null) {
+      const updated = updateSlot(parent, oldChild, children[newIdx])
+      if (updated === null) {
+        return patchDynamicChildren(parent, children)
+      }
+      if (updated === oldChild) {
+        lastPlacedIndex = placeChild(parent, updated, lastPlacedIndex, newIdx)
+        if (prevNewChild === null) {
+          resultingChild = updated
+        } else {
+          prevNewChild.sibling = updated
+        }
+        prevNewChild = updated
+        oldChild = nextOldChild
+        continue
+      }
+    }
+
+    const newChild = updateSlot(parent, oldChild, children[newIdx])
+    if (newChild === null) {
+      return patchDynamicChildren(parent, children)
+    }
+    if (oldChild && !newChild.prev) {
+      deleteChild(parent, oldChild)
+    }
+    lastPlacedIndex = placeChild(parent, newChild, lastPlacedIndex, newIdx)
+    if (prevNewChild === null) {
+      resultingChild = newChild
+    } else {
+      prevNewChild.sibling = newChild
+    }
+    prevNewChild = newChild
+    oldChild = nextOldChild
+  }
+
+  deleteRemainingChildren(parent, oldChild)
+  return resultingChild
+}
+
+function staticChildAt(parent: VNode, index: number): VNode | null {
+  let child = parent.child
+  for (let i = 0; i < index && child; i++) {
+    child = child.sibling
+  }
+  return child
+}
+
+function patchDynamicChildren(parent: VNode, children: unknown[]) {
   let resultingChild: VNode | null = null
   let prevNewChild: VNode | null = null
 
@@ -99,7 +309,7 @@ function reconcileChildrenArray(parent: VNode, children: unknown[]) {
     if (oldChild && !newChild.prev) {
       deleteChild(parent, oldChild)
     }
-    lastPlacedIndex = placeChild(newChild, lastPlacedIndex, newIdx)
+    lastPlacedIndex = placeChild(parent, newChild, lastPlacedIndex, newIdx)
     if (prevNewChild === null) {
       resultingChild = newChild
     } else {
@@ -120,7 +330,7 @@ function reconcileChildrenArray(parent: VNode, children: unknown[]) {
     for (; newIdx < children.length; newIdx++) {
       const newNode = createChild(parent, children[newIdx])
       if (newNode === null) continue
-      lastPlacedIndex = placeChild(newNode, lastPlacedIndex, newIdx)
+      lastPlacedIndex = placeChild(parent, newNode, lastPlacedIndex, newIdx)
       if (prevNewChild === null) {
         resultingChild = newNode
       } else {
@@ -148,7 +358,7 @@ function reconcileChildrenArray(parent: VNode, children: unknown[]) {
         // node persisted, remove it from the list so it doesn't get deleted
         existingChildren.delete(key === null ? prev.index : key)
       }
-      lastPlacedIndex = placeChild(newNode, lastPlacedIndex, newIdx)
+      lastPlacedIndex = placeChild(parent, newNode, lastPlacedIndex, newIdx)
       if (prevNewChild === null) {
         resultingChild = newNode
       } else {
@@ -171,20 +381,31 @@ function updateSlot(
   const key = oldChild === null ? null : oldChild.key
   if (isValidTextChild(child)) {
     if (key !== null) return null
-    if (
-      oldChild?.type === "#text" &&
-      Signal.isSignal(oldChild.props.nodeValue)
-    ) {
+    if (oldChild?.type === "#text" && isSignal(oldChild.props.nodeValue)) {
       return null
     }
     return updateTextNode(parent, oldChild, "" + child)
   }
-  if (Signal.isSignal(child)) {
+  if (isSignal(child)) {
     if (!!oldChild && oldChild.props.nodeValue !== child) return null
     return updateTextNode(parent, oldChild, child)
   }
+  if (isTemplateRoot(child)) {
+    if (key !== null) return null
+    if (
+      oldChild !== null &&
+      (oldChild.flags & FLAG_TEMPLATE) !== 0 &&
+      oldChild.templateHtml === child.html
+    ) {
+      refreshReusedTemplateHoles(oldChild, child)
+      return oldChild
+    }
+    return createTemplateVNode(parent, child)
+  }
   if (isElement(child)) {
-    if (child.key !== key) return null
+    const staticUnkeyed =
+      parent.flags & FLAG_STATIC_CHILDREN && child.key == null && key == null
+    if (!staticUnkeyed && child.key !== key) return null
     return updateNode(parent, oldChild, child)
   }
   if (Array.isArray(child)) {
@@ -218,12 +439,14 @@ function updateTextNode(
     oldChild.props.nodeValue = content
     oldChild.flags |= FLAG_UPDATE
   }
-  oldChild.sibling = null
+  if (!(parent.flags & FLAG_STATIC_CHILDREN)) {
+    oldChild.sibling = null
+  }
   return oldChild
 }
 
 function updateNode(parent: VNode, oldChild: VNode | null, newChild: KElement) {
-  let { type, props, key } = newChild
+  let { type, props } = newChild
   if (__DEV__ && typeof type === "function") {
     type = latest(type)
   }
@@ -240,18 +463,24 @@ function updateNode(parent: VNode, oldChild: VNode | null, newChild: KElement) {
       dev_emitUpdateNode()
     }
     oldChild.index = 0
-    oldChild.sibling = null
+    if (!(parent.flags & FLAG_STATIC_CHILDREN)) {
+      oldChild.sibling = null
+    }
     if (typeof type === "string") {
       if (domNodePropsChanged(oldChild.props, props)) {
         oldChild.flags |= FLAG_UPDATE
       }
-    } else {
+    } else if (
+      !(parent.flags & FLAG_STATIC_CHILDREN) ||
+      propsChanged(oldChild.props, props)
+    ) {
       oldChild.flags |= FLAG_UPDATE
     }
     oldChild.props = props
+    applyElementFlags(oldChild, newChild)
     return oldChild
   }
-  return createVNode(parent, type, props, key)
+  return createVNodeFromElement(parent, newChild)
 }
 
 function updateFragment(
@@ -268,7 +497,9 @@ function updateFragment(
   }
   oldChild.props = { ...oldChild.props, ...newProps, children }
   oldChild.flags |= FLAG_UPDATE
-  oldChild.sibling = null
+  if (!(parent.flags & FLAG_STATIC_CHILDREN)) {
+    oldChild.sibling = null
+  }
   return oldChild
 }
 
@@ -285,7 +516,9 @@ function updateInlineFnChild(
   }
   oldChild.props = { expr }
   oldChild.flags |= FLAG_UPDATE
-  oldChild.sibling = null
+  if (!(parent.flags & FLAG_STATIC_CHILDREN)) {
+    oldChild.sibling = null
+  }
   return oldChild
 }
 
@@ -294,12 +527,16 @@ function createChild(parent: VNode, child: unknown): VNode | null {
     return createVNode(parent, "#text", { nodeValue: "" + child })
   }
 
-  if (Signal.isSignal(child)) {
+  if (isSignal(child)) {
     return createVNode(parent, "#text", { nodeValue: child })
   }
 
+  if (isTemplateRoot(child)) {
+    return createTemplateVNode(parent, child)
+  }
+
   if (isElement(child)) {
-    return createVNode(parent, child.type, child.props, child.key)
+    return createVNodeFromElement(parent, child)
   }
 
   if (Array.isArray(child)) {
@@ -317,12 +554,22 @@ function createChild(parent: VNode, child: unknown): VNode | null {
 }
 
 function placeChild(
+  parent: VNode,
   child: VNode,
   lastPlacedIndex: number,
   newIndex: number
 ): number {
-  child.index = newIndex
   const prev = child.prev
+  if (
+    parent.flags & FLAG_STATIC_CHILDREN &&
+    prev !== null &&
+    prev.index === newIndex
+  ) {
+    const oldIndex = prev.index
+    return oldIndex < lastPlacedIndex ? lastPlacedIndex : oldIndex
+  }
+
+  child.index = newIndex
   if (prev !== null) {
     const oldIndex = prev.index
     if (oldIndex < lastPlacedIndex) {
@@ -343,19 +590,34 @@ function updateFromMap(
   index: number,
   child: any
 ): VNode | null {
-  const isSig = Signal.isSignal(child)
+  const isSig = isSignal(child)
   if (isSig || isValidTextChild(child)) {
     const oldChild = existingChildren.get(index)
     if (oldChild?.type === "#text") {
       if (oldChild.props.nodeValue === child) {
         return oldChild
       }
-      if (Signal.isSignal(oldChild.props.nodeValue)) {
+      if (isSignal(oldChild.props.nodeValue)) {
         oldChild.cleanups?.["nodeValue"]?.()
       }
     }
 
     return createVNode(parent, "#text", { nodeValue: child }, null, index)
+  }
+
+  if (isTemplateRoot(child)) {
+    const oldChild = existingChildren.get(index)
+    if (
+      oldChild &&
+      (oldChild.flags & FLAG_TEMPLATE) !== 0 &&
+      oldChild.templateHtml === child.html
+    ) {
+      refreshReusedTemplateHoles(oldChild, child)
+      oldChild.sibling = null
+      oldChild.index = index
+      return oldChild
+    }
+    return createTemplateVNode(parent, child)
   }
 
   if (isElement(child)) {
@@ -375,10 +637,11 @@ function updateFromMap(
       oldChild.props = props
       oldChild.sibling = null
       oldChild.index = index
+      applyElementFlags(oldChild, child)
       return oldChild
     }
 
-    return createVNode(parent, type, props, key, index)
+    return createVNodeFromElement(parent, child, index)
   }
 
   if (Array.isArray(child)) {
@@ -509,6 +772,238 @@ function getNearestParentFcTag(vNode: VNode) {
   const tag = `<${fn?.displayName || fn?.name || "Anonymous Function"} />`
   parentFcTagLookups.set(vNode, tag)
   return tag
+}
+
+function applyElementFlags(node: VNode, element: KElement) {
+  const compileFlags = element.meta?.flags ?? 0
+  if (compileFlags & FLAG_STATIC_CHILDREN) {
+    node.flags |= FLAG_STATIC_CHILDREN
+  } else {
+    node.flags &= ~FLAG_STATIC_CHILDREN
+  }
+  if (compileFlags & FLAG_HOISTED) {
+    node.flags |= FLAG_HOISTED
+  } else {
+    node.flags &= ~FLAG_HOISTED
+  }
+  const dynamicIndices = element.meta?.dynamicIndices
+  if (dynamicIndices !== undefined) {
+    node.dynamicChildIndices = dynamicIndices
+  }
+}
+
+/** Sync hole children from a new `createHoledTemplate` value and reconcile mounted holes. */
+function refreshReusedTemplateHoles(
+  vNode: VNode,
+  template: TemplateRoot
+): void {
+  const count = template.holeCount ?? 0
+  vNode.templateHoleCount = count
+  if (template.holeChildren !== undefined) {
+    vNode.templateHoleChildren = template.holeChildren
+  }
+  if (count > 0 && vNode.dom) {
+    reconcileTemplateHoles(vNode)
+    // Holes are already reconciled; mark so performUnitOfWork descends into hole
+    // heads without a second reconcileTemplateHoles (avoids duplicate work and
+    // re-weaving holes before stale cross-hole sibling links are cleared).
+    vNode.flags |= FLAG_TEMPLATE_HOLES_SYNCED
+  }
+}
+
+/** Remove a stale weave from the previous hole's tail into `toHead`. */
+function unlinkTemplateHoleWeave(
+  fromHead: VNode | null,
+  toHead: VNode | null
+): void {
+  if (!fromHead || !toHead) return
+  let node: VNode = fromHead
+  while (node.sibling) {
+    if (node.sibling === toHead) {
+      node.sibling = null
+      return
+    }
+    node = node.sibling
+  }
+}
+
+/** Ephemeral hole slot parents are not walked by the scheduler; bubble to the template host. */
+function adoptTemplateHoleDeletions(template: VNode, slotParent: VNode): void {
+  const pending = slotParent.deletions
+  if (!pending?.length) return
+  if (template.deletions) {
+    template.deletions.push(...pending)
+  } else {
+    template.deletions = pending
+  }
+  slotParent.deletions = null
+}
+
+/** Last vnode belonging to a single hole (does not follow weaves into the next hole). */
+function templateHoleTail(
+  head: VNode,
+  nextHoleHead: VNode | null | undefined
+): VNode {
+  let tail = head
+  while (tail.sibling) {
+    if (nextHoleHead && tail.sibling === nextHoleHead) {
+      tail.sibling = null
+      break
+    }
+    tail = tail.sibling
+  }
+  return tail
+}
+
+export function reconcileTemplateHoles(vNode: VNode): VNode | null {
+  const root = vNode.dom
+  if (!(root instanceof Element)) return null
+  const holeCount = vNode.templateHoleCount ?? 0
+  if (holeCount === 0) return vNode.child
+
+  const holeChildren = vNode.templateHoleChildren ?? []
+  const anchors = findTemplateHoleAnchors(root)
+  if (__DEV__ && anchors.length !== holeCount) {
+    throw new Error(
+      `[kiru]: template hole count mismatch (expected ${holeCount}, found ${anchors.length})`
+    )
+  }
+
+  let first: VNode | null = null
+  let prevTail: VNode | null = null
+
+  for (let i = 0; i < holeCount; i++) {
+    const anchor = anchors[i]!
+    const parentEl = anchor.parentNode as Element | null
+    if (!parentEl) continue
+
+    const nextStoredHead =
+      i + 1 < holeCount ? (vNode.templateHoleHeads?.[i + 1] ?? null) : null
+    if (i > 0) {
+      unlinkTemplateHoleWeave(
+        vNode.templateHoleHeads?.[i - 1] ?? null,
+        vNode.templateHoleHeads?.[i] ?? null
+      )
+    }
+
+    const slotParent = createVNode(vNode, $FRAGMENT, {})
+    slotParent.dom = parentEl as Kiru.VNode["dom"]
+    slotParent.templateHoleAnchor = anchor
+
+    const holeChild = holeChildren[i]
+    if (
+      Array.isArray(holeChild) &&
+      $STATIC_CHILDREN_LIST in (holeChild as object)
+    ) {
+      slotParent.flags |= FLAG_STATIC_CHILDREN
+    }
+
+    const existing = vNode.templateHoleHeads?.[i] ?? null
+    if (existing) {
+      unlinkTemplateHoleWeave(existing, nextStoredHead)
+      slotParent.child = existing
+    }
+    const hydrating = renderMode.current === "hydrate"
+    if (hydrating) {
+      const nodeIndex = [...parentEl.childNodes].indexOf(anchor)
+      if (nodeIndex >= 0) {
+        hydrationStack.push(
+          parentEl as unknown as import("./types.utils.js").SomeDom
+        )
+        hydrationStack.setChildIndex(nodeIndex + 1)
+      }
+    }
+    const head = reconcileChildren(slotParent, holeChild)
+    adoptTemplateHoleDeletions(vNode, slotParent)
+    if (hydrating) {
+      hydrationStack.pop()
+    }
+
+    if (head && !existing) {
+      let n: VNode | null = head
+      while (n) {
+        if (n.dom) {
+          parentEl.insertBefore(n.dom, anchor)
+        }
+        n = n.sibling
+      }
+    }
+
+    if (!vNode.templateHoleHeads) {
+      vNode.templateHoleHeads = []
+    }
+    vNode.templateHoleHeads[i] = head
+
+    if (!first) first = head
+    else if (prevTail && head) {
+      if (__DEV__ && prevTail === head) {
+        throw new Error(
+          "[kiru]: template hole weave would create a self-sibling cycle"
+        )
+      }
+      prevTail.sibling = head
+    }
+    if (head) {
+      prevTail = templateHoleTail(head, nextStoredHead)
+    }
+  }
+
+  vNode.child = first
+  return first
+}
+
+function createTemplateVNode(parent: VNode, template: TemplateRoot): VNode {
+  const holeCount = template.holeCount ?? 0
+  let type: VNode["type"] = "div"
+  if (renderMode.current !== "hydrate" && typeof document !== "undefined") {
+    const dom = cloneTemplateDom(template.html)
+    const tagName = dom.tagName.toLowerCase()
+    type = (svgTags.has(tagName) ? dom.tagName : tagName) as VNode["type"]
+    const node = createVNode(parent, type, {})
+    node.flags |= FLAG_TEMPLATE
+    node.templateHtml = template.html
+    node.templateHoleCount = holeCount
+    if (holeCount > 0 && template.holeChildren) {
+      node.templateHoleChildren = template.holeChildren
+    }
+    node.dom = dom as Kiru.VNode["dom"]
+    if (__DEV__) {
+      ;(dom as Element).__kiruNode = node
+    }
+    return node
+  }
+  type = inferTemplateRootType(template.html)
+  const node = createVNode(parent, type, {})
+  node.flags |= FLAG_TEMPLATE
+  node.templateHtml = template.html
+  node.templateHoleCount = holeCount
+  if (holeCount > 0 && template.holeChildren) {
+    node.templateHoleChildren = template.holeChildren
+  }
+  return node
+}
+
+function inferTemplateRootType(html: string): VNode["type"] {
+  const m = /^<([a-zA-Z][\w-]*)/.exec(html.trim())
+  if (!m) return "div"
+  const tag = m[1]!
+  return svgTags.has(tag)
+    ? (tag as VNode["type"])
+    : (tag.toLowerCase() as VNode["type"])
+}
+
+function createVNodeFromElement(
+  parent: VNode,
+  element: KElement,
+  index = 0
+): VNode {
+  let { type, props, key } = element
+  if (__DEV__ && typeof type === "function") {
+    type = latest(type)
+  }
+  const node = createVNode(parent, type, props, key, index)
+  applyElementFlags(node, element)
+  return node
 }
 
 function createVNode(

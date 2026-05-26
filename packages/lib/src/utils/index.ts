@@ -1,6 +1,7 @@
 export * from "./compare.js"
 export * from "./dom.js"
 export * from "./format.js"
+export * from "./staticHtml.js"
 export * from "./generateId.js"
 export * from "./runtime.js"
 export * from "./stream.js"

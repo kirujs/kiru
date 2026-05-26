@@ -1,9 +1,12 @@
 import * as kiru from "kiru"
 
 export const isOverlayShown = kiru.signal(false)
-export const toggleOverlayShown = () =>
-  (isOverlayShown.value = !isOverlayShown.value)
-export const hideOverlay = () => (isOverlayShown.value = false)
+export const toggleOverlayShown = () => {
+  isOverlayShown.set(!isOverlayShown())
+}
+export const hideOverlay = () => {
+  isOverlayShown.set(false)
+}
 
 export const isProfilerShown = kiru.signal(false)
 export const isDebuggerShown = kiru.signal(false)
@@ -23,7 +26,7 @@ export interface ComponentInfoPanelState {
 export const componentInfoPanels = kiru.signal<ComponentInfoPanelState[]>([])
 
 export const isComponentInfoPanelShown = kiru.computed(
-  () => componentInfoPanels.value.length > 0
+  () => componentInfoPanels().length > 0
 )
 
 /** Widget stack: last-hovered widget is on top. Main menu is always above widgets. */

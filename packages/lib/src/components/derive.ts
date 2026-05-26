@@ -2,7 +2,7 @@ import {
   sideEffectsEnabled,
   type StreamDataThrowValue,
 } from "../utils/index.js"
-import { Signal } from "../signals/index.js"
+import { isSignal, type Signal } from "../signals/index.js"
 import { $STREAM_DATA } from "../constants.js"
 import { node } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"
@@ -10,22 +10,25 @@ import { isResource, Resource } from "../resource.js"
 import type { RecordHas } from "../types.utils.js"
 
 export type Derivable =
-  | Kiru.Signal<unknown>
-  | Record<string, Kiru.Signal<unknown>>
+  | Kiru.Signal<any>
+  | Resource<any>
+  | Record<string, Kiru.Signal<any> | Resource<any>>
 
 type InnerOf<T> = T extends Kiru.Signal<infer V> ? V : never
 
-type UnwrapDerivable<T extends Derivable> = T extends Kiru.Signal<unknown>
+type UnwrapDerivable<T extends Derivable> = T extends Kiru.Signal<any>
   ? InnerOf<T>
-  : { [K in keyof T]: InnerOf<T[K]> }
+  : T extends Resource<any>
+  ? InnerOf<T>
+  : { [K in keyof T]: InnerOf<T[K & keyof T]> }
 
 type RecordHasResource<T extends Record<string, any>> = RecordHas<
   T,
   Resource<any>
 >
 
-type ChildFn<T> = (value: T) => JSX.Children
-type ChildFnWithStale<T> = (value: T, isStale: boolean) => JSX.Children
+type ChildFn<T> = (value: T) => JSX.Element
+type ChildFnWithStale<T> = (value: T, isStale: boolean) => JSX.Element
 
 export type DeriveFallbackMode = "swr" | "fallback"
 
@@ -55,37 +58,45 @@ export interface DeriveProps<
     : never
 }
 
-type Derive = {
-  <T extends Derivable, U extends DeriveFallbackMode = "swr">(
-    props: DeriveProps<T, U>
-  ): (props: DeriveProps<T, U>) => JSX.Element
-}
-
 function readDerivableValue(from: Derivable): unknown {
-  if (Signal.isSignal(from)) {
-    return from.value as unknown
+  if (isSignal(from)) {
+    return from() as unknown
   }
   const out: Record<string, unknown> = {}
   for (const key in from) {
     const v = from[key]
-    out[key] = (v as Signal<unknown> | Kiru.StatefulPromise<unknown>).value
+    out[key] = isSignal(v)
+      ? (v as Signal<unknown>)()
+      : (v as Kiru.StatefulPromise<unknown>).value
   }
   return out
+}
+
+/** JSX-facing generic; runtime is setup-style `() => (props) => …`. */
+export type DeriveComponent = {
+  <T extends Derivable, Mode extends DeriveFallbackMode = "fallback">(
+    props: DeriveProps<T, Mode>
+  ): (props: DeriveProps<T, Mode>) => JSX.Element
 }
 
 /**
  * Derives a value from a signal or stateful promise and renders a child component.
  * @see https://kirujs.dev/docs/components/derive
  */
-export const Derive: Derive = () => {
+export const Derive = (() => {
   let prevSuccess: { value: unknown } | null
-  return ({ from, children, fallback, mode }) => {
+  return ({
+    from,
+    children,
+    fallback,
+    mode,
+  }: DeriveProps<Derivable, DeriveFallbackMode>) => {
     const promises = new Set<Kiru.StatefulPromise<any>>()
     const value = readDerivableValue(from)
 
     if (isResource(from)) {
       promises.add(from.promise)
-    } else if (!Signal.isSignal(from)) {
+    } else if (!isSignal(from)) {
       for (const key in from) {
         const v = from[key]
         if (isResource(v)) promises.add(v.promise)
@@ -141,4 +152,4 @@ export const Derive: Derive = () => {
     prevSuccess = { value }
     return (children as ChildFnWithStale<unknown>)(value, false)
   }
-}
+}) as DeriveComponent

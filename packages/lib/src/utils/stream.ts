@@ -4,7 +4,7 @@ export interface StreamDataThrowValue {
   [$STREAM_DATA]: {
     fallback?: JSX.Element
     data: Kiru.StatefulPromise<unknown>[]
-    continue: () => JSX.Children
+    continue: () => JSX.Element
   }
 }
 

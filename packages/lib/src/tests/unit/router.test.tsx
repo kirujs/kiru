@@ -4,7 +4,10 @@ import assert from "node:assert"
 import {
   compileRouteTree,
   createRenderer,
-  createRouter, createRoute, createRouteScope, createRouteTree ,
+  createRouter,
+  createRoute,
+  createRouteScope,
+  createRouteTree,
   fillRouteHtmlTemplate,
   generateStaticPaths,
   generateSitemapPaths,
@@ -33,25 +36,25 @@ const MINIMAL_TPL =
 
 describe("router", () => {
   const routes = createRouteTree({
-      layout: async () => ({
-        default: ({ children }: { children: JSX.Children }) => (
-          <main>{children}</main>
-        ),
-      }),
-      children: [
-        createRoute("/", async () => ({ default: () => <h1>Home</h1> })),
-        createRoute("/users/[id]", {
-          static: true,
-          component: async () => ({
-            default: () => {
-              const router = useRouter()
-              return <h1>{router.params.value.id}</h1>
-            },
-            generateStaticParams: async () => [{ id: "1" }, { id: "2" }],
-          }),
+    layout: async () => ({
+      default: ({ children }: { children: JSX.Element }) => (
+        <main>{children}</main>
+      ),
+    }),
+    children: [
+      createRoute("/", async () => ({ default: () => <h1>Home</h1> })),
+      createRoute("/users/[id]", {
+        static: true,
+        component: async () => ({
+          default: () => {
+            const router = useRouter()
+            return <h1>{router.params().id}</h1>
+          },
+          generateStaticParams: async () => [{ id: "1" }, { id: "2" }],
         }),
-      ],
-    })
+      }),
+    ],
+  })
   it("compiles and matches dynamic routes", () => {
     const manifest = compileRouteTree(routes)
     const match = matchRoute(manifest, "/users/99")
@@ -67,26 +70,26 @@ describe("router", () => {
 
   it("composes nested generateStaticParams from parent routes", async () => {
     const nested = createRouteTree({
-        static: true,
-        children: [
-          createRoute("/posts/[slug]", {
-            component: async () => ({
-              default: () => <h1>post</h1>,
-              generateStaticParams: () => [{ slug: "a" }, { slug: "b" }],
-            }),
+      static: true,
+      children: [
+        createRoute("/posts/[slug]", {
+          component: async () => ({
+            default: () => <h1>post</h1>,
+            generateStaticParams: () => [{ slug: "a" }, { slug: "b" }],
           }),
-          createRoute("/posts/[slug]/comments/[id]", {
-            component: async () => ({
-              default: () => <h1>comment</h1>,
-              generateStaticParams: ({
-                params,
-              }: {
-                params: Record<string, string>
-              }) => [{ id: `${params.slug}-1` }, { id: `${params.slug}-2` }],
-            }),
+        }),
+        createRoute("/posts/[slug]/comments/[id]", {
+          component: async () => ({
+            default: () => <h1>comment</h1>,
+            generateStaticParams: ({
+              params,
+            }: {
+              params: Record<string, string>
+            }) => [{ id: `${params.slug}-1` }, { id: `${params.slug}-2` }],
           }),
-        ],
-      })
+        }),
+      ],
+    })
     const manifest = compileRouteTree(nested)
     const paths = await generateStaticPaths(manifest)
     assert.deepStrictEqual(paths, [
@@ -101,22 +104,22 @@ describe("router", () => {
 
   it("rejects child generateStaticParams with parent param keys", async () => {
     const bad = createRouteTree({
-        static: true,
-        children: [
-          createRoute("/posts/[slug]", {
-            component: async () => ({
-              default: () => null,
-              generateStaticParams: () => [{ slug: "a" }],
-            }),
+      static: true,
+      children: [
+        createRoute("/posts/[slug]", {
+          component: async () => ({
+            default: () => null,
+            generateStaticParams: () => [{ slug: "a" }],
           }),
-          createRoute("/posts/[slug]/comments/[id]", {
-            component: async () => ({
-              default: () => null,
-              generateStaticParams: () => [{ slug: "x", id: "1" }],
-            }),
+        }),
+        createRoute("/posts/[slug]/comments/[id]", {
+          component: async () => ({
+            default: () => null,
+            generateStaticParams: () => [{ slug: "x", id: "1" }],
           }),
-        ],
-      })
+        }),
+      ],
+    })
     await assert.rejects(
       () => generateStaticPaths(compileRouteTree(bad)),
       /unexpected key "slug"/
@@ -164,19 +167,19 @@ describe("router", () => {
 
   it("errors when static parent route lacks generateStaticParams", async () => {
     const bad = createRouteTree({
-        static: true,
-        children: [
-          createRoute("/posts/[slug]", {
-            component: async () => ({ default: () => null }),
+      static: true,
+      children: [
+        createRoute("/posts/[slug]", {
+          component: async () => ({ default: () => null }),
+        }),
+        createRoute("/posts/[slug]/comments/[id]", {
+          component: async () => ({
+            default: () => null,
+            generateStaticParams: () => [{ id: "1" }],
           }),
-          createRoute("/posts/[slug]/comments/[id]", {
-            component: async () => ({
-              default: () => null,
-              generateStaticParams: () => [{ id: "1" }],
-            }),
-          }),
-        ],
-      })
+        }),
+      ],
+    })
     await assert.rejects(
       async () => generateStaticPaths(compileRouteTree(bad)),
       (err: Error) =>
@@ -187,38 +190,40 @@ describe("router", () => {
 
   it("uses empty parent params when no static parent route exists", async () => {
     const solo = createRouteTree({
-        static: true,
-        children: [
-          createRoute("/items/[id]", {
-            component: async () => ({
-              default: () => null,
-              generateStaticParams: () => [{ id: "solo" }],
-            }),
+      static: true,
+      children: [
+        createRoute("/items/[id]", {
+          component: async () => ({
+            default: () => null,
+            generateStaticParams: () => [{ id: "solo" }],
           }),
-        ],
-      })
+        }),
+      ],
+    })
     const paths = await generateStaticPaths(compileRouteTree(solo))
     assert.deepStrictEqual(paths, ["/items/solo"])
   })
 
   it("generateSitemapPaths merges static, default SSR, and included dynamic paths", async () => {
     const hybrid = createRouteTree({
-        children: [
-          createRoute("/", async () => ({ default: () => <h1>Home</h1> })),
-          createRoute("/about", async () => ({ default: () => <h1>About</h1> })),
-          createRoute("/docs", {
-            static: true,
-            component: async () => ({ default: () => <h1>Docs</h1> }),
+      children: [
+        createRoute("/", async () => ({ default: () => <h1>Home</h1> })),
+        createRoute("/about", async () => ({ default: () => <h1>About</h1> })),
+        createRoute("/docs", {
+          static: true,
+          component: async () => ({ default: () => <h1>Docs</h1> }),
+        }),
+        createRoute("/users/[id]", {
+          component: async () => ({
+            default: () => <h1>User</h1>,
+            generateSitemapParams: () => [{ id: "1" }, { id: "2" }],
           }),
-          createRoute("/users/[id]", {
-            component: async () => ({
-              default: () => <h1>User</h1>,
-              generateSitemapParams: () => [{ id: "1" }, { id: "2" }],
-            }),
-          }),
-          createRoute("/private", async () => ({ default: () => <h1>Private</h1> })),
-        ],
-      })
+        }),
+        createRoute("/private", async () => ({
+          default: () => <h1>Private</h1>,
+        })),
+      ],
+    })
     const manifest = compileRouteTree(hybrid)
     const site = defineSiteConfig({
       url: "https://example.com",
@@ -242,8 +247,8 @@ describe("router", () => {
   it("generateSitemapPaths rejects unknown sitemap.include route", async () => {
     const manifest = compileRouteTree(
       createRouteTree({
-          children: [createRoute("/", async () => ({ default: () => null }))],
-        })
+        children: [createRoute("/", async () => ({ default: () => null }))],
+      })
     )
     const site = defineSiteConfig({
       url: "https://example.com",
@@ -258,12 +263,12 @@ describe("router", () => {
   it("generateSitemapPaths requires generateSitemapParams for included dynamic routes", async () => {
     const manifest = compileRouteTree(
       createRouteTree({
-          children: [
-            createRoute("/users/[id]", {
-              component: async () => ({ default: () => null }),
-            }),
-          ],
-        })
+        children: [
+          createRoute("/users/[id]", {
+            component: async () => ({ default: () => null }),
+          }),
+        ],
+      })
     )
     const site = defineSiteConfig({
       url: "https://example.com",
@@ -314,16 +319,16 @@ describe("router", () => {
 
   it("SSR render includes jsonLd in document head", async () => {
     const r = createRouteTree({
-        children: [
-          createRoute("/schema", {
-            component: async () => ({ default: () => <h1>Schema</h1> }),
-            head: {
-              title: "Schema page",
-              jsonLd: { "@type": "WebPage", name: "Schema" },
-            },
-          }),
-        ],
-      })
+      children: [
+        createRoute("/schema", {
+          component: async () => ({ default: () => <h1>Schema</h1> }),
+          head: {
+            title: "Schema page",
+            jsonLd: { "@type": "WebPage", name: "Schema" },
+          },
+        }),
+      ],
+    })
     const renderer = createRenderer({ routes: r, htmlTemplate: MINIMAL_TPL })
     const res = await renderer.render("/schema")
     assert.ok(res?.body.includes("application/ld+json"))
@@ -332,26 +337,26 @@ describe("router", () => {
 
   it("prerenderStaticRoutes includes nested static paths", async () => {
     const nested = createRouteTree({
-        static: true,
-        children: [
-          createRoute("/posts/[slug]", {
-            component: async () => ({
-              default: () => <p>post</p>,
-              generateStaticParams: () => [{ slug: "x" }],
-            }),
+      static: true,
+      children: [
+        createRoute("/posts/[slug]", {
+          component: async () => ({
+            default: () => <p>post</p>,
+            generateStaticParams: () => [{ slug: "x" }],
           }),
-          createRoute("/posts/[slug]/comments/[id]", {
-            component: async () => ({
-              default: () => <p>c</p>,
-              generateStaticParams: ({
-                params,
-              }: {
-                params: Record<string, string>
-              }) => [{ id: `${params.slug}-1` }],
-            }),
+        }),
+        createRoute("/posts/[slug]/comments/[id]", {
+          component: async () => ({
+            default: () => <p>c</p>,
+            generateStaticParams: ({
+              params,
+            }: {
+              params: Record<string, string>
+            }) => [{ id: `${params.slug}-1` }],
           }),
-        ],
-      })
+        }),
+      ],
+    })
     const outputs = await prerenderStaticRoutes({ routes: nested })
     const paths = outputs.map((o) => o.path).sort()
     assert.deepStrictEqual(paths, ["/posts/x", "/posts/x/comments/x-1"])
@@ -372,20 +377,20 @@ describe("router", () => {
 
   it("provides CustomRequestContext to SSR components and serializes it for hydration", async () => {
     const r = createRouteTree({
-        layout: async () => ({
-          default: ({ children }: { children: JSX.Children }) => (
-            <main>{children}</main>
-          ),
-        }),
-        children: [
-          createRoute("/", async () => ({
-            default: () => {
-              const ctx = useRequestContext() as any
-              return <p>{ctx.user?.name}</p>
-            },
-          })),
-        ],
-      })
+      layout: async () => ({
+        default: ({ children }: { children: JSX.Element }) => (
+          <main>{children}</main>
+        ),
+      }),
+      children: [
+        createRoute("/", async () => ({
+          default: () => {
+            const ctx = useRequestContext() as any
+            return <p>{ctx.user?.name}</p>
+          },
+        })),
+      ],
+    })
     const renderer = createRenderer({ routes: r, htmlTemplate: MINIMAL_TPL })
     const response = await renderer.render("/", {
       context: { user: { name: "John" } } as any,
@@ -423,21 +428,21 @@ describe("router", () => {
     })
 
     const concurrentRoutes = createRouteTree({
-        static: true,
-        layout: async () => ({
-          default: ({ children }: { children: JSX.Children }) => (
-            <main>{children}</main>
-          ),
-        }),
-        children: Array.from({ length: pageCount }, (_, i) =>
-          createRoute(`/pages/${i}`, {
-            component: async () => ({
-              load: trackLoad,
-              default: () => <p>{i}</p>,
-            }),
-          })
+      static: true,
+      layout: async () => ({
+        default: ({ children }: { children: JSX.Element }) => (
+          <main>{children}</main>
         ),
-      })
+      }),
+      children: Array.from({ length: pageCount }, (_, i) =>
+        createRoute(`/pages/${i}`, {
+          component: async () => ({
+            load: trackLoad,
+            default: () => <p>{i}</p>,
+          }),
+        })
+      ),
+    })
     inFlight = 0
     peak = 0
     await prerenderStaticRoutes({
@@ -457,19 +462,19 @@ describe("router", () => {
 
   it("returns document head from renderer with merged route meta", async () => {
     const metaRoutes = createRouteTree({
-        head: { title: "AppRoot", description: "from-scope" },
-        layout: async () => ({
-          default: ({ children }: { children: JSX.Children }) => (
-            <main>{children}</main>
-          ),
+      head: { title: "AppRoot", description: "from-scope" },
+      layout: async () => ({
+        default: ({ children }: { children: JSX.Element }) => (
+          <main>{children}</main>
+        ),
+      }),
+      children: [
+        createRoute("/doc", {
+          component: async () => ({ default: () => <p>x</p> }),
+          head: { title: "LeafTitle", description: "from-leaf" },
         }),
-        children: [
-          createRoute("/doc", {
-            component: async () => ({ default: () => <p>x</p> }),
-            head: { title: "LeafTitle", description: "from-leaf" },
-          }),
-        ],
-      })
+      ],
+    })
     const renderer = createRenderer({
       routes: metaRoutes,
       htmlTemplate: MINIMAL_TPL,
@@ -481,25 +486,25 @@ describe("router", () => {
 
   it("resolves {param} placeholders in meta for document head", async () => {
     const r = createRouteTree({
-        layout: async () => ({
-          default: ({ children }: { children: JSX.Children }) => (
-            <main>{children}</main>
-          ),
-        }),
-        children: [
-          createRoute("/users/[id]", {
-            component: async () => ({
-              head: defineHeadContent((ctx) => ({
-                title: `User ${ctx.params.id}`,
-              })),
-              default: () => {
-                const router = useRouter()
-                return <span>{router.params.value.id}</span>
-              },
-            }),
+      layout: async () => ({
+        default: ({ children }: { children: JSX.Element }) => (
+          <main>{children}</main>
+        ),
+      }),
+      children: [
+        createRoute("/users/[id]", {
+          component: async () => ({
+            head: defineHeadContent((ctx) => ({
+              title: `User ${ctx.params.id}`,
+            })),
+            default: () => {
+              const router = useRouter()
+              return <span>{router.params().id}</span>
+            },
           }),
-        ],
-      })
+        }),
+      ],
+    })
     const renderer = createRenderer({ routes: r, htmlTemplate: MINIMAL_TPL })
     const response = await renderer.render("/users/99")
     assert.ok(response?.body.includes("<title>User 99</title>"))
@@ -507,16 +512,16 @@ describe("router", () => {
 
   it("merges static defineHeadContent with route meta (SSR)", async () => {
     const r = createRouteTree({
-        head: { title: "Base" },
-        children: [
-          createRoute("/", {
-            component: async () => ({
-              head: defineHeadContent({ title: "Welcome!" }),
-              default: () => <h1>Home</h1>,
-            }),
+      head: { title: "Base" },
+      children: [
+        createRoute("/", {
+          component: async () => ({
+            head: defineHeadContent({ title: "Welcome!" }),
+            default: () => <h1>Home</h1>,
           }),
-        ],
-      })
+        }),
+      ],
+    })
     const renderer = createRenderer({ routes: r, htmlTemplate: MINIMAL_TPL })
     const response = await renderer.render("/")
     assert.ok(response?.body.includes("<title>Welcome!</title>"))
@@ -525,20 +530,20 @@ describe("router", () => {
   it("resolves async defineHeadContent after loader (SSR stream)", async () => {
     const load = serverLoader(async () => ({ title: "Gizmo" }))
     const r = createRouteTree({
-        head: { title: "Base" },
-        children: [
-          createRoute("/product", {
-            component: async () => ({
-              load,
-              head: defineHeadContent<typeof load>(async (ctx) => {
-                const { data } = await ctx.loader()
-                return { title: `Product: ${data!.title}` }
-              }),
-              default: () => <h1>Product</h1>,
+      head: { title: "Base" },
+      children: [
+        createRoute("/product", {
+          component: async () => ({
+            load,
+            head: defineHeadContent<typeof load>(async (ctx) => {
+              const { data } = await ctx.loader()
+              return { title: `Product: ${data!.title}` }
             }),
+            default: () => <h1>Product</h1>,
           }),
-        ],
-      })
+        }),
+      ],
+    })
     const renderer = createRenderer({
       stream: true,
       routes: r,
@@ -568,19 +573,19 @@ describe("router", () => {
       fallback: () => <p data-testid="load-fallback">Loading...</p>,
     })
     const r = createRouteTree({
-        head: { title: "Route" },
-        children: [
-          createRoute("/items/[id]", {
-            component: async () => ({
-              load,
-              head: defineHeadContent((ctx) => ({
-                title: `Item ${ctx.params.id}`,
-              })),
-              default: () => <p data-testid="ok">ok</p>,
-            }),
+      head: { title: "Route" },
+      children: [
+        createRoute("/items/[id]", {
+          component: async () => ({
+            load,
+            head: defineHeadContent((ctx) => ({
+              title: `Item ${ctx.params.id}`,
+            })),
+            default: () => <p data-testid="ok">ok</p>,
           }),
-        ],
-      })
+        }),
+      ],
+    })
     const renderer = createRenderer({
       stream: true,
       routes: r,
@@ -607,17 +612,17 @@ describe("router", () => {
       fallback: () => <p data-testid="load-fallback">Loading...</p>,
     })
     const r = createRouteTree({
-        head: { title: "Route" },
-        children: [
-          createRoute("/loader", {
-            component: async () => ({
-              load,
-              head: defineHeadContent({ title: "Static head" }),
-              default: () => <p data-testid="ok">ok</p>,
-            }),
+      head: { title: "Route" },
+      children: [
+        createRoute("/loader", {
+          component: async () => ({
+            load,
+            head: defineHeadContent({ title: "Static head" }),
+            default: () => <p data-testid="ok">ok</p>,
           }),
-        ],
-      })
+        }),
+      ],
+    })
     const renderer = createRenderer({
       stream: true,
       routes: r,
@@ -665,16 +670,18 @@ describe("router", () => {
 
   it("renders Link with resolved href in SSR output", async () => {
     const r = createRouteTree({
-        layout: async () => ({
-          default: ({ children }: { children: JSX.Children }) => (
-            <main>
-              <Link to="/users/1">Go</Link>
-              {children}
-            </main>
-          ),
-        }),
-        children: [createRoute("/", async () => ({ default: () => <p>home</p> }))],
-      })
+      layout: async () => ({
+        default: ({ children }) => (
+          <main>
+            <Link to="/users/1">Go</Link>
+            {children}
+          </main>
+        ),
+      }),
+      children: [
+        createRoute("/", async () => ({ default: () => <p>home</p> })),
+      ],
+    })
     const renderer = createRenderer({ routes: r })
     const response = await renderer.render("/")
     assert.ok(response?.body.includes('<a href="/users/1">'))
@@ -708,19 +715,19 @@ describe("router", () => {
 
   it("Link renders hash suffixes on href in SSR output", async () => {
     const r = createRouteTree({
-        layout: async () => ({
-          default: () => (
-            <nav>
-              <Link to="#intro">Intro</Link>
-              <Link to="/about#team">Team</Link>
-            </nav>
-          ),
-        }),
-        children: [
-          createRoute("/docs", async () => ({ default: () => <p>docs</p> })),
-          createRoute("/about", async () => ({ default: () => <p>about</p> })),
-        ],
-      })
+      layout: async () => ({
+        default: () => (
+          <nav>
+            <Link to="#intro">Intro</Link>
+            <Link to="/about#team">Team</Link>
+          </nav>
+        ),
+      }),
+      children: [
+        createRoute("/docs", async () => ({ default: () => <p>docs</p> })),
+        createRoute("/about", async () => ({ default: () => <p>about</p> })),
+      ],
+    })
     const renderer = createRenderer({ routes: r })
     const response = await renderer.render("/docs")
     assert.ok(response?.body.includes('<a href="/docs#intro">'))
@@ -745,19 +752,22 @@ describe("router", () => {
       location,
       pathPolicy: { baseUrl: "/app" },
     })
-    assert.strictEqual(router.resolveHref("/about#section"), "/app/about#section")
+    assert.strictEqual(
+      router.resolveHref("/about#section"),
+      "/app/about#section"
+    )
     assert.strictEqual(router.resolveHref("#top"), "/app/users/1#top")
   })
 
   it("runs root scope middleware and can abort navigation", async () => {
     const manifest = compileRouteTree(
       createRouteTree({
-          middleware: [() => ({ abort: true })],
-          children: [
-            createRoute("/", async () => ({ default: () => <h2>home</h2> })),
-            createRoute("/about", async () => ({ default: () => <p>about</p> })),
-          ],
-        })
+        middleware: [() => ({ abort: true })],
+        children: [
+          createRoute("/", async () => ({ default: () => <h2>home</h2> })),
+          createRoute("/about", async () => ({ default: () => <p>about</p> })),
+        ],
+      })
     )
     const historyEvents: Array<{ kind: "push" | "replace"; to: string }> = []
     const history = {
@@ -777,24 +787,24 @@ describe("router", () => {
     })
     router.navigate("/about")
     await new Promise((r) => setTimeout(r, 0))
-    assert.strictEqual(router.path.value, "/")
+    assert.strictEqual(router.path(), "/")
     assert.strictEqual(historyEvents.length, 0)
   })
 
   it("runs root scope middleware and can redirect navigation", async () => {
     const manifest = compileRouteTree(
       createRouteTree({
-          middleware: [
-            (ctx) => {
-              if (ctx.to.pathname === "/about") return { redirect: "/login" }
-              return
-            },
-          ],
-          children: [
-            createRoute("/", async () => ({ default: () => <h2>home</h2> })),
-            createRoute("/about", async () => ({ default: () => <p>about</p> })),
-          ],
-        })
+        middleware: [
+          (ctx) => {
+            if (ctx.to.pathname === "/about") return { redirect: "/login" }
+            return
+          },
+        ],
+        children: [
+          createRoute("/", async () => ({ default: () => <h2>home</h2> })),
+          createRoute("/about", async () => ({ default: () => <p>about</p> })),
+        ],
+      })
     )
     const historyEvents: Array<{ kind: "push" | "replace"; to: string }> = []
     const history = {
@@ -814,25 +824,25 @@ describe("router", () => {
     })
     router.navigate("/about")
     await new Promise((r) => setTimeout(r, 0))
-    assert.strictEqual(router.path.value, "/login")
+    assert.strictEqual(router.path(), "/login")
     assert.ok(historyEvents.some((e) => e.to === "/login"))
   })
 
   it("SSR runs route middleware and returns redirect when middleware redirects", async () => {
     const r = createRouteTree({
-        middleware: [
-          (ctx) => {
-            if (ctx.to.params.id === "0") return { redirect: "/about" }
-            return
-          },
-        ],
-        children: [
-          createRoute("/about", async () => ({ default: () => <p>about</p> })),
-          createRoute("/users/[id]", {
-            component: async () => ({ default: () => <p>user</p> }),
-          }),
-        ],
-      })
+      middleware: [
+        (ctx) => {
+          if (ctx.to.params.id === "0") return { redirect: "/about" }
+          return
+        },
+      ],
+      children: [
+        createRoute("/about", async () => ({ default: () => <p>about</p> })),
+        createRoute("/users/[id]", {
+          component: async () => ({ default: () => <p>user</p> }),
+        }),
+      ],
+    })
     const renderer = createRenderer({
       routes: r,
     })
@@ -847,14 +857,14 @@ describe("router", () => {
 
   it("runs per-route middleware abort", async () => {
     const guarded = createRouteTree({
-        children: [
-          createRoute("/", async () => ({ default: () => <p>ok</p> })),
-          createRoute("/blocked", {
-            component: async () => ({ default: () => <p>no</p> }),
-            middleware: [() => ({ abort: true })],
-          }),
-        ],
-      })
+      children: [
+        createRoute("/", async () => ({ default: () => <p>ok</p> })),
+        createRoute("/blocked", {
+          component: async () => ({ default: () => <p>no</p> }),
+          middleware: [() => ({ abort: true })],
+        }),
+      ],
+    })
     const manifest = compileRouteTree(guarded)
     const historyEvents: Array<{ kind: "push" | "replace"; to: string }> = []
     const history = {
@@ -870,26 +880,26 @@ describe("router", () => {
     const router = createRouter({ routes: manifest, history, location })
     router.navigate("/blocked")
     await new Promise((r) => setTimeout(r, 0))
-    assert.strictEqual(router.path.value, "/")
+    assert.strictEqual(router.path(), "/")
     assert.strictEqual(historyEvents.length, 0)
   })
 
   it("exposes pathname/params/hash/query signals via useRouter", async () => {
     const r = createRouteTree({
-        children: [
-          createRoute("/users/[id]", async () => ({
-            default: () => {
-              const router = useRouter()
-              return (
-                <p>
-                  {router.pathname.value}:{router.params.value.id}:
-                  {router.hash.value}:{router.query.value.tag?.join(",")}
-                </p>
-              )
-            },
-          })),
-        ],
-      })
+      children: [
+        createRoute("/users/[id]", async () => ({
+          default: () => {
+            const router = useRouter()
+            return (
+              <p>
+                {router.pathname()}:{router.params().id}:{router.hash()}:
+                {router.query().tag?.join(",")}
+              </p>
+            )
+          },
+        })),
+      ],
+    })
     const renderer = createRenderer({ routes: r })
     const response = await renderer.render("/users/42?tag=a&tag=b#section")
     assert.ok(response?.body.includes(":42:#section:a,b"))
@@ -940,31 +950,31 @@ describe("router", () => {
     })
     router.navigate("/users/1")
     await new Promise((r) => setTimeout(r, 0))
-    assert.strictEqual(router.pathname.value, "/users/1")
+    assert.strictEqual(router.pathname(), "/users/1")
     assert.strictEqual(router.resolveHref("/about"), "/app/about")
 
     router.setQuery({ tag: ["x", "y"] }, { replace: true })
     await new Promise((r) => setTimeout(r, 0))
-    assert.deepStrictEqual(router.query.value, { tag: ["x", "y"] })
+    assert.deepStrictEqual(router.query(), { tag: ["x", "y"] })
 
     router.setHash("top")
     await new Promise((r) => setTimeout(r, 0))
-    assert.strictEqual(router.hash.value, "#top")
+    assert.strictEqual(router.hash(), "#top")
     assert.ok(historyEvents.some((e) => e.to.startsWith("/app/users/1")))
   })
 
   it("renders notFound module when route is unmatched", async () => {
     const nfRoutes = createRouteTree({
-        layout: async () => ({
-          default: ({ children }: { children: JSX.Children }) => (
-            <main>{children}</main>
-          ),
-        }),
-        notFound: async () => ({
-          default: () => <p>missing</p>,
-        }),
-        children: [createRoute("/", async () => ({ default: () => <p>ok</p> }))],
-      })
+      layout: async () => ({
+        default: ({ children }: { children: JSX.Element }) => (
+          <main>{children}</main>
+        ),
+      }),
+      notFound: async () => ({
+        default: () => <p>missing</p>,
+      }),
+      children: [createRoute("/", async () => ({ default: () => <p>ok</p> }))],
+    })
     const renderer = createRenderer({ routes: nfRoutes })
     const response = await renderer.render("/does-not-exist")
     assert.strictEqual(response?.status, 404)
@@ -973,24 +983,24 @@ describe("router", () => {
 
   it("renders scope error module when SSR throws after a matched route", async () => {
     const errRoutes = createRouteTree({
-        layout: async () => ({
-          default: ({ children }: { children: JSX.Children }) => (
-            <main data-layout="yes">{children}</main>
-          ),
-        }),
-        error: async () => ({
-          default: ({ error }: { error: Error }) => (
-            <p data-msg={error.message}>err-scope</p>
-          ),
-        }),
-        children: [
-          createRoute("/break", async () => ({
-            default: () => {
-              throw new Error("boom-matched")
-            },
-          })),
-        ],
-      })
+      layout: async () => ({
+        default: ({ children }: { children: JSX.Element }) => (
+          <main data-layout="yes">{children}</main>
+        ),
+      }),
+      error: async () => ({
+        default: ({ error }: { error: Error }) => (
+          <p data-msg={error.message}>err-scope</p>
+        ),
+      }),
+      children: [
+        createRoute("/break", async () => ({
+          default: () => {
+            throw new Error("boom-matched")
+          },
+        })),
+      ],
+    })
     const renderer = createRenderer({ routes: errRoutes })
     const response = await renderer.render("/break")
     assert.ok(response)
@@ -1010,27 +1020,27 @@ describe("router", () => {
 
   it("renders root error module when notFound subtree throws SSR", async () => {
     const nfErr = createRouteTree({
-        layout: async () => ({
-          default: ({ children }: { children: JSX.Children }) => (
-            <div className="shell">{children}</div>
-          ),
-        }),
-        notFound: async () => ({
-          default: () => {
-            throw "nf-string"
-          },
-        }),
-        error: async () => ({
-          default: ({ error }: { error: Error }) => (
-            <p className="roe">{error.message}</p>
-          ),
-        }),
-        children: [
-          createRoute("/", async () => ({
-            default: () => <p>ok</p>,
-          })),
-        ],
-      })
+      layout: async () => ({
+        default: ({ children }: { children: JSX.Element }) => (
+          <div className="shell">{children}</div>
+        ),
+      }),
+      notFound: async () => ({
+        default: () => {
+          throw "nf-string"
+        },
+      }),
+      error: async () => ({
+        default: ({ error }: { error: Error }) => (
+          <p className="roe">{error.message}</p>
+        ),
+      }),
+      children: [
+        createRoute("/", async () => ({
+          default: () => <p>ok</p>,
+        })),
+      ],
+    })
     const renderer = createRenderer({ routes: nfErr })
     const response = await renderer.render("/gone")
     assert.ok(response)
@@ -1046,19 +1056,19 @@ describe("router", () => {
 
   it("streaming SSR renders custom error page with HTML template", async () => {
     const errRoutes = createRouteTree({
-        error: async () => ({
-          default: ({ error }: { error: Error }) => (
-            <p>t-stream-{error.message}</p>
-          ),
-        }),
-        children: [
-          createRoute("/bad", async () => ({
-            default: () => {
-              throw new Error("sink")
-            },
-          })),
-        ],
-      })
+      error: async () => ({
+        default: ({ error }: { error: Error }) => (
+          <p>t-stream-{error.message}</p>
+        ),
+      }),
+      children: [
+        createRoute("/bad", async () => ({
+          default: () => {
+            throw new Error("sink")
+          },
+        })),
+      ],
+    })
     const renderer = createRenderer({
       stream: true,
       routes: errRoutes,
@@ -1083,14 +1093,14 @@ describe("router", () => {
 
   it("falls back to generic 500 HTML when route has no error module", async () => {
     const plain = createRouteTree({
-        children: [
-          createRoute("/x", async () => ({
-            default: () => {
-              throw new Error("silent")
-            },
-          })),
-        ],
-      })
+      children: [
+        createRoute("/x", async () => ({
+          default: () => {
+            throw new Error("silent")
+          },
+        })),
+      ],
+    })
     const renderer = createRenderer({ routes: plain })
     const response = await renderer.render("/x")
     assert.ok(response)
@@ -1107,29 +1117,29 @@ describe("router", () => {
 
   it("uses leaf route error over ancestor scope error", async () => {
     const layered = createRouteTree({
-        layout: async () => ({
-          default: ({ children }: { children: JSX.Children }) => (
-            <aside>{children}</aside>
-          ),
-        }),
-        error: async () => ({
-          default: () => <p>wrong-scope-error</p>,
-        }),
-        children: [
-          createRoute("/deep", {
-            error: async () => ({
-              default: ({ error }: { error: Error }) => (
-                <p>caught-leaf-{error.message}</p>
-              ),
-            }),
-            component: async () => ({
-              default: () => {
-                throw new Error("leaf-throw")
-              },
-            }),
+      layout: async () => ({
+        default: ({ children }: { children: JSX.Element }) => (
+          <aside>{children}</aside>
+        ),
+      }),
+      error: async () => ({
+        default: () => <p>wrong-scope-error</p>,
+      }),
+      children: [
+        createRoute("/deep", {
+          error: async () => ({
+            default: ({ error }: { error: Error }) => (
+              <p>caught-leaf-{error.message}</p>
+            ),
           }),
-        ],
-      })
+          component: async () => ({
+            default: () => {
+              throw new Error("leaf-throw")
+            },
+          }),
+        }),
+      ],
+    })
     const renderer = createRenderer({ routes: layered })
     const response = await renderer.render("/deep")
     assert.ok(response)
@@ -1140,28 +1150,28 @@ describe("router", () => {
 
   it("uses innermost scope error when route does not define error", async () => {
     const nested = createRouteTree({
-        children: [
-          createRouteScope({
-            layout: async () => ({
-              default: ({ children }: { children: JSX.Children }) => (
-                <section id="inner">{children}</section>
-              ),
-            }),
-            error: async () => ({
-              default: ({ error }: { error: Error }) => (
-                <p>inner-{error.message}</p>
-              ),
-            }),
-            children: [
-              createRoute("/inner-fail", async () => ({
-                default: () => {
-                  throw new Error("no-leaf-error")
-                },
-              })),
-            ],
+      children: [
+        createRouteScope({
+          layout: async () => ({
+            default: ({ children }: { children: JSX.Element }) => (
+              <section id="inner">{children}</section>
+            ),
           }),
-        ],
-      })
+          error: async () => ({
+            default: ({ error }: { error: Error }) => (
+              <p>inner-{error.message}</p>
+            ),
+          }),
+          children: [
+            createRoute("/inner-fail", async () => ({
+              default: () => {
+                throw new Error("no-leaf-error")
+              },
+            })),
+          ],
+        }),
+      ],
+    })
     const renderer = createRenderer({ routes: nested })
     const response = await renderer.render("/inner-fail")
     assert.ok(response)
@@ -1175,19 +1185,19 @@ describe("router", () => {
 
   it("applies htmlTemplate in string mode for custom 500", async () => {
     const r = createRouteTree({
-        error: async () => ({
-          default: ({ error }: { error: Error }) => (
-            <p>string-err-{error.message}</p>
-          ),
-        }),
-        children: [
-          createRoute("/se", async () => ({
-            default: () => {
-              throw new Error("tpl")
-            },
-          })),
-        ],
-      })
+      error: async () => ({
+        default: ({ error }: { error: Error }) => (
+          <p>string-err-{error.message}</p>
+        ),
+      }),
+      children: [
+        createRoute("/se", async () => ({
+          default: () => {
+            throw new Error("tpl")
+          },
+        })),
+      ],
+    })
     const renderer = createRenderer({
       routes: r,
       htmlTemplate: MINIMAL_TPL,
@@ -1203,22 +1213,22 @@ describe("router", () => {
 
   it("root error without root layout still renders for notFound failure", async () => {
     const rootOnly = createRouteTree({
-        notFound: async () => ({
-          default: () => {
-            throw new Error("nf-err")
-          },
-        }),
-        error: async () => ({
-          default: ({ error }: { error: Error }) => (
-            <p id="root-only">{error.message}</p>
-          ),
-        }),
-        children: [
-          createRoute("/", async () => ({
-            default: () => <p>home</p>,
-          })),
-        ],
-      })
+      notFound: async () => ({
+        default: () => {
+          throw new Error("nf-err")
+        },
+      }),
+      error: async () => ({
+        default: ({ error }: { error: Error }) => (
+          <p id="root-only">{error.message}</p>
+        ),
+      }),
+      children: [
+        createRoute("/", async () => ({
+          default: () => <p>home</p>,
+        })),
+      ],
+    })
     const manifest = compileRouteTree(rootOnly)
     assert.strictEqual(manifest.rootLayout, undefined)
     assert.ok(typeof manifest.rootError === "function")
@@ -1236,19 +1246,19 @@ describe("router", () => {
 
   it("falls back to generic 500 when custom error loader rejects", async () => {
     const badLoader = createRouteTree({
-        children: [
-          createRoute("/z", {
-            error: async () => {
-              throw new Error("loader-broke")
+      children: [
+        createRoute("/z", {
+          error: async () => {
+            throw new Error("loader-broke")
+          },
+          component: async () => ({
+            default: () => {
+              throw new Error("original-page")
             },
-            component: async () => ({
-              default: () => {
-                throw new Error("original-page")
-              },
-            }),
           }),
-        ],
-      })
+        }),
+      ],
+    })
     const renderer = createRenderer({ routes: badLoader })
     const response = await renderer.render("/z")
     assert.ok(response)
@@ -1259,12 +1269,12 @@ describe("router", () => {
 
   it("returns null from loadRootErrorRouteTree without root scope error", async () => {
     const routesNoRootErr = createRouteTree({
-        children: [
-          createRoute("/", async () => ({
-            default: () => <p>home</p>,
-          })),
-        ],
-      })
+      children: [
+        createRoute("/", async () => ({
+          default: () => <p>home</p>,
+        })),
+      ],
+    })
     const m = compileRouteTree(routesNoRootErr)
     assert.strictEqual(await loadRootErrorRouteTree(m), null)
     assert.strictEqual(m.rootError, undefined)
@@ -1316,15 +1326,15 @@ describe("router", () => {
       note: "from-server",
     }))
     const r = createRouteTree({
-        children: [
-          createRoute("/loader", {
-            component: async () => ({
-              load,
-              default: () => <p data-testid="ok">ok</p>,
-            }),
+      children: [
+        createRoute("/loader", {
+          component: async () => ({
+            load,
+            default: () => <p data-testid="ok">ok</p>,
           }),
-        ],
-      })
+        }),
+      ],
+    })
     const renderer = createRenderer({
       stream: true,
       routes: r,
@@ -1381,15 +1391,15 @@ describe("router", () => {
 
   it("invalidate bumps loaderEpoch and clears force reload after outlet run", async () => {
     const routes = createRouteTree({
-        layout: async () => ({
-          default: ({ children }: { children: JSX.Children }) => (
-            <main>{children}</main>
-          ),
-        }),
-        children: [
-          createRoute("/", async () => ({ default: () => <h1>Home</h1> })),
-        ],
-      })
+      layout: async () => ({
+        default: ({ children }: { children: JSX.Element }) => (
+          <main>{children}</main>
+        ),
+      }),
+      children: [
+        createRoute("/", async () => ({ default: () => <h1>Home</h1> })),
+      ],
+    })
     const manifest = compileRouteTree(routes)
     const history = {
       pushState() {},

@@ -106,23 +106,23 @@ const ComponentInfoPanel: Kiru.Component<{
   let lastPulseGeneration = -1
 
   kiru.effect(() => {
-    const id = panelId.value
+    const id = panelId()
     if (!id) {
       const prev = propsViewerRoot.peek()
       if (prev) {
         disposeViewerRoot(prev)
-        propsViewerRoot.value = null
+        propsViewerRoot.set(null)
       }
       return
     }
 
-    const currentPanels = componentInfoPanels.value
+    const currentPanels = componentInfoPanels()
     const current = currentPanels.find((p) => p.id === id)
     if (!current) {
       const prev = propsViewerRoot.peek()
       if (prev) {
         disposeViewerRoot(prev)
-        propsViewerRoot.value = null
+        propsViewerRoot.set(null)
       }
       return
     }
@@ -130,10 +130,10 @@ const ComponentInfoPanel: Kiru.Component<{
     if (current.pulseGeneration !== lastPulseGeneration) {
       lastPulseGeneration = current.pulseGeneration
       if (current.pulseGeneration > 0) {
-        isPulsing.value = true
+        isPulsing.set(true)
         setTimeout(() => {
           if (lastPulseGeneration === current.pulseGeneration) {
-            isPulsing.value = false
+            isPulsing.set(false)
           }
         }, PULSE_DURATION)
       }
@@ -141,10 +141,10 @@ const ComponentInfoPanel: Kiru.Component<{
 
     if (!current.unmounted) {
       const hash = computeComponentHash(current.component)
-      selectedHash.value = hash
+      selectedHash.set(hash)
       if (current.hash !== hash) {
-        componentInfoPanels.value = currentPanels.map((p) =>
-          p.id === id ? { ...p, hash } : p
+        componentInfoPanels.set((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, hash } : p))
         )
       }
     }
@@ -159,7 +159,7 @@ const ComponentInfoPanel: Kiru.Component<{
     const settings = devtoolsState.viewerSettings.peek()
     const nodeProps = getPropsForViewer(current.component)
     const nextRoot = buildViewerRoot(nodeProps, "props", prevCache, settings)
-    propsViewerRoot.value = nextRoot
+    propsViewerRoot.set(nextRoot)
     disposeCache(prevCache)
   })
 
@@ -167,7 +167,7 @@ const ComponentInfoPanel: Kiru.Component<{
     const root = propsViewerRoot.peek()
     if (root) {
       disposeViewerRoot(root)
-      propsViewerRoot.value = null
+      propsViewerRoot.set(null)
     }
   })
 
@@ -192,10 +192,10 @@ const ComponentInfoPanel: Kiru.Component<{
     resizeController.init()
 
     const onAppUpdate = (updatedApp: kiru.AppHandle) => {
-      const id = panelId.value
+      const id = panelId()
       if (!id) return
 
-      const currentPanels = componentInfoPanels.value
+      const currentPanels = componentInfoPanels()
       const current = currentPanels.find((p) => p.id === id)
       if (!current) return
       if (isDevtoolsApp(updatedApp)) return
@@ -203,19 +203,21 @@ const ComponentInfoPanel: Kiru.Component<{
       if (vNodeApp && vNodeApp !== updatedApp) return
 
       if (current.unmounted) {
-        const hash = selectedHash.value
+        const hash = selectedHash()
         if (!hash) return
         const remounted = findComponentByHash(updatedApp.rootNode, hash)
         if (!remounted) return
-        componentInfoPanels.value = currentPanels.map((p) =>
-          p.id === id ? { ...p, component: remounted, unmounted: false } : p
+        componentInfoPanels.set((prev) =>
+          prev.map((p) =>
+            p.id === id ? { ...p, component: remounted, unmounted: false } : p
+          )
         )
         return
       }
 
       if (isVNodeDeleted(current.component)) {
-        componentInfoPanels.value = currentPanels.map((p) =>
-          p.id === id ? { ...p, unmounted: true } : p
+        componentInfoPanels.set((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, unmounted: true } : p))
         )
         return
       }
@@ -225,11 +227,13 @@ const ComponentInfoPanel: Kiru.Component<{
       const settings = devtoolsState.viewerSettings.peek()
       const prevCache = emptyCache()
       collectFromRoot(prev, "props", prevCache)
-      propsViewerRoot.value = buildViewerRoot(
-        getPropsForViewer(current.component),
-        "props",
-        prevCache,
-        settings
+      propsViewerRoot.set(
+        buildViewerRoot(
+          getPropsForViewer(current.component),
+          "props",
+          prevCache,
+          settings
+        )
       )
       disposeCache(prevCache)
     }
@@ -243,36 +247,36 @@ const ComponentInfoPanel: Kiru.Component<{
   })
 
   const containerRef = (current: HTMLElement | null) => {
-    dragController.containerRef.value = current
-    dragController.handleRef.value = current
-    resizeController.containerRef.value = current
+    dragController.containerRef.set(current)
+    dragController.handleRef.set(current)
+    resizeController.containerRef.set(current)
   }
 
   const resizeHandleRef = (current: HTMLElement | null) => {
-    resizeController.handleRef.value = current
+    resizeController.handleRef.set(current)
   }
 
   return ({ panel, state }) => {
-    if (!panelId.value) {
-      panelId.value = panel.id
+    if (!panelId()) {
+      panelId.set(panel.id)
     }
 
-    const currentPanels = componentInfoPanels.value
+    const currentPanels = componentInfoPanels()
     const current = currentPanels.find((p) => p.id === panel.id)
     if (!current) return null
 
     const bringToFront = () => {
-      const panels = componentInfoPanels.value
+      const panels = componentInfoPanels()
       const target = panels.find((p) => p.id === panel.id)
       if (!target) return
-      componentInfoPanels.value = [
-        ...panels.filter((p) => p.id !== panel.id),
+      componentInfoPanels.set((prev) => [
+        ...prev.filter((p) => p.id !== panel.id),
         target,
-      ]
-      widgetStackTop.value = "componentInfo"
+      ])
+      widgetStackTop.set("componentInfo")
     }
-    const hovered = isHovered.value
-    const pulsing = isPulsing.value
+    const hovered = isHovered()
+    const pulsing = isPulsing()
     const overlayBox =
       hovered && !current.unmounted
         ? getComponentBoundingBox(current.component)
@@ -297,22 +301,26 @@ const ComponentInfoPanel: Kiru.Component<{
           className="fixed p-0.5 flex flex-col gap-2 select-none z-index-1001"
           style={{
             zIndex:
-              widgetStackTop.value === "componentInfo"
+              widgetStackTop() === "componentInfo"
                 ? WIDGET_Z_BASE + 1
                 : WIDGET_Z_BASE,
             minWidth: `${COMPONENT_INFO_MIN_WIDTH}px`,
             minHeight: `${COMPONENT_INFO_MIN_HEIGHT}px`,
             opacity: state === "entered" ? 1 : 0,
-            cursor: resizeController.isResizing.value
+            cursor: resizeController.isResizing()
               ? "se-resize"
-              : dragController.isDragging.value
+              : dragController.isDragging()
                 ? "grabbing"
                 : "grab",
           }}
           onclick={bringToFront}
           onmousedown={bringToFront}
-          onmouseenter={() => (isHovered.value = true)}
-          onmouseleave={() => (isHovered.value = false)}
+          onmouseenter={() => {
+            isHovered.set(true)
+          }}
+          onmouseleave={() => {
+            isHovered.set(false)
+          }}
         >
           <div
             style={{
@@ -354,8 +362,9 @@ const ComponentInfoPanel: Kiru.Component<{
                   type="button"
                   className="p-1 text-neutral-400 hover:text-neutral-200"
                   onclick={() => {
-                    componentInfoPanels.value =
-                      componentInfoPanels.value.filter((p) => p.id !== panel.id)
+                    componentInfoPanels.set((prev) =>
+                      prev.filter((p) => p.id !== panel.id)
+                    )
                   }}
                   title="Close"
                 >

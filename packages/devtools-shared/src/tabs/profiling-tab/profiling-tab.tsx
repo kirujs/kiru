@@ -39,7 +39,7 @@ function AppProfilingChart({ item, pauseWhen }: AppProfilingChartProps) {
 
   const unsub = item.chartData.subscribe((data) => {
     if (hovered.peek() || pauseWhen?.peek()) return
-    chartData.value = data
+    chartData.set(data)
   })
 
   kiru.onCleanup(() => unsub())
@@ -48,12 +48,12 @@ function AppProfilingChart({ item, pauseWhen }: AppProfilingChartProps) {
   const showStatsTooltip = kiru.signal(false)
 
   const onCanvasMouseOver = () => {
-    hovered.value = true
+    hovered.set(true)
   }
   const onCanvasMouseOut = () => {
     if (pauseWhen?.peek()) return
-    hovered.value = false
-    chartData.value = item.chartData.peek()
+    hovered.set(false)
+    chartData.set(item.chartData.peek())
     lineChart.resetZoom()
   }
 
@@ -77,7 +77,9 @@ function AppProfilingChart({ item, pauseWhen }: AppProfilingChartProps) {
       >
         <button
           className="p-1"
-          onclick={() => (showStatsTooltip.value = !showStatsTooltip.value)}
+          onclick={() => {
+            showStatsTooltip.set(!showStatsTooltip())
+          }}
         >
           <InfoIcon className="w-4 h-4" />
         </button>

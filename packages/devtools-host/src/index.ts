@@ -23,7 +23,7 @@ if ("window" in globalThis) {
     kiru.mount(kiru.createElement(App), shadow, {
       name: "kiru.devtools",
     })
-    const handleMainWindowClose = () => devtoolsState.popupWindow.value?.close()
+    const handleMainWindowClose = () => devtoolsState.popupWindow()?.close()
     window.addEventListener("close", handleMainWindowClose)
     window.addEventListener("beforeunload", handleMainWindowClose)
   }

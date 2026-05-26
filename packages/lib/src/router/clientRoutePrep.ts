@@ -25,20 +25,21 @@ import {
   type LeafRouteProps,
 } from "./routeTree.js"
 import type { CurrentNavigation } from "./types.js"
-import type { RouteManifest, RouteMatch, RouteModule } from "./types.js"
+import type { RouteMatch, RouteModule } from "./types.js"
 import type { Router } from "./routerInstance.js"
 
-export type ClientOutletRouter = LoaderContextRouterSlice & {
-  manifest: RouteManifest
-  pathname: { peek(): string }
-  isNavigating: { peek(): boolean }
-  currentNavigation: {
-    peek(): { to: { pathname: string } } | null
-  }
-  forceLoaderReload: { peek(): boolean; value: boolean }
-  loaderEpoch: { value: number }
-  isLoaderStale: { value: boolean }
-}
+export type ClientOutletRouter = LoaderContextRouterSlice &
+  Pick<
+    Router,
+    | "manifest"
+    | "pathname"
+    | "query"
+    | "isNavigating"
+    | "currentNavigation"
+    | "forceLoaderReload"
+    | "loaderEpoch"
+    | "isLoaderStale"
+  >
 
 /** Unwrapped deps passed to the `RouterView` outlet `resource()` loader. */
 export type RouterOutletResourceSnapshot = {
@@ -104,7 +105,7 @@ export async function prepareRouteWithDocumentHead(
       scope,
       getNavGeneration,
       onCacheRefreshed: () => {
-        router.loaderEpoch.value += 1
+        router.loaderEpoch.set((prev) => prev + 1)
       },
     },
   })
@@ -204,8 +205,8 @@ export async function buildClientOutletSubtree(
       ) {
         return null
       }
-      router.forceLoaderReload.value = false
-      router.isLoaderStale.value = prepared.isLoaderStale === true
+      router.forceLoaderReload.set(false)
+      router.isLoaderStale.set(prepared.isLoaderStale === true)
       routeModule = prepared.routeModule
       leafProps = prepared.leafProps
     }
@@ -218,11 +219,7 @@ export async function buildClientOutletSubtree(
       : null
   } catch (err) {
     if (signal.aborted) return null
-    const recovery = await renderClientErrorOutlet(
-      router.manifest,
-      match,
-      err
-    )
+    const recovery = await renderClientErrorOutlet(router.manifest, match, err)
     if (recovery) return recovery
     throw err
   }

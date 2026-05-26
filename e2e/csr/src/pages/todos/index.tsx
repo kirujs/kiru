@@ -9,8 +9,8 @@ export default function TodosPage() {
   ])
 
   function addItem() {
-    items.value = [...items.value, { text: inputText.peek() }]
-    inputText.value = ""
+    items.set([...items(), { text: inputText.peek() }])
+    inputText.set("")
   }
 
   return () => (

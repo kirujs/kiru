@@ -1,6 +1,6 @@
 import type { AppHandle, AppHandleOptions } from "../appHandle.js"
 import { Fragment } from "../element.js"
-import { signal } from "../signals/index.js"
+import { signal, type Signal } from "../signals/index.js"
 import { hydrate } from "./client.js"
 import { buildClientOutletSubtree } from "../router/clientRoutePrep.js"
 import { createRouter } from "../router/csr.js"
@@ -162,7 +162,7 @@ function stashClientHashForSsrHydration(
 ): string {
   if (typeof window === "undefined") return ""
   const hash = window.location.hash
-  if (hash) router.hash.value = ""
+  if (hash) router.hash.set("")
   return hash
 }
 
@@ -170,7 +170,7 @@ function restoreClientHashAfterHydration(
   router: ReturnType<typeof createRouter>,
   hash: string
 ): void {
-  if (hash) router.hash.value = hash
+  if (hash) router.hash.set(hash)
 }
 
 type SsrClientRouter = ReturnType<typeof createRouter>
@@ -180,7 +180,7 @@ async function buildSsrClientOutlet(
   router: SsrClientRouter,
   manifest: RouteManifest,
   options: { useHydratedPageData: boolean; forceReload: boolean },
-  outlet: { value: JSX.Element | null },
+  outlet: Signal<JSX.Element | null>,
   scope?: NavigationScope,
   getNavGeneration?: () => number
 ): Promise<JSX.Element | null> {
@@ -192,14 +192,14 @@ async function buildSsrClientOutlet(
   }
   const outletErr = router.outletRenderError.peek()
   if (outletErr) {
-    router.isLoaderPending.value = true
+    router.isLoaderPending.set(true)
     try {
       return await renderClientErrorOutlet(manifest, committedMatch, outletErr)
     } finally {
-      if (!signal.aborted) router.isLoaderPending.value = false
+      if (!signal.aborted) router.isLoaderPending.set(false)
     }
   }
-  router.isLoaderPending.value = true
+  router.isLoaderPending.set(true)
   try {
     return buildClientOutletSubtree({
       router,
@@ -212,7 +212,7 @@ async function buildSsrClientOutlet(
       onLeafRenderError: (err) => {
         const renderErr = toRenderError(err)
         const matchAtError = committedMatch
-        router.outletRenderError.value = renderErr
+        router.outletRenderError.set(renderErr)
         void recoverSsrOutletFromRenderError(
           router,
           manifest,
@@ -223,7 +223,7 @@ async function buildSsrClientOutlet(
       },
     })
   } finally {
-    if (!signal.aborted) router.isLoaderPending.value = false
+    if (!signal.aborted) router.isLoaderPending.set(false)
   }
 }
 
@@ -260,7 +260,7 @@ function canCommitSsrOutletUpdate(
 async function recoverSsrOutletFromRenderError(
   router: SsrClientRouter,
   manifest: RouteManifest,
-  outlet: { value: JSX.Element | null },
+  outlet: Signal<JSX.Element | null>,
   matchAtError: RouteMatch | null,
   err: Error
 ): Promise<void> {
@@ -271,14 +271,14 @@ async function recoverSsrOutletFromRenderError(
       expectedOutletError: err,
     })
   ) {
-    outlet.value = recovery
+    outlet.set(recovery)
   }
 }
 
 function subscribeSsrClientOutlet(
   router: SsrClientRouter,
   manifest: RouteManifest,
-  outlet: { value: JSX.Element | null },
+  outlet: Signal<JSX.Element | null>,
   buildOptions: { useHydratedPageData: boolean }
 ): void {
   let outletAbort: AbortController | null = null
@@ -290,7 +290,7 @@ function subscribeSsrClientOutlet(
     const match = router.match.peek()
     const outletErr = router.outletRenderError.peek()
     if (outletErr) {
-      router.isLoaderPending.value = true
+      router.isLoaderPending.set(true)
       try {
         const recovery = await renderClientErrorOutlet(
           manifest,
@@ -304,10 +304,10 @@ function subscribeSsrClientOutlet(
             expectedOutletError: outletErr,
           })
         ) {
-          outlet.value = recovery
+          outlet.set(recovery)
         }
       } finally {
-        if (!ctrl.signal.aborted) router.isLoaderPending.value = false
+        if (!ctrl.signal.aborted) router.isLoaderPending.set(false)
       }
       tryClearClientNavigation(router)
       return
@@ -351,10 +351,10 @@ function subscribeSsrClientOutlet(
             expectedOutletError: pendingErr,
           })
         ) {
-          outlet.value = errOut
+          outlet.set(errOut)
         }
       } else {
-        outlet.value = subtree
+        outlet.set(subtree)
       }
       tryClearClientNavigation(router)
     } catch {
@@ -402,12 +402,14 @@ export async function bootstrapSsrClient(
 
   const outlet = signal<JSX.Element | null>(null)
   if (match) {
-    outlet.value = await buildSsrClientOutlet(
-      match,
-      router,
-      manifest,
-      { useHydratedPageData: true, forceReload: false },
-      outlet
+    outlet.set(
+      await buildSsrClientOutlet(
+        match,
+        router,
+        manifest,
+        { useHydratedPageData: true, forceReload: false },
+        outlet
+      )
     )
   }
 
@@ -416,7 +418,7 @@ export async function bootstrapSsrClient(
       children: createSsrRouterShell(
         router,
         requestContext,
-        () => outlet.value,
+        () => outlet(),
         undefined,
         getRouterRuntime(router).i18n?.runtime
       ),
@@ -458,9 +460,9 @@ export async function bootstrapSsrClient(
       scope,
       getNavGeneration
     )
-    router.forceLoaderReload.value = false
+    router.forceLoaderReload.set(false)
     if (ctrl.signal.aborted || !isScopeCurrent(scope, getNavGeneration)) return
-    outlet.value = subtree
+    outlet.set(subtree)
     tryClearClientNavigation(router)
   }
   router.loaderEpoch.subscribe(() => {

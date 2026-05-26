@@ -12,16 +12,16 @@ export default function Layout() {
   const ctx = useRequestContext()
 
   onAfterRouteEnter((to) => {
-    guardEvents.value = [...guardEvents.peek(), `enter:${to.pathname}`]
+    guardEvents.set((prev) => [...prev, `enter:${to.pathname}`])
   })
   onBeforeRouteUpdate((to, from) => {
-    guardEvents.value = [
-      ...guardEvents.peek(),
+    guardEvents.set((prev) => [
+      ...prev,
       `update:${from?.pathname ?? "none"}->${to.pathname}`,
-    ]
+    ])
   })
 
-  return ({ children }: { children: JSX.Children }) => (
+  return ({ children }: { children: JSX.Element }) => (
     <main className="min-h-screen bg-slate-950 p-6 text-slate-100 md:p-10">
       <div className="mx-auto max-w-3xl rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-slate-950/40 md:p-8">
         <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
@@ -121,7 +121,7 @@ export default function Layout() {
           data-testid="guard-events"
           className="mt-6 rounded-lg border border-slate-800 bg-slate-950/60 p-3 font-mono text-xs text-slate-300"
         >
-          Guard events: {() => guardEvents.value.join(", ")}
+          Guard events: {() => guardEvents().join(", ")}
         </p>
         <section className="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-4 md:p-6">
           {children}

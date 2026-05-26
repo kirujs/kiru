@@ -17,6 +17,9 @@ export default defineConfig({
         },
         remote: "**/*.actions.ts",
       },
+      experimental: {
+        staticHoisting: true,
+      },
     }),
   ],
 })

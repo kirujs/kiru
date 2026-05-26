@@ -1,4 +1,5 @@
-export { Signal, signal } from "./base.js"
+export { SignalHelpers, isSignal, signal, getSignalState } from "./base.js"
+export type { Signal } from "./base.js"
 export { ComputedSignal, computed } from "./computed.js"
 export { Effect, effect } from "./effect.js"
 export { tick, untrack, unwrap } from "./utils.js"

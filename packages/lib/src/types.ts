@@ -1,4 +1,5 @@
-import type { Signal as SignalClass } from "./signals/base.js"
+import type { Signal as SignalCallable } from "./signals/base.js"
+import { $SIGNAL } from "./constants.js"
 import type {
   $CONTEXT,
   $ERROR_BOUNDARY,
@@ -60,7 +61,7 @@ type HTMLElementProps<Tag extends keyof HtmlElementAttributes> =
     SignalableAriaProps &
     Kiru.EventAttributes<HTMLTagToElement<Tag>> &
     JSX.ElementAttributes & {
-      ref?: Kiru.Ref<Element | null> | SignalClass<Element | null> | null
+      ref?: Kiru.Ref<Element | null> | SignalCallable<Element | null> | null
     }
 
 type SVGElementProps<Tag extends keyof SvgElementAttributes> =
@@ -70,7 +71,7 @@ type SVGElementProps<Tag extends keyof SvgElementAttributes> =
     SignalableAriaProps &
     Kiru.EventAttributes<SVGTagToElement<Tag>> &
     JSX.ElementAttributes & {
-      ref?: Kiru.Ref<Element | null> | SignalClass<Element | null> | null
+      ref?: Kiru.Ref<Element | null> | SignalCallable<Element | null> | null
     }
 
 declare global {
@@ -263,25 +264,30 @@ declare global {
       children: {}
     }
 
-    type Children = JSX.Element | JSX.Element[]
-
     type PrimitiveChild = string | number | bigint | boolean | undefined | null
 
     type ElementKey = string | number
 
+    type InlineFnChild = (() => Element) & { [$SIGNAL]?: never }
+
     type Element =
-      | Element[]
       | Kiru.Element
+      | Kiru.TemplateRoot
       | PrimitiveChild
       | Kiru.Signal<PrimitiveChild>
-      | Kiru.Component<any>
+      | InlineFnChild
+      | Element[]
+
+    /** Tags accepted in JSX (Kiru components use `ComponentReturn`, not `Element`). */
+    type ElementType = keyof IntrinsicElements | Kiru.Component<any>
 
     interface ElementAttributes {
       key?: JSX.ElementKey
-      children?: JSX.Children
+      children?: JSX.Element
       innerHTML?:
         | string
         | number
+        | null
         | Kiru.Signal<string | number | null | undefined>
     }
   }
@@ -290,19 +296,23 @@ declare global {
 
     interface ContextProps<T> {
       value: T
-      children?: JSX.Children
+      children?: JSX.Element
     }
 
-    interface Context<T> extends Kiru.Component<ContextProps<T>> {
-      [$CONTEXT]: () => T
-    }
-
-    export interface Component<T = {}> {
-      (
-        props: T
-      ): Exclude<JSX.Element, Kiru.Component<any>> | ((props: T) => JSX.Element)
-      /** Used to display the name of the component in devtools  */
+    export interface SimpleComponent<T = {}> {
+      (props: T): JSX.Element
       displayName?: string
+    }
+
+    export interface SetupComponent<T = {}> {
+      (props: T): (props: T) => JSX.Element
+      displayName?: string
+    }
+
+    export type Component<T = {}> = SimpleComponent<T> | SetupComponent<T>
+
+    export type Context<T = {}> = Component<ContextProps<T>> & {
+      [$CONTEXT]: () => T
     }
 
     type InferProps<T> = T extends Kiru.Component<infer P> ? P : never
@@ -329,13 +339,27 @@ declare global {
 
     type StateSetter<T> = T | ((prev: T) => T)
 
-    type Signal<T> = SignalClass<T>
+    type Signal<T> = SignalCallable<T>
 
     type ExoticSymbol =
       | typeof $FRAGMENT
       | typeof $CONTEXT
       | typeof $ERROR_BOUNDARY
       | typeof $INLINE_FN
+
+    /** Compile-time metadata from vite-plugin-kiru (hoisting, mixed static children). */
+    interface ElementCompileMeta {
+      flags?: number
+      dynamicIndices?: readonly number[]
+    }
+
+    /** Build-time `_template("...")()` handle (codegen-only). */
+    interface TemplateRoot {
+      readonly __kiruTemplate: symbol
+      readonly html: string
+      readonly holeCount: number
+      readonly holeChildren?: readonly unknown[]
+    }
 
     interface Element {
       type:
@@ -344,6 +368,7 @@ declare global {
         | "#text"
         | (string & {})
       key: JSX.ElementKey | null
+      meta?: ElementCompileMeta
       props: {
         [key: string]: any
         children?: unknown
@@ -376,6 +401,19 @@ declare global {
       /** Run before each render with current props to sync prop-derived signals */
       propSyncs?: ((props: VNode["props"]) => void)[]
       render?: (props: VNode["props"]) => unknown
+      /** Set when reconciling `jsxs` children; used for dev contract checks. */
+      staticChildCount?: number
+      /** Copied from `element.meta.dynamicIndices` at vnode creation. */
+      dynamicChildIndices?: readonly number[]
+      /** Cloned template HTML; used to reuse the same shell on updates. */
+      templateHtml?: string
+      /** Structural holes in a cloned template (`<!--#-->`). */
+      templateHoleCount?: number
+      templateHoleChildren?: readonly unknown[]
+      /** @internal Anchor comment used to place new hole children before marker. */
+      templateHoleAnchor?: Comment
+      /** @internal Per-hole reconciled vnode heads for updates. */
+      templateHoleHeads?: (VNode | null)[]
     }
     interface VNodeSnapshot {
       props: Kiru.VNode["props"]

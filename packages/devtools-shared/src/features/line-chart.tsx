@@ -46,7 +46,7 @@ export function createLineChart(config: LineChartConfig): LineChartController {
   const getZoomLevel = () => chart?.getZoomLevel() ?? 0
 
   const init = () => {
-    const canvas = canvasRef.value
+    const canvas = canvasRef()
     if (!canvas) {
       console.error("createLineChart: canvas ref not set", new Error().stack)
       return dispose

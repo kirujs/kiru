@@ -41,21 +41,22 @@ export function createDraggableController(
   const position = kiru.signal<DraggablePositionInfo>(
     loadDraggablePosFromStorage(config)
   )
-  const snapSide = kiru.computed<SnapSide | null>(() =>
-    position.value.type === "snapped" ? position.value.side : null
-  )
+  const snapSide = kiru.computed<SnapSide | null>(() => {
+    const pos = position()
+    return pos.type === "snapped" ? pos.side : null
+  })
   const containerX = kiru.signal(0)
   const containerY = kiru.signal(0)
   const containerPos = kiru.computed<Vec2>(() => [
-    containerX.value,
-    containerY.value,
+    containerX(),
+    containerY(),
   ])
   const isDragging = kiru.signal(false)
   let containerSize: { width: number; height: number } | null = null
 
   cleanups.push(
     containerPos.subscribe(([x, y]) => {
-      const container = containerRef.value!
+      const container = containerRef()!
       container.style.transform = `translate(${x}px, ${y}px)`
     })
   )
@@ -63,7 +64,7 @@ export function createDraggableController(
   const onHandleMouseDown = (e: MouseEvent) => {
     if (e.button !== 0) return
 
-    const container = containerRef.value!
+    const container = containerRef()!
     if (!containerSize) {
       const rect = container.getBoundingClientRect()
       containerSize = { width: rect.width, height: rect.height }
@@ -74,7 +75,7 @@ export function createDraggableController(
       initialX - initialContainerRect.left,
       initialY - initialContainerRect.top,
     ]
-    isDragging.value = false
+    isDragging.set(false)
     let lastMoveEvent: MouseEvent | null = null
     let moveScheduled = false
     let isMouseDown = true
@@ -91,7 +92,7 @@ export function createDraggableController(
         (Math.abs(e.clientX - initialX) > 5 ||
           Math.abs(e.clientY - initialY) > 5)
       ) {
-        isDragging.value = true
+        isDragging.set(true)
       }
 
       if (!isDragging.peek()) return
@@ -114,11 +115,11 @@ export function createDraggableController(
       const minDist = Math.min(distLeft, distRight, distTop, distBottom)
 
       if (config.allowFloat && minDist > (config.snapDistance ?? 0)) {
-        position.value = {
+        position.set({
           type: "floating",
           x: centerX / boundsW,
           y: centerY / boundsH,
-        }
+        })
       } else {
         const prev = position.peek()
         const prevSide = prev.type === "snapped" ? prev.side : null
@@ -146,7 +147,7 @@ export function createDraggableController(
             ? centerY / boundsH
             : centerX / boundsW
 
-        position.value = { type: "snapped", side, percent }
+        position.set({ type: "snapped", side, percent })
       }
       calculatePosition()
     }
@@ -165,8 +166,8 @@ export function createDraggableController(
 
       if (!isDragging.peek()) return config.onclick?.()
 
-      isDragging.value = false
-      config.storage.setItem(config.key, JSON.stringify(position.value))
+      isDragging.set(false)
+      config.storage.setItem(config.key, JSON.stringify(position()))
     }
 
     window.addEventListener("mousemove", onMouseMove)
@@ -174,7 +175,7 @@ export function createDraggableController(
   }
 
   const calculatePosition = () => {
-    const container = containerRef.value!
+    const container = containerRef()!
     if (!containerSize) {
       const rect = container.getBoundingClientRect()
       containerSize = { width: rect.width, height: rect.height }
@@ -182,19 +183,23 @@ export function createDraggableController(
     const { width: containerW, height: containerH } = containerSize
 
     const [boundsW, boundsH] = config.getDraggableBounds()
-    const pos = position.value
+    const pos = position()
 
     if (pos.type === "floating") {
       const [xPad, yPad] = config.getPadding(null)
-      containerX.value = clamp(
-        pos.x * boundsW - containerW / 2,
-        xPad,
-        boundsW - xPad - containerW
+      containerX.set(
+        clamp(
+          pos.x * boundsW - containerW / 2,
+          xPad,
+          boundsW - xPad - containerW
+        )
       )
-      containerY.value = clamp(
-        pos.y * boundsH - containerH / 2,
-        yPad,
-        boundsH - yPad - containerH
+      containerY.set(
+        clamp(
+          pos.y * boundsH - containerH / 2,
+          yPad,
+          boundsH - yPad - containerH
+        )
       )
       return
     }
@@ -221,14 +226,14 @@ export function createDraggableController(
         break
     }
 
-    containerX.value = clamp(targetX, xPad, boundsW - xPad - containerW)
-    containerY.value = clamp(targetY, yPad, boundsH - yPad - containerH)
+    containerX.set(clamp(targetX, xPad, boundsW - xPad - containerW))
+    containerY.set(clamp(targetY, yPad, boundsH - yPad - containerH))
   }
 
   const init = () => {
-    const handle = handleRef.value!
+    const handle = handleRef()!
     if (!handle) return console.error("handle not found", new Error().stack)
-    const container = containerRef.value!
+    const container = containerRef()!
     if (!container)
       return console.error("container not found", new Error().stack)
 

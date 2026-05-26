@@ -78,7 +78,7 @@ describe("navigation abort integration", () => {
 
     await Promise.all([navA, navB])
 
-    assert.equal(router.pathname.value, "/page-b")
+    assert.equal(router.pathname(), "/page-b")
     assert.equal(getNavGeneration(), 2)
   })
 

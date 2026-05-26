@@ -1,7 +1,7 @@
 import { MagicString, TransformCTX } from "./codegen/shared.js"
 import {
   prepareHMR,
-  prepareJSXHoisting,
+  applyJsxHoistAndTemplates,
   prepareRemoteFunctions,
   preparePageLoaders,
 } from "./codegen/index.js"
@@ -606,10 +606,6 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         log,
       }
 
-      if (state.features.staticHoisting) {
-        prepareJSXHoisting(ctx)
-      }
-
       if (!state.isProduction && !state.isBuild) {
         prepareHMR(ctx)
       }
@@ -898,6 +894,39 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   // Runs after vite:esbuild so `this.parse` always receives compiled JS,
   // not raw TypeScript. This is required for `.actions.ts` files which may
   // contain TS type annotations that Rollup's Acorn parser can't handle.
+  // After vite:esbuild so the AST contains jsx/jsxs/jsxDEV calls (not raw JSX).
+  const jsxHoistPlugin = {
+    name: "vite-plugin-kiru:jsx-hoist",
+    enforce: "post" as const,
+    transform(src, id) {
+      if (!state?.features.staticHoisting) return null
+      if (!shouldTransformFile(id, state)) return null
+
+      const ast = this.parse(src)
+      const code = new MagicString(src)
+      const ctx: TransformCTX = {
+        code,
+        ast,
+        isBuild: state.isBuild,
+        fileLinkFormatter: state.fileLinkFormatter,
+        filePath: id,
+        log,
+      }
+
+      const sourceBefore = src
+      applyJsxHoistAndTemplates(ctx)
+
+      if (!ctx.didTransform && ctx.code.toString() === sourceBefore) return null
+
+      return {
+        code: ctx.code.toString(),
+        map: ctx.code
+          .generateMap({ source: id, file: `${id}.map`, includeContent: true })
+          .toString(),
+      }
+    },
+  } satisfies Plugin
+
   const remotePlugin = {
     name: "vite-plugin-kiru:remote",
     enforce: "post" as const,
@@ -977,7 +1006,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
   } satisfies Plugin
 
-  return [mainPlugin, remotePlugin]
+  return [mainPlugin, jsxHoistPlugin, remotePlugin]
 }
 
 // Export additional utilities

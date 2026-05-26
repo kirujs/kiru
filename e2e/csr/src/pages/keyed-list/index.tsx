@@ -17,10 +17,10 @@ function Counter({ item }: { item: CounterItem }) {
         #{item.id}
       </span>
       <span className="counter-value">{count}</span>
-      <button className="increment" onclick={() => count.value++}>
+      <button className="increment" onclick={() => count.set((c) => c + 1)}>
         +
       </button>
-      <button className="decrement" onclick={() => count.value--}>
+      <button className="decrement" onclick={() => count.set((c) => c - 1)}>
         -
       </button>
     </div>
@@ -36,27 +36,26 @@ export default function KeyedListPage() {
 
   function moveUp(index: number) {
     if (index === 0) return
-    const newItems = [...items.value]
+    const newItems = [...items()]
     ;[newItems[index - 1], newItems[index]] = [
       newItems[index],
       newItems[index - 1],
     ]
-    items.value = newItems
+    items.set(newItems)
   }
 
   function moveDown(index: number) {
-    if (index === items.value.length - 1) return
-    const newItems = [...items.value]
+    if (index === items().length - 1) return
+    const newItems = [...items()]
     ;[newItems[index], newItems[index + 1]] = [
       newItems[index + 1],
       newItems[index],
     ]
-    items.value = newItems
+    items.set(newItems)
   }
 
   return () => (
     <div id="keyed-list">
-      <h2>Keyed List Test</h2>
       <div style="display: flex; flex-direction: column; gap: 0.5rem;">
         <For each={items}>
           {(item, index) => (

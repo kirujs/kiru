@@ -16,9 +16,9 @@ export default function DefaultExportDemoPage() {
         type="button"
         onclick={async () => {
           try {
-            literalResult.value = await literal.getEcho()
+            literalResult.set(await literal.getEcho())
           } catch (e) {
-            literalResult.value = e instanceof Error ? e.message : "failed"
+            literalResult.set(e instanceof Error ? e.message : "failed")
           }
         }}
       >
@@ -31,9 +31,9 @@ export default function DefaultExportDemoPage() {
         type="button"
         onclick={async () => {
           try {
-            linkedResult.value = await linked.getEcho()
+            linkedResult.set(await linked.getEcho())
           } catch (e) {
-            linkedResult.value = e instanceof Error ? e.message : "failed"
+            linkedResult.set(e instanceof Error ? e.message : "failed")
           }
         }}
       >
@@ -46,9 +46,9 @@ export default function DefaultExportDemoPage() {
         type="button"
         onclick={async () => {
           try {
-            composeResult.value = JSON.stringify(await runPipeline())
+            composeResult.set(JSON.stringify(await runPipeline()))
           } catch (e) {
-            composeResult.value = e instanceof Error ? e.message : "failed"
+            composeResult.set(e instanceof Error ? e.message : "failed")
           }
         }}
       >

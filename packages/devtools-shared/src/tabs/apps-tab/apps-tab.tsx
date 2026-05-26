@@ -9,18 +9,18 @@ import { SelectedNodeView } from "./selected-node"
 const { apps, selectedApp, componentSelection } = devtoolsState
 
 const toggleComponentSelection = () => {
-  componentSelection.value = {
-    enabled: !componentSelection.value.enabled,
-    componentNode: componentSelection.value.componentNode,
-  }
+  componentSelection.set((prev) => ({
+    enabled: !prev.enabled,
+    componentNode: prev.componentNode,
+  }))
 }
 
 const componentSelectionEnabled = kiru.computed(
-  () => componentSelection.value.enabled
+  () => componentSelection().enabled
 )
 
 export function AppsTabView() {
-  const app = selectedApp.value
+  const app = selectedApp()
   return (
     <>
       <div className="flex items-center justify-between gap-4 p-2 bg-neutral-400 bg-opacity-5 border border-white border-opacity-10 rounded">
@@ -29,9 +29,9 @@ export function AppsTabView() {
             className="px-2 py-1 bg-neutral-800 text-neutral-100 rounded border border-white border-opacity-10"
             value={app?.name ?? ""}
             onchange={(e) =>
-              (selectedApp.value =
-                apps.peek().find((a) => a.name === e.currentTarget.value) ??
-                null)
+              selectedApp.set(
+                apps.peek().find((a) => a.name === e.currentTarget.value) ?? null
+              )
             }
           >
             <option value="" disabled>
@@ -49,7 +49,7 @@ export function AppsTabView() {
             title="Toggle Component Inspection"
             onclick={toggleComponentSelection}
             className={`p-1 rounded ${
-              componentSelectionEnabled.value ? "bg-neutral-900" : ""
+              componentSelectionEnabled() ? "bg-neutral-900" : ""
             }`}
           >
             <MouseIcon />

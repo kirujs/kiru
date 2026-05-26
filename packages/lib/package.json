@@ -93,6 +93,10 @@
     "./jsx-runtime": {
       "types": "./dist/jsx.d.ts",
       "default": "./dist/jsx.js"
+    },
+    "./template": {
+      "types": "./dist/template.d.ts",
+      "default": "./dist/template.js"
     }
   },
   "dependencies": {

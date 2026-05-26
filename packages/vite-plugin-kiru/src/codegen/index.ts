@@ -1,4 +1,6 @@
 export { prepareHMR } from "./hmr.js"
 export { prepareJSXHoisting } from "./hoistJSX.js"
+export { applyJsxHoistAndTemplates } from "./jsxHoistPipeline.js"
+export { prepareJSXTemplates } from "./prepareJSXTemplates.js"
 export { prepareRemoteFunctions } from "./remote.js"
 export { preparePageLoaders } from "./loaders.js"

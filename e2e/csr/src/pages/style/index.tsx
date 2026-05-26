@@ -17,13 +17,13 @@ export default function StylePage() {
   }
 
   const randomizeStyle = () => {
-    divStyle.value = generateRandomStyleProp()
+    divStyle.set(generateRandomStyleProp())
     const styleAttr = divRef.current?.getAttribute("style") ?? ""
     try {
-      compareStyles(divStyle.value, styleAttr)
-      verified.value = "✅"
+      compareStyles(divStyle(), styleAttr)
+      verified.set("✅")
     } catch {
-      verified.value = "❌"
+      verified.set("❌")
     }
   }
 
@@ -49,7 +49,7 @@ export default function StylePage() {
       <button
         data-style-signal-toggle
         onclick={() => {
-          signalColor.value = signalColor.value === "red" ? "blue" : "red"
+          signalColor.set(signalColor() === "red" ? "blue" : "red")
         }}
       >
         Toggle color
@@ -60,7 +60,7 @@ export default function StylePage() {
       <button
         data-toggle-color-only
         onclick={() => {
-          signalColor.value = signalColor.value === "red" ? "blue" : "red"
+          signalColor.set(signalColor() === "red" ? "blue" : "red")
         }}
       >
         Toggle color only
@@ -68,7 +68,7 @@ export default function StylePage() {
       <button
         data-toggle-font-size-only
         onclick={() => {
-          fontSize.value = fontSize.value === "12px" ? "24px" : "12px"
+          fontSize.set(fontSize() === "12px" ? "24px" : "12px")
         }}
       >
         Toggle fontSize only
@@ -82,8 +82,7 @@ export default function StylePage() {
       <button
         data-toggle-css-var
         onclick={() => {
-          cssVarFromSignal.value =
-            cssVarFromSignal.value === "4px" ? "16px" : "4px"
+          cssVarFromSignal.set(cssVarFromSignal() === "4px" ? "16px" : "4px")
         }}
       >
         Toggle --dynamic-gap

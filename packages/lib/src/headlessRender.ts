@@ -9,7 +9,7 @@ import {
   isValidTextChild,
   isStreamDataThrowValue,
 } from "./utils/index.js"
-import { Signal } from "./signals/base.js"
+import { isSignal } from "./signals/base.js"
 import {
   $ERROR_BOUNDARY,
   voidElements,
@@ -19,13 +19,15 @@ import {
 import { __DEV__ } from "./env.js"
 import type { ErrorBoundaryNode, InlineFnNode } from "./types.utils.js"
 import { createElement } from "./element.js"
+import { isTemplateRoot, type TemplateRoot } from "./template.js"
+import { KIRU_HOLE_MARKER } from "./utils/staticHtml.js"
 
 export interface HeadlessRenderContext {
   write(chunk: string): void
   onStreamData?: (data: Kiru.StatefulPromise<unknown>[]) => void
   scheduleSpeculativeContinue?: (
     pending: Kiru.StatefulPromise<unknown>[],
-    continueRender: () => JSX.Children,
+    continueRender: () => JSX.Element,
     anchorVNode: Kiru.VNode
   ) => void
 }
@@ -74,7 +76,10 @@ export function headlessRender(
       idx
     )
   }
-  if (Signal.isSignal(el)) {
+  if (isTemplateRoot(el)) {
+    return renderTemplateRoot(ctx, el)
+  }
+  if (isSignal(el)) {
     const value = el.peek()
     if (!isPrimitiveChild(value)) {
       if (__DEV__) {
@@ -153,8 +158,7 @@ export function headlessRender(
       return
     } catch (error) {
       if (isStreamDataThrowValue(error)) {
-        const { fallback, data, continue: continueRender } =
-          error[$STREAM_DATA]
+        const { fallback, data, continue: continueRender } = error[$STREAM_DATA]
         ctx.scheduleSpeculativeContinue?.(data, continueRender, el)
         ctx.onStreamData?.(data)
         return headlessRender(ctx, fallback, el, 0)
@@ -174,9 +178,7 @@ export function headlessRender(
   if ("innerHTML" in props) {
     ctx.write(
       String(
-        Signal.isSignal(props.innerHTML)
-          ? props.innerHTML.peek()
-          : props.innerHTML
+        isSignal(props.innerHTML) ? props.innerHTML.peek() : props.innerHTML
       )
     )
   } else if (Array.isArray(children)) {
@@ -185,6 +187,34 @@ export function headlessRender(
     headlessRender(ctx, children, el, 0)
   }
   ctx.write(`</${type}>`)
+}
+
+function renderTemplateRoot(
+  ctx: HeadlessRenderContext,
+  template: TemplateRoot
+): void {
+  const holeCount = template.holeCount ?? 0
+  const holeChildren = template.holeChildren
+  if (holeCount === 0 || !holeChildren?.length) {
+    ctx.write(template.html)
+    return
+  }
+  let pos = 0
+  for (let i = 0; i < holeCount; i++) {
+    const markerAt = template.html.indexOf(KIRU_HOLE_MARKER, pos)
+    if (markerAt < 0) {
+      if (__DEV__) {
+        console.error(
+          `[kiru]: template missing hole marker ${KIRU_HOLE_MARKER} for hole ${i}`
+        )
+      }
+      break
+    }
+    ctx.write(template.html.slice(pos, markerAt + KIRU_HOLE_MARKER.length))
+    headlessRender(ctx, holeChildren[i], undefined, i)
+    pos = markerAt + KIRU_HOLE_MARKER.length
+  }
+  ctx.write(template.html.slice(pos))
 }
 
 function renderSpeculativeChildNodes(
@@ -229,7 +259,7 @@ export function speculativeTraverse(
       idx
     )
   }
-  if (Signal.isSignal(el)) return
+  if (isSignal(el)) return
   if (!isVNode(el)) return
 
   el.parent = parent

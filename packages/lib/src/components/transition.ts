@@ -33,7 +33,7 @@ export const Transition: Kiru.Component<TransitionProps> = () => {
 
   const setTransitionState = (transitionState: TransitionState) => {
     clearTimeout(timeoutRef)
-    tState.value = transitionState
+    tState.set(transitionState)
     if (transitionState === "entered" || transitionState === "exited") {
       $.props.onTransitionEnd?.(transitionState)
     }
@@ -67,7 +67,7 @@ export const Transition: Kiru.Component<TransitionProps> = () => {
     }
   })
 
-  return (props) => props.element(tState.value)
+  return (props: TransitionProps) => props.element(tState())
 }
 
 const defaultDuration = 150

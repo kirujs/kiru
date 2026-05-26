@@ -8,12 +8,17 @@ export default function CounterPage() {
     return (
       <div id="counter">
         {/* used for checking that counter persists state after reordering these children */}
-        {() => $toggled.value && <p id="toggled">Toggled</p>}
+        {() => $toggled() && <p id="toggled">Toggled</p>}
 
-        <button id="toggle" onclick={() => ($toggled.value = !$toggled.value)}>
+        <button
+          id="toggle"
+          onclick={() => {
+            $toggled.set(!$toggled())
+          }}
+        >
           toggle
         </button>
-        {() => $count.value % 2 === 0 ? (
+        {() => $count() % 2 === 0 ? (
           <span data-even={true} data-test={true} id="count">
             {$count}
           </span>
@@ -25,11 +30,13 @@ export default function CounterPage() {
         <button
           ariaLabel="increment"
           id="increment"
-          onclick={() => $count.value++}
+          onclick={() => {
+            $count.set($count() + 1)
+          }}
         >
           increment
         </button>
-        {() => ($count.value > 0 && $count.value % 2 === 0) && <p>count is even</p>}
+        {() => ($count() > 0 && $count() % 2 === 0) && <p>count is even</p>}
       </div>
     )
   }

@@ -2,7 +2,8 @@ import path from "node:path"
 import { createHash } from "node:crypto"
 import * as AST from "./ast.js"
 import { isAstExpression } from "./ast.js"
-import { MagicString, TransformCTX, createAliasHandler } from "./shared.js"
+import { MagicString, TransformCTX } from "./shared.js"
+import { buildModuleImportScope, isImportedCall } from "./scope.js"
 
 type AstNode = AST.AstNode
 
@@ -176,17 +177,11 @@ function serverRegisterLoaders(
 }
 
 function findExportedLoaderCalls(bodyNodes: AstNode[]): LoaderMatch[] {
-  const handlers = LOADER_KINDS.map((name) => ({
-    name,
-    handler: createAliasHandler(name, "kiru/router"),
-  }))
+  const scope = buildModuleImportScope(bodyNodes)
+  const resolve = (name: string) => scope.resolve(name)
   const matches: LoaderMatch[] = []
 
   for (const node of bodyNodes) {
-    if (node.type === "ImportDeclaration") {
-      for (const h of handlers) h.handler.addAliases(node)
-      continue
-    }
     if (
       node.type !== "ExportNamedDeclaration" ||
       node.declaration?.type !== "VariableDeclaration"
@@ -201,14 +196,19 @@ function findExportedLoaderCalls(bodyNodes: AstNode[]): LoaderMatch[] {
     const init = declaration.init
     if (!init) continue
 
-    for (const h of handlers) {
-      if (h.handler.isMatchingCallExpression(init)) {
+    for (const name of LOADER_KINDS) {
+      if (
+        isImportedCall(init as AstNode, resolve, {
+          imported: name,
+          namespace: "kiru/router",
+        })
+      ) {
         const kind =
-          h.name === "serverLoader"
+          name === "serverLoader"
             ? "server"
-            : h.name === "staticLoader"
+            : name === "staticLoader"
               ? "static"
-              : h.name === "clientLoader"
+              : name === "clientLoader"
                 ? "client"
                 : "universal"
         matches.push({ node, name: declaration.id.name, kind })

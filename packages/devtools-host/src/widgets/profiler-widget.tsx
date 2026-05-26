@@ -46,13 +46,13 @@ export const ProfilingWidget: Kiru.Component<ProfilingWidgetProps> = () => {
   })
 
   const containerRef = (current: HTMLElement | null) => {
-    dragController.containerRef.value = current
-    dragController.handleRef.value = current
-    resizeController.containerRef.value = current
+    dragController.containerRef.set(current)
+    dragController.handleRef.set(current)
+    resizeController.containerRef.set(current)
   }
 
   const resizeHandleRef = (current: HTMLElement | null) => {
-    resizeController.handleRef.value = current
+    resizeController.handleRef.set(current)
   }
 
   return ({ state }) => (
@@ -64,18 +64,20 @@ export const ProfilingWidget: Kiru.Component<ProfilingWidgetProps> = () => {
       )}
       style={{
         zIndex:
-          widgetStackTop.value === "profiler"
+          widgetStackTop() === "profiler"
             ? WIDGET_Z_BASE + 1
             : WIDGET_Z_BASE,
         minWidth: `${PROFILER_MIN_WIDTH}px`,
         minHeight: `${PROFILER_MIN_HEIGHT}px`,
-        cursor: resizeController.isResizing.value
+        cursor: resizeController.isResizing()
           ? "se-resize"
-          : dragController.isDragging.value
+          : dragController.isDragging()
           ? "grabbing"
           : "grab",
       }}
-      onclick={() => (widgetStackTop.value = "profiler")}
+      onclick={() => {
+        widgetStackTop.set("profiler")
+      }}
     >
       <div
         style={{

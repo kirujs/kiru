@@ -10,6 +10,10 @@ import {
   CONSECUTIVE_DIRTY_LIMIT,
   FLAG_DELETION,
   FLAG_DIRTY,
+  FLAG_TEMPLATE_HOLES_SYNCED,
+  FLAG_HOISTED,
+  FLAG_TEMPLATE,
+  FLAG_STATIC_CHILDREN,
 } from "./constants.js"
 import {
   captureFocus,
@@ -34,9 +38,14 @@ import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
 import { node, postEffectCleanups, renderMode, setups } from "./globals.js"
 import { hydrationStack } from "./hydration.js"
-import { reconcileChildren } from "./reconciler.js"
+import {
+  reconcileChildren,
+  reconcileTemplateHoles,
+  tryReconcileStaticChildrenInPlace,
+} from "./reconciler.js"
 import { isHmrUpdate } from "./hmr.js"
 import type { AppHandle } from "./appHandle.js"
+import { isSignal } from "./signals/base.js"
 
 type VNode = Kiru.VNode
 
@@ -52,6 +61,25 @@ let consecutiveDirtyCount = 0
 let preEffects: Kiru.LifecycleHookCallback[] = []
 let postEffects: Kiru.LifecycleHookCallback[] = []
 let animationFrameHandle = -1
+
+/** Clears module scheduler state (used between jsdom unit tests). */
+export function resetSchedulerForTests(): void {
+  if (typeof window !== "undefined" && animationFrameHandle >= 0) {
+    window.cancelAnimationFrame(animationFrameHandle)
+  }
+  animationFrameHandle = -1
+  isRunningOrQueued = false
+  treesInProgress.length = 0
+  deletions.length = 0
+  nextIdleEffects.length = 0
+  currentWorkRoot = null
+  isImmediateEffectsMode = false
+  immediateEffectDirtiedRender = false
+  isRenderDirtied = false
+  consecutiveDirtyCount = 0
+  preEffects.length = 0
+  postEffects.length = 0
+}
 
 /**
  * Runs a function after any existing work has been completed,
@@ -251,7 +279,7 @@ function updateVNode(vNode: VNode): VNode | null {
   if (__DEV__ && isHmrUpdate()) {
   } else if (
     prev &&
-    (flags & FLAG_DIRTY) === 0 &&
+    (flags & (FLAG_DIRTY | FLAG_TEMPLATE_HOLES_SYNCED)) === 0 &&
     (prev.props === props || !propsChanged(prev.props, props))
   ) {
     return null
@@ -424,7 +452,7 @@ function renderFunctionComponent(
   }
 
   let newChild = type(props)
-  if (typeof newChild === "function") {
+  if (typeof newChild === "function" && !isSignal(newChild)) {
     vNode.subs?.forEach(call) // unsub from signals observed during setup
     vNode.render = newChild
     if (shouldSyncProps) {
@@ -456,6 +484,40 @@ function updateHostComponent(vNode: DomVNode): VNode | null {
   }
   // text should _never_ have children
   if (type !== "#text") {
+    if (vNode.flags & FLAG_TEMPLATE) {
+      if ((vNode.templateHoleCount ?? 0) > 0) {
+        if (vNode.flags & FLAG_TEMPLATE_HOLES_SYNCED) {
+          vNode.flags &= ~FLAG_TEMPLATE_HOLES_SYNCED
+          return vNode.child ?? reconcileTemplateHoles(vNode)
+        }
+        return reconcileTemplateHoles(vNode)
+      }
+      return vNode.child
+    }
+    if (
+      vNode.flags & FLAG_HOISTED &&
+      vNode.child &&
+      vNode.prev &&
+      vNode.prev.props.children === props.children
+    ) {
+      return vNode.child
+    }
+    const childList = props.children
+    if (
+      renderMode.current === "hydrate" &&
+      vNode.flags & FLAG_STATIC_CHILDREN &&
+      vNode.child &&
+      Array.isArray(childList)
+    ) {
+      const inPlace = tryReconcileStaticChildrenInPlace(vNode, childList)
+      if (inPlace !== undefined) {
+        vNode.child = inPlace
+        if (vNode.child) {
+          hydrationStack.push(vNode.dom!)
+        }
+        return vNode.child
+      }
+    }
     vNode.child = reconcileChildren(vNode, props.children)
     if (vNode.child && renderMode.current === "hydrate") {
       hydrationStack.push(vNode.dom!)

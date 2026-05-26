@@ -4,8 +4,8 @@ export default function UrlStatePage() {
   const router = useRouter()
   return () => (
     <p data-testid="url-state">
-      {router.pathname.value}:{router.params.value.id}:{router.hash.value}:
-      {router.query.value.tag?.join(",")}
+      {router.pathname()}:{router.params().id}:{router.hash()}:
+      {router.query().tag?.join(",")}
     </p>
   )
 }

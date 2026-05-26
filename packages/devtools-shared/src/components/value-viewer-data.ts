@@ -130,12 +130,12 @@ function collectFromNodes(nodes: ViewerNode[], cache: SignalCache) {
 }
 
 export function disposeCache(cache: SignalCache) {
-  for (const s of cache.collapsed.values()) kiru.Signal.dispose(s)
-  for (const s of cache.page.values()) kiru.Signal.dispose(s)
-  for (const s of cache.children.values()) kiru.Signal.dispose(s)
+  for (const s of cache.collapsed.values()) kiru.SignalHelpers.dispose(s)
+  for (const s of cache.page.values()) kiru.SignalHelpers.dispose(s)
+  for (const s of cache.children.values()) kiru.SignalHelpers.dispose(s)
   for (const n of cache.signalNodes.values()) {
     n.unsubscribe()
-    kiru.Signal.dispose(n.viewerNode)
+    kiru.SignalHelpers.dispose(n.viewerNode)
   }
 }
 
@@ -182,7 +182,7 @@ function buildNode(
     return { kind: leafKind, label, path, raw }
   }
 
-  if (kiru.Signal.isSignal(raw)) {
+  if (kiru.isSignal(raw)) {
     const sig = raw as kiru.Signal<unknown>
     const innerPath = `${path}.$value`
     const innerNode = buildNode(sig.peek(), "value", innerPath, cache, settings)
@@ -193,12 +193,8 @@ function buildNode(
       // new build so collapse/page state is preserved across value changes
       const prevCache = emptyCache()
       collectFromNodes([viewerNode.peek()], prevCache)
-      viewerNode.value = buildNode(
-        newValue,
-        "value",
-        innerPath,
-        prevCache,
-        settings
+      viewerNode.set(
+        buildNode(newValue, "value", innerPath, prevCache, settings)
       )
       disposeCache(prevCache)
     })
@@ -228,7 +224,7 @@ function buildNode(
 
         if (raw.length > settings.arrayChunkSize) {
           const numChunks = Math.ceil(raw.length / settings.arrayChunkSize)
-          children.value = Array.from({ length: numChunks }, (_, idx) => {
+          children.set(Array.from({ length: numChunks }, (_, idx) => {
             const start = idx * settings.arrayChunkSize
             const end = Math.min(
               (idx + 1) * settings.arrayChunkSize,
@@ -249,27 +245,31 @@ function buildNode(
               children: chunkChildren,
               buildChildren: () => {
                 if (chunkChildren.peek() !== null) return
-                chunkChildren.value = rawSlice.map((item, i) =>
-                  buildNode(
-                    item,
-                    (start + i).toString(),
-                    `${path}[${start + i}]`,
-                    childCache,
-                    settings
+                chunkChildren.set(
+                  rawSlice.map((item, i) =>
+                    buildNode(
+                      item,
+                      (start + i).toString(),
+                      `${path}[${start + i}]`,
+                      childCache,
+                      settings
+                    )
                   )
                 )
               },
             }
             return chunk
-          })
+          }))
         } else {
-          children.value = raw.map((item, idx) =>
-            buildNode(
-              item,
-              idx.toString(),
-              `${path}[${idx}]`,
-              childCache,
-              settings
+          children.set(
+            raw.map((item, idx) =>
+              buildNode(
+                item,
+                idx.toString(),
+                `${path}[${idx}]`,
+                childCache,
+                settings
+              )
             )
           )
         }
@@ -315,7 +315,7 @@ function buildNode(
     children,
     buildChildren: () => {
       if (children.peek() !== null) return
-      children.value = buildObjectChildren(rawObj, path, childCache, settings)
+      children.set(buildObjectChildren(rawObj, path, childCache, settings))
     },
   }
   return node

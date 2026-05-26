@@ -11,9 +11,7 @@ export default defineConfig({
     kiru({
       loggingEnabled: true,
       experimental: {
-        // TODO: static hoisting is not working with the primitive app...
-        // good thing it's still experimental 😅
-        staticHoisting: false,
+        staticHoisting: true,
       },
     }),
   ],

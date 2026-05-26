@@ -34,9 +34,9 @@ export function createFormController<Output>(
     if (__DEV__ && __KIRU_PURE_CLIENT__) {
       throw new Error(REMOTE_ACTION_PURE_CLIENT_DEV_MSG)
     }
-    isPending.value = true
-    result.value = null
-    error.value = null
+    isPending.set(true)
+    result.set(null)
+    error.set(null)
     const fd = new FormData(form)
     if (!fd.has(KIRU_FORM_TOKEN_FIELD)) {
       fd.set(KIRU_FORM_TOKEN_FIELD, requestToken.current)
@@ -53,7 +53,7 @@ export function createFormController<Output>(
       applyActionResponseHeaders(res.headers)
 
       if (!res.ok) {
-        error.value = "Form action failed"
+        error.set("Form action failed")
         return
       }
 
@@ -63,7 +63,7 @@ export function createFormController<Output>(
         try {
           data = JSON.parse(text) as unknown
         } catch {
-          error.value = "Form action failed"
+          error.set("Form action failed")
           return
         }
       }
@@ -75,9 +75,9 @@ export function createFormController<Output>(
         return
       }
 
-      result.value = data as FormActionClientOutput<Output>
+      result.set(data as FormActionClientOutput<Output>)
     } finally {
-      isPending.value = false
+      isPending.set(false)
     }
   }
 

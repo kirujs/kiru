@@ -70,6 +70,9 @@ export interface AstNode {
   shorthand?: boolean
   left?: AstNode
   right?: AstNode
+  test?: AstNode
+  /** `ArrayExpression` element slots (may contain `null` holes). */
+  elements?: (AstNode | null)[]
 }
 
 export function findNode(
@@ -106,7 +109,14 @@ type AstVisitor = {
   "*"?: VisitorNodeCallback
 }
 
-export function walk(node: AstNode, visitor: AstVisitor) {
+export function walk(
+  node: AstNode,
+  visitorOrCallback: AstVisitor | VisitorNodeCallback
+) {
+  const visitor =
+    typeof visitorOrCallback === "function"
+      ? { "*": visitorOrCallback }
+      : visitorOrCallback
   const ctx: VisitorCTX = {
     stack: [],
     exit: exitWalk,
@@ -153,39 +163,57 @@ function walk_impl(node: AstNode, visitor: AstVisitor, ctx: VisitorCTX) {
   }
 
   ctx.stack.push(node)
-  ;[
-    node.arguments,
-    node.declarations,
-    node.properties,
-    node.property,
-    node.cases,
-    node.body,
-    node.consequent,
-    node.init,
-    node.argument,
-    node.alternate,
-    node.callee,
-    node.declaration,
-    node.expression,
-    node.expressions,
-    node.left,
-    node.right,
-  ]
-    .filter(Boolean)
-    .forEach((a) => {
-      if (Array.isArray(a)) {
-        for (let i = 0; i < a.length; i++) {
-          walk_impl(a![i], visitor, ctx)
-        }
-        return
-      }
-      if (typeof a === "object" && "type" in a) {
-        walk_impl(a as AstNode, visitor, ctx)
-        return
-      }
-    })
+  walkChildFields(node, visitor, ctx)
+  ctx.stack.pop()
+  flushCallbacks(onExitCallbacks)
+}
 
-  // only walk 'value' of Property nodes
+const walkChildKeys = [
+  "arguments",
+  "declarations",
+  "properties",
+  "property",
+  "cases",
+  "body",
+  "consequent",
+  "init",
+  "argument",
+  "alternate",
+  "callee",
+  "declaration",
+  "expression",
+  "expressions",
+  "test",
+  "left",
+  "right",
+  "object",
+] as const satisfies readonly (keyof AstNode)[]
+
+function walkChildFields(
+  node: AstNode,
+  visitor: AstVisitor,
+  ctx: VisitorCTX
+): void {
+  const descend = (val: unknown) => {
+    if (!val) return
+    if (Array.isArray(val)) {
+      for (const c of val) {
+        if (c && typeof c === "object" && "type" in c) {
+          walk_impl(c as AstNode, visitor, ctx)
+        }
+      }
+      return
+    }
+    if (typeof val === "object" && "type" in val) {
+      walk_impl(val as AstNode, visitor, ctx)
+    }
+  }
+  for (const key of walkChildKeys) descend(node[key])
+  if (node.type === "ArrayExpression") {
+    for (const c of node.elements ?? []) {
+      if (c && typeof c === "object" && "type" in c) walk_impl(c, visitor, ctx)
+    }
+  }
   if (
     node.type === "Property" &&
     node.value != null &&
@@ -194,7 +222,4 @@ function walk_impl(node: AstNode, visitor: AstVisitor, ctx: VisitorCTX) {
   ) {
     walk_impl(node.value as AstNode, visitor, ctx)
   }
-
-  ctx.stack.pop()
-  flushCallbacks(onExitCallbacks)
 }

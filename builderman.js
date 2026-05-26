@@ -252,6 +252,18 @@ const fileRoutesSsgTest = task({
   cwd: "e2e/file-routes-ssg",
 })
 
+const compileOptsTest = task({
+  ...sharedE2EConfig,
+  name: "e2e:compile-opts",
+  cwd: "e2e/compile-opts",
+})
+
+const primitiveTest = task({
+  ...sharedE2EConfig,
+  name: "e2e:primitive",
+  cwd: "e2e/primitive",
+})
+
 const ssrMatrixTest = task({
   name: "e2e:ssr-matrix",
   cwd: "e2e/ssr-matrix",
@@ -287,6 +299,8 @@ const cypressE2e = pipeline([
   fileRoutesTest,
   fileRoutesSsrTest,
   fileRoutesSsgTest,
+  compileOptsTest,
+  primitiveTest,
 ]).toTask({
   name: "e2e:cypress",
   dependencies: adapterDeps,

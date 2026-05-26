@@ -54,13 +54,13 @@ export const DebuggerWidget: Kiru.Component<DebuggerWidgetProps> = () => {
   })
 
   const containerRef = (current: HTMLElement | null) => {
-    dragController.containerRef.value = current
-    dragController.handleRef.value = current
-    resizeController.containerRef.value = current
+    dragController.containerRef.set(current)
+    dragController.handleRef.set(current)
+    resizeController.containerRef.set(current)
   }
 
   const resizeHandleRef = (current: HTMLElement | null) => {
-    resizeController.handleRef.value = current
+    resizeController.handleRef.set(current)
   }
 
   return ({ state }) => (
@@ -71,16 +71,18 @@ export const DebuggerWidget: Kiru.Component<DebuggerWidgetProps> = () => {
         "bg-neutral-900 opacity-75 hover:opacity-100 shadow-lg"
       )}
       style={{
-        zIndex: widgetStackTop.value === "debugger" ? WIDGET_Z_BASE + 1 : WIDGET_Z_BASE,
+        zIndex: widgetStackTop() === "debugger" ? WIDGET_Z_BASE + 1 : WIDGET_Z_BASE,
         minWidth: `${DEBUGGER_MIN_WIDTH}px`,
         minHeight: `${DEBUGGER_MIN_HEIGHT}px`,
-        cursor: resizeController.isResizing.value
+        cursor: resizeController.isResizing()
           ? "se-resize"
-          : dragController.isDragging.value
+          : dragController.isDragging()
           ? "grabbing"
           : "grab",
       }}
-      onclick={() => (widgetStackTop.value = "debugger")}
+      onclick={() => {
+        widgetStackTop.set("debugger")
+      }}
     >
       <div
         style={{
@@ -123,10 +125,12 @@ const DebuggerView: Kiru.Component = () => {
 
   kiru.onMount(() => {
     const unsub = kiruGlobal().devtools!.subscribe((newEntries) => {
-      debuggerEntries.value = Array.from(newEntries).map((entry) => ({
-        ...entry,
-        link: getFileLink(entry.signal),
-      }))
+      debuggerEntries.set(
+        Array.from(newEntries).map((entry) => ({
+          ...entry,
+          link: getFileLink(entry.signal),
+        }))
+      )
     })
     return () => unsub()
   })
@@ -188,11 +192,13 @@ const DebuggerEntryCard: Kiru.Component<{ entry: DebuggerEntryWithLink }> = ({
       // can reuse collapse/page state, then dispose whatever wasn't reused.
       const prevCache = emptyCache()
       collectFromRoot(viewerRootSig.peek(), entry.label, prevCache)
-      viewerRootSig.value = buildViewerRoot(
-        toRootData(newValue),
-        entry.label,
-        prevCache,
-        settings
+      viewerRootSig.set(
+        buildViewerRoot(
+          toRootData(newValue),
+          entry.label,
+          prevCache,
+          settings
+        )
       )
       disposeCache(prevCache)
     })

@@ -5,7 +5,7 @@ import type { Signalable } from "../types.js"
 type ShowChildren<T> = (value: Truthy<T>) => JSX.Element
 
 export interface ShowProps<T> {
-  children: ShowChildren<T> | Exclude<JSX.Element, ShowChildren<T>>
+  children: ShowChildren<T> | JSX.Element
   when: Signalable<T>
   fallback?: JSX.Element
 }
@@ -24,9 +24,9 @@ export function Show<T>({
 }: ShowProps<T>): JSX.Element {
   const value = unwrap(when, true)
   if (!!value) {
-    return typeof children === "function"
+    return (typeof children === "function"
       ? children(value as Truthy<T>)
-      : children
+      : children) as JSX.Element
   }
   return fallback
 }

@@ -20,7 +20,7 @@ export default function UserPage() {
       <p className="text-slate-300">
         SSR user route param id:
         <span className="ml-2 rounded-md bg-cyan-400/20 px-2 py-1 font-mono text-sm text-cyan-200">
-          {() => router.params.value.id}
+          {() => router.params().id}
         </span>
       </p>
     </div>

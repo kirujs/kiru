@@ -19,8 +19,8 @@ type ValueViewerProps = {
 }
 
 export function ValueViewer({ root, className }: ValueViewerProps) {
-  const { objectKeysChunkSize } = devtoolsState.viewerSettings.value
-  const page = root.page.value
+  const { objectKeysChunkSize } = devtoolsState.viewerSettings()
+  const page = root.page()
   const visibleChildren = root.children.slice(
     0,
     (page + 1) * objectKeysChunkSize
@@ -32,7 +32,11 @@ export function ValueViewer({ root, className }: ValueViewerProps) {
       <div
         className={cls(
           "flex flex-col items-start w-full text-neutral-400",
-          unwrap(className)
+          className != null
+            ? kiru.isSignal(className)
+              ? className()
+              : className
+            : undefined
         )}
       >
         {visibleChildren.map((child) => (
@@ -46,7 +50,9 @@ export function ValueViewer({ root, className }: ValueViewerProps) {
       </div>
       {hasMore && (
         <button
-          onclick={() => root.page.value++}
+          onclick={() => {
+            root.page.set(page + 1)
+          }}
           title="Show more"
           className="p-1 border font-bold border-neutral-700 hover:bg-neutral-700"
         >
@@ -171,7 +177,7 @@ function LeafValue({
 }
 
 function ObjectNodeView({ node }: { node: ViewerObjectNode }) {
-  const isCollapsed = node.collapsed.value
+  const isCollapsed = node.collapsed()
   if (!isCollapsed) node.buildChildren()
   // peek() — children is stable after first build, no need to track as a dep
   const children = isCollapsed ? null : node.children.peek()
@@ -192,7 +198,7 @@ function ObjectNodeView({ node }: { node: ViewerObjectNode }) {
 }
 
 function ArrayNodeView({ node }: { node: ViewerArrayNode }) {
-  const isCollapsed = node.collapsed.value
+  const isCollapsed = node.collapsed()
   if (!isCollapsed) node.buildChildren()
   const children = isCollapsed ? null : node.children.peek()
 
@@ -220,7 +226,7 @@ function ArrayNodeView({ node }: { node: ViewerArrayNode }) {
 }
 
 function ArrayChunkView({ node }: { node: ViewerArrayChunkNode }) {
-  const isCollapsed = node.collapsed.value
+  const isCollapsed = node.collapsed()
   if (!isCollapsed) node.buildChildren()
   const children = isCollapsed ? null : node.children.peek()
 
@@ -244,7 +250,7 @@ function ArrayChunkView({ node }: { node: ViewerArrayChunkNode }) {
 }
 
 function SignalNodeView({ node }: { node: ViewerSignalNode }) {
-  const inner = node.viewerNode.value
+  const inner = node.viewerNode()
 
   return (
     <NodeWrapper>
@@ -293,7 +299,7 @@ function NodeExpanderButton({
       onclick={(e) => {
         e.stopPropagation()
         e.stopImmediatePropagation()
-        node.collapsed.value = !node.collapsed.value
+        node.collapsed.set(!node.collapsed())
       }}
     >
       {label}

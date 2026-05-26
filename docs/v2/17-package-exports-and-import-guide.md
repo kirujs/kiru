@@ -100,7 +100,7 @@ Browser field may point to `remote/browser.js` for client stubs.
 
 ### `kiru/jsx-runtime` / `kiru/jsx-dev-runtime`
 
-JSX automatic runtime.
+JSX automatic runtime. Development builds import `kiru/jsx-dev-runtime` and emit `jsxDEV`; production uses `kiru/jsx-runtime` with `jsx` / `jsxs`. With `staticHoisting` enabled, the Vite plugin hoists static subtrees from either runtime.
 
 ---
 

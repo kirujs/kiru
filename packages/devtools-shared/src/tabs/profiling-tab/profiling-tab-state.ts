@@ -39,18 +39,18 @@ export function initProfilingViewState(kiruGlobal: typeof window.__kiru) {
   const onAppMounted = (app: kiru.AppHandle) => {
     if (isDevtoolsApp(app)) return
 
-    const match = profilingViewState.value.find(
-      (item) => item.app.name === app.name
-    )
+    const match = profilingViewState
+      .peek()
+      .find((item) => item.app.name === app.name)
     if (match) return
     const item = createProfilingViewStateItem(kiruGlobal, profilingContext, app)
-    profilingViewState.value = [...profilingViewState.value, item]
+    profilingViewState.set((prev) => [...prev, item])
   }
 
   const onAppUnmounted = (app: kiru.AppHandle) => {
     if (isDevtoolsApp(app)) return
     console.log("onAppUnmounted", app)
-    profilingViewState.value
+    profilingViewState()
       .find((item) => item.app.name === app.name)
       ?.dispose()
   }
@@ -62,7 +62,7 @@ export function initProfilingViewState(kiruGlobal: typeof window.__kiru) {
       profilingContext,
       app
     )
-    profilingViewState.value = [...profilingViewState.value, stateItem]
+    profilingViewState.set((prev) => [...prev, stateItem])
   })
 
   kiruGlobal.on("mount", onAppMounted)
@@ -86,8 +86,8 @@ function createProfilingViewStateItem(
   const cleanups: (() => void)[] = []
   const dispose = () => {
     cleanups.forEach((c) => c())
-    profilingViewState.value = profilingViewState.value.filter(
-      (item) => item.app.name !== thisApp.name
+    profilingViewState.set((prev) =>
+      prev.filter((item) => item.app.name !== thisApp.name)
     )
   }
 
@@ -96,7 +96,7 @@ function createProfilingViewStateItem(
     labels: [(performance.now() / 1000).toFixed(2)],
     datasets: createLineChartDatasets(events),
   })
-  cleanups.push(() => kiru.Signal.dispose(chartData))
+  cleanups.push(() => kiru.SignalHelpers.dispose(chartData))
 
   Object.entries(events).forEach(([event, { values }]) => {
     const listener = (app: kiru.AppHandle) => {
@@ -116,18 +116,16 @@ function createProfilingViewStateItem(
       }
     })
 
-    const newLabels = [
-      ...chartData.value.labels,
-      (performance.now() / 1000).toFixed(2),
-    ]
-    if (newLabels.length > MAX_TICKS) {
-      newLabels.shift()
-    }
-
-    chartData.value = {
-      labels: newLabels,
-      datasets: createLineChartDatasets(events),
-    }
+    chartData.set((prev) => {
+      const newLabels = [...prev.labels, (performance.now() / 1000).toFixed(2)]
+      if (newLabels.length > MAX_TICKS) {
+        newLabels.shift()
+      }
+      return {
+        labels: newLabels,
+        datasets: createLineChartDatasets(events),
+      }
+    })
   }, 100)
 
   cleanups.push(() => clearInterval(updateInterval))
@@ -135,7 +133,7 @@ function createProfilingViewStateItem(
   const stats = kiru.signal<AppStats>(createAppStats(ctx, thisApp))
   const onUpdate = (app: kiru.AppHandle) => {
     if (app.name === thisApp.name) {
-      stats.value = createAppStats(ctx, app)
+      stats.set(createAppStats(ctx, app))
     }
   }
 

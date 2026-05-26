@@ -42,7 +42,7 @@ export function I18nProvider({
   children,
 }: {
   value: I18nContextValue
-  children?: JSX.Children
+  children?: JSX.Element
 }) {
   return createElement(I18nContext, { value, children })
 }
@@ -122,7 +122,7 @@ export function readHydratedI18n(): HydratedI18nPayload | null {
 /** Client shell: exposes {@link createI18nRuntime} to {@link useI18n}. */
 export const I18nReactiveRoot: Kiru.Component<{
   runtime: I18nRuntime
-  children?: JSX.Children
+  children?: JSX.Element
 }> = ({ runtime, children }) =>
   createElement(I18nRuntimeContext, {
     value: runtime,
@@ -154,8 +154,8 @@ export function createI18nRuntime<Data>(options: {
       defaultLocale: defaultLocale as I18nLocale,
     }),
     setLocale(nextLocale, nextData) {
-      locale.value = nextLocale
-      data.value = nextData
+      locale.set(nextLocale)
+      data.set(nextData)
     },
   }
 }

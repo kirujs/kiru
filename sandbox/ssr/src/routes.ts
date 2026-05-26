@@ -7,6 +7,7 @@ export const routes = createRouteTree({
     description: "Kiru server-rendered sandbox.",
   },
   layout: () => import("./pages/layout.tsx"),
+  notFound: () => import("./pages/not-found.tsx"),
   error: () => import("./pages/error-page.tsx"),
   children: [
     createRoute("/login", {

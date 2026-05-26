@@ -29,7 +29,7 @@ type LinkBase = Omit<JSX.IntrinsicElements["a"], "href"> & {
    * must be one of your configured locales. Use `false` when `to` already includes a prefix.
    */
   locale?: RouterLocaleParam
-  children?: JSX.Children
+  children?: JSX.Element
 }
 
 export type LinkProps = IsRouteRegistryConfigured extends true

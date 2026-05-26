@@ -28,9 +28,9 @@ export const selectedNodeViewData = kiru.signal<SelectedNodeViewData | null>(
 )
 
 kiru.effect(() => {
-  const node = selectedNode.value
-  const app = selectedApp.value
-  const settings = viewerSettings.value
+  const node = selectedNode()
+  const app = selectedApp()
+  const settings = viewerSettings()
 
   rebuildNodeViewData(node, settings)
 
@@ -39,7 +39,7 @@ kiru.effect(() => {
   const onAppUpdate = (updatedApp: kiru.AppHandle) => {
     if (updatedApp !== app) return
     if (isVNodeDeleted(node)) {
-      selectedNode.value = null
+      selectedNode.set(null)
       return
     }
     rebuildNodeViewData(node, viewerSettings.peek())
@@ -57,7 +57,7 @@ function rebuildNodeViewData(
 
   if (!node) {
     if (prevData) disposePropsData(prevData.props)
-    selectedNodeViewData.value = null
+    selectedNodeViewData.set(null)
     return
   }
 
@@ -86,16 +86,16 @@ function rebuildNodeViewData(
 
   disposeCache(prevCache)
 
-  selectedNodeViewData.value = {
+  selectedNodeViewData.set({
     node,
     name: getNodeName(node),
     props: { root: propsViewerRoot, collapsed: propsRootCollapsed },
-  }
+  })
 }
 
 function disposePropsData(props: PropsData) {
-  kiru.Signal.dispose(props.collapsed)
-  kiru.Signal.dispose(props.root.page)
+  kiru.SignalHelpers.dispose(props.collapsed)
+  kiru.SignalHelpers.dispose(props.root.page)
   const cache = emptyCache()
   collectFromRoot(props.root, "props", cache)
   disposeCache(cache)

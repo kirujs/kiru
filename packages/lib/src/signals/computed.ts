@@ -1,145 +1,151 @@
 import { __DEV__ } from "../env.js"
-import { $HMR_ACCEPT } from "../constants.js"
+import { $HMR_ACCEPT, $SIGNAL } from "../constants.js"
 import { call, latest } from "../utils/index.js"
 import { effectQueue } from "./globals.js"
 import { executeWithTracking } from "./tracking.js"
-import { Signal } from "./base.js"
+import {
+  SignalHelpers,
+  createSignalCallable,
+  createSignalState,
+  getSignalState,
+  type Signal as SignalFn,
+  type SignalState,
+} from "./base.js"
 import type { HMRAccept } from "../hmr.js"
 
-export class ComputedSignal<T> extends Signal<T> {
-  protected $getter: (prev?: T) => T
-  protected $unsubs: Map<string, Function>
-  protected $isDirty: boolean
-  constructor(getter: (prev?: T) => T, displayName?: string) {
-    super(void 0 as T, displayName)
-    this.$getter = getter
-    this.$unsubs = new Map()
-    this.$isDirty = true
+export type ComputedSignalState<T> = SignalState<T> & {
+  $getter: (prev?: T) => T
+  $unsubs: Map<string, Function>
+  $isDirty: boolean
+}
 
-    if (__DEV__) {
-      const { inject: baseInject } = this[$HMR_ACCEPT]!
-      // @ts-expect-error this is fine 😅
-      this[$HMR_ACCEPT] = {
-        provide: () => {
-          return this
-        },
-        inject: (prev) => {
-          baseInject(prev)
-          // Stop any pending reactions on the previous instance and mark
-          // this computed as dirty so it will recompute with the latest
-          // dependencies after HMR.
-          ComputedSignal.stop(prev)
-          this.$isDirty = true
-          // Force a recompute immediately so any active subscribers (like
-          // text nodes bound to a computed signal) see the updated value
-          // after a hot reload where only its dependencies changed.
-          ComputedSignal.run(this)
-          this.notify()
-        },
-        destroy: () => {},
-      } satisfies HMRAccept<ComputedSignal<T>>
+export type ComputedSignal<T> = SignalFn<T>
+
+function stopComputed<T>(state: ComputedSignalState<T>) {
+  if (__DEV__) {
+    state = latest(state)
+  }
+  const { $id, $unsubs } = state
+  effectQueue.delete($id)
+  $unsubs.forEach(call)
+  $unsubs.clear()
+  state.$isDirty = true
+}
+
+function runComputed<T>(state: ComputedSignalState<T>) {
+  if (__DEV__) {
+    state = latest(state)
+  }
+  const { $id: id, $getter, $unsubs: subs } = state
+
+  const value = executeWithTracking({
+    id,
+    subs,
+    fn: () => $getter(state.$value),
+    onDepChanged: () => {
+      state.$isDirty = true
+      if (!state.$subs.size) return
+      runComputed(state)
+      if (Object.is(state.$value, state.$prevValue)) return
+      state.notify()
+    },
+  })
+  state.$prevValue = state.$value
+  state.$value = value
+  state.$isDirty = false
+}
+
+function ensureNotDirty<T>(state: ComputedSignalState<T>) {
+  let computed = state
+  if (__DEV__) {
+    computed = latest(state)
+  }
+
+  if (!computed.$isDirty) {
+    const pending = effectQueue.get(computed.$id)
+    if (pending) {
+      pending()
+      effectQueue.delete(computed.$id)
     }
   }
 
-  get value() {
-    this.ensureNotDirty()
-    return super.value
+  if (!computed.$isDirty) return
+  if (__DEV__ && computed.$isDisposed) return
+  runComputed(computed)
+}
+
+function wrapComputedCallable<T>(
+  state: ComputedSignalState<T>
+): ComputedSignal<T> {
+  const base = createSignalCallable(state)
+
+  const read = (() => {
+    ensureNotDirty(state)
+    SignalHelpers.entangle(state)
+    return (__DEV__ ? latest(state) : state).$value
+  }) as ComputedSignal<T>
+
+  read.peek = () => {
+    ensureNotDirty(state)
+    return (__DEV__ ? latest(state) : state).$value
   }
 
-  set value(next: T) {
-    super.value = next
+  read.sneak = base.sneak
+  read.set = base.set
+  read.notify = base.notify
+  read.subscribe = (cb) => {
+    if (state.$isDirty) runComputed(state)
+    return base.subscribe(cb)
   }
 
-  toString() {
-    this.ensureNotDirty()
-    return super.toString()
+  read.toString = () => {
+    ensureNotDirty(state)
+    SignalHelpers.entangle(state)
+    return `${(__DEV__ ? latest(state) : state).$value}`
   }
 
-  peek() {
-    this.ensureNotDirty()
-    return super.peek()
-  }
+  read[$SIGNAL] = true
+  if (state.displayName) read.displayName = state.displayName
+  ;(read as ComputedSignal<T> & { [k: symbol]: ComputedSignalState<T> })[
+    Symbol.for("kiru.signalState")
+  ] = state
 
-  subscribe(cb: (state: T, prevState?: T) => void): () => void {
-    if (this.$isDirty) {
-      ComputedSignal.run(this)
-    }
-    return super.subscribe(cb)
-  }
+  return read
+}
 
-  static dispose(signal: ComputedSignal<any>): void {
-    ComputedSignal.stop(signal)
-    Signal.dispose(signal)
-  }
-
-  private static stop<T>(computed: ComputedSignal<T>) {
-    if (__DEV__) {
-      computed = latest(computed)
-    }
-    const { $id, $unsubs } = computed
-
-    effectQueue.delete($id)
-    $unsubs.forEach(call)
-    $unsubs.clear()
-    computed.$isDirty = true
-  }
-
-  private static run<T>(computed: ComputedSignal<T>) {
-    if (__DEV__) {
-      computed = latest(computed)
-    }
-    const { $id: id, $getter, $unsubs: subs } = computed
-
-    const value = executeWithTracking({
-      id,
-      subs,
-      fn: () => $getter(computed.$value),
-      onDepChanged: () => {
-        computed.$isDirty = true
-        if (!computed.$subs.size) return
-        ComputedSignal.run(computed)
-        if (Object.is(computed.$value, computed.$prevValue)) return
-        computed.notify()
-      },
-    })
-    computed.sneak(value)
-    computed.$isDirty = false
-  }
-
-  private ensureNotDirty() {
-    let computed = this
-    if (__DEV__) {
-      computed = latest(this)
-    }
-
-    if (!computed.$isDirty) {
-      const pending = effectQueue.get(computed.$id)
-      if (pending) {
-        pending()
-        effectQueue.delete(computed.$id)
-      }
-    }
-
-    if (!computed.$isDirty) return
-    if (__DEV__) {
-      /**
-       * This is a safeguard for dev-mode only, where a 'read' on an
-       * already-disposed signal during HMR update => `dom.setSignalProp`
-       * would throw due to invalid subs-map access.
-       *
-       * Perhaps in future we could handle this better by carrying over
-       * the previous signal's ID and not disposing it / deleting the
-       * map entry.
-       */
-      if (computed.$isDisposed) return
-    }
-    ComputedSignal.run(computed)
-  }
+export const ComputedSignal = {
+  dispose(sig: ComputedSignal<any>) {
+    stopComputed(getSignalState(sig) as ComputedSignalState<any>)
+    SignalHelpers.dispose(sig)
+  },
 }
 
 export function computed<T>(
   getter: (prev?: T) => T,
   displayName?: string
 ): ComputedSignal<T> {
-  return new ComputedSignal(getter, displayName)
+  const state = createSignalState(undefined as T, displayName, (callable) =>
+    ComputedSignal.dispose(callable as ComputedSignal<T>)
+  ) as ComputedSignalState<T>
+
+  state.$getter = getter
+  state.$unsubs = new Map()
+  state.$isDirty = true
+
+  if (__DEV__) {
+    const { inject: baseInject } = state[$HMR_ACCEPT]!
+    state[$HMR_ACCEPT] = {
+      provide: () => state,
+      inject: (prev: ComputedSignalState<T>) => {
+        baseInject(prev)
+        stopComputed(prev)
+        state.$isDirty = true
+        runComputed(state)
+        state.notify()
+      },
+      destroy: () => {},
+    } as unknown as HMRAccept<SignalState<any>>
+  }
+
+  return wrapComputedCallable(state)
 }

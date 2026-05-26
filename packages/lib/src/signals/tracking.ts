@@ -14,7 +14,7 @@ export const tracking = {
   },
 }
 
-type TrackedExecutionContext<T, Deps extends readonly Signal<unknown>[]> = {
+type TrackedExecutionContext<T, Deps extends readonly Signal<any>[]> = {
   id: string
   subs: Map<string, Function>
   fn: (...values: SignalValues<Deps>) => T
@@ -28,7 +28,7 @@ type TrackedExecutionContext<T, Deps extends readonly Signal<unknown>[]> = {
  * @param ctx - The execution context
  * @returns The result of the effect function
  */
-export function executeWithTracking<T, Deps extends readonly Signal<unknown>[]>(
+export function executeWithTracking<T, Deps extends readonly Signal<any>[]>(
   ctx: TrackedExecutionContext<T, Deps>
 ): T {
   const { id, subs, fn, deps = [], onDepChanged } = ctx
@@ -42,7 +42,7 @@ export function executeWithTracking<T, Deps extends readonly Signal<unknown>[]>(
     tracking.stack.push(observations)
   }
 
-  const result = fn(...(deps.map((s) => s.value) as SignalValues<Deps>))
+  const result = fn(...(deps.map((s) => s()) as SignalValues<Deps>))
 
   if (observations) {
     const effect = () => {

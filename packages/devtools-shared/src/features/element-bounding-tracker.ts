@@ -47,31 +47,30 @@ export function createElementBoundingTracker(
   const update = () => {
     const el = element.current
     if (!el) {
-      width.value =
-        height.value =
-        top.value =
-        left.value =
-        right.value =
-        bottom.value =
-        x.value =
-        y.value =
-        scrollX.value =
-        scrollY.value =
-          0
+      width.set(0)
+      height.set(0)
+      top.set(0)
+      left.set(0)
+      right.set(0)
+      bottom.set(0)
+      x.set(0)
+      y.set(0)
+      scrollX.set(0)
+      scrollY.set(0)
       return
     }
-    width.value = el.clientWidth
-    height.value = el.clientHeight
+    width.set(el.clientWidth)
+    height.set(el.clientHeight)
 
     const rect = el.getBoundingClientRect()
-    top.value = rect.top
-    left.value = rect.left
-    right.value = rect.right
-    bottom.value = rect.bottom
-    x.value = rect.x
-    y.value = rect.y
-    scrollX.value = window.scrollX
-    scrollY.value = window.scrollY
+    top.set(rect.top)
+    left.set(rect.left)
+    right.set(rect.right)
+    bottom.set(rect.bottom)
+    x.set(rect.x)
+    y.set(rect.y)
+    scrollX.set(window.scrollX)
+    scrollY.set(window.scrollY)
   }
 
   const init = () => {

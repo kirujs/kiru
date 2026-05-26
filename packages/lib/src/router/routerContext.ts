@@ -7,15 +7,15 @@ const RouterContext = createContext<Router | null>(null)
 
 export interface RouterProviderProps {
   router: Router
-  children?: JSX.Children
+  children?: JSX.Element
 }
 
 const RequestContextBridge: Kiru.Component<{
   router: Router
-  children?: JSX.Children
+  children?: JSX.Element
 }> = ({ router, children }) => {
   return createElement(RequestContextProvider, {
-    value: router.requestContext.value,
+    value: router.requestContext(),
     children,
   })
 }
