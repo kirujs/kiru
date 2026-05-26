@@ -63,7 +63,10 @@ describe("jsx-hoist plugin pipeline", () => {
   it("returns templated output via ctx.code (inline static badge)", () => {
     const out = transformLikeJsxHoistPlugin(HOISTED_BADGE_SOURCE)
     assert.ok(out)
-    assert.match(out, /import \{ _template, createHoledTemplate \} from "kiru\/template"/)
+    assert.match(
+      out,
+      /import \{[^}]*_template[^}]*createHoledTemplate[^}]*\} from "kiru\/template"/
+    )
     assert.match(out, /\$t\d+ = _template\(/)
     assert.doesNotMatch(out, /jsxDEV\("span", \{ className: "badge"/)
   })

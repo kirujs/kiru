@@ -1,17 +1,13 @@
-import { _template, createHoledTemplate } from "kiru/template";
+import { _template, createHoledTemplate, markHoisted } from "kiru/template";
 
 import { jsxDEV } from "kiru/jsx-dev-runtime"
 import { signal } from "kiru"
 
 const n = signal(0)
 
-const $k0 = jsxDEV("span", { children: n }, void 0, true, void 0, this)
-$k0.meta={ flags: ($k0.meta?.flags??0)|32 }
+const $k0 = markHoisted(jsxDEV("span", { children: n }, void 0, true, void 0, this))
 const $t0 = _template("<div><span>A</span><!--#--></div>", 1)
 
 
 const Mixed = () =>
-  Object.assign(
-    createHoledTemplate($t0, [$k0]),
-    { meta: { regions: [{ kind: "insert", slot: 1 }] } }
-  )
+  createHoledTemplate($t0, [$k0], [{ kind: "text", anchor: 0 }])

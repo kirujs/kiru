@@ -27,7 +27,10 @@ import { jsxDEV } from "kiru/jsx-dev-runtime"
 const StaticBadge = () =>
   jsxDEV("span", { className: "badge", children: "OK" }, void 0, false, void 0, this)
 `)
-    assert.match(out, /import \{ _template, createHoledTemplate \} from "kiru\/template"/)
+    assert.match(
+      out,
+      /import \{[^}]*_template[^}]*createHoledTemplate[^}]*\} from "kiru\/template"/
+    )
     assert.match(out, /const \$t\d+ = _template\(/)
     assert.match(out, /\$t\d+\(\)|createHoledTemplate\(\$t\d+,/)
     assert.doesNotMatch(out, /jsxDEV\("span", \{ className: "badge"/)
@@ -41,24 +44,24 @@ import { signal } from "kiru"
 const n = signal(0)
 
 const Mixed = () =>
-  Object.assign(
-    jsxDEV(
-      "div",
-      {
-        children: [
-          jsxDEV("span", { children: "A" }, void 0, false, void 0, this),
-          jsxDEV("span", { children: n }, void 0, true, void 0, this),
-        ],
-      },
-      void 0,
-      true,
-      void 0,
-      this
-    ),
-    { meta: { regions: [{ kind: "insert", slot: 1 }] } }
+  jsxDEV(
+    "div",
+    {
+      children: [
+        jsxDEV("span", { children: "A" }, void 0, false, void 0, this),
+        jsxDEV("span", { children: n }, void 0, true, void 0, this),
+      ],
+    },
+    void 0,
+    true,
+    void 0,
+    this
   )
 `)
-    assert.match(out, /import \{ _template, createHoledTemplate \} from "kiru\/template"/)
+    assert.match(
+      out,
+      /import \{[^}]*_template[^}]*createHoledTemplate[^}]*\} from "kiru\/template"/
+    )
     assert.match(out, /_template\([^)]*<!--#-->/)
     assert.match(out, /createHoledTemplate\(\$t\d+,[^)]+\[\{kind:/)
     assert.doesNotMatch(out, /dynamicIndices/)
@@ -72,17 +75,16 @@ import { signal } from "kiru"
 
 const initialCount = signal(0)
 
-const $k0 = jsxDEV("input", { "bind:value": initialCount, type: "number" }, void 0, false, void 0, this),
-  $k1 = jsxDEV("span", { className: "badge", children: "OK" }, void 0, false, void 0, this)
-$k0.meta={ flags: ($k0.meta?.flags??0)|32 }
-$k1.meta={ flags: ($k1.meta?.flags??0)|32 }
+const StaticBadge = () =>
+  jsxDEV("span", { className: "badge", children: "OK" }, void 0, false, void 0, this)
 
-const StaticBadge = () => $k1
+const BindInput = () =>
+  jsxDEV("input", { "bind:value": initialCount, type: "number" }, void 0, false, void 0, this)
 `)
     assert.match(out, /\$t\d+ = _template\(/)
-    assert.match(out, /const \$k0 = jsxDEV\("input"/)
-    assert.match(out, /StaticBadge = \(\) => \$t\d+\(\)/)
-    assert.doesNotMatch(out, /\$k1\.meta=/)
+    assert.match(out, /StaticBadge = \(\) =>[\s\n]*\$t\d+\(\)/)
+    assert.match(out, /const \$k\d+ = markHoisted\(jsxDEV\("input"/)
+    assert.doesNotMatch(out, /jsxDEV\("span", \{ className: "badge"/)
     assert.doesNotMatch(out, /,\s*\n\s*\$k1 = jsxDEV\("span"/)
   })
 
@@ -119,10 +121,13 @@ export function App() {
   )
 }
 `)
-    assert.match(out, /import \{ _template, createHoledTemplate \} from "kiru\/template"/)
+    assert.match(
+      out,
+      /import \{[^}]*_template[^}]*createHoledTemplate[^}]*\} from "kiru\/template"/
+    )
     assert.match(out, /_template\([^)]*<!--#-->/)
     assert.match(out, /createHoledTemplate\(\$t\d+,/)
-    assert.match(out, /const \$k\d+ = jsxDEV\("input"/)
+    assert.match(out, /const \$k\d+ = markHoisted\(jsxDEV\("input"/)
     assert.match(out, /jsxDEV\(\s*Counter/)
   })
 

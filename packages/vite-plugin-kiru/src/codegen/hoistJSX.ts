@@ -116,6 +116,8 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
   )
 
   let needsTagStaticChildrenList = false
+  let needsRegionElement = dynamicSlotCalls.length > 0
+  let needsMarkHoisted = false
   for (const node of sortedAllNodes) {
     const varName = `$k${counter++}`
     if (node.type === "ArrayExpression") {
@@ -127,9 +129,18 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
         : arrayCode
       allHoistables.push({ node, code: codeExpr, varName })
     } else {
+      let codeExpr = source.slice(node.start, node.end)
+      if (node.type === "CallExpression" && isJsxFactoryCall(node, analysis)) {
+        const wrapped = buildRegionElementWrap(node, analysis, codeExpr)
+        if (wrapped) {
+          codeExpr = wrapped
+          if (wrapped.startsWith("markHoisted(")) needsMarkHoisted = true
+          else needsRegionElement = true
+        }
+      }
       allHoistables.push({
         node,
-        code: source.slice(node.start, node.end),
+        code: codeExpr,
         varName,
       })
     }
@@ -147,10 +158,11 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
               : `  ${h.varName} = ${h.code}`
           )
           .join(",\n")
-  const metaLines =
-    allHoistables.length > 0
-      ? buildElementMetaAssignmentLines(allHoistables, analysis)
-      : []
+  const regionElementLines = buildRegionElementLines(allHoistables, analysis)
+  for (const line of regionElementLines) {
+    if (line.includes("markHoisted(")) needsMarkHoisted = true
+    else needsRegionElement = true
+  }
 
   // Hoist leaf replacements first, then wrap mixed parents with the updated tree.
   for (let i = allHoistables.length - 1; i >= 0; i--) {
@@ -168,9 +180,19 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
     code.update(
       node.start,
       node.end,
-      `Object.assign(${current},{meta:{regions:${formatRegionsLiteral(
-        regions
-      )}}})`
+      `regionElement(${current}, ${formatRegionsLiteral(regions)})`
+    )
+    needsRegionElement = true
+  }
+
+  if (needsTagStaticChildrenList || needsRegionElement || needsMarkHoisted) {
+    ensureTemplateCodegenImports(
+      code,
+      bodyNodes,
+      source,
+      needsTagStaticChildrenList,
+      needsRegionElement,
+      needsMarkHoisted
     )
   }
 
@@ -183,11 +205,8 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
       source,
       moduleDeps
     )
-    const hoistBlock = ["", declarations, ...metaLines, ""].join("\n")
+    const hoistBlock = ["", declarations, ...regionElementLines, ""].join("\n")
     code.appendRight(insertPos, hoistBlock)
-    if (needsTagStaticChildrenList) {
-      ensureTagStaticChildrenListImport(code, bodyNodes, source)
-    }
   }
 }
 
@@ -254,11 +273,20 @@ function isDirectChildOfAnyArray(
   return false
 }
 
-function ensureTagStaticChildrenListImport(
+function ensureTemplateCodegenImports(
   code: MagicString,
   bodyNodes: AstNode[],
-  source: string
+  source: string,
+  needTagStaticChildrenList: boolean,
+  needRegionElement: boolean,
+  needMarkHoisted: boolean
 ): void {
+  const names: string[] = []
+  if (needTagStaticChildrenList) names.push("tagStaticChildrenList")
+  if (needRegionElement) names.push("regionElement")
+  if (needMarkHoisted) names.push("markHoisted")
+  if (names.length === 0) return
+
   for (const node of bodyNodes) {
     if (node.type !== "ImportDeclaration") continue
     const src = node.source
@@ -271,14 +299,15 @@ function ensureTagStaticChildrenListImport(
     }
     const end = node.end
     const slice = source.slice(node.start, end)
-    if (slice.includes("tagStaticChildrenList")) return
+    const missing = names.filter((n) => !slice.includes(n))
+    if (missing.length === 0) return
     const braceFrom = slice.indexOf("} from")
     if (braceFrom === -1) return
     const start = node.start + braceFrom
     code.overwrite(
       start,
       start + "} from".length,
-      ", tagStaticChildrenList } from"
+      `, ${missing.join(", ")} } from`
     )
     return
   }
@@ -290,8 +319,16 @@ function ensureTagStaticChildrenListImport(
   )
   code.appendRight(
     insertAt,
-    `import { tagStaticChildrenList } from "kiru/template";\n`
+    `import { ${names.join(", ")} } from "kiru/template";\n`
   )
+}
+
+function ensureRegionElementImport(
+  code: MagicString,
+  bodyNodes: AstNode[],
+  source: string
+): void {
+  ensureTemplateCodegenImports(code, bodyNodes, source, false, true, false)
 }
 
 function filterMaximalHoistCandidates(calls: AstNode[]): AstNode[] {
@@ -665,59 +702,48 @@ function findModuleHoistInsertPosition(
   return insertAt
 }
 
-function buildElementMetaLiteral(
+function buildRegionElementWrap(
   node: AstNode,
   ctx: AnalysisCtx,
-  varName: string
+  expr: string
 ): string | null {
-  const parts: string[] = []
-  const flagsBase = `(${varName}.meta?.flags??0)`
-  let flagsExpr: string | null = null
+  let flagsExpr: string | undefined
   if (
     isIntrinsicJsxTag(node.arguments?.[0]) &&
     isHoistableJsxCall(node, ctx, true) &&
     !subtreeHasImpureCall(node, ctx)
   ) {
-    flagsExpr = `${flagsBase}|${FLAG_HOISTED_BIT}`
+    flagsExpr = `${FLAG_HOISTED_BIT}`
   }
   const regions = getCompileRegionsForJsxs(node, ctx)
-  if (regions) {
-    parts.push(`regions: ${formatRegionsLiteral(regions)}`)
+  if (!regions && flagsExpr === undefined) return null
+  if (!regions && flagsExpr !== undefined) {
+    return `markHoisted(${expr})`
   }
-  if (flagsExpr) {
-    parts.unshift(`flags: ${flagsExpr}`)
-  } else if (regions) {
-    parts.unshift(`flags: ${flagsBase}`)
+  const regionsLit = formatRegionsLiteral(regions!)
+  if (flagsExpr !== undefined) {
+    return `regionElement(${expr}, ${regionsLit}, ${flagsExpr})`
   }
-  if (parts.length === 0) return null
-  return `{ ${parts.join(", ")} }`
+  return `regionElement(${expr}, ${regionsLit})`
 }
 
-function buildElementMetaAssignmentLines(
+function buildRegionElementLines(
   allHoistables: Hoistable[],
   ctx: AnalysisCtx
 ): string[] {
   const lines: string[] = []
   for (const h of allHoistables) {
-    if (h.node.type === "ArrayExpression") {
-      const elems = (h.node as { elements?: (AstNode | null)[] }).elements ?? []
-      for (let i = 0; i < elems.length; i++) {
-        const elem = elems[i]
-        if (!elem || elem.type !== "CallExpression") continue
-        if (!isJsxFactoryCall(elem, ctx)) continue
-        const meta = buildElementMetaLiteral(elem, ctx, `${h.varName}[${i}]`)
-        if (meta) {
-          lines.push(`${h.varName}[${i}].meta=${meta}`)
-        }
+    if (h.node.type !== "ArrayExpression") continue
+    const elems = (h.node as { elements?: (AstNode | null)[] }).elements ?? []
+    for (let i = 0; i < elems.length; i++) {
+      const elem = elems[i]
+      if (!elem || elem.type !== "CallExpression") continue
+      if (!isJsxFactoryCall(elem, ctx)) continue
+      const elemExpr = `${h.varName}[${i}]`
+      const wrap = buildRegionElementWrap(elem, ctx, elemExpr)
+      if (wrap) {
+        lines.push(`${h.varName}[${i}] = ${wrap}`)
       }
-      continue
-    }
-    if (h.node.type !== "CallExpression") continue
-    if (!isJsxFactoryCall(h.node, ctx)) continue
-    if (isHoistedCallNestedIn(h, allHoistables)) continue
-    const meta = buildElementMetaLiteral(h.node, ctx, h.varName)
-    if (meta) {
-      lines.push(`${h.varName}.meta=${meta}`)
     }
   }
   return lines

@@ -201,6 +201,25 @@ describe("template holes", () => {
     })
   })
 
+  it("ignores nested template hole markers inside a shell hole", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const outerHtml = `<div>${KIRU_HOLE_MARKER}${KIRU_HOLE_MARKER}</div>`
+      const innerHtml = `<section>${KIRU_HOLE_MARKER}</section>`
+      const Page = () =>
+        createElement("p", { "data-testid": "page", children: "nested" })
+      const makeOuter = () =>
+        createHoledTemplate(_template(outerHtml, 2), [
+          createElement("span", { children: "static" }),
+          createHoledTemplate(_template(innerHtml, 1), [
+            createElement(Page, {}),
+          ]),
+        ])
+      kiru.mount(makeOuter(), container)
+      const app = container.__kiruNode!.app!
+      assert.doesNotThrow(() => app.render(makeOuter()))
+    })
+  })
+
   it("holed shell matches renderToString of equivalent tree", () => {
     const staticPart = createElement("span", { children: "A" })
     const dynamicPart = createElement("span", { className: "dyn", children: "B" })

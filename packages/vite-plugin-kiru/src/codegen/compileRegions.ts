@@ -68,7 +68,7 @@ function classifyChildSlotRegion(
   if (node.type === "CallExpression" && isAnyJsxFactoryCall(node, ctx)) {
     const typeArg = node.arguments?.[0]
     if (typeArg?.type === "Literal" && typeof typeArg.value === "string") {
-      return { kind: "insert" }
+      return { kind: "node" }
     }
     return { kind: "component" }
   }

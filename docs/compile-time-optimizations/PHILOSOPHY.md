@@ -4,15 +4,58 @@ This document is the **compiler constitution** for Kiru’s static-hoisting and 
 
 ## Primary model
 
+> **Static DOM structure is authoritative.** Regions describe mutations against that structure. VNodes represent dynamic runtime ownership boundaries only.
+
 > Compile host UI into cloneable HTML shells; represent all non-static behavior as a small, ordered list of **typed regions** bound at known `<!--#-->` anchors—not as a fully hoisted vnode graph.
+
+Kiru is moving from **vnode tree with template optimizations** → **compiled DOM structure with runtime regions**.
 
 ## Rules
 
 1. **One host shell per render root** — When `experimental.staticHoisting` is on, maximize a single `_template` / `createHoledTemplate` shell per component return (e.g. layout `<main>`), not many leaf templates for static `<p>` / `<h1>` tags.
-2. **Dynamics = typed regions** — Non-static behavior is `meta.regions[]` at template anchors (`conditional`, `text`, `fragment`, `children`, `component`, `insert`), not extra vnodes for markup that belongs in HTML.
+2. **Dynamics = typed regions** — Non-static behavior is region metadata at template anchors or `jsxs` child slots (`conditional`, `text`, `fragment`, `children`, `component`, `node`, `insert`), not extra vnodes for markup that belongs in HTML.
 3. **`$kN` only for region payloads** — Module hoists hold component lists, pure chrome inside holes, or subtrees templates cannot inline. Do not hoist static host elements that an ancestor shell already serializes.
 4. **Extend `regions`, not `dynamicIndices`** — Positional slot masks on `jsxs` are retired; mixed static layouts use region metadata on templates or hoisted roots.
 5. **Hydrate and clone first** — Runtime changes must preserve or improve template shell reuse (`refreshReusedTemplateHoles`), SSR HTML alignment, and anchor-based hole reconciliation.
+
+## One model, two domains
+
+Both `templateRegions` and `slotRegions` use the same [`CompileRegion`](../../packages/lib/src/compileRegions.ts) type. The **domain** selects ownership, not shape:
+
+| Domain | VNode field | Index | Ownership |
+|--------|-------------|-------|-----------|
+| Template | `templateRegions` | `anchor` | DOM shell, `<!--#-->`, hydration |
+| Slot | `slotRegions` | `slot` | Stable child index in a compiled `jsxs` child array |
+
+Do not duplicate validation, traversal, or debug logic per layer—use shared helpers (`validateRegions`, `regionAt`, `resolve*RegionOp`).
+
+The `slot` index is a **stable child index** in a compiler-built static child array. Positional indexing is foundational for mixed `jsxs` (same as other frameworks internally). Future binding descriptors may generalize beyond child arrays; the index itself is not going away.
+
+## Region kinds: `node` vs `component`
+
+| Kind | Meaning | Reconciliation |
+|------|---------|----------------|
+| `node` | Intrinsic host element (`jsx("div", …)`) | No lifecycle ownership boundary; DOM subtree owned by parent host/template |
+| `component` | Function / class component | Ownership boundary: hooks, effects, render |
+| `insert` | Unknown / complex expression | Fallback: full slot or hole reconcile |
+
+`component` is a different reconciliation mode—not “a node with behavior.”
+
+Semantic `kind` describes **what** is bound; update **strategy** (direct text, signal sub, hydrate patch) may split later without renaming kinds.
+
+## Region ownership
+
+| Concern | Owner |
+|---------|--------|
+| Cloned DOM shell | `TemplateRoot` / template host vnode |
+| Hole anchor comments | Template HTML + `templateRegions` |
+| Per-hole mounted subtree | `templateHoleHeads[i]` + anchor region ops |
+| Mixed `jsxs` static siblings | Parent host + `slotRegions` mask |
+| Subscriptions / effects | Component vnodes & inline fns |
+| Hydration cursor | `hydrationStack` during anchor ops |
+| Fragment boundaries | `fragment` kind + `FLAG_STATIC_CHILDREN` |
+
+Async boundaries, suspense, portals, and streaming extend this matrix—not ad-hoc reconciler branches.
 
 ## Transform order
 

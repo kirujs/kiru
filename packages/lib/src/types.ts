@@ -403,8 +403,8 @@ declare global {
       render?: (props: VNode["props"]) => unknown
       /** Set when reconciling `jsxs` children; used for dev contract checks. */
       staticChildCount?: number
-      /** Copied from `element.meta.regions` at vnode creation (mixed static layouts). */
-      compileRegions?: readonly import("./compileRegions.js").CompileRegion[]
+      /** Copied from `element.meta.regions` at vnode creation (mixed static `jsxs` slots). */
+      slotRegions?: readonly import("./compileRegions.js").CompileRegion[]
       /** Copied from `TemplateRoot.regions` for template hosts. */
       templateRegions?: readonly import("./compileRegions.js").CompileRegion[]
       /** Cloned template HTML; used to reuse the same shell on updates. */
@@ -416,6 +416,8 @@ declare global {
       templateHoleAnchor?: Comment
       /** @internal Per-hole reconciled vnode heads for updates. */
       templateHoleHeads?: (VNode | null)[]
+      /** @internal Shell `<!--#-->` anchors (cached; excludes nested template markers). */
+      templateHoleAnchors?: readonly Comment[]
     }
     interface VNodeSnapshot {
       props: Kiru.VNode["props"]

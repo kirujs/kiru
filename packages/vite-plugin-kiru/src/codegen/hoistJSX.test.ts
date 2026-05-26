@@ -69,7 +69,10 @@ mount(
     assert.ok(declIdx !== -1, "expected hoisted declaration")
     assert.ok(mountIdx !== -1, "expected mount call")
     assert.ok(declIdx < mountIdx, "hoisted const must be declared before use")
-    assert.match(out, /\$k0\.meta=\{ flags: \(\$k0\.meta\?\.flags\?\?0\)\|32/)
+    assert.match(
+      out,
+      /const \$k0 = markHoisted\(jsxDEV/
+    )
   })
 
   it("hoists static jsxs subtrees imported from kiru/jsx-runtime", () => {
@@ -86,7 +89,7 @@ export function Page() {
   })
 }
 `)
-    assert.match(out, /const \$k\d+ = jsxs\(/)
+    assert.match(out, /const \$k\d+ = markHoisted\(jsxs\(/)
     assert.match(out, /return \$k\d+/)
     assert.doesNotMatch(out, /return jsxs\("div"/)
   })
@@ -138,7 +141,7 @@ export function Page() {
   )
 }
 `)
-    assert.match(out, /const \$k\d+ = jsxDEV\(/)
+    assert.match(out, /const \$k\d+ = markHoisted\(jsxDEV\(/)
     assert.match(out, /return \$k\d+/)
     assert.doesNotMatch(out, /return jsxDEV\(\s*"div"/)
   })
@@ -196,7 +199,7 @@ export function Page() {
   )
 }
 `)
-    assert.match(out, /const \$k\d+ = jsxDEV\(/)
+    assert.match(out, /const \$k\d+ = markHoisted\(jsxDEV\(/)
     assert.match(out, /return \$k\d+/)
   })
 
@@ -211,7 +214,10 @@ export function Page() {
   })
 }
 `)
-    assert.match(out, /\$k\d+\.meta=\{ flags: \(\$k\d+\.meta\?\.flags\?\?0\)\|32/)
+    assert.match(
+      out,
+      /const \$k\d+ = markHoisted\(jsx/
+    )
   })
 
   it("does not mark hoisted jsxs when a child slot is dynamic", () => {
@@ -224,7 +230,10 @@ export function Page({ label }) {
   })
 }
 `)
-    assert.doesNotMatch(out, /\$k\d+\.meta=\{ flags: \(\$k\d+\.meta\?\.flags\?\?0\)\|32/)
+    assert.doesNotMatch(
+      out,
+      /const \$k\d+ = regionElement\(jsx/
+    )
   })
 
   it("emits compile regions for mixed static hoisted jsxs children", () => {
@@ -243,7 +252,7 @@ export function Page() {
   })
 }
 `)
-    assert.match(out, /regions:\s*\[\{kind:"insert",slot:1\}\]/)
+    assert.match(out, /regionElement\([\s\S]*\{kind:"node",slot:1\}/)
   })
 
   it("does not mark FLAG_HOISTED when a child uses count()", () => {
@@ -259,7 +268,10 @@ export function Page() {
   })
 }
 `)
-    assert.doesNotMatch(out, /\$k\d+\.meta=\{ flags: \(\$k\d+\.meta\?\.flags\?\?0\)\|32/)
+    assert.doesNotMatch(
+      out,
+      /const \$k\d+ = regionElement\(jsx/
+    )
   })
 
   it("does not mark FLAG_HOISTED for arbitrary impure calls like formatTitle()", () => {
@@ -276,7 +288,10 @@ export function Page() {
   })
 }
 `)
-    assert.doesNotMatch(out, /\$k\d+\.meta=\{ flags: \(\$k\d+\.meta\?\.flags\?\?0\)\|32/)
+    assert.doesNotMatch(
+      out,
+      /const \$k\d+ = regionElement\(jsx/
+    )
   })
 
   it("allows count.peek() inside an otherwise static hoisted child", () => {
@@ -292,7 +307,10 @@ export function Page() {
   })
 }
 `)
-    assert.match(out, /\$k\d+\.meta=\{ flags: \(\$k\d+\.meta\?\.flags\?\?0\)\|32/)
+    assert.match(
+      out,
+      /const \$k\d+ = markHoisted\(jsx/
+    )
   })
 
   it("marks compile regions for count() in a mixed jsxs children array", () => {
@@ -311,7 +329,7 @@ export function Page() {
   })
 }
 `)
-    assert.match(out, /regions:\s*\[\{kind:"insert",slot:1\}\]/)
+    assert.match(out, /regionElement\([\s\S]*\{kind:"node",slot:1\}/)
   })
 
   it("does not treat shadowed signal import as a signal factory", () => {
@@ -395,7 +413,7 @@ const Counter = () => {
     assert.doesNotMatch(out, /const \$k\d+ = jsxs\(/)
   })
 
-  it("assigns compile regions via Object.assign inside render arrow", () => {
+  it("assigns compile regions via regionElement inside render arrow", () => {
     const out = transformHoist(`
 import { jsxDEV } from "kiru/jsx-dev-runtime"
 import { setup } from "kiru"
@@ -414,7 +432,7 @@ const Counter = () => {
 `)
     assert.doesNotMatch(out, /const \$__jsx\d+ = jsxDEV/)
     assert.match(out, /return \(props\) =>/)
-    assert.match(out, /Object\.assign\([\s\S]*meta:\{regions:\[[^\]]+\]\}/)
+    assert.match(out, /regionElement\([\s\S]*\[\{kind:/)
   })
 
   it("hoists when jsxDEV is imported from a Vite-resolved kiru jsx module", () => {
@@ -429,7 +447,7 @@ export function Page() {
   }, void 0)
 }
 `)
-    assert.match(out, /const \$k\d+ = jsxDEV\(/)
+    assert.match(out, /const \$k\d+ = markHoisted\(jsxDEV\(/)
   })
 
   it("hoists static jsx from a direct-return component", () => {
@@ -440,7 +458,7 @@ export function Page() {
   return jsxs("div", { class: "hero", children: [] })
 }
 `)
-    assert.match(out, /const \$k\d+ = jsxs\(/)
+    assert.match(out, /const \$k\d+ = markHoisted\(jsxs\(/)
     assert.match(out, /return \$k\d+/)
   })
 
@@ -458,7 +476,7 @@ const Badge = () =>
     this
   )
 `)
-    assert.match(out, /const \$k\d+ = jsxDEV\(/)
+    assert.match(out, /const \$k\d+ = markHoisted\(jsxDEV\(/)
     assert.match(out, /Badge = \(\) =>[\s\S]*\$k\d+/)
   })
 
@@ -496,7 +514,7 @@ export function App() {
   }, this)
 }
 `)
-    assert.match(out, /const \$k\d+ = jsxDEV\([\s\S]*"input"/)
+    assert.match(out, /const \$k\d+ = markHoisted\(jsxDEV\([\s\S]*"input"/)
     assert.doesNotMatch(out, /const \$k\d+ = jsxs\("div"/)
     assert.match(out, /return jsxs\("div"/)
   })
@@ -519,8 +537,11 @@ export function App() {
   )
 }
 `)
-    assert.match(out, /const \$k\d+ = jsxDEV\([\s\S]*"input"/)
-    assert.match(out, /\$k\d+\.meta=\{ flags: \(\$k\d+\.meta\?\.flags\?\?0\)\|32/)
+    assert.match(out, /const \$k\d+ = markHoisted\(jsxDEV\([\s\S]*"input"/)
+    assert.match(
+      out,
+      /const \$k\d+ = markHoisted\(jsx/
+    )
   })
 
   it("does not hoist when subtree contains a signal read call", () => {
@@ -625,7 +646,7 @@ export default function Layout({ children }) {
       /const \$k\d+ = jsxDEV\("div", \{[\s\S]*\bchildren \}/
     )
     assert.match(out, /className: "outlet", children \}/)
-    assert.match(out, /regions:\[\{kind:"insert",slot:1\}\]/)
+    assert.match(out, /regionElement\([\s\S]*\{kind:"node",slot:1\}/)
     assert.match(out, /children: \[\s*\$k0,/)
     assert.doesNotMatch(
       out,
