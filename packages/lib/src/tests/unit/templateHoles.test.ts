@@ -93,6 +93,106 @@ describe("template holes", () => {
     assert.ok(out.includes('href="/about"'))
   })
 
+  it("mounts mixed holes before static siblings (Counter-shaped shell)", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const html = `<div><h1>${KIRU_HOLE_MARKER}</h1>${KIRU_HOLE_MARKER}<span class="badge">OK</span><div>123</div></div>`
+      const factory = _template(html, 2)
+      const count = kiru.signal(0)
+      const button = createElement("button", {
+        onclick: () => {},
+        children: "Increment",
+      })
+
+      kiru.mount(
+        createHoledTemplate(
+          factory,
+          [["Count: ", count], button],
+          [
+            { kind: "text", anchor: 0 },
+            { kind: "node", anchor: 1 },
+          ]
+        ),
+        container
+      )
+
+      const root = container.querySelector("div")!
+      const h1 = root.querySelector("h1")!
+      assert.ok(h1.textContent?.includes("Count:"))
+      assert.strictEqual(root.querySelector("button")?.textContent, "Increment")
+      assert.strictEqual(
+        root.querySelector("span.badge")?.textContent,
+        "OK"
+      )
+      assert.strictEqual(root.querySelector("div:last-child")?.textContent, "123")
+      const countComments = (node: Node): number => {
+        let count = 0
+        const walk = (n: Node) => {
+          if (n.nodeType === Node.COMMENT_NODE && (n as Comment).data === "#") {
+            count++
+          }
+          for (const child of n.childNodes) walk(child)
+        }
+        walk(node)
+        return count
+      }
+      assert.ok(
+        countComments(root) >= 2,
+        "hole anchors remain in the shell"
+      )
+      assert.ok(
+        h1.compareDocumentPosition(root.querySelector("button")!) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      )
+      assert.ok(
+        (root.querySelector("button")!.compareDocumentPosition(
+          root.querySelector("div:last-child")!
+        ) &
+          Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+      )
+      const rootHtml = root.innerHTML
+      const buttonPos = rootHtml.indexOf("<button")
+      const badgePos = rootHtml.indexOf('<span class="badge">OK</span>')
+      const staticPos = rootHtml.indexOf("<div>123</div>")
+      assert.ok(buttonPos !== -1, "button hole must mount")
+      assert.ok(badgePos !== -1, "static badge must remain in shell")
+      assert.ok(staticPos !== -1, "static <div>123</div> must remain in shell")
+      assert.ok(
+        buttonPos < badgePos && badgePos < staticPos,
+        "button hole must mount before static badge and static <div>123</div>"
+      )
+      assert.strictEqual(
+        h1.textContent,
+        "Count: 0",
+        "text hole must mount inside <h1>"
+      )
+      assert.ok(
+        ![...root.childNodes].some(
+          (n) => n.nodeType === Node.TEXT_NODE && (n.textContent ?? "").includes("Count:")
+        ),
+        "text hole must not be appended at the root level"
+      )
+    })
+  })
+
+  it("mounts module-hoisted element reference at a template hole", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const html = `<section data-testid="hoist-hole">${KIRU_HOLE_MARKER}</section>`
+      const factory = _template(html, 1)
+      const hoistedButton = createElement("button", {
+        onclick: () => {},
+        children: "Increment",
+      })
+
+      kiru.mount(createHoledTemplate(factory, [hoistedButton]), container)
+
+      const root = container.querySelector('[data-testid="hoist-hole"]')!
+      assert.strictEqual(root.querySelector("button")?.textContent, "Increment")
+      assert.ok(
+        [...root.childNodes].some((n) => n.nodeType === Node.COMMENT_NODE)
+      )
+    })
+  })
+
   it("mounts host + component children across separate holes", async () => {
     await withJSDOM(async (container, kiru) => {
       const html = `<div>${KIRU_HOLE_MARKER}${KIRU_HOLE_MARKER}</div>`
@@ -153,6 +253,174 @@ describe("template holes", () => {
         "updated"
       )
       assertHoleChainHealthy(rootNode.child)
+    })
+  })
+
+  it("App shell: nested AnotherCounter badge stays inside component hole subtree", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const anotherHtml = `<div><h1>${KIRU_HOLE_MARKER}</h1>${KIRU_HOLE_MARKER}<span class="badge">OK</span></div>`
+      const count = kiru.signal(0)
+      const button = createElement("button", {
+        onclick: () => {},
+        children: "Increment",
+      })
+      const AnotherCounter = () =>
+        createHoledTemplate(
+          _template(anotherHtml, 2),
+          [["Count: ", count], button],
+          [
+            { kind: "text", anchor: 0 },
+            { kind: "node", anchor: 1 },
+          ]
+        )
+
+      const appHtml = `<div><h1>Static content</h1>${KIRU_HOLE_MARKER}${KIRU_HOLE_MARKER}</div>`
+      const toggle = createElement("button", { children: "Toggle" })
+      kiru.mount(
+        createHoledTemplate(
+          _template(appHtml, 2),
+          [toggle, createElement(AnotherCounter, {})],
+          [
+            { kind: "node", anchor: 0 },
+            { kind: "component", anchor: 1 },
+          ]
+        ),
+        container
+      )
+
+      const root = container.querySelector("div")!
+      assert.strictEqual(
+        root.querySelector(":scope > h1")?.textContent,
+        "Static content"
+      )
+      assert.strictEqual(
+        root.querySelector(":scope > button")?.textContent,
+        "Toggle"
+      )
+
+      const h1s = root.querySelectorAll("h1")
+      assert.strictEqual(h1s.length, 2)
+      assert.strictEqual(h1s[1]!.textContent, "Count: 0")
+
+      const badges = root.querySelectorAll("span.badge")
+      assert.strictEqual(badges.length, 1, "badge must not duplicate outside subtree")
+      assert.ok(
+        h1s[1]!.parentElement?.contains(badges[0]!),
+        "badge must live inside AnotherCounter shell"
+      )
+
+      const rootHtml = root.innerHTML
+      const staticH1Pos = rootHtml.indexOf("Static content")
+      const anotherH1Pos = rootHtml.indexOf("Count: 0")
+      const badgePos = rootHtml.indexOf('<span class="badge">OK</span>')
+      assert.ok(
+        staticH1Pos < anotherH1Pos && anotherH1Pos < badgePos,
+        "DOM order: app static, then AnotherCounter content, then badge"
+      )
+    })
+  })
+
+  it("mounts component hole at its own anchor among static siblings", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const html = `<div><h1>${KIRU_HOLE_MARKER}</h1>${KIRU_HOLE_MARKER}<span class="badge">OK</span><div>123</div>${KIRU_HOLE_MARKER}</div>`
+      const factory = _template(html, 3)
+      const count = kiru.signal(0)
+      const button = createElement("button", {
+        onclick: () => {},
+        children: "Increment",
+      })
+      const AnotherCounter = () =>
+        createElement("section", {
+          "data-testid": "another-counter",
+          children: "Another",
+        })
+
+      kiru.mount(
+        createHoledTemplate(
+          factory,
+          [["Count: ", count], button, createElement(AnotherCounter, {})],
+          [
+            { kind: "text", anchor: 0 },
+            { kind: "node", anchor: 1 },
+            { kind: "component", anchor: 2 },
+          ]
+        ),
+        container
+      )
+
+      const root = container.querySelector("div")!
+      const h1 = root.querySelector("h1")!
+      const another = root.querySelector('[data-testid="another-counter"]')
+      assert.strictEqual(h1.textContent, "Count: 0")
+      assert.ok(another, "component hole should mount")
+
+      const rootHtml = root.innerHTML
+      const anotherPos = rootHtml.indexOf('data-testid="another-counter"')
+      const badgePos = rootHtml.indexOf('<span class="badge">OK</span>')
+      const staticPos = rootHtml.indexOf("<div>123</div>")
+      assert.ok(anotherPos !== -1, "component hole should be in root html")
+      assert.ok(badgePos !== -1, "static badge should be in root html")
+      assert.ok(staticPos !== -1, "static div should be in root html")
+      assert.ok(
+        badgePos < staticPos && staticPos < anotherPos,
+        "component hole must mount at anchor 2 (after static siblings)"
+      )
+    })
+  })
+
+  it("preserves trailing component hole when middle conditional hole turns on", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const html = `<div><h1>Static content</h1>${KIRU_HOLE_MARKER}${KIRU_HOLE_MARKER}${KIRU_HOLE_MARKER}</div>`
+      const factory = _template(html, 3)
+      const button = createElement("button", { children: "Toggle" })
+      const Counter = () =>
+        createElement("section", {
+          "data-testid": "counter-hole",
+          children: "counter",
+        })
+      const AnotherCounter = () =>
+        createElement("section", {
+          "data-testid": "another-hole",
+          children: "another",
+        })
+      const regions = [
+        { kind: "node", anchor: 0 },
+        { kind: "conditional", anchor: 1 },
+        { kind: "component", anchor: 2 },
+      ] as const
+
+      kiru.mount(
+        createHoledTemplate(factory, [button, false, createElement(AnotherCounter, {})], regions),
+        container
+      )
+      assert.strictEqual(
+        container.querySelector('[data-testid="another-hole"]')?.textContent,
+        "another"
+      )
+
+      const app = container.__kiruNode!.app!
+      app.render(
+        createHoledTemplate(
+          factory,
+          [button, createElement(Counter, {}), createElement(AnotherCounter, {})],
+          regions
+        )
+      )
+
+      assert.strictEqual(
+        container.querySelector('[data-testid="counter-hole"]')?.textContent,
+        "counter"
+      )
+      assert.strictEqual(
+        container.querySelector('[data-testid="another-hole"]')?.textContent,
+        "another"
+      )
+      const root = container.querySelector("div")!
+      const rootHtml = root.innerHTML
+      const counterPos = rootHtml.indexOf('data-testid="counter-hole"')
+      const anotherPos = rootHtml.indexOf('data-testid="another-hole"')
+      assert.ok(counterPos !== -1 && anotherPos !== -1, rootHtml)
+      assert.ok(counterPos < anotherPos, "middle conditional hole must not displace trailing hole")
     })
   })
 

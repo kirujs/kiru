@@ -39,6 +39,18 @@ describe("template", () => {
     assert.strictEqual(tpl.html, html)
   })
 
+  it("composed _template literal merges child factory via toString", () => {
+    const child = _template('<span class="badge">OK</span>')
+    const parent = _template(
+      `<div><h1><!--#--></h1><!--#-->${child}<div>123</div></div>`,
+      2
+    )
+    const root = parent()
+    assert.ok(root.html.includes('class="badge"'))
+    assert.ok(root.html.includes("<div>123</div>"))
+    assert.strictEqual(String(child), '<span class="badge">OK</span>')
+  })
+
   it("mounts template children via reconciler", async () => {
     await withJSDOM(async (container, kiru) => {
       const $t0 = _template('<span class="badge">OK</span>')

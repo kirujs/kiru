@@ -9,7 +9,11 @@ export type {
   CompileRegionKind,
   RegionDomain,
 } from "./compileRegions.js"
-export { validateRegions, regionAt, regionTargetsSlot } from "./compileRegions.js"
+export {
+  validateRegions,
+  regionAt,
+  regionTargetsSlot,
+} from "./compileRegions.js"
 
 export const $KIRU_TEMPLATE = Symbol.for("kiru.template")
 
@@ -37,11 +41,13 @@ export function isTemplateRoot(thing: unknown): thing is TemplateRoot {
 }
 
 export function _template(html: string, holeCount = 0): TemplateFactory {
-  return () => ({
+  const factory: TemplateFactory = () => ({
     __kiruTemplate: $KIRU_TEMPLATE,
     html,
     holeCount,
   })
+  factory.toString = () => html
+  return factory
 }
 
 /** Tag a hoisted region children array for static list reconciliation. */
@@ -110,7 +116,10 @@ export function cloneTemplateDom(html: string): Element {
   const root = fragment.firstElementChild
   if (!root) {
     throw new KiruError({
-      message: `[kiru]: template HTML must contain a single root element: ${html.slice(0, 80)}`,
+      message: `[kiru]: template HTML must contain a single root element: ${html.slice(
+        0,
+        80
+      )}`,
     })
   }
   if (fragment.childElementCount > 1) {
@@ -177,17 +186,17 @@ export function markHoisted<T extends Kiru.Element>(element: T): T {
 }
 
 /** Attach slot-domain compile regions (and optional flags) to a jsx element. */
-export function regionElement<T extends Kiru.Element>(
-  element: T,
+export function regionElement(
+  element: Kiru.Element,
   regions: readonly CompileRegion[],
   flags?: number
-): T {
+): Kiru.Element {
   if (__DEV__) {
     validateRegions(regions, "slot")
   }
   const meta = element.meta ?? {}
   const mergedFlags =
-    flags !== undefined ? ((meta.flags ?? 0) | flags) : meta.flags
+    flags !== undefined ? (meta.flags ?? 0) | flags : meta.flags
   element.meta = {
     ...meta,
     ...(mergedFlags !== undefined ? { flags: mergedFlags } : {}),
@@ -195,4 +204,3 @@ export function regionElement<T extends Kiru.Element>(
   }
   return element
 }
-

@@ -93,9 +93,13 @@ Tests: `packages/lib/src/tests/unit/jsxStaticChildren.test.tsx`
 - `$STATIC_CHILDREN_LIST` symbol on `jsxs` / static `jsxDEV` child arrays
 - Dev: `assertStaticChildrenContract`, `parent.staticChildCount` length guard
 
-### Phase 2C — Vite JSX hoisting
+### Phase 2C — Vite JSX hoisting (+ setup-scope instance hoist)
 
 [`hoistJSX.ts`](../../packages/vite-plugin-kiru/src/codegen/hoistJSX.ts) with lexical scope in [`scope.ts`](../../packages/vite-plugin-kiru/src/codegen/scope.ts):
+
+**Three hoist tiers:** module (`const $kN` at file scope), setup (`const $kN` before `return () =>` for Counter-style components), inline `regionElement` fallback. Event-handler arrows are hoistable when they only close over bindings allowed for that tier.
+
+**Deferred slot reads:** When `experimental.staticHoisting` is on, the compiler may wrap a `jsxs` child expression in `() => (…)` if it contains a reactive signal **call** (e.g. `toggled() && <p>…</p>`) so the read happens in an `$INLINE_FN` child instead of the parent render. Manual `{() => …}` wrappers remain valid and are not double-wrapped. Signal identifiers passed as text bindings (e.g. `["Count: ", count]`) are not wrapped.
 
 - Factories: `kiru/jsx-runtime` (`jsx`, `jsxs`), `kiru/jsx-dev-runtime` (`jsxDEV`) — resolved via import bindings (supports aliases; locals shadow imports)
 - **Module hoistability:** JSX may lift to module `const $kN` when identifiers resolve to module-level bindings only (never setup/render locals or params). Module-scope **signal objects** in props (e.g. `bind:value={initialCount}` without `initialCount()`) are allowed; any **call** in the subtree stays dynamic. Siblings that remain dynamic are left inline (maximal hoisting).
@@ -339,11 +343,10 @@ See **[phase-2e-status.md](./phase-2e-status.md)** for the authoritative PR matr
 | ID | Status |
 |----|--------|
 | pr1–pr3 (core code) | Landed in repo |
-| pr1–pr3 (plan tests + `count()`) | Open — after callable signals |
-| pr3 (hydrate integration test) | Open |
+| Setup-scope instance hoist | Shipped — see [PHILOSOPHY](./PHILOSOPHY.md) JSX hoist tiers |
 | pr4-polish | Optional |
 
-Phases **1, 2A, 2B, 2C, 2D, 2E** are shipped.
+Phases **1, 2A, 2B, 2C, 2D, 2E** and **setup-scope hoist** are shipped.
 
 ---
 

@@ -7,6 +7,10 @@ import {
 import * as AST from "./ast.js"
 import { classifyTemplateHoleRegion } from "./compileRegions.js"
 import {
+  KIRU_TEMPLATE_REF_PREFIX,
+  tryFoldStaticComponentHtml,
+} from "./componentFold.js"
+import {
   blocksModuleHoist,
   isKiruJsxFactoryCall,
   isStaticLiteral,
@@ -20,6 +24,8 @@ export type TemplateSerializeCtx = {
   isJsxProd: (node: AstNode) => boolean
   isJsxs: (node: AstNode) => boolean
   isJsxDev: (node: AstNode) => boolean
+  /** Module body — used to resolve static component folds. */
+  bodyNodes?: readonly AstNode[]
   /** When true, reject holed shells with no static text (nested render fns). */
   strictHoledShell?: boolean
 }
@@ -85,8 +91,19 @@ export function serializeJsxCallToHtml(
 
 /** True when serialized shell HTML includes static text (not holes/tags only). */
 export function shellHtmlHasStaticContent(html: string): boolean {
+  if (html.includes(KIRU_TEMPLATE_REF_PREFIX)) return true
   const withoutHoles = html.replaceAll(KIRU_HOLE_MARKER, "")
   return /<[^>]+>[^<\s]/.test(withoutHoles)
+}
+
+/**
+ * True when the shell has static markup beside holes (e.g. `<div><button>Toggle</button><!--#--></div>`).
+ * Hole-only shells (`<div><!--#--></div>`) stay ineligible under strictHoledShell.
+ */
+export function shellHtmlHasStaticMarkupBesideHoles(html: string): boolean {
+  if (html.includes(KIRU_TEMPLATE_REF_PREFIX)) return false
+  const marked = html.replaceAll(KIRU_HOLE_MARKER, "\0")
+  return /<[a-z][\w-]*[^>]*>[^<\0\s]/.test(marked)
 }
 
 export function serializeJsxCallToTemplate(
@@ -118,7 +135,8 @@ export function serializeJsxCallToTemplate(
   if (
     ctx.strictHoledShell &&
     holeNodes.length > 0 &&
-    !shellHtmlHasStaticContent(html)
+    !shellHtmlHasStaticContent(html) &&
+    !shellHtmlHasStaticMarkupBesideHoles(html)
   ) {
     return null
   }
@@ -492,6 +510,10 @@ function arrayElementWouldProduceHole(
   ctx: TemplateSerializeCtx
 ): boolean {
   if (elem.type === "CallExpression" && isAnyJsxFactoryCall(elem, ctx)) {
+    const folded = tryFoldStaticComponentHtml(elem, ctx, (jsx) =>
+      serializeJsxCallToTemplate(jsx, ctx)
+    )
+    if (folded) return false
     const inner = serializeJsxCallToTemplate(elem, ctx)
     if (inner && inner.holeCount > 0) return true
     if (inner && inner.holeCount === 0) return false
@@ -531,13 +553,59 @@ function isRegionEligibleChildArray(
   return hasHole
 }
 
+/**
+ * Intrinsic host with static children and only event/bind props dynamic — emit static
+ * markup and one hole for the jsx call (props/events) at reconcile time.
+ */
+function trySerializeEventHostShell(
+  callNode: AstNode,
+  ctx: TemplateSerializeCtx,
+  holeNodes: AstNode[],
+  regions: CompileRegion[]
+): string | null {
+  const typeArg = callNode.arguments?.[0]
+  if (typeArg?.type !== "Literal" || typeof typeArg.value !== "string") {
+    return null
+  }
+  const propsArg = callNode.arguments?.[1]
+  if (!propsArg || propsArg.type !== "ObjectExpression") return null
+
+  let hasEventOrBind = false
+  for (const prop of propsArg.properties ?? []) {
+    if (prop.type !== "Property") return null
+    const key = propKeyName(prop)
+    if (!key || key === "children" || key === "key" || key === "ref") continue
+    if (key.startsWith("on") || key.startsWith("bind:")) {
+      hasEventOrBind = true
+      continue
+    }
+    if (!isTemplatePropValue(prop.value as AstNode, ctx)) return null
+  }
+  if (!hasEventOrBind) return null
+
+  const scratchHoles: AstNode[] = []
+  const scratchRegions: CompileRegion[] = []
+  const innerHtml = serializeChildrenToInnerHtml(
+    propsArg,
+    ctx,
+    scratchHoles,
+    scratchRegions
+  )
+  if (scratchHoles.length > 0) return null
+
+  pushTemplateHole(callNode, ctx, holeNodes, regions)
+  const props = collectStaticProps(propsArg, ctx)
+  return serializeStaticElementToHtml(typeArg.value as string, props, innerHtml)
+}
+
 function serializeChildInner(
   node: AstNode,
   ctx: TemplateSerializeCtx,
   holeNodes: AstNode[],
   regions: CompileRegion[]
 ): string {
-  if (isStaticLiteral(node)) {
+  // Only primitive literals encode as text; isStaticLiteral is also true for arrays/objects.
+  if (node.type === "Literal" && isStaticLiteral(node)) {
     return encodeStaticText(String(node.value ?? ""))
   }
   if (node.type === "ConditionalExpression" || node.type === "LogicalExpression") {
@@ -545,6 +613,12 @@ function serializeChildInner(
     return KIRU_HOLE_MARKER
   }
   if (node.type === "CallExpression" && isAnyJsxFactoryCall(node, ctx)) {
+    const eventHost = trySerializeEventHostShell(node, ctx, holeNodes, regions)
+    if (eventHost) return eventHost
+    const folded = tryFoldStaticComponentHtml(node, ctx, (jsx) =>
+      serializeJsxCallToTemplate(jsx, ctx)
+    )
+    if (folded) return folded
     const inner = serializeJsxCallToTemplate(node, ctx)
     if (inner && inner.holeCount === 0) return inner.html
     if (inner && inner.holeCount > 0) {

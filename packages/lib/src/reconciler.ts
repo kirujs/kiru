@@ -869,6 +869,30 @@ function unlinkTemplateHoleWeave(
   }
 }
 
+function nextStoredHoleHead(
+  heads: (VNode | null)[] | undefined,
+  fromIndex: number
+): VNode | null {
+  if (!heads) return null
+  for (let i = fromIndex + 1; i < heads.length; i++) {
+    const head = heads[i]
+    if (head) return head
+  }
+  return null
+}
+
+function prevStoredHoleHead(
+  heads: (VNode | null)[] | undefined,
+  fromIndex: number
+): VNode | null {
+  if (!heads) return null
+  for (let i = fromIndex - 1; i >= 0; i--) {
+    const head = heads[i]
+    if (head) return head
+  }
+  return null
+}
+
 /** Ephemeral hole slot parents are not walked by the scheduler; bubble to the template host. */
 function adoptTemplateHoleDeletions(template: VNode, slotParent: VNode): void {
   const pending = slotParent.deletions
@@ -973,13 +997,10 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
     const parentEl = anchor.parentNode as Element | null
     if (!parentEl) continue
 
-    const nextStoredHead =
-      i + 1 < holeCount ? vNode.templateHoleHeads?.[i + 1] ?? null : null
-    if (i > 0) {
-      unlinkTemplateHoleWeave(
-        vNode.templateHoleHeads?.[i - 1] ?? null,
-        vNode.templateHoleHeads?.[i] ?? null
-      )
+    const nextStoredHead = nextStoredHoleHead(vNode.templateHoleHeads, i)
+    const prevStoredHead = prevStoredHoleHead(vNode.templateHoleHeads, i)
+    if (prevStoredHead) {
+      unlinkTemplateHoleWeave(prevStoredHead, vNode.templateHoleHeads?.[i] ?? null)
     }
 
     const slotParent = createVNode(vNode, $FRAGMENT, {})

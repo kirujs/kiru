@@ -97,6 +97,42 @@ function MyComponent() {
     )
   })
 
+  it("matches Vite-resolved kiru jsx.js for jsx and jsxs", () => {
+    const resolved = "/@fs/C:/repos/kiru/kiru/packages/lib/dist/jsx.js"
+    assert.ok(matchesKiruJsxFactorySource(resolved, "jsx"))
+    assert.ok(matchesKiruJsxFactorySource(resolved, "jsxs"))
+    // Same physical module as dev; callee import name disambiguates jsxDEV vs jsx.
+    assert.ok(matchesKiruJsxFactorySource(resolved, "jsxDEV"))
+  })
+
+  it("isKiruJsxFactoryCall works with resolved jsx import path", () => {
+    const body = parseProgram(
+      `import { jsx, jsxs } from "/@fs/C:/repos/kiru/kiru/packages/lib/dist/jsx.js"`
+    )
+    const scope = buildModuleImportScope(body)
+    const resolve = (name: string) => scope.resolve(name)
+    assert.ok(
+      isKiruJsxFactoryCall(
+        {
+          type: "CallExpression",
+          callee: { type: "Identifier", name: "jsx" },
+        } as AstNode,
+        resolve,
+        "jsx"
+      )
+    )
+    assert.ok(
+      isKiruJsxFactoryCall(
+        {
+          type: "CallExpression",
+          callee: { type: "Identifier", name: "jsxs" },
+        } as AstNode,
+        resolve,
+        "jsxs"
+      )
+    )
+  })
+
   it("registerImportDeclaration adds jsx-runtime imports", () => {
     const body = parseProgram(
       `import { jsx, jsxs } from "kiru/jsx-runtime"`

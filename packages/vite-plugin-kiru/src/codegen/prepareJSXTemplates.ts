@@ -8,11 +8,21 @@ import {
 import { isKiruJsxFactoryCall } from "./scope.js"
 import { formatRegionsLiteral } from "./compileRegions.js"
 import {
+  bindingMatchesComponentRender,
+  parseTemplateRefMarkers,
+  serializeComponentLeafTemplate,
+} from "./componentFold.js"
+import {
   isTemplateShellEligibleCall,
   selectMaximalTemplateShellCalls,
+  serializeJsxCallToTemplate,
   type TemplateSerializeCtx,
   type TemplateShellCallSite,
 } from "./templateHTML.js"
+import {
+  buildTemplateFactoryExpr,
+  htmlUsesTemplateRefs,
+} from "./templateComposition.js"
 import type { CompileRegion } from "kiru/template"
 
 type AstNode = AST.AstNode
@@ -39,6 +49,7 @@ export function prepareJSXTemplates(ctx: TransformCTX) {
 
   const analysis: TemplateSerializeCtx = {
     resolve,
+    bodyNodes,
     isJsxProd: (node) =>
       isKiruJsxFactoryCall(node, resolve, "jsx") ||
       isKiruJsxFactoryCall(node, resolve, "jsxs"),
@@ -61,18 +72,11 @@ export function prepareJSXTemplates(ctx: TransformCTX) {
   const selected = selectMaximalTemplateShellCalls(calls, analysis)
   if (selected.length === 0) return
 
-  const bindings: TemplateBinding[] = []
-  let counter = 0
-  for (const { call: callNode, result } of selected) {
-    bindings.push({
-      node: callNode,
-      html: result.html,
-      holeCount: result.holeCount,
-      holeNodes: result.holeNodes,
-      regions: result.regions,
-      varName: `$t${counter++}`,
-    })
-  }
+  const { bindings, refVarMap } = planTemplateBindings(
+    selected,
+    bodyNodes,
+    analysis
+  )
 
   if (bindings.length === 0) return
 
@@ -82,7 +86,7 @@ export function prepareJSXTemplates(ctx: TransformCTX) {
   const moduleDecls: string[] = []
   for (const b of bindings) {
     if (hoistedVarByNode.has(b.node)) continue
-    moduleDecls.push(templateDecl(b))
+    moduleDecls.push(templateDecl(b, refVarMap))
   }
 
   const inline = bindings.filter((b) => !hoistedVarByNode.has(b.node))
@@ -115,7 +119,7 @@ export function prepareJSXTemplates(ctx: TransformCTX) {
     )
     src =
       src.slice(0, hoist.declStart) +
-      `${b.varName} = ${templateDeclExpr(b)}` +
+      `${b.varName} = ${templateDeclExpr(b, refVarMap)}` +
       src.slice(hoist.declEnd)
     src = src.replace(
       new RegExp(escapeRegExp(hoist.varName), "g"),
@@ -128,15 +132,121 @@ export function prepareJSXTemplates(ctx: TransformCTX) {
   ctx.code = new MagicString(code.toString())
 }
 
-function templateDecl(b: TemplateBinding): string {
-  return `const ${b.varName} = ${templateDeclExpr(b)}`
+function planTemplateBindings(
+  selected: { call: AstNode; result: { html: string; holeCount: number; holeNodes: AstNode[]; regions: CompileRegion[] } }[],
+  bodyNodes: AstNode[],
+  analysis: TemplateSerializeCtx
+): { bindings: TemplateBinding[]; refVarMap: Map<string, string> } {
+  let bindings: TemplateBinding[] = selected.map((s, i) => ({
+    node: s.call,
+    html: s.result.html,
+    holeCount: s.result.holeCount,
+    holeNodes: s.result.holeNodes,
+    regions: s.result.regions,
+    varName: `$t${i}`,
+  }))
+
+  const refNames = new Set<string>()
+  for (const b of bindings) {
+    for (const name of parseTemplateRefMarkers(b.html)) refNames.add(name)
+  }
+
+  for (const name of refNames) {
+    const hasRenderBinding = bindings.some((b) =>
+      bindingMatchesComponentRender(b.node, name, bodyNodes, analysis)
+    )
+    if (hasRenderBinding) continue
+    const leaf = serializeComponentLeafTemplate(name, analysis, (jsx) =>
+      serializeJsxCallToTemplate(jsx, analysis)
+    )
+    if (!leaf) continue
+    const renderInit = findComponentRenderJsxNode(name, bodyNodes, analysis)
+    bindings.push({
+      node: renderInit ?? bindings[0]!.node,
+      html: leaf.html,
+      holeCount: 0,
+      holeNodes: [],
+      regions: [],
+      varName: `$t${bindings.length}`,
+    })
+  }
+
+  bindings.sort((a, b) => {
+    const aLeaf = a.holeCount === 0 && !htmlUsesTemplateRefs(a.html)
+    const bLeaf = b.holeCount === 0 && !htmlUsesTemplateRefs(b.html)
+    if (aLeaf && !bLeaf) return -1
+    if (bLeaf && !aLeaf) return 1
+    return a.node.start - b.node.start
+  })
+
+  bindings = bindings.map((b, i) => ({ ...b, varName: `$t${i}` }))
+
+  const refVarMap = new Map<string, string>()
+  for (const name of refNames) {
+    const match = bindings.find(
+      (b) =>
+        b.holeCount === 0 &&
+        (bindingMatchesComponentRender(b.node, name, bodyNodes, analysis) ||
+          serializeComponentLeafTemplate(name, analysis, (jsx) =>
+            serializeJsxCallToTemplate(jsx, analysis)
+          )?.html === b.html)
+    )
+    if (match) refVarMap.set(name, match.varName)
+  }
+
+  return { bindings, refVarMap }
 }
 
-function templateDeclExpr(b: TemplateBinding): string {
-  if (b.holeCount === 0) {
-    return `_template(${JSON.stringify(b.html)})`
+function findComponentRenderJsxNode(
+  componentName: string,
+  bodyNodes: AstNode[],
+  ctx: TemplateSerializeCtx
+): AstNode | null {
+  for (const stmt of bodyNodes) {
+    const init = findBindingInitInStmt(stmt, componentName)
+    if (!init) continue
+    if (
+      init.type === "ArrowFunctionExpression" ||
+      init.type === "FunctionExpression"
+    ) {
+      const body = (init as { body?: AstNode }).body
+      if (body?.type === "CallExpression") return body
+      if (body?.type === "BlockStatement") {
+        const stmts = (body as { body?: AstNode[] }).body
+        const ret = stmts?.find((s) => s.type === "ReturnStatement")
+        const arg = (ret as { argument?: AstNode } | undefined)?.argument
+        if (arg?.type === "CallExpression") return arg
+      }
+    }
   }
-  return `_template(${JSON.stringify(b.html)}, ${b.holeCount})`
+  return null
+}
+
+function findBindingInitInStmt(stmt: AstNode, name: string): AstNode | null {
+  if (stmt.type === "VariableDeclaration") {
+    for (const decl of (stmt as { declarations?: AstNode[] }).declarations ?? []) {
+      const id = (decl as { id?: AstNode }).id
+      if (id?.type === "Identifier" && id.name === name) {
+        return (decl as { init?: AstNode }).init ?? null
+      }
+    }
+  }
+  if (stmt.type === "ExportNamedDeclaration") {
+    const decl = (stmt as { declaration?: AstNode }).declaration
+    if (decl) return findBindingInitInStmt(decl, name)
+  }
+  return null
+}
+
+function templateDecl(b: TemplateBinding, refVarMap: Map<string, string>): string {
+  return `const ${b.varName} = ${templateDeclExpr(b, refVarMap)}`
+}
+
+function templateDeclExpr(
+  b: TemplateBinding,
+  refVarMap: Map<string, string>
+): string {
+  return buildTemplateFactoryExpr(b.html, b.holeCount, refVarMap)
 }
 
 function templateUse(b: TemplateBinding, origSrc: string): string {

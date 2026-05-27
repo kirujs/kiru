@@ -44,6 +44,18 @@ export function classifyJsxSlotRegion(
   return { ...classifyChildSlotRegion(node, ctx), slot }
 }
 
+function unwrapFunctionExpressionBody(node: AstNode): AstNode | null {
+  if (
+    node.type !== "ArrowFunctionExpression" &&
+    node.type !== "FunctionExpression"
+  ) {
+    return null
+  }
+  const body = (node as { body?: AstNode }).body
+  if (!body || body.type === "BlockStatement") return null
+  return body
+}
+
 function classifyChildSlotRegion(
   node: AstNode,
   ctx: RegionAnalysisCtx
@@ -56,6 +68,16 @@ function classifyChildSlotRegion(
   }
   if (node.type === "LogicalExpression") {
     return { kind: "conditional" }
+  }
+  const fnBody = unwrapFunctionExpressionBody(node)
+  if (fnBody) {
+    if (
+      fnBody.type === "ConditionalExpression" ||
+      fnBody.type === "LogicalExpression"
+    ) {
+      return { kind: "conditional" }
+    }
+    return classifyChildSlotRegion(fnBody, ctx)
   }
   if (node.type === "ArrayExpression") {
     if (isRegionEligibleChildArray(node, ctx)) {
@@ -75,13 +97,16 @@ function classifyChildSlotRegion(
   if (isTextBindingExpression(node, ctx)) {
     return { kind: "text" }
   }
+  if (
+    node.type === "ArrowFunctionExpression" ||
+    node.type === "FunctionExpression"
+  ) {
+    return { kind: "insert" }
+  }
   return { kind: "insert" }
 }
 
 function isTextBindingExpression(node: AstNode, ctx: RegionAnalysisCtx): boolean {
-  if (node.type === "ArrowFunctionExpression" || node.type === "FunctionExpression") {
-    return true
-  }
   if (isReactiveSignalRead(node, ctx)) return true
   if (node.type === "Identifier" && node.name) {
     const binding = ctx.resolve(node.name)
@@ -90,6 +115,58 @@ function isTextBindingExpression(node: AstNode, ctx: RegionAnalysisCtx): boolean
   }
   if (node.type === "CallExpression") {
     if (isReactiveSignalRead(node, ctx)) return true
+  }
+  return false
+}
+
+/** Whether a jsxs static child should be wrapped in `() => …` to defer signal reads. */
+export function shouldDeferSlotRead(
+  node: AstNode,
+  ctx: RegionAnalysisCtx
+): boolean {
+  if (
+    node.type === "ArrowFunctionExpression" ||
+    node.type === "FunctionExpression"
+  ) {
+    return false
+  }
+  if (!isDynamicChildSlot(node, ctx)) return false
+  if (
+    node.type === "ConditionalExpression" ||
+    node.type === "LogicalExpression"
+  ) {
+    return true
+  }
+  return subtreeHasReactiveSignalCall(node, ctx)
+}
+
+function subtreeHasReactiveSignalCall(
+  node: AstNode,
+  ctx: RegionAnalysisCtx
+): boolean {
+  let found = false
+  AST.walk(node, {
+    CallExpression: (n, walkCtx) => {
+      if (isReactiveSignalRead(n, ctx)) {
+        found = true
+        walkCtx.exit()
+      }
+    },
+  })
+  return found
+}
+
+function isStaticChildrenJsxCall(
+  callNode: AstNode,
+  ctx: RegionAnalysisCtx
+): boolean {
+  if (ctx.isJsxs(callNode)) return true
+  if (ctx.isJsxDev(callNode)) {
+    const isStaticChildrenArg = callNode.arguments?.[3]
+    return (
+      isStaticChildrenArg?.type === "Literal" &&
+      isStaticChildrenArg.value === true
+    )
   }
   return false
 }
@@ -250,6 +327,22 @@ function isDynamicChildSlot(
     return true
   }
   return true
+}
+
+export function deferSlotReadsInJsxCall(
+  callNode: AstNode,
+  ctx: RegionAnalysisCtx,
+  wrap: (elem: AstNode) => void
+): void {
+  if (!isStaticChildrenJsxCall(callNode, ctx)) return
+  const elems = getChildrenArrayElements(callNode.arguments?.[1])
+  if (!elems) return
+  for (const elem of elems) {
+    if (!elem) continue
+    if (shouldDeferSlotRead(elem as AstNode, ctx)) {
+      wrap(elem as AstNode)
+    }
+  }
 }
 
 function jsxFactoryCallHasDynamicChildSlot(

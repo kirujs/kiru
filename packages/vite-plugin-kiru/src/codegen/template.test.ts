@@ -127,7 +127,8 @@ export function App() {
     )
     assert.match(out, /_template\([^)]*<!--#-->/)
     assert.match(out, /createHoledTemplate\(\$t\d+,/)
-    assert.match(out, /const \$k\d+ = markHoisted\(jsxDEV\("input"/)
+    assert.match(out, /^const \$k0 = markHoisted\(jsxDEV\("input"/m)
+    assert.match(out, /createHoledTemplate\(\$t\d+, \[\[[\s\S]*\$k0/)
     assert.match(out, /jsxDEV\(\s*Counter/)
   })
 

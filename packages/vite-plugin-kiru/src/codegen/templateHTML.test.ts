@@ -21,6 +21,7 @@ function buildCtx(source: string): TemplateSerializeCtx {
   const resolve = buildProgramBindingResolve(bodyNodes)
   return {
     resolve,
+    bodyNodes,
     isJsxProd: (node) =>
       isKiruJsxFactoryCall(node, resolve, "jsx") ||
       isKiruJsxFactoryCall(node, resolve, "jsxs"),
@@ -253,6 +254,175 @@ const el = jsx("div", {
     assert.strictEqual(result!.holeNodes[0]?.type, "Identifier")
     assert.ok(result!.html.includes("<!--#-->"))
     assert.ok(!result!.html.includes("<h1>"))
+  })
+
+  it("AnotherCounter outer div: folds Badge via ref under strictHoledShell", () => {
+    const source = `
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { signal } from "kiru"
+
+const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 0, false, void 0, this)
+
+export const AnotherCounter = () => {
+  const count = signal(0)
+  return () => (
+    jsxDEV("div", { children: [
+      jsxDEV("h1", { children: ["Count: ", count] }, void 0, true, void 0, this),
+      jsxDEV("button", { onclick: () => count.set((c) => c + 1), children: "Increment" }, void 0, false, void 0, this),
+      jsxDEV(Badge, {}, void 0, false, void 0, this),
+    ] }, void 0, true, void 0, this)
+  )
+}
+`
+    const ctx = buildCtx(source)
+    const calls = collectShellCallSites(source, ctx)
+    const divCall = calls.find((c) => {
+      const typeArg = c.node.arguments?.[0]
+      return typeArg?.type === "Literal" && typeArg.value === "div"
+    })
+    assert.ok(divCall, "outer div must be a shell call site")
+    const selected = selectMaximalTemplateShellCalls(calls, ctx)
+    const divShell = selected.find((s) => s.call === divCall!.node)
+    assert.ok(divShell, "outer div must serialize to a template shell")
+    assert.ok(divShell!.result.html.includes("<!--@kiru-tpl-ref:Badge@-->"))
+    assert.strictEqual(divShell!.result.holeCount, 2)
+  })
+
+  it("Counter outer div (jsx/jsxs): folds Badge, 2 holes for text and button", () => {
+    const source = `
+import { jsx, jsxs } from "kiru/jsx-runtime"
+import { signal } from "kiru"
+
+const count = signal(0)
+export const Counter = () => {
+  return jsxs("div", { children: [
+    jsxs("h1", { children: ["Count: ", count] }),
+    jsx("button", { onclick: () => count.set((c) => c + 1), children: "Increment" }),
+    jsx(Badge, {}),
+    jsx("div", { children: 123 }),
+  ] })
+}
+const Badge = () => jsx("span", { className: "badge", children: "OK" })
+`
+    const ctx = buildCtx(source)
+    const call = findOutermostJsxCall(source, ctx)
+    const result = serializeJsxCallToTemplate(call, ctx)
+    assert.ok(result)
+    assert.strictEqual(result!.holeCount, 2)
+    assert.ok(result!.html.includes("<!--@kiru-tpl-ref:Badge@-->"))
+    assert.ok(!result!.html.includes('<span class="badge">OK</span>'))
+    assert.ok(result!.html.includes("<div>123</div>"))
+  })
+
+  it("Toggler render div: strict holed shell with static button label", () => {
+    const source = `
+import { jsx, jsxs } from "kiru/jsx-runtime"
+import { signal } from "kiru"
+
+const Toggler = () => {
+  const toggled = signal(false)
+  return () => jsxs("div", { children: [
+    jsx("button", { onclick: () => toggled.set((t) => !t), children: "Toggle" }),
+    () => toggled() && jsx("p", { children: "Toggled" }),
+  ] })
+}
+`
+    const ctx = buildCtx(source)
+    const calls = collectShellCallSites(source, ctx)
+    const togglerDiv = calls.find(
+      (c) =>
+        c.strictHoledShell &&
+        c.node.arguments?.[0]?.type === "Literal" &&
+        c.node.arguments?.[0]?.value === "div"
+    )
+    assert.ok(togglerDiv, "Toggler render-root div should be a shell call site")
+    const selected = selectMaximalTemplateShellCalls(calls, ctx)
+    const shell = selected.find((s) => s.call === togglerDiv!.node)
+    assert.ok(shell, "Toggler div should serialize under strictHoledShell")
+    assert.ok(shell!.result.html.includes("<button>Toggle</button>"))
+    assert.strictEqual(shell!.result.holeCount, 2)
+    assert.ok(
+      shell!.result.regions.some((r) => r.kind === "conditional"),
+      "expected a conditional template region"
+    )
+  })
+
+  it("serializes jsxs div with multiple static literal children", () => {
+    const source = `
+import { jsxs } from "kiru/jsx-runtime"
+export const X = () => jsxs("div", { children: [123, "asdasd"] })
+`
+    const ctx = buildCtx(source)
+    const call = findOutermostJsxCall(source, ctx)
+    const result = serializeJsxCallToTemplate(call, ctx)
+    assert.ok(result)
+    assert.strictEqual(result!.holeCount, 0)
+    assert.ok(result!.html.includes("<div>123asdasd</div>"))
+  })
+
+  it("AnotherCounter outer div (jsx/jsxs): folds Badge via ref under strictHoledShell", () => {
+    const source = `
+import { jsx, jsxs } from "kiru/jsx-runtime"
+import { signal } from "kiru"
+
+const Badge = () => jsx("span", { className: "badge", children: "OK" })
+
+export const AnotherCounter = () => {
+  const count = signal(0)
+  return () => jsxs("div", { children: [
+    jsxs("h1", { children: ["Count: ", count] }),
+    jsx("button", { onclick: () => count.set((c) => c + 1), children: "Increment" }),
+    jsx(Badge, {}),
+  ] })
+}
+`
+    const ctx = buildCtx(source)
+    const calls = collectShellCallSites(source, ctx)
+    const divCall = calls.find((c) => {
+      const typeArg = c.node.arguments?.[0]
+      return typeArg?.type === "Literal" && typeArg.value === "div"
+    })
+    assert.ok(divCall)
+    const selected = selectMaximalTemplateShellCalls(calls, ctx)
+    const divShell = selected.find((s) => s.call === divCall!.node)
+    assert.ok(divShell)
+    assert.ok(divShell!.result.html.includes("<!--@kiru-tpl-ref:Badge@-->"))
+    assert.strictEqual(divShell!.result.holeCount, 2)
+  })
+
+  it("Counter outer div: folds Badge, 2 holes for text and button", () => {
+    const source = `
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { signal } from "kiru"
+
+const count = signal(0)
+export const Counter = () => {
+  return jsxDEV("div", { children: [
+    jsxDEV("h1", { children: ["Count: ", count] }, void 0, true, void 0, this),
+    jsxDEV("button", { onclick: () => count.set((c) => c + 1), children: "Increment" }, void 0, false, void 0, this),
+    jsxDEV(Badge, {}, void 0, false, void 0, this),
+    jsxDEV("div", { children: 123 }, void 0, true, void 0, this),
+  ] }, void 0, true, void 0, this)
+}
+const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 0, false, void 0, this)
+`
+    const ctx = buildCtx(source)
+    const call = findOutermostJsxCall(source, ctx)
+    const result = serializeJsxCallToTemplate(call, ctx)
+    assert.ok(result)
+    assert.strictEqual(result!.holeCount, 2)
+    assert.ok(result!.html.includes("<!--@kiru-tpl-ref:Badge@-->"))
+    assert.ok(!result!.html.includes('<span class="badge">OK</span>'))
+    assert.ok(result!.html.includes("<div>123</div>"))
+    assert.strictEqual(result!.regions.length, 2)
+    assert.strictEqual(result!.regions[0]?.kind, "text")
+    assert.strictEqual(result!.regions[0]?.anchor, 0)
+    assert.strictEqual(result!.regions[1]?.kind, "node")
+    assert.strictEqual(result!.regions[1]?.anchor, 1)
+    assert.ok(
+      result!.regions.every((r) => r.kind !== "component"),
+      "folded Badge must not produce a component hole"
+    )
   })
 
   it("rejects bind: props", () => {

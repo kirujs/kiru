@@ -3,6 +3,7 @@ import assert from "node:assert"
 import { parseAst } from "rollup/parseAst"
 import { MagicString } from "./shared.js"
 import { prepareJSXHoisting } from "./hoistJSX.js"
+import { applyJsxHoistAndTemplates } from "./jsxHoistPipeline.js"
 
 function transformHoist(source: string): string {
   const ast = parseAst(source, { allowReturnOutsideFunction: true })
@@ -16,6 +17,20 @@ function transformHoist(source: string): string {
     log: () => {},
   })
   return code.toString()
+}
+
+function transformPipeline(source: string): string {
+  const ast = parseAst(source, { allowReturnOutsideFunction: true })
+  const ctx = {
+    code: new MagicString(source),
+    ast,
+    isBuild: false,
+    fileLinkFormatter: (id: string) => id,
+    filePath: "/project/src/counter.tsx",
+    log: () => {},
+  }
+  applyJsxHoistAndTemplates(ctx)
+  return ctx.code.toString()
 }
 
 describe("prepareJSXHoisting", () => {
@@ -350,6 +365,23 @@ export function Page() {
     assert.match(out, /return \(\) =>[\s\S]*jsxs\("div"/)
   })
 
+  it("auto-wraps signal-reading jsxs slot in render fn", () => {
+    const out = transformPipeline(`
+import { jsx, jsxs } from "kiru/jsx-runtime"
+import { signal } from "kiru"
+
+const Toggler = () => {
+  const toggled = signal(false)
+  return () => jsxs("div", { children: [
+    jsx("button", { onclick: () => toggled.set((t) => !t), children: "Toggle" }),
+    toggled() && jsx("p", { children: "Toggled" }),
+  ] })
+}
+`)
+    assert.match(out, /\(\) => \(toggled\(\) &&/)
+    assert.match(out, /createHoledTemplate\(\$t\d+,[\s\S]*kind:"conditional",anchor:1/)
+  })
+
   it("does not hoist jsx with inline fn children that close over render locals", () => {
     const out = transformHoist(`
 import { jsxDEV } from "kiru/jsx-dev-runtime"
@@ -377,7 +409,32 @@ export default function Page() {
     assert.match(out, /nav\?\.from/)
   })
 
-  it("does not hoist render JSX that closes over setup-scoped signals", () => {
+  it("setup-hoists render JSX that closes over setup-scoped signal identifier", () => {
+    const out = transformHoist(`
+import { jsxs, jsx } from "kiru/jsx-runtime"
+import { signal } from "kiru"
+
+export function Page() {
+  const count = signal(0)
+  return () =>
+    jsxs("div", {
+      children: [
+        jsx("span", { children: "static" }),
+        jsx("span", { children: count }),
+      ],
+    })
+}
+`)
+    assert.doesNotMatch(out, /^const \$k\d+ = jsxs\(/m)
+    assert.match(out, /const count = signal\(0\)/)
+    assert.match(
+      out,
+      /const count = signal\(0\)[\s\S]*const \$k\d+ = regionElement\(jsxs/
+    )
+    assert.match(out, /return \(\) =>\s*\n?\s*\$k\d+/)
+  })
+
+  it("does not setup-hoist render root when a slot uses count()", () => {
     const out = transformHoist(`
 import { jsxs, jsx } from "kiru/jsx-runtime"
 import { signal } from "kiru"
@@ -393,9 +450,11 @@ export function Page() {
     })
 }
 `)
-    assert.doesNotMatch(out, /const \$k\d+ = jsxs\(/)
+    assert.doesNotMatch(
+      out,
+      /const count = signal\(0\)[\s\S]*const \$k\d+ = regionElement\(jsxs/
+    )
     assert.match(out, /return \(\) =>/)
-    assert.match(out, /jsxs\("div"/)
   })
 
   it("does not hoist when setup().derive feeds render JSX", () => {
@@ -411,6 +470,55 @@ const Counter = () => {
 }
 `)
     assert.doesNotMatch(out, /const \$k\d+ = jsxs\(/)
+  })
+
+  it("transforms sandbox Counter shape (direct return) with 2-hole shell and hoisted button", () => {
+    const out = transformPipeline(`
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { signal } from "kiru"
+
+const count = signal(0)
+export const Counter = () => {
+  return jsxDEV("div", { children: [
+    jsxDEV("h1", { children: ["Count: ", count] }, void 0, true, void 0, this),
+    jsxDEV("button", { onclick: () => count.set((c) => c + 1), children: "Increment" }, void 0, false, void 0, this),
+    jsxDEV(Badge, {}, void 0, false, void 0, this),
+    jsxDEV("div", { children: 123 }, void 0, true, void 0, this),
+  ] }, void 0, true, void 0, this)
+}
+const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 0, false, void 0, this)
+`)
+    assert.match(out, /const count = signal\(0\)/)
+    assert.match(out, /^const \$k0 = jsxDEV\("button"/m)
+    assert.match(out, /\$t\d+ = _template\([^)]*<span class=\\"badge\\">OK<\/span>/)
+    assert.match(out, /_template\([^)]*, 2\)/)
+    assert.match(
+      out,
+      /createHoledTemplate\(\$t\d+, \[\[[\s\S]*\], \$k0\], \[\{kind:"text",anchor:0\},\{kind:"node",anchor:1\}\]/
+    )
+    assert.doesNotMatch(out, /\{kind:"component"/)
+    assert.match(out, /Badge = \(\) => \$t\d+\(\)/)
+  })
+
+  it("allows onclick handler closing over module signal on hoisted jsxs", () => {
+    const out = transformHoist(`
+import { jsxs, jsx } from "kiru/jsx-runtime"
+import { signal } from "kiru"
+
+const count = signal(0)
+
+export function Page() {
+  return () =>
+    jsxs("div", {
+      children: [
+        jsx("span", { children: count }),
+        jsx("button", { onclick: () => count.set((c) => c + 1), children: "+" }),
+      ],
+    })
+}
+`)
+    assert.match(out, /const \$k\d+ = regionElement\(jsxs/)
+    assert.match(out, /return \(\) =>\s*\n?\s*\$k\d+/)
   })
 
   it("assigns compile regions via regionElement inside render arrow", () => {
@@ -623,6 +731,58 @@ export function Nav() {
 `)
     assert.doesNotMatch(out, /const \$k\d+ = jsxDEV\(Link/)
     assert.match(out, /return jsxDEV\(Link/)
+  })
+
+  it("setup-hoists createHoledTemplate hole payloads in return ()=> render", () => {
+    const out = transformHoist(`
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { signal } from "kiru"
+import { _template, createHoledTemplate, regionElement } from "kiru/template"
+
+const $tBadge = _template("<span class=\\"badge\\">OK</span>")
+const $t0 = _template(\`<div><!--#--><!--#-->\${$tBadge}<div>123</div></div>\`, 2)
+
+export const Counter = () => {
+  const count = signal(0)
+  return () =>
+    createHoledTemplate($t0, [
+      regionElement(
+        jsxDEV("h1", { children: ["Count: ", count] }, void 0, true, void 0, this),
+        [{kind:"text",slot:1}]
+      ),
+      jsxDEV("button", { onclick: () => count.set((c) => c + 1), children: "Increment" }, void 0, false, void 0, this),
+    ], [{kind:"node",anchor:0},{kind:"node",anchor:1}])
+}
+`)
+    assert.match(out, /const \$k\d+ = regionElement\(\s*jsxDEV\("h1"/)
+    assert.match(out, /const \$k\d+ = jsxDEV\("button"/)
+    assert.match(
+      out,
+      /return \(\) =>[\s\S]*createHoledTemplate\(\$t0, \[\s*\$k\d+,\s*\$k\d+,?\s*\]/
+    )
+  })
+
+  it("does not setup-hoist createHoledTemplate hole payload when payload uses count()", () => {
+    const out = transformHoist(`
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { signal } from "kiru"
+import { _template, createHoledTemplate } from "kiru/template"
+
+const $t0 = _template("<div><!--#--></div>", 1)
+
+export const Counter = () => {
+  const count = signal(0)
+  return () =>
+    createHoledTemplate($t0, [
+      jsxDEV("h1", { children: ["Count: ", count()] }, void 0, true, void 0, this),
+    ], [{kind:"node",anchor:0}])
+}
+`)
+    assert.doesNotMatch(
+      out,
+      /const count = signal\(0\)[\s\S]*const \$k\d+ = jsxDEV\("h1"/
+    )
+    assert.match(out, /count\(\)/)
   })
 
   it("does not hoist layout shell when children is a destructured param", () => {

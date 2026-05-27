@@ -98,7 +98,10 @@ export function matchesKiruJsxFactorySource(
   if (imported === "jsx" || imported === "jsxs") {
     return (
       matchesSource(s, { source: "kiru/jsx-runtime" }) ||
-      (s.includes("jsx-runtime") && !s.includes("jsx-dev-runtime"))
+      (s.includes("jsx-runtime") && !s.includes("jsx-dev-runtime")) ||
+      (/\/kiru/i.test(s) &&
+        /\/jsx\.js$/.test(s) &&
+        !s.includes("jsx-dev-runtime"))
     )
   }
   return false
@@ -228,6 +231,12 @@ export function blocksModuleHoist(binding: BindingInfo | null): boolean {
     default:
       return true
   }
+}
+
+/** Setup-scope hoist: only render-local bindings are forbidden. */
+export function blocksSetupHoist(binding: BindingInfo | null): boolean {
+  if (!binding) return true
+  return binding.kind === "renderLocal"
 }
 
 export function bindingKindAtDepth(

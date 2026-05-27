@@ -4,9 +4,13 @@ import {
   getCompileRegionsForJsxs,
 } from "./compileRegions.js"
 import { MagicString, TransformCTX } from "./shared.js"
-import { walkProgramBody } from "./scopeWalk.js"
+import {
+  buildProgramBindingResolve,
+  walkProgramBody,
+} from "./scopeWalk.js"
 import {
   blocksModuleHoist,
+  blocksSetupHoist,
   isKiruJsxFactoryCall,
   isModuleSignalBinding,
   isSignalFactoryCall,
@@ -27,6 +31,23 @@ type AnalysisCtx = {
   isJsxProd: (node: AstNode) => boolean
   isJsxs: (node: AstNode) => boolean
   isJsxDev: (node: AstNode) => boolean
+}
+
+type HoistTier = "module" | "setup"
+
+type BindingBlocksFn = (binding: BindingInfo | null) => boolean
+
+type SetupHoistCandidate = {
+  rootJsx: AstNode
+  /** Setup `return () =>` statement — insert `const $kN` immediately before. */
+  insertBefore: AstNode
+}
+
+type SetupHolePayloadCandidate = {
+  exprNode: AstNode
+  jsxNode: AstNode
+  /** Setup `return () =>` statement — insert `const $kN` immediately before. */
+  insertBefore: AstNode
 }
 
 function createAnalysisCtx(
@@ -57,10 +78,24 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
     node: AstNode
     regions: import("kiru/template").CompileRegion[]
   }[] = []
+  const setupHoistCandidates: SetupHoistCandidate[] = []
+  const setupHolePayloadCandidates: SetupHolePayloadCandidate[] = []
 
   const scope = walkProgramBody(bodyNodes, {
     onCallExpression: (node, walkCtx) => {
       const analysis = createAnalysisCtx(walkCtx.resolve)
+      const setupCand = findSetupRenderHoistCandidate(node, walkCtx, analysis)
+      if (setupCand) {
+        setupHoistCandidates.push(setupCand)
+      }
+      if (isCreateHoledTemplateCall(node)) {
+        const insertBefore = findSetupRenderInsertBefore(node, walkCtx)
+        if (insertBefore) {
+          setupHolePayloadCandidates.push(
+            ...findSetupHolePayloadCandidates(node, analysis, insertBefore)
+          )
+        }
+      }
       if (canHoistToModule(node, analysis)) {
         hoistableCalls.push(node)
       }
@@ -87,10 +122,21 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
   const resolve = (name: string) => scope.resolve(name)
   const analysis = createAnalysisCtx(resolve)
 
+  const setupHoists = dedupeSetupHoistCandidates(setupHoistCandidates).filter(
+    (c) => canHoistToSetup(c.rootJsx, analysis)
+  )
+  const setupHoleHoists = dedupeSetupHolePayloadCandidates(
+    setupHolePayloadCandidates
+  ).filter((c) => canHoistHolePayloadToSetup(c, analysis))
+  const setupRootNodes = new Set(setupHoists.map((c) => c.rootJsx))
+  const setupHoleExprNodes = new Set(setupHoleHoists.map((c) => c.exprNode))
+
   if (
     hoistableCalls.length === 0 &&
     hoistableRegionArrays.length === 0 &&
-    dynamicSlotCalls.length === 0
+    dynamicSlotCalls.length === 0 &&
+    setupHoists.length === 0 &&
+    setupHoleHoists.length === 0
   ) {
     return
   }
@@ -102,7 +148,11 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
   const regionArraysToHoist = new Set(hoistableRegionArrays)
 
   const callsForHoist = hoistableCalls.filter(
-    (call) => !isDirectChildOfAnyArray(call, regionArraysToHoist)
+    (call) =>
+      !isDirectChildOfAnyArray(call, regionArraysToHoist) &&
+      !setupRootNodes.has(call) &&
+      !setupHoleExprNodes.has(call) &&
+      !isStrictlyInsideAnyNode(call, setupRootNodes)
   )
 
   const maximalHoists = filterMaximalHoistCandidates(callsForHoist)
@@ -164,6 +214,66 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
     else needsRegionElement = true
   }
 
+  const regionsByJsxNode = new Map<
+    AstNode,
+    import("kiru/template").CompileRegion[]
+  >()
+  for (const { node, regions } of dynamicSlotCalls) {
+    regionsByJsxNode.set(node, regions)
+  }
+
+  const setupHoistDecls: {
+    insertBefore: AstNode
+    replaceNode: AstNode
+    varName: string
+    codeExpr: string
+  }[] = []
+  for (const candidate of setupHoists) {
+    const varName = `$k${counter++}`
+    let codeExpr = source.slice(
+      candidate.rootJsx.start,
+      candidate.rootJsx.end
+    )
+    const wrapped = buildRegionElementWrap(
+      candidate.rootJsx,
+      analysis,
+      codeExpr,
+      "setup"
+    )
+    if (wrapped) {
+      codeExpr = wrapped
+      if (wrapped.startsWith("markHoisted(")) needsMarkHoisted = true
+      else needsRegionElement = true
+    } else {
+      const regions =
+        regionsByJsxNode.get(candidate.rootJsx) ??
+        getCompileRegionsForJsxs(candidate.rootJsx, analysis)
+      if (regions && regions.length > 0) {
+        codeExpr = `regionElement(${codeExpr}, ${formatRegionsLiteral(regions)})`
+        needsRegionElement = true
+      }
+    }
+    setupHoistDecls.push({
+      insertBefore: candidate.insertBefore,
+      replaceNode: candidate.rootJsx,
+      varName,
+      codeExpr,
+    })
+    hoistedNodes.add(candidate.rootJsx)
+  }
+  for (const candidate of setupHoleHoists) {
+    const varName = `$k${counter++}`
+    const codeExpr = source.slice(candidate.exprNode.start, candidate.exprNode.end)
+    setupHoistDecls.push({
+      insertBefore: candidate.insertBefore,
+      replaceNode: candidate.exprNode,
+      varName,
+      codeExpr,
+    })
+    hoistedNodes.add(candidate.exprNode)
+    hoistedNodes.add(candidate.jsxNode)
+  }
+
   // Hoist leaf replacements first, then wrap mixed parents with the updated tree.
   for (let i = allHoistables.length - 1; i >= 0; i--) {
     const h = allHoistables[i]!
@@ -171,11 +281,24 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
     code.update(h.node.start, h.node.end, h.varName)
   }
 
+  for (const { insertBefore, replaceNode, varName, codeExpr } of [
+    ...setupHoistDecls,
+  ].sort(
+    (a, b) => b.replaceNode.start - a.replaceNode.start
+  )) {
+    code.appendLeft(
+      insertBefore.start,
+      `const ${varName} = ${codeExpr};\n`
+    )
+    code.update(replaceNode.start, replaceNode.end, varName)
+  }
+
   const sortedDynamicSlots = [...dynamicSlotCalls].sort(
     (a, b) => b.node.start - a.node.start
   )
   for (const { node, regions } of sortedDynamicSlots) {
     if (hoistedNodes.has(node)) continue
+    if (isStrictlyInsideAnyNode(node, setupRootNodes)) continue
     const current = code.slice(node.start, node.end)
     code.update(
       node.start,
@@ -231,7 +354,7 @@ function isCreateHoledTemplateRegionHole(
 
 function canHoistRegionArray(arrayNode: AstNode, ctx: AnalysisCtx): boolean {
   if (arrayNode.type !== "ArrayExpression") return false
-  if (expressionReferencesBlockedBinding(arrayNode, ctx)) return false
+  if (expressionReferencesBinding(arrayNode, ctx, blocksModuleHoist)) return false
   const elems = (
     (arrayNode as { elements?: (AstNode | null)[] }).elements ?? []
   ).filter(Boolean) as AstNode[]
@@ -348,13 +471,220 @@ function isIntrinsicJsxTag(typeArg: AstNode | null | undefined): boolean {
   return typeArg?.type === "Literal" && typeof typeArg.value === "string"
 }
 
+function blocksForTier(tier: HoistTier): BindingBlocksFn {
+  return tier === "module" ? blocksModuleHoist : blocksSetupHoist
+}
+
 function canHoistToModule(callNode: AstNode, ctx: AnalysisCtx): boolean {
   if (!isJsxFactoryCall(callNode, ctx)) return false
   if (!isIntrinsicJsxTag(callNode.arguments?.[0])) return false
-  if (!isHoistableJsxCall(callNode, ctx, false)) return false
-  if (expressionReferencesBlockedBinding(callNode, ctx)) return false
+  if (!isHoistableJsxCall(callNode, ctx, false, "module")) return false
+  if (expressionReferencesBinding(callNode, ctx, blocksModuleHoist)) return false
   if (subtreeHasImpureCall(callNode, ctx)) return false
   return true
+}
+
+function canHoistToSetup(callNode: AstNode, ctx: AnalysisCtx): boolean {
+  if (!isJsxFactoryCall(callNode, ctx)) return false
+  if (!isIntrinsicJsxTag(callNode.arguments?.[0])) return false
+  if (!isHoistableJsxCall(callNode, ctx, false, "setup")) return false
+  if (expressionReferencesBinding(callNode, ctx, blocksSetupHoist)) return false
+  if (subtreeHasImpureCall(callNode, ctx)) return false
+  return true
+}
+
+function nodeContains(outer: AstNode, inner: AstNode): boolean {
+  return inner.start >= outer.start && inner.end <= outer.end
+}
+
+function isStrictlyInsideAnyNode(
+  node: AstNode,
+  containers: Set<AstNode>
+): boolean {
+  for (const outer of containers) {
+    if (outer !== node && nodeContains(outer, node)) return true
+  }
+  return false
+}
+
+function dedupeSetupHoistCandidates(
+  candidates: SetupHoistCandidate[]
+): SetupHoistCandidate[] {
+  const byRoot = new Map<number, SetupHoistCandidate>()
+  for (const c of candidates) {
+    byRoot.set(c.rootJsx.start, c)
+  }
+  return [...byRoot.values()]
+}
+
+function dedupeSetupHolePayloadCandidates(
+  candidates: SetupHolePayloadCandidate[]
+): SetupHolePayloadCandidate[] {
+  const byExpr = new Map<number, SetupHolePayloadCandidate>()
+  for (const c of candidates) {
+    byExpr.set(c.exprNode.start, c)
+  }
+  return [...byExpr.values()]
+}
+
+function findSetupRenderInsertBefore(
+  renderExprNode: AstNode,
+  walkCtx: import("./scopeWalk.js").ScopeWalkContext
+): AstNode | null {
+  if (walkCtx.fnDepth !== 2) return null
+  const stack = walkCtx.stack
+  for (const n of stack) {
+    if (n.type !== "ReturnStatement") continue
+    const renderFn = (n as { argument?: AstNode }).argument
+    if (!renderFn || renderFn.type !== "ArrowFunctionExpression") continue
+    const renderParams = (renderFn as { params?: AstNode[] }).params ?? []
+    if (renderParams.length > 0) continue
+    const body = (renderFn as { body?: AstNode }).body
+    if (!isRenderBodySingleExpression(body, renderExprNode)) continue
+    return n
+  }
+  return null
+}
+
+function findSetupHolePayloadCandidates(
+  createHoledTemplateCall: AstNode,
+  ctx: AnalysisCtx,
+  insertBefore: AstNode
+): SetupHolePayloadCandidate[] {
+  if (!isCreateHoledTemplateCall(createHoledTemplateCall)) return []
+  const holesArg = createHoledTemplateCall.arguments?.[1]
+  if (!holesArg || holesArg.type !== "ArrayExpression") return []
+  const out: SetupHolePayloadCandidate[] = []
+  for (const hole of (holesArg as { elements?: (AstNode | null)[] }).elements ?? []) {
+    if (!hole) continue
+    const candidate = extractSetupHoistableHolePayload(hole, ctx)
+    if (!candidate) continue
+    out.push({
+      exprNode: candidate.exprNode,
+      jsxNode: candidate.jsxNode,
+      insertBefore,
+    })
+  }
+  return out
+}
+
+function extractSetupHoistableHolePayload(
+  node: AstNode,
+  ctx: AnalysisCtx
+): { exprNode: AstNode; jsxNode: AstNode } | null {
+  if (
+    node.type === "CallExpression" &&
+    (isJsxFactoryCall(node, ctx) || looksLikeJsxFactoryCall(node))
+  ) {
+    return { exprNode: node, jsxNode: node }
+  }
+  if (node.type !== "CallExpression") return null
+  const callee = node.callee
+  if (callee?.type !== "Identifier" || callee.name !== "regionElement") return null
+  const jsxNode = node.arguments?.[0]
+  if (!jsxNode || jsxNode.type !== "CallExpression") return null
+  if (!(isJsxFactoryCall(jsxNode, ctx) || looksLikeJsxFactoryCall(jsxNode))) {
+    return null
+  }
+  return { exprNode: node, jsxNode }
+}
+
+function looksLikeJsxFactoryCall(node: AstNode): boolean {
+  if (node.type !== "CallExpression") return false
+  const callee = node.callee
+  return (
+    callee?.type === "Identifier" &&
+    (callee.name === "jsx" || callee.name === "jsxs" || callee.name === "jsxDEV")
+  )
+}
+
+function canHoistHolePayloadToSetup(
+  candidate: SetupHolePayloadCandidate,
+  ctx: AnalysisCtx
+): boolean {
+  if (!isIntrinsicJsxTag(candidate.jsxNode.arguments?.[0])) return false
+  if (subtreeHasImpureCallForSetupHole(candidate.jsxNode, ctx)) return false
+  return true
+}
+
+function subtreeHasImpureCallForSetupHole(node: AstNode, ctx: AnalysisCtx): boolean {
+  let found = false
+  AST.walk(node, {
+    ArrowFunctionExpression: (_n, walkCtx) => {
+      // Deferred callbacks are not executed during render-time expression evaluation.
+      walkCtx.skipDescent()
+    },
+    FunctionExpression: (_n, walkCtx) => {
+      // Deferred callbacks are not executed during render-time expression evaluation.
+      walkCtx.skipDescent()
+    },
+    CallExpression: (n, walkCtx) => {
+      if (isJsxFactoryCall(n, ctx) || looksLikeJsxFactoryCall(n)) return
+      if (isSignalFactoryCall(n, ctx.resolve)) return
+      found = true
+      walkCtx.exit()
+    },
+  })
+  return found
+}
+
+function findSetupRenderHoistCandidate(
+  jsxNode: AstNode,
+  walkCtx: import("./scopeWalk.js").ScopeWalkContext,
+  ctx: AnalysisCtx
+): SetupHoistCandidate | null {
+  if (!isJsxFactoryCall(jsxNode, ctx)) return null
+  const insertBefore = findSetupRenderInsertBefore(jsxNode, walkCtx)
+  if (!insertBefore) return null
+  return { rootJsx: jsxNode, insertBefore }
+}
+
+function unwrapExpression(node: AstNode | undefined): AstNode | undefined {
+  let current = node
+  while (current) {
+    if (current.type === "ParenthesizedExpression") {
+      current = (current as { expression?: AstNode }).expression
+      continue
+    }
+    if (current.type === "ExpressionStatement") {
+      current = (current as { expression?: AstNode }).expression
+      continue
+    }
+    break
+  }
+  return current
+}
+
+function isRenderBodySingleExpression(
+  body: AstNode | undefined,
+  exprNode: AstNode
+): boolean {
+  if (!body) return false
+  const unwrapped = unwrapExpression(body)
+  if (unwrapped === exprNode) return true
+  if (unwrapped?.type === "BlockStatement") {
+    const stmts = (unwrapped as { body?: AstNode[] }).body
+    if (stmts?.length === 1 && stmts[0]?.type === "ReturnStatement") {
+      return unwrapExpression(stmts[0].argument) === exprNode
+    }
+  }
+  return false
+}
+
+/** JSX roots that setup-scope hoisting will absorb (skip template shells on these subtrees). */
+export function collectSetupHoistRenderRoots(bodyNodes: AstNode[]): Set<AstNode> {
+  const resolve = buildProgramBindingResolve(bodyNodes)
+  const analysis = createAnalysisCtx(resolve)
+  const roots = new Set<AstNode>()
+  walkProgramBody(bodyNodes, {
+    onCallExpression: (node, walkCtx) => {
+      const cand = findSetupRenderHoistCandidate(node, walkCtx, analysis)
+      if (cand && canHoistToSetup(cand.rootJsx, analysis)) {
+        roots.add(cand.rootJsx)
+      }
+    },
+  })
+  return roots
 }
 
 function isJsxFactoryCall(callNode: AstNode, ctx: AnalysisCtx): boolean {
@@ -364,7 +694,8 @@ function isJsxFactoryCall(callNode: AstNode, ctx: AnalysisCtx): boolean {
 function isHoistableJsxCall(
   callNode: AstNode,
   ctx: AnalysisCtx,
-  fullyStatic: boolean
+  fullyStatic: boolean,
+  tier: HoistTier = "module"
 ): boolean {
   if (!isJsxFactoryCall(callNode, ctx)) return false
 
@@ -372,7 +703,7 @@ function isHoistableJsxCall(
   if (!typeArg) return false
 
   const propsArg = callNode.arguments?.[1]
-  if (!isHoistableProps(propsArg, ctx, fullyStatic)) return false
+  if (!isHoistableProps(propsArg, ctx, fullyStatic, tier)) return false
 
   const keyArg = callNode.arguments?.[2]
   if (!isAbsentOrStaticJsxKeyArg(keyArg)) return false
@@ -399,7 +730,8 @@ function isHoistableJsxCall(
 function isHoistableProps(
   propsArg: AstNode | undefined | null,
   ctx: AnalysisCtx,
-  fullyStatic: boolean
+  fullyStatic: boolean,
+  tier: HoistTier = "module"
 ): boolean {
   if (!propsArg) return true
   if (propsArg.type === "Literal") {
@@ -414,8 +746,8 @@ function isHoistableProps(
       (typeof prop.key?.value === "string" ? prop.key.value : undefined)
     const value = prop.value as AstNode
     if (key === "children") {
-      if (!isHoistableChildValue(value, ctx, fullyStatic)) return false
-    } else if (!isHoistablePropValue(value, ctx, fullyStatic)) {
+      if (!isHoistableChildValue(value, ctx, fullyStatic, tier)) return false
+    } else if (!isHoistablePropValue(value, ctx, fullyStatic, tier)) {
       return false
     }
   }
@@ -425,9 +757,12 @@ function isHoistableProps(
 function isHoistablePropValue(
   value: AstNode,
   ctx: AnalysisCtx,
-  fullyStatic: boolean
+  fullyStatic: boolean,
+  tier: HoistTier = "module"
 ): boolean {
-  if (isInlineFunctionExpression(value)) return false
+  if (isInlineFunctionExpression(value)) {
+    return isHoistableInlineFunction(value, ctx, blocksForTier(tier))
+  }
   if (isStaticLiteral(value)) return true
   if (value.type !== "Identifier" || !value.name) return false
   const binding = ctx.resolve(value.name)
@@ -435,32 +770,35 @@ function isHoistablePropValue(
     return true
   }
   if (fullyStatic) return false
-  return binding != null && !blocksModuleHoist(binding)
+  return binding != null && !blocksForTier(tier)(binding)
 }
 
 function isHoistableChildValue(
   node: AstNode,
   ctx: AnalysisCtx,
-  fullyStatic: boolean
+  fullyStatic: boolean,
+  tier: HoistTier = "module"
 ): boolean {
   if (!node) return true
-  if (isInlineFunctionExpression(node)) return false
+  if (isInlineFunctionExpression(node)) {
+    return isHoistableInlineFunction(node, ctx, blocksForTier(tier))
+  }
   if (node.type === "CallExpression") {
     if (isNonTrackingSignalMemberCall(node, ctx)) return true
     if (fullyStatic) {
       if (isReactiveSignalRead(node, ctx)) return false
       if (isImpureCall(node, ctx)) return false
-      return isHoistableJsxCall(node, ctx, true)
+      return isHoistableJsxCall(node, ctx, true, tier)
     }
-    if (isHoistableJsxCall(node, ctx, false)) return true
+    if (isHoistableJsxCall(node, ctx, false, tier)) return true
     if (isImpureCall(node, ctx)) return false
-    return !expressionReferencesBlockedBinding(node, ctx)
+    return !expressionReferencesBinding(node, ctx, blocksForTier(tier))
   }
   if (node.type === "ArrayExpression") {
     for (const elem of (node as { elements?: (AstNode | null)[] }).elements ??
       []) {
       if (!elem) continue
-      if (!isHoistableChildValue(elem, ctx, fullyStatic)) return false
+      if (!isHoistableChildValue(elem, ctx, fullyStatic, tier)) return false
     }
     return true
   }
@@ -468,17 +806,35 @@ function isHoistableChildValue(
   if (fullyStatic) {
     return isFullyStaticExpression(node, ctx)
   }
-  return isHoistableExpression(node, ctx)
+  return isHoistableExpression(node, ctx, tier)
 }
 
-function isHoistableExpression(node: AstNode, ctx: AnalysisCtx): boolean {
+function isHoistableExpression(
+  node: AstNode,
+  ctx: AnalysisCtx,
+  tier: HoistTier = "module"
+): boolean {
   if (isStaticLiteral(node)) return true
   if (node.type === "Identifier") {
     const binding = ctx.resolve(node.name!)
     if (isModuleSignalBinding(binding)) return true
-    return !blocksModuleHoist(binding)
+    return !blocksForTier(tier)(binding)
   }
   return false
+}
+
+function isHoistableInlineFunction(
+  node: AstNode,
+  ctx: AnalysisCtx,
+  blocks: BindingBlocksFn
+): boolean {
+  const body =
+    node.type === "ArrowFunctionExpression" ||
+    node.type === "FunctionExpression"
+      ? (node as { body?: AstNode }).body
+      : undefined
+  if (!body) return false
+  return !expressionReferencesBinding(body, ctx, blocks)
 }
 
 function isFullyStaticExpression(node: AstNode, ctx: AnalysisCtx): boolean {
@@ -521,9 +877,10 @@ function subtreeHasImpureCall(node: AstNode, ctx: AnalysisCtx): boolean {
   return found
 }
 
-function expressionReferencesBlockedBinding(
+function expressionReferencesBinding(
   node: AstNode,
-  ctx: AnalysisCtx
+  ctx: AnalysisCtx,
+  blocks: BindingBlocksFn
 ): boolean {
   let blocked = false
   AST.walk(node, {
@@ -531,13 +888,21 @@ function expressionReferencesBlockedBinding(
       if (!n.name) return
       if (n.name === "this" || n.name === "undefined") return
       const binding = ctx.resolve(n.name)
-      if (binding && blocksModuleHoist(binding)) {
+      if (binding && blocks(binding)) {
         blocked = true
         walkCtx.exit()
       }
     },
   })
   return blocked
+}
+
+/** @deprecated Use expressionReferencesBinding with blocksModuleHoist */
+function expressionReferencesBlockedBinding(
+  node: AstNode,
+  ctx: AnalysisCtx
+): boolean {
+  return expressionReferencesBinding(node, ctx, blocksModuleHoist)
 }
 
 function isImpureCall(node: AstNode, ctx: AnalysisCtx): boolean {
@@ -702,20 +1067,42 @@ function findModuleHoistInsertPosition(
   return insertAt
 }
 
+function jsxCallHasInlineFunctionProp(callNode: AstNode): boolean {
+  const propsArg = callNode.arguments?.[1]
+  if (!propsArg || propsArg.type !== "ObjectExpression") return false
+  for (const prop of propsArg.properties ?? []) {
+    if (prop.type !== "Property") continue
+    const key = prop.key
+    const keyName =
+      key?.type === "Identifier"
+        ? key.name
+        : key?.type === "Literal" && typeof key.value === "string"
+          ? key.value
+          : null
+    if (keyName === "children") continue
+    const propValue = prop.value as AstNode
+    if (isInlineFunctionExpression(propValue)) return true
+  }
+  return false
+}
+
 function buildRegionElementWrap(
   node: AstNode,
   ctx: AnalysisCtx,
-  expr: string
+  expr: string,
+  tier: HoistTier = "module"
 ): string | null {
+  const regions = getCompileRegionsForJsxs(node, ctx)
   let flagsExpr: string | undefined
   if (
     isIntrinsicJsxTag(node.arguments?.[0]) &&
-    isHoistableJsxCall(node, ctx, true) &&
-    !subtreeHasImpureCall(node, ctx)
+    isHoistableJsxCall(node, ctx, true, tier) &&
+    !subtreeHasImpureCall(node, ctx) &&
+    !jsxCallHasInlineFunctionProp(node) &&
+    !regions?.length
   ) {
     flagsExpr = `${FLAG_HOISTED_BIT}`
   }
-  const regions = getCompileRegionsForJsxs(node, ctx)
   if (!regions && flagsExpr === undefined) return null
   if (!regions && flagsExpr !== undefined) {
     return `markHoisted(${expr})`

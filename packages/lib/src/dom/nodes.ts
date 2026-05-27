@@ -1,4 +1,8 @@
-import { svgTags, FLAG_PLACEMENT, FLAG_STATIC_DOM } from "../constants.js"
+import {
+  svgTags,
+  FLAG_PLACEMENT,
+  FLAG_STATIC_DOM,
+} from "../constants.js"
 import { isSignal, type Signal } from "../signals/base.js"
 import { unwrap } from "../signals/utils.js"
 import { hydrationStack } from "../hydration.js"
@@ -109,12 +113,27 @@ function getDomParent(vNode: VNode): ElementVNode {
   return parentNode as ElementVNode
 }
 
+/** Hole payloads mount before the shell anchor; inner DOM uses normal placement. */
+function resolveTemplateHoleAnchor(vNode: VNode): Comment | null {
+  let parent = vNode.parent
+  while (parent) {
+    if (parent.templateHoleAnchor) return parent.templateHoleAnchor
+    parent = parent.parent
+  }
+  return null
+}
+
 function placeDom(vNode: DomVNode, hostNode: HostNode) {
   const { node: parentVNodeWithDom, lastChild } = hostNode
   const dom = vNode.dom
-  const holeAnchor = parentVNodeWithDom.templateHoleAnchor
-  if (holeAnchor?.parentNode === parentVNodeWithDom.dom) {
-    parentVNodeWithDom.dom.insertBefore(dom, holeAnchor)
+  const holeAnchor =
+    parentVNodeWithDom.templateHoleAnchor ??
+    (vNode.parent !== parentVNodeWithDom
+      ? resolveTemplateHoleAnchor(vNode)
+      : null)
+  const insertParent = holeAnchor?.parentNode
+  if (insertParent) {
+    insertParent.insertBefore(dom, holeAnchor)
     return
   }
   if (lastChild) {
