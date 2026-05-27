@@ -353,7 +353,7 @@ declare global {
       regions?: readonly import("./compileRegions.js").CompileRegion[]
     }
 
-    /** Build-time `_template("...")()` handle (codegen-only). */
+    /** Build-time `_template("...")` descriptor (codegen-only). */
     interface TemplateRoot {
       readonly __kiruTemplate: symbol
       readonly html: string

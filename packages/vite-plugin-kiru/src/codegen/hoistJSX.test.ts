@@ -477,7 +477,6 @@ export const Counter = () => {
 const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 0, false, void 0, this)
 `)
     assert.match(out, /const count = signal\(0\)/)
-    assert.match(out, /^const \$k0 = jsxDEV\("button"/m)
     assert.match(
       out,
       /\$t\d+ = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
@@ -485,10 +484,12 @@ const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 
     assert.match(out, /_template\([^)]*, 2\)/)
     assert.match(
       out,
-      /createHoledTemplate\(\$t\d+, \[\[[\s\S]*\], \$k0\], \[\{kind:"text",anchor:0\},\{kind:"node",anchor:1\}\]/
+      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+, \[\[[\s\S]*\], jsxDEV\("button"/
     )
+    assert.match(out, /return \$r0/)
+    assert.doesNotMatch(out, /^const \$k\d+ = jsxDEV\("button"/m)
     assert.doesNotMatch(out, /\{kind:"component"/)
-    assert.match(out, /Badge = \(\) => \$t\d+\(\)/)
+    assert.match(out, /Badge = \(\) => \$t\d+/)
   })
 
   it("allows onclick handler closing over module signal on hoisted jsxs", () => {
@@ -724,33 +725,32 @@ export function Nav() {
     assert.match(out, /return jsxDEV\(Link/)
   })
 
-  it("setup-hoists createHoledTemplate hole payloads in return ()=> render", () => {
-    const out = transformHoist(`
+  it("caches createHoledTemplate render root for setup-return Counter", () => {
+    const out = transformPipeline(`
 import { jsxDEV } from "kiru/jsx-dev-runtime"
 import { signal } from "kiru"
-import { _template, createHoledTemplate, regionElement } from "kiru/template"
 
-const $tBadge = _template("<span class=\\"badge\\">OK</span>")
-const $t0 = _template(\`<div><!--#--><!--#-->\${$tBadge}<div>123</div></div>\`, 2)
+const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 0, false, void 0, this)
 
 export const Counter = () => {
   const count = signal(0)
   return () =>
-    createHoledTemplate($t0, [
-      regionElement(
-        jsxDEV("h1", { children: ["Count: ", count] }, void 0, true, void 0, this),
-        [{kind:"text",slot:1}]
-      ),
+    jsxDEV("div", { children: [
+      jsxDEV("h1", { children: ["Count: ", count] }, void 0, true, void 0, this),
       jsxDEV("button", { onclick: () => count.set((c) => c + 1), children: "Increment" }, void 0, false, void 0, this),
-    ], [{kind:"node",anchor:0},{kind:"node",anchor:1}])
+      jsxDEV(Badge, {}, void 0, false, void 0, this),
+      jsxDEV("div", { children: 123 }, void 0, true, void 0, this),
+    ] }, void 0, true, void 0, this)
 }
 `)
-    assert.match(out, /const \$k\d+ = regionElement\(\s*jsxDEV\("h1"/)
-    assert.match(out, /const \$k\d+ = jsxDEV\("button"/)
     assert.match(
       out,
-      /return \(\) =>[\s\S]*createHoledTemplate\(\$t0, \[\s*\$k\d+,\s*\$k\d+,?\s*\]/
+      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+,[\s\S]*jsxDEV\("h1"/
     )
+    assert.match(out, /jsxDEV\("button"/)
+    assert.match(out, /return \(\) => \$r0/)
+    assert.doesNotMatch(out, /const \$k\d+ = regionElement\(\s*jsxDEV\("h1"/)
+    assert.doesNotMatch(out, /const \$k\d+ = jsxDEV\("button"/)
   })
 
   it("does not setup-hoist createHoledTemplate hole payload when payload uses count()", () => {
@@ -790,7 +790,7 @@ export const App = () =>
     assert.doesNotMatch(out, /createHoledTemplate\([\s\S]*count\(\) % 2/)
   })
 
-  it("setup-hoists conditional template hole when setup signal is referenced", () => {
+  it("caches conditional template hole inline in setup-return render root", () => {
     const out = transformPipeline(`
 import { jsx, jsxs } from "kiru/jsx-runtime"
 import { signal } from "kiru"
@@ -810,13 +810,10 @@ export function App() {
 `)
     assert.match(
       out,
-      /const toggled = signal\(false\)[\s\S]*\$k\d+ = \(\) => \(toggled\(\) &&/
+      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t1,[\s\S]*\(\) => \(toggled\(\) &&/
     )
-    assert.match(out, /createHoledTemplate\(\$t\d+,\s*\[\s*\$k\d+/)
-    assert.doesNotMatch(
-      out,
-      /createHoledTemplate\([\s\S]*toggled\(\) &&\s*jsx\(Counter/
-    )
+    assert.match(out, /return \(\) => \$r0/)
+    assert.doesNotMatch(out, /const \$k\d+ = \(\) =>/)
   })
 
   it("module-hoists static component jsx in a direct template hole", () => {
@@ -849,7 +846,7 @@ export function App() {
   }
 }
 `)
-    assert.match(out, /local\(\) &&\s*\$t0\(\)/)
+    assert.match(out, /local\(\) &&\s*\$t0/)
     assert.doesNotMatch(out, /\$k\d+ = \(\) => \(local\(\) &&/)
   })
 

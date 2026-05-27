@@ -17,7 +17,7 @@ import {
   templateHoleNodes,
   templatePlanToEdits,
 } from "./prepareJSXTemplates.js"
-import { buildProgramBindingResolve } from "./scopeWalk.js"
+import { buildProgramCallIndex, programResolve } from "./programCallIndex.js"
 import type * as AST from "./ast.js"
 
 type AstNode = AST.AstNode
@@ -26,24 +26,44 @@ type AstNode = AST.AstNode
 export function applyJsxHoistAndTemplates(ctx: TransformCTX): void {
   const source = ctx.code.toString()
   const bodyNodes = ctx.ast.body as AstNode[]
-  const resolve = buildProgramBindingResolve(bodyNodes)
+  const callIndex = buildProgramCallIndex(bodyNodes)
+  const resolve = programResolve(callIndex)
 
-  const templatePlan = analyzeTemplateBindings(ctx.ast, resolve)
+  const templatePlan = analyzeTemplateBindings(ctx.ast, resolve, callIndex)
   const templateAbsorbed = templateAbsorbedNodes(templatePlan)
 
-  const deferPlanFull = analyzeDeferSlotReads(ctx.ast, source, resolve)
-  const deferByNode = deferWrapMap(deferPlanFull)
+  const deferPlanFull = analyzeDeferSlotReads(ctx.ast, source, resolve, callIndex)
   const deferPlan = filterDeferOutsideTemplates(deferPlanFull, templateAbsorbed)
+  const deferByNode = deferWrapMap(deferPlan)
   const hoistPlan = analyzeJsxHoisting(ctx.ast, source, {
     templateAbsorbed,
     templateHoleNodes: templateHoleNodes(templatePlan),
     templatePlan,
     deferByNode,
+    callIndex,
   })
   const hoistByNode = hoistPlan ? buildHoistVarByNode(hoistPlan) : new Map()
+  const renderRootVarByBindingNode = new Map<AstNode, string>()
+  const renderRootBindingSkipTemplateReplace = new Set<AstNode>()
+  if (hoistPlan) {
+    for (const cache of hoistPlan.renderRootCacheDecls) {
+      if (cache.tier === "module") {
+        renderRootVarByBindingNode.set(cache.exprNode, cache.varName)
+      } else {
+        renderRootBindingSkipTemplateReplace.add(cache.exprNode)
+      }
+    }
+  }
 
   const templateCodegen = templatePlan
-    ? templatePlanToEdits(templatePlan, source, deferByNode, hoistByNode)
+    ? templatePlanToEdits(
+        templatePlan,
+        source,
+        deferByNode,
+        hoistByNode,
+        renderRootVarByBindingNode,
+        renderRootBindingSkipTemplateReplace
+      )
     : emptyCodegenPlan()
 
   const hoistCodegen = hoistPlan

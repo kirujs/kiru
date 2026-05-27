@@ -1,9 +1,10 @@
 import { describe, it } from "node:test"
 import assert from "node:assert"
 import { parseAst } from "rollup/parseAst"
+import type { AstNode } from "./ast.js"
 import { MagicString } from "./shared.js"
-import { applyJsxHoistAndTemplates } from "./jsxHoistPipeline.js"
-import { prepareDeferSlotReads } from "./deferSlotReads.js"
+import { analyzeDeferSlotReads, prepareDeferSlotReads } from "./deferSlotReads.js"
+import { buildProgramCallIndex, programResolve } from "./programCallIndex.js"
 
 function transformDefer(source: string): string {
   const ast = parseAst(source, { allowReturnOutsideFunction: true })
@@ -48,5 +49,32 @@ const Toggler = () => {
 `)
     assert.match(out, /\(\) => toggled\(\) && null/)
     assert.doesNotMatch(out, /\(\) => \(\(\) =>/)
+  })
+
+  it("supports per-call snapshot resolve via shared ProgramCallIndex", () => {
+    const source = `
+import { jsx, jsxs } from "kiru/jsx-runtime"
+import { signal } from "kiru"
+
+export function App() {
+  return () => {
+    const toggled = signal(false)
+    return jsxs("div", { children: [
+      jsx("button", { children: "Toggle" }),
+      toggled() && jsx("p", { children: "Toggled" }),
+    ] })
+  }
+}
+`
+    const ast = parseAst(source, { allowReturnOutsideFunction: true })
+    const callIndex = buildProgramCallIndex(ast.body as AstNode[])
+    const plan = analyzeDeferSlotReads(
+      ast,
+      source,
+      programResolve(callIndex),
+      callIndex
+    )
+    const wrapped = plan.wraps.map((w) => w.text).join("\n")
+    assert.match(wrapped, /\(\) => \(toggled\(\) && jsx\("p"/)
   })
 })

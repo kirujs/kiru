@@ -8,14 +8,11 @@ import { withJSDOM } from "./jsdom.js"
 describe("template", () => {
   it("_template caches fragments by html string", async () => {
     await withJSDOM(async () => {
-      const factory = _template('<span class="badge">OK</span>')
-      const a = factory()
-      const b = factory()
+      const html = '<span class="badge">OK</span>'
+      const a = _template(html)
+      const b = _template(html)
       assert.notStrictEqual(a, b)
-      assert.strictEqual(
-        getTemplateFragment('<span class="badge">OK</span>'),
-        getTemplateFragment('<span class="badge">OK</span>')
-      )
+      assert.strictEqual(getTemplateFragment(html), getTemplateFragment(html))
     })
   })
 
@@ -35,26 +32,24 @@ describe("template", () => {
     const el = createElement("span", { className: "badge", children: "OK" })
     let html = ""
     headlessRender({ write: (chunk) => (html += chunk) }, el)
-    const tpl = _template('<span class="badge">OK</span>')()
+    const tpl = _template('<span class="badge">OK</span>')
     assert.strictEqual(tpl.html, html)
   })
 
-  it("composed _template literal merges child factory via toString", () => {
+  it("composed _template literal merges child html via .html", () => {
     const child = _template('<span class="badge">OK</span>')
     const parent = _template(
-      `<div><h1><!--#--></h1><!--#-->${child}<div>123</div></div>`,
+      `<div><h1><!--#--></h1><!--#-->${child.html}<div>123</div></div>`,
       2
     )
-    const root = parent()
-    assert.ok(root.html.includes('class="badge"'))
-    assert.ok(root.html.includes("<div>123</div>"))
-    assert.strictEqual(String(child), '<span class="badge">OK</span>')
+    assert.ok(parent.html.includes('class="badge"'))
+    assert.ok(parent.html.includes("<div>123</div>"))
   })
 
   it("mounts template children via reconciler", async () => {
     await withJSDOM(async (container, kiru) => {
       const $t0 = _template('<span class="badge">OK</span>')
-      kiru.mount($t0(), container)
+      kiru.mount($t0, container)
       const badge = container.querySelector(".badge")
       assert.ok(badge)
       assert.strictEqual(badge!.textContent, "OK")

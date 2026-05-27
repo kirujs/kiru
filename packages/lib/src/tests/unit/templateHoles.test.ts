@@ -22,7 +22,7 @@ const linkManifest = compileRouteTree(
 describe("template holes", () => {
   it("headlessRender writes hole markers when there are no hole children", () => {
     const html = `<div><span>A</span>${KIRU_HOLE_MARKER}</div>`
-    const tpl = _template(html, 1)()
+    const tpl = _template(html, 1)
     let out = ""
     headlessRender({ write: (chunk) => (out += chunk) }, tpl)
     assert.strictEqual(out, html)
@@ -498,7 +498,7 @@ describe("template holes", () => {
     const html = `<div><span>A</span>${KIRU_HOLE_MARKER}</div>`
     assert.ok(shell.includes("<span>A</span>"))
     assert.ok(shell.includes('class="dyn"'))
-    const tplOnly = renderToString(_template(html, 1)())
+    const tplOnly = renderToString(_template(html, 1))
     assert.strictEqual(tplOnly, html)
   })
 })

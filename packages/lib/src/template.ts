@@ -28,8 +28,6 @@ export type TemplateRoot = {
   readonly regions?: readonly CompileRegion[]
 }
 
-export type TemplateFactory = () => TemplateRoot
-
 const fragmentCache = new Map<string, DocumentFragment>()
 
 export function isTemplateRoot(thing: unknown): thing is TemplateRoot {
@@ -40,14 +38,12 @@ export function isTemplateRoot(thing: unknown): thing is TemplateRoot {
   )
 }
 
-export function _template(html: string, holeCount = 0): TemplateFactory {
-  const factory: TemplateFactory = () => ({
+export function _template(html: string, holeCount = 0): TemplateRoot {
+  return {
     __kiruTemplate: $KIRU_TEMPLATE,
     html,
     holeCount,
-  })
-  factory.toString = () => html
-  return factory
+  }
 }
 
 /** Tag a hoisted region children array for static list reconciliation. */
@@ -59,14 +55,13 @@ export function tagStaticChildrenList<T>(children: T[]): T[] {
   return children
 }
 
-/** Attach runtime hole children to a template factory product. */
+/** Attach runtime hole children to a template descriptor from `_template`. */
 export function createHoledTemplate(
-  factory: TemplateFactory,
+  template: TemplateRoot,
   holeChildren: unknown[],
   regions?: readonly CompileRegion[]
 ): TemplateRoot {
-  const base = factory()
-  const count = base.holeCount
+  const count = template.holeCount
   if (__DEV__ && holeChildren.length !== count) {
     throw new KiruError({
       message: `[kiru]: createHoledTemplate expected ${count} hole children, got ${holeChildren.length}`,
@@ -82,7 +77,7 @@ export function createHoledTemplate(
   }
   return {
     __kiruTemplate: $KIRU_TEMPLATE,
-    html: base.html,
+    html: template.html,
     holeCount: count,
     holeChildren,
     regions,

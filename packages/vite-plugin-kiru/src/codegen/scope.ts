@@ -47,6 +47,18 @@ export class ScopeStack {
     }
     return null
   }
+
+  /** Frozen binding resolve for the current stack (safe after walk continues). */
+  snapshotResolve(): (name: string) => BindingInfo | null {
+    const frames = this.frames.map((f) => new Map(f.bindings))
+    return (name: string) => {
+      for (let i = frames.length - 1; i >= 0; i--) {
+        const hit = frames[i]!.get(name)
+        if (hit) return hit
+      }
+      return null
+    }
+  }
 }
 
 export function matchesSource(

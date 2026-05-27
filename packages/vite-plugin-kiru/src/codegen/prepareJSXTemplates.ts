@@ -12,6 +12,7 @@ import {
   walkProgramBody,
 } from "./scopeWalk.js"
 import { isKiruJsxFactoryCall } from "./scope.js"
+import type { ProgramCallIndex } from "./programCallIndex.js"
 import { formatRegionsLiteral } from "./compileRegions.js"
 import {
   bindingMatchesComponentRender,
@@ -60,7 +61,8 @@ export type TemplatePlan = {
 
 export function analyzeTemplateBindings(
   ast: ProgramNode,
-  resolve: TemplateSerializeCtx["resolve"]
+  resolve: TemplateSerializeCtx["resolve"],
+  callIndex?: ProgramCallIndex
 ): TemplatePlan | null {
   const bodyNodes = ast.body as AstNode[]
 
@@ -75,16 +77,28 @@ export function analyzeTemplateBindings(
   }
 
   const calls: TemplateShellCallSite[] = []
-  walkProgramBody(bodyNodes, {
-    onCallExpression: (node, { fnDepth }) => {
+  if (callIndex) {
+    callIndex.forEachCall((site) => {
+      const node = site.node
       if (
         (analysis.isJsxProd(node) || analysis.isJsxDev(node)) &&
         isTemplateShellEligibleCall(node, analysis)
       ) {
-        calls.push({ node, strictHoledShell: fnDepth >= 2 })
+        calls.push({ node, strictHoledShell: site.fnDepth >= 2 })
       }
-    },
-  })
+    })
+  } else {
+    walkProgramBody(bodyNodes, {
+      onCallExpression: (node, { fnDepth }) => {
+        if (
+          (analysis.isJsxProd(node) || analysis.isJsxDev(node)) &&
+          isTemplateShellEligibleCall(node, analysis)
+        ) {
+          calls.push({ node, strictHoledShell: fnDepth >= 2 })
+        }
+      },
+    })
+  }
 
   const selected = selectMaximalTemplateShellCalls(calls, analysis)
   if (selected.length === 0) return null
@@ -104,7 +118,9 @@ export function templatePlanToEdits(
   plan: TemplatePlan,
   source: string,
   deferByNode: Map<AstNode, string>,
-  hoistByNode: Map<AstNode, string> = new Map()
+  hoistByNode: Map<AstNode, string> = new Map(),
+  renderRootVarByBindingNode: Map<AstNode, string> = new Map(),
+  renderRootBindingSkipTemplateReplace: Set<AstNode> = new Set()
 ): CodegenPlan {
   const edits: CodegenPlan["edits"] = [{ kind: "prepend", text: TEMPLATE_IMPORT }]
 
@@ -118,11 +134,15 @@ export function templatePlanToEdits(
   }
 
   for (const b of inline) {
+    if (renderRootBindingSkipTemplateReplace.has(b.node)) continue
+    const renderRootVar = renderRootVarByBindingNode.get(b.node)
     edits.push({
       kind: "replace",
       start: b.node.start,
       end: b.node.end,
-      text: templateUse(b, source, deferByNode, hoistByNode),
+      text:
+        renderRootVar ??
+        templateUse(b, source, deferByNode, hoistByNode),
     })
   }
 
@@ -259,7 +279,7 @@ function planTemplateBindings(
       serializeJsxCallToTemplate(jsx, analysis)
     )
     if (!leaf) continue
-    const renderInit = findComponentRenderJsxNode(name, bodyNodes, analysis)
+    const renderInit = findComponentRenderJsxNode(name, bodyNodes)
     bindings.push({
       node: renderInit ?? bindings[0]!.node,
       html: leaf.html,
@@ -298,8 +318,7 @@ function planTemplateBindings(
 
 function findComponentRenderJsxNode(
   componentName: string,
-  bodyNodes: AstNode[],
-  ctx: TemplateSerializeCtx
+  bodyNodes: AstNode[]
 ): AstNode | null {
   for (const stmt of bodyNodes) {
     const init = findBindingInitInStmt(stmt, componentName)
@@ -374,7 +393,7 @@ function templateUse(
   deferByNode: Map<AstNode, string>,
   hoistByNode: Map<AstNode, string>
 ): string {
-  if (b.holeCount === 0) return `${b.varName}()`
+  if (b.holeCount === 0) return b.varName
   const parts = b.holeNodes.map((n) =>
     exprTextForTemplateHole(source, n, deferByNode, hoistByNode)
   )

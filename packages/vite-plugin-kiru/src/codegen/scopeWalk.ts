@@ -24,6 +24,7 @@ export type ScopeWalkContext = {
 export type ScopeWalkHooks = {
   onCallExpression?: (node: AstNode, ctx: ScopeWalkContext) => void
   onArrayExpression?: (node: AstNode, ctx: ScopeWalkContext) => void
+  onVariableDeclarator?: (decl: AstNode, ctx: ScopeWalkContext) => void
 }
 
 /** Resolve bindings after walking imports, functions, and nested scopes. */
@@ -86,7 +87,7 @@ function createScopedProgramVisitor(
     FunctionExpression: (node) => enterFunction(node),
     ArrowFunctionExpression: (node) => enterFunction(node),
 
-    VariableDeclaration: (node) => {
+    VariableDeclaration: (node, ctx) => {
       for (const decl of node.declarations ?? []) {
         if (decl.type !== "VariableDeclarator") continue
         const id = decl.id
@@ -100,13 +101,17 @@ function createScopedProgramVisitor(
             name: id.name,
           })
         }
+        hooks.onVariableDeclarator?.(
+          decl,
+          toScopeWalkContext(ctx, resolve, fnDepthRef.current)
+        )
       }
     },
 
     CallExpression: (node, ctx) => {
       hooks.onCallExpression?.(
         node,
-        toScopeWalkContext(ctx, resolve, fnDepthRef.current)
+        toScopeWalkContext(ctx, scope.snapshotResolve(), fnDepthRef.current)
       )
       ctx.walkArguments(node)
       ctx.skipDescent()
@@ -115,7 +120,7 @@ function createScopedProgramVisitor(
     ArrayExpression: (node, ctx) => {
       hooks.onArrayExpression?.(
         node,
-        toScopeWalkContext(ctx, resolve, fnDepthRef.current)
+        toScopeWalkContext(ctx, scope.snapshotResolve(), fnDepthRef.current)
       )
     },
 

@@ -14,6 +14,11 @@ import {
   getCompileRegionsForJsxs,
 } from "./compileRegions.js"
 import { TransformCTX } from "./shared.js"
+import {
+  buildProgramCallIndex,
+  findSetupRenderInsertBefore,
+  type ProgramCallIndex,
+} from "./programCallIndex.js"
 import { buildProgramBindingResolve, walkProgramBody } from "./scopeWalk.js"
 import {
   blocksModuleHoist,
@@ -78,7 +83,12 @@ const NON_TRACKING_SIGNAL_METHODS = new Set(["peek", "set", "sneak"])
 const FLAG_HOISTED_BIT = 32
 
 export type TemplateHoistPlanSlice = {
-  bindings: { node: AstNode; holeNodes: AstNode[] }[]
+  bindings: {
+    node: AstNode
+    holeNodes: AstNode[]
+    varName: string
+    regions: import("kiru/template").CompileRegion[]
+  }[]
 }
 
 export type AnalyzeJsxHoistingOpts = {
@@ -86,6 +96,7 @@ export type AnalyzeJsxHoistingOpts = {
   templateHoleNodes: Set<AstNode>
   templatePlan: TemplateHoistPlanSlice | null
   deferByNode: Map<AstNode, string>
+  callIndex?: ProgramCallIndex
 }
 
 function mayHoistInsideTemplateShell(
@@ -98,6 +109,21 @@ function mayHoistInsideTemplateShell(
   return templateHoleNodes.has(node)
 }
 
+type RenderRootCacheTier = "module" | "componentBody" | "setupReturn"
+
+export type RenderRootCacheDecl = {
+  exprNode: AstNode
+  tier: RenderRootCacheTier
+  /** `ReturnStatement` to insert before (setup/component); null for module tier. */
+  insertBefore: AstNode | null
+  varName: string
+  codeExpr: string
+  /** Hole AST nodes folded inline into `$rN` (suppress setup hole hoists). */
+  foldedHoleNodes: Set<AstNode>
+  /** Module `$kN` jsx roots inlined into `$rN` instead of separate hoists. */
+  inlinedJsxNodes: Set<AstNode>
+}
+
 export type HoistPlan = {
   allHoistables: Hoistable[]
   setupHoistDecls: {
@@ -106,6 +132,7 @@ export type HoistPlan = {
     varName: string
     codeExpr: string
   }[]
+  renderRootCacheDecls: RenderRootCacheDecl[]
   dynamicSlotWraps: {
     node: AstNode
     regions: import("kiru/template").CompileRegion[]
@@ -149,7 +176,13 @@ export function analyzeJsxHoisting(
   opts: AnalyzeJsxHoistingOpts
 ): HoistPlan | null {
   const bodyNodes = ast.body as AstNode[]
-  const { templateAbsorbed, templateHoleNodes, templatePlan, deferByNode } =
+  const {
+    templateAbsorbed,
+    templateHoleNodes,
+    templatePlan,
+    deferByNode,
+    callIndex: sharedCallIndex,
+  } =
     opts
   const moduleComponentNames = collectModuleComponentNames(bodyNodes)
 
@@ -162,63 +195,29 @@ export function analyzeJsxHoisting(
   const setupHoistCandidates: SetupHoistCandidate[] = []
   const setupHolePayloadCandidates: SetupHolePayloadCandidate[] = []
 
-  const scope = walkProgramBody(bodyNodes, {
-    onCallExpression: (node, walkCtx) => {
-      const analysis = createAnalysisCtx(walkCtx.resolve)
-      const setupCand = findSetupRenderHoistCandidate(node, walkCtx, analysis)
-      if (
-        setupCand &&
-        !isTemplateBindingRoot(setupCand.rootJsx, templateAbsorbed)
-      ) {
-        setupHoistCandidates.push(setupCand)
-      }
-      if (isCreateHoledTemplateCall(node)) {
-        const insertBefore = findSetupRenderInsertBefore(node, walkCtx)
-        if (insertBefore) {
-          setupHolePayloadCandidates.push(
-            ...findSetupHolePayloadCandidates(node, analysis, insertBefore)
-          )
-        }
-      }
-      if (
-        canHoistToModule(node, analysis) &&
-        !isTemplateBindingRoot(node, templateAbsorbed)
-      ) {
-        hoistableCalls.push(node)
-      }
-      const regions = getCompileRegionsForJsxs(node, analysis)
-      if (regions) {
-        dynamicSlotCalls.push({ node, regions })
-      }
-    },
-    onArrayExpression: (node, walkCtx) => {
-      const analysis = createAnalysisCtx(walkCtx.resolve)
-      if (
-        isCreateHoledTemplateRegionHole(
-          node,
-          walkCtx.parent(),
-          walkCtx.grandparent()
-        ) &&
-        canHoistRegionArray(node, analysis) &&
-        mayHoistInsideTemplateShell(node, templateAbsorbed, templateHoleNodes)
-      ) {
-        hoistableRegionArrays.push(node)
-      }
-    },
+  const callIndex =
+    sharedCallIndex ??
+    buildProgramCallIndex(bodyNodes, {
+      onCallExpression: () => {},
+      onArrayExpression: () => {},
+    })
+  collectHoistCandidatesFromIndex(callIndex, {
+    templateAbsorbed,
+    templateHoleNodes,
+    hoistableCalls,
+    hoistableRegionArrays,
+    dynamicSlotCalls,
+    setupHoistCandidates,
+    setupHolePayloadCandidates,
   })
 
-  const resolve = (name: string) => scope.resolve(name)
+  const resolve = (name: string) => callIndex.scope.resolve(name)
   const analysis = createAnalysisCtx(resolve)
 
   if (templatePlan) {
     for (const binding of templatePlan.bindings) {
-      let insertBefore: AstNode | null = null
-      walkProgramBody(bodyNodes, {
-        onCallExpression: (node, walkCtx) => {
-          if (node !== binding.node || insertBefore) return
-          insertBefore = findSetupRenderInsertBefore(node, walkCtx)
-        },
-      })
+      const bindingSite = callIndex.getCall(binding.node.start)
+      const insertBefore = bindingSite?.setupInsertBefore ?? null
       for (const hole of binding.holeNodes) {
         const hoistTargets = expandTemplateHoleHoistTargets(hole, analysis)
         for (const target of hoistTargets) {
@@ -229,46 +228,38 @@ export function analyzeJsxHoisting(
             analysis
           )
           if (conditionalExpr) {
-            // `analysis` is scoped to the module after the first walk.
-            // Conditional holes often reference setup-scoped signals, so we
-            // must evaluate hoist eligibility with a scoped resolver.
             let decided = false
-            walkProgramBody(bodyNodes, {
-              onCallExpression: (callNode, walkCtx) => {
-                if (decided) return
-                if (!nodeContains(conditionalExpr, callNode)) return
-
-                const scopedAnalysis = createAnalysisCtx(walkCtx.resolve)
-                if (
-                  canHoistConditionalHoleExpr(
-                    conditionalExpr,
-                    scopedAnalysis,
-                    "module"
-                  )
-                ) {
-                  hoistableCalls.push(conditionalExpr)
-                  decided = true
-                  return
-                }
-
-                if (
-                  insertBefore &&
-                  canHoistConditionalHoleExpr(
-                    conditionalExpr,
-                    scopedAnalysis,
-                    "setup"
-                  )
-                ) {
-                  setupHolePayloadCandidates.push({
-                    exprNode: conditionalExpr,
-                    jsxNode: conditionalExpr,
-                    insertBefore,
-                    isConditional: true,
-                  })
-                  decided = true
-                }
-              },
-            })
+            for (const site of callIndex.callsContainedIn(conditionalExpr)) {
+              if (decided) break
+              const scopedAnalysis = createAnalysisCtx(site.resolve)
+              if (
+                canHoistConditionalHoleExpr(
+                  conditionalExpr,
+                  scopedAnalysis,
+                  "module"
+                )
+              ) {
+                hoistableCalls.push(conditionalExpr)
+                decided = true
+                break
+              }
+              if (
+                insertBefore &&
+                canHoistConditionalHoleExpr(
+                  conditionalExpr,
+                  scopedAnalysis,
+                  "setup"
+                )
+              ) {
+                setupHolePayloadCandidates.push({
+                  exprNode: conditionalExpr,
+                  jsxNode: conditionalExpr,
+                  insertBefore,
+                  isConditional: true,
+                })
+                decided = true
+              }
+            }
             continue
           }
 
@@ -288,24 +279,17 @@ export function analyzeJsxHoisting(
             templateHoleNodes.has(target) &&
             !isElementOfRegionArrayHole(target, binding.holeNodes)
           ) {
-            let decided = false
-            walkProgramBody(bodyNodes, {
-              onCallExpression: (callNode, walkCtx) => {
-                if (decided) return
-                if (callNode !== target) return
-                const scopedAnalysis = createAnalysisCtx(walkCtx.resolve)
-                if (
-                  canHoistComponentCallToModule(
-                    target,
-                    scopedAnalysis,
-                    moduleComponentNames
-                  )
-                ) {
-                  hoistableCalls.push(target)
-                }
-                decided = true
-              },
-            })
+            const targetSite = callIndex.getCall(target.start)
+            if (
+              targetSite &&
+              canHoistComponentCallToModule(
+                target,
+                createAnalysisCtx(targetSite.resolve),
+                moduleComponentNames
+              )
+            ) {
+              hoistableCalls.push(target)
+            }
             continue
           }
           if (
@@ -328,16 +312,6 @@ export function analyzeJsxHoisting(
   ).filter((c) => canHoistHolePayloadToSetup(c, analysis))
   const setupRootNodes = new Set(setupHoists.map((c) => c.rootJsx))
   const setupHoleExprNodes = new Set(setupHoleHoists.map((c) => c.exprNode))
-  if (
-    hoistableCalls.length === 0 &&
-    hoistableRegionArrays.length === 0 &&
-    dynamicSlotCalls.length === 0 &&
-    setupHoists.length === 0 &&
-    setupHoleHoists.length === 0
-  ) {
-    return null
-  }
-
   let counter = 0
   const allHoistables: Hoistable[] = []
   const hoistedNodes = new Set<AstNode>()
@@ -357,7 +331,7 @@ export function analyzeJsxHoisting(
       !setupRootNodes.has(call) &&
       !setupHoleExprNodes.has(call) &&
       !isStrictlyInsideAnyNode(call, setupRootNodes) &&
-      !isExistingModuleHoistInit(call, bodyNodes) &&
+      !callIndex.moduleHoistInits.has(call.start) &&
       mayHoistInsideTemplateShell(call, templateAbsorbed, templateHoleNodes)
   )
 
@@ -408,18 +382,6 @@ export function analyzeJsxHoisting(
     }
   }
 
-  const declarations =
-    allHoistables.length === 0
-      ? null
-      : allHoistables.length === 1
-      ? `const ${allHoistables[0].varName} = ${allHoistables[0].code}`
-      : allHoistables
-          .map((h, i) =>
-            i === 0
-              ? `const ${h.varName} = ${h.code}`
-              : `  ${h.varName} = ${h.code}`
-          )
-          .join(",\n")
   const regionElementLines = buildRegionElementLines(allHoistables, analysis)
   for (const line of regionElementLines) {
     if (line.includes("markHoisted(")) needsMarkHoisted = true
@@ -472,7 +434,55 @@ export function analyzeJsxHoisting(
     })
     hoistedNodes.add(candidate.rootJsx)
   }
+  const hoistByNode = new Map<AstNode, string>()
+  for (const h of allHoistables) {
+    hoistByNode.set(h.node, h.varName)
+  }
+
+  let rCounter = 0
+  const renderRootCacheDecls = collectRenderRootCacheDecls(
+    callIndex,
+    source,
+    deferByNode,
+    hoistByNode,
+    moduleComponentNames,
+    templatePlan,
+    () => `$r${rCounter++}`
+  )
+
+  const foldedHoleExprNodes = new Set<AstNode>()
+  const inlinedJsxFromRenderCache = new Set<AstNode>()
+  for (const cache of renderRootCacheDecls) {
+    for (const n of cache.foldedHoleNodes) foldedHoleExprNodes.add(n)
+    for (const n of cache.inlinedJsxNodes) inlinedJsxFromRenderCache.add(n)
+    hoistedNodes.add(cache.exprNode)
+  }
+
+  const filteredHoistables = allHoistables.filter(
+    (h) => !inlinedJsxFromRenderCache.has(h.node)
+  )
+  if (filteredHoistables.length !== allHoistables.length) {
+    allHoistables.length = 0
+    allHoistables.push(...filteredHoistables)
+    hoistByNode.clear()
+    for (const h of allHoistables) hoistByNode.set(h.node, h.varName)
+  }
+
+  const declarationsAfterFilter =
+    allHoistables.length === 0
+      ? null
+      : allHoistables.length === 1
+        ? `const ${allHoistables[0].varName} = ${allHoistables[0].code}`
+        : allHoistables
+            .map((h, i) =>
+              i === 0
+                ? `const ${h.varName} = ${h.code}`
+                : `  ${h.varName} = ${h.code}`
+            )
+            .join(",\n")
+
   for (const candidate of setupHoleHoists) {
+    if (foldedHoleExprNodes.has(candidate.exprNode)) continue
     const varName = `$k${counter++}`
     const codeExpr = candidate.isConditional
       ? lazyConditionalHoleCodeExpr(source, candidate.exprNode, deferByNode)
@@ -497,14 +507,28 @@ export function analyzeJsxHoisting(
     needMarkHoisted: needsMarkHoisted,
   }
 
+  const moduleRenderCaches = renderRootCacheDecls.filter(
+    (c) => c.tier === "module"
+  )
+
   let moduleInsertPos = 0
-  if (declarations && allHoistables.length > 0) {
+  if (allHoistables.length > 0 || moduleRenderCaches.length > 0) {
     const moduleDeps = collectReferencedModuleBindings(allHoistables, resolve)
     moduleInsertPos = findModuleHoistInsertPosition(
       bodyNodes,
       source,
       moduleDeps
     )
+  }
+
+  if (
+    allHoistables.length === 0 &&
+    hoistableRegionArrays.length === 0 &&
+    dynamicSlotCalls.length === 0 &&
+    setupHoistDecls.length === 0 &&
+    renderRootCacheDecls.length === 0
+  ) {
+    return null
   }
 
   const dynamicSlotWraps: HoistPlan["dynamicSlotWraps"] = []
@@ -524,15 +548,84 @@ export function analyzeJsxHoisting(
   return {
     allHoistables,
     setupHoistDecls,
+    renderRootCacheDecls,
     dynamicSlotWraps,
     hoistedNodes,
     setupRootNodes,
     regionElementLines,
-    declarations,
+    declarations: declarationsAfterFilter,
     moduleInsertPos,
     imports,
     bodyNodes,
   }
+}
+
+function collectHoistCandidatesFromIndex(
+  callIndex: ProgramCallIndex,
+  opts: {
+    templateAbsorbed: Set<AstNode>
+    templateHoleNodes: Set<AstNode>
+    hoistableCalls: AstNode[]
+    hoistableRegionArrays: AstNode[]
+    dynamicSlotCalls: {
+      node: AstNode
+      regions: import("kiru/template").CompileRegion[]
+    }[]
+    setupHoistCandidates: SetupHoistCandidate[]
+    setupHolePayloadCandidates: SetupHolePayloadCandidate[]
+  }
+): void {
+  const {
+    templateAbsorbed,
+    templateHoleNodes,
+    hoistableCalls,
+    hoistableRegionArrays,
+    dynamicSlotCalls,
+    setupHoistCandidates,
+    setupHolePayloadCandidates,
+  } = opts
+
+  callIndex.forEachCall((site) => {
+    const node = site.node
+    const analysis = createAnalysisCtx(site.resolve)
+    if (
+      site.setupInsertBefore &&
+      isJsxFactoryCall(node, analysis) &&
+      !isTemplateBindingRoot(node, templateAbsorbed)
+    ) {
+      setupHoistCandidates.push({
+        rootJsx: node,
+        insertBefore: site.setupInsertBefore,
+      })
+    }
+    if (isCreateHoledTemplateCall(node) && site.setupInsertBefore) {
+      setupHolePayloadCandidates.push(
+        ...findSetupHolePayloadCandidates(node, analysis, site.setupInsertBefore)
+      )
+    }
+    if (
+      canHoistToModule(node, analysis) &&
+      !isTemplateBindingRoot(node, templateAbsorbed)
+    ) {
+      hoistableCalls.push(node)
+    }
+    const regions = getCompileRegionsForJsxs(node, analysis)
+    if (regions) {
+      dynamicSlotCalls.push({ node, regions })
+    }
+  })
+
+  callIndex.forEachArray((site) => {
+    const node = site.node
+    const analysis = createAnalysisCtx(site.resolve)
+    if (
+      isCreateHoledTemplateRegionHole(node, site.parent, site.grandparent) &&
+      canHoistRegionArray(node, analysis) &&
+      mayHoistInsideTemplateShell(node, templateAbsorbed, templateHoleNodes)
+    ) {
+      hoistableRegionArrays.push(node)
+    }
+  })
 }
 
 export function hoistPlanToEdits(
@@ -541,9 +634,19 @@ export function hoistPlanToEdits(
   templateAbsorbed: Set<AstNode>
 ): CodegenPlan {
   const edits: SourceEdit[] = []
+  const renderRootCacheExprs = new Set(
+    plan.renderRootCacheDecls.map((c) => c.exprNode)
+  )
+  const isInsideRenderRootCache = (node: AstNode): boolean => {
+    for (const root of renderRootCacheExprs) {
+      if (node !== root && nodeContains(root, node)) return true
+    }
+    return false
+  }
 
   for (const h of plan.allHoistables) {
     if (isInsideTemplateBindingRoot(h.node, templateAbsorbed)) continue
+    if (isInsideRenderRootCache(h.node)) continue
     edits.push({
       kind: "replace",
       start: h.node.start,
@@ -564,11 +667,40 @@ export function hoistPlanToEdits(
       text: `const ${varName} = ${codeExpr};\n`,
     })
     if (isInsideTemplateBindingRoot(replaceNode, templateAbsorbed)) continue
+    if (isInsideRenderRootCache(replaceNode)) continue
     edits.push({
       kind: "replace",
       start: replaceNode.start,
       end: replaceNode.end,
       text: varName,
+    })
+  }
+
+  for (const cache of plan.renderRootCacheDecls) {
+    if (cache.tier !== "module" && cache.insertBefore?.type === "ReturnStatement") {
+      const ret = cache.insertBefore
+      const renderFn = (ret as { argument?: AstNode }).argument
+      const isSetupReturn =
+        renderFn?.type === "ArrowFunctionExpression" &&
+        ((renderFn as { params?: AstNode[] }).params ?? []).length === 0
+      edits.push({
+        kind: "replace",
+        start: ret.start,
+        end: ret.end,
+        text: isSetupReturn
+          ? `const ${cache.varName} = /* @__PURE__ */ ${cache.codeExpr};\nreturn () => ${cache.varName}`
+          : `const ${cache.varName} = /* @__PURE__ */ ${cache.codeExpr};\nreturn ${cache.varName}`,
+      })
+      continue
+    }
+    if (!isCreateHoledTemplateCall(cache.exprNode)) {
+      continue
+    }
+    edits.push({
+      kind: "replace",
+      start: cache.exprNode.start,
+      end: cache.exprNode.end,
+      text: cache.varName,
     })
   }
 
@@ -585,10 +717,14 @@ export function hoistPlanToEdits(
     ...templateCodegenImportEdits(plan.bodyNodes, source, plan.imports)
   )
 
-  if (plan.declarations) {
+  const moduleRenderCacheLines = plan.renderRootCacheDecls
+    .filter((c) => c.tier === "module")
+    .map((c) => `const ${c.varName} = /* @__PURE__ */ ${c.codeExpr}`)
+  if (plan.declarations || moduleRenderCacheLines.length > 0) {
     const hoistBlock = [
       "",
-      plan.declarations,
+      ...(plan.declarations ? [plan.declarations] : []),
+      ...moduleRenderCacheLines,
       ...plan.regionElementLines,
       "",
     ].join("\n")
@@ -724,39 +860,6 @@ function isFullyStaticRegionArray(
   return elems.length > 0
 }
 
-function isExistingModuleHoistInit(
-  callNode: AstNode,
-  bodyNodes: AstNode[]
-): boolean {
-  let found = false
-  visitModuleAst(bodyNodes, (node) => {
-    if (node.type !== "VariableDeclaration") return
-    for (const decl of node.declarations ?? []) {
-      if (decl.type !== "VariableDeclarator") continue
-      const id = decl.id
-      const init = decl.init as AstNode | undefined
-      if (id?.type !== "Identifier" || !id.name || !init) continue
-      if (!/^\$k\d+$/.test(id.name)) continue
-      if (init === callNode) found = true
-    }
-  })
-  return found
-}
-
-function visitModuleAst(
-  nodes: AstNode[],
-  visit: (node: AstNode) => void
-): void {
-  for (const node of nodes) {
-    AST.walk(node, {
-      "*": (n, ctx) => {
-        visit(n)
-        if (ctx.stack.length >= 200) ctx.exitBranch()
-      },
-    })
-  }
-}
-
 function isDirectChildOfAnyArray(
   callNode: AstNode,
   arrays: Set<AstNode>
@@ -845,23 +948,262 @@ function dedupeSetupHolePayloadCandidates(
   return [...byExpr.values()]
 }
 
-function findSetupRenderInsertBefore(
-  renderExprNode: AstNode,
-  walkCtx: import("./scopeWalk.js").ScopeWalkContext
-): AstNode | null {
-  if (walkCtx.fnDepth < 2) return null
-  const stack = walkCtx.stack
-  for (const n of stack) {
-    if (n.type !== "ReturnStatement") continue
-    const renderFn = (n as { argument?: AstNode }).argument
-    if (!renderFn || renderFn.type !== "ArrowFunctionExpression") continue
-    const renderParams = (renderFn as { params?: AstNode[] }).params ?? []
-    if (renderParams.length > 0) continue
-    const body = (renderFn as { body?: AstNode }).body
-    if (!isRenderBodySingleExpression(body, renderExprNode)) continue
-    return n
+function renderCacheTierToHoistTier(tier: RenderRootCacheTier): HoistTier {
+  return tier === "module" ? "module" : "setup"
+}
+
+function collectRenderRootCacheDecls(
+  callIndex: ProgramCallIndex,
+  source: string,
+  deferByNode: Map<AstNode, string>,
+  hoistByNode: Map<AstNode, string>,
+  moduleComponentNames: Set<string>,
+  templatePlan: AnalyzeJsxHoistingOpts["templatePlan"],
+  allocVarName: () => string
+): RenderRootCacheDecl[] {
+  const decls: RenderRootCacheDecl[] = []
+  const claimed = new Set<number>()
+
+  const tryClaimRenderRoot = (
+    exprNode: AstNode,
+    factoryVar: string,
+    holeNodes: AstNode[],
+    regions: import("kiru/template").CompileRegion[],
+    setupInsert: AstNode | null,
+    componentInsert: AstNode | null,
+    resolve: (name: string) => BindingInfo | null
+  ): void => {
+    if (claimed.has(exprNode.start)) return
+    if (!setupInsert && !componentInsert) return
+    if (holeNodes.length === 0 && !isCreateHoledTemplateCall(exprNode)) return
+
+    const tiers: RenderRootCacheTier[] = ["module"]
+    if (componentInsert) tiers.push("componentBody")
+    if (setupInsert) tiers.push("setupReturn")
+
+    for (const tier of tiers) {
+      const built = tryBuildRenderRootCacheDecl(
+        exprNode,
+        factoryVar,
+        holeNodes,
+        regions,
+        tier,
+        setupInsert,
+        componentInsert,
+        resolve,
+        source,
+        deferByNode,
+        hoistByNode,
+        moduleComponentNames,
+        allocVarName
+      )
+      if (!built) continue
+      decls.push(built)
+      claimed.add(exprNode.start)
+      break
+    }
   }
-  return null
+
+  if (templatePlan) {
+    for (const binding of templatePlan.bindings) {
+      const site = callIndex.getCall(binding.node.start)
+      if (!site) continue
+      tryClaimRenderRoot(
+        binding.node,
+        binding.varName,
+        binding.holeNodes,
+        binding.regions,
+        site.setupInsertBefore,
+        site.componentInsertBefore,
+        site.resolve
+      )
+    }
+  }
+
+  callIndex.forEachCall((site) => {
+    const node = site.node
+    if (!isCreateHoledTemplateCall(node)) return
+    if (claimed.has(node.start)) return
+
+    const holesArg = node.arguments?.[1]
+    if (!holesArg || holesArg.type !== "ArrayExpression") return
+    const holeNodes = (
+      (holesArg as { elements?: (AstNode | null)[] }).elements ?? []
+    ).filter(Boolean) as AstNode[]
+    const factory = node.arguments?.[0]
+    const factoryVar =
+      factory?.type === "Identifier" && factory.name
+        ? factory.name
+        : sliceNode(source, factory!, deferByNode)
+    const regions: import("kiru/template").CompileRegion[] = []
+    tryClaimRenderRoot(
+      node,
+      factoryVar,
+      holeNodes,
+      regions,
+      site.setupInsertBefore,
+      site.componentInsertBefore,
+      site.resolve
+    )
+  })
+
+  return decls
+}
+
+function tryBuildRenderRootCacheDecl(
+  exprNode: AstNode,
+  factoryVar: string,
+  holeNodes: AstNode[],
+  regions: import("kiru/template").CompileRegion[],
+  tier: RenderRootCacheTier,
+  setupInsert: AstNode | null,
+  componentInsert: AstNode | null,
+  resolve: (name: string) => BindingInfo | null,
+  source: string,
+  deferByNode: Map<AstNode, string>,
+  hoistByNode: Map<AstNode, string>,
+  moduleComponentNames: Set<string>,
+  allocVarName: () => string
+): RenderRootCacheDecl | null {
+  if (tier === "setupReturn" && !setupInsert) return null
+  if (tier === "componentBody" && !componentInsert) return null
+
+  const scopedAnalysis = createAnalysisCtx(resolve)
+  const hoistTier = renderCacheTierToHoistTier(tier)
+
+  const foldedHoleNodes = new Set<AstNode>()
+  const inlinedJsxNodes = new Set<AstNode>()
+  const holeCodes: string[] = []
+
+  for (const hole of holeNodes) {
+    const folded = foldRenderRootHole(
+      hole,
+      hoistTier,
+      scopedAnalysis,
+      source,
+      deferByNode,
+      hoistByNode,
+      moduleComponentNames
+    )
+    if (!folded) return null
+    holeCodes.push(folded.code)
+    for (const n of folded.foldedNodes) foldedHoleNodes.add(n)
+    for (const n of folded.inlinedJsxNodes) inlinedJsxNodes.add(n)
+  }
+
+  const regionsPart =
+    regions.length > 0
+      ? `, ${formatRegionsLiteral(regions)}`
+      : ""
+  const codeExpr = `createHoledTemplate(${factoryVar}, [${holeCodes.join(", ")}]${regionsPart})`
+
+  const insertBefore =
+    tier === "module"
+      ? null
+      : tier === "componentBody"
+        ? componentInsert
+        : setupInsert
+
+  return {
+    exprNode,
+    tier,
+    insertBefore,
+    varName: allocVarName(),
+    codeExpr,
+    foldedHoleNodes,
+    inlinedJsxNodes,
+  }
+}
+
+function foldRenderRootHole(
+  hole: AstNode,
+  hoistTier: HoistTier,
+  ctx: AnalysisCtx,
+  source: string,
+  deferByNode: Map<AstNode, string>,
+  hoistByNode: Map<AstNode, string>,
+  moduleComponentNames: Set<string>
+): {
+  code: string
+  foldedNodes: AstNode[]
+  inlinedJsxNodes: AstNode[]
+} | null {
+  const foldedNodes: AstNode[] = []
+  const inlinedJsxNodes: AstNode[] = []
+
+  const conditionalExpr = extractConditionalTemplateHole(hole, ctx)
+  if (conditionalExpr) {
+    if (!canHoistConditionalHoleExpr(conditionalExpr, ctx, hoistTier))
+      return null
+    foldedNodes.push(conditionalExpr)
+    return {
+      code: lazyConditionalHoleCodeExpr(source, conditionalExpr, deferByNode),
+      foldedNodes,
+      inlinedJsxNodes,
+    }
+  }
+
+  if (hole.type === "ArrayExpression") {
+    if (expressionReferencesBinding(hole, ctx, blocksForTier(hoistTier)))
+      return null
+    if (conditionalHoleHasImpureCall(hole, ctx)) return null
+    foldedNodes.push(hole)
+    return {
+      code: sliceNode(source, hole, deferByNode),
+      foldedNodes,
+      inlinedJsxNodes,
+    }
+  }
+
+  const payload = extractSetupHoistableHolePayload(hole, ctx)
+  if (!payload) return null
+
+  const { exprNode, jsxNode } = payload
+  const typeArg = jsxNode.arguments?.[0]
+  const isComponent =
+    typeArg &&
+    isComponentJsxTag(typeArg, ctx, moduleComponentNames) &&
+    !isIntrinsicJsxTag(typeArg)
+
+  if (isComponent) {
+    const kVar = hoistByNode.get(jsxNode)
+    if (kVar) {
+      foldedNodes.push(exprNode)
+      return { code: kVar, foldedNodes, inlinedJsxNodes }
+    }
+    if (hoistTier === "module") {
+      if (
+        !canHoistComponentCallToModule(jsxNode, ctx, moduleComponentNames) &&
+        !canHoistToModule(jsxNode, ctx)
+      ) {
+        return null
+      }
+    } else if (!canHoistToSetup(jsxNode, ctx)) {
+      return null
+    }
+    foldedNodes.push(exprNode)
+    return {
+      code: sliceNode(source, exprNode, deferByNode),
+      foldedNodes,
+      inlinedJsxNodes,
+    }
+  }
+
+  if (hoistTier === "module") {
+    if (!canHoistToModule(jsxNode, ctx)) return null
+  } else if (!canHoistToSetup(jsxNode, ctx)) {
+    return null
+  }
+
+  if (hoistByNode.has(jsxNode)) {
+    inlinedJsxNodes.push(jsxNode)
+  }
+  foldedNodes.push(exprNode)
+  return {
+    code: sliceNode(source, exprNode, deferByNode),
+    foldedNodes,
+    inlinedJsxNodes,
+  }
 }
 
 function findSetupHolePayloadCandidates(
@@ -1151,49 +1493,6 @@ function subtreeHasImpureCallForSetupHole(
   return found
 }
 
-function findSetupRenderHoistCandidate(
-  jsxNode: AstNode,
-  walkCtx: import("./scopeWalk.js").ScopeWalkContext,
-  ctx: AnalysisCtx
-): SetupHoistCandidate | null {
-  if (!isJsxFactoryCall(jsxNode, ctx)) return null
-  const insertBefore = findSetupRenderInsertBefore(jsxNode, walkCtx)
-  if (!insertBefore) return null
-  return { rootJsx: jsxNode, insertBefore }
-}
-
-function unwrapExpression(node: AstNode | undefined): AstNode | undefined {
-  let current = node
-  while (current) {
-    if (current.type === "ParenthesizedExpression") {
-      current = (current as { expression?: AstNode }).expression
-      continue
-    }
-    if (current.type === "ExpressionStatement") {
-      current = (current as { expression?: AstNode }).expression
-      continue
-    }
-    break
-  }
-  return current
-}
-
-function isRenderBodySingleExpression(
-  body: AstNode | undefined,
-  exprNode: AstNode
-): boolean {
-  if (!body) return false
-  const unwrapped = unwrapExpression(body)
-  if (unwrapped === exprNode) return true
-  if (unwrapped?.type === "BlockStatement") {
-    const stmts = (unwrapped as { body?: AstNode[] }).body
-    if (stmts?.length === 1 && stmts[0]?.type === "ReturnStatement") {
-      return unwrapExpression(stmts[0].argument) === exprNode
-    }
-  }
-  return false
-}
-
 /** JSX roots that setup-scope hoisting will absorb (skip template shells on these subtrees). */
 export function collectSetupHoistRenderRoots(
   bodyNodes: AstNode[]
@@ -1203,9 +1502,13 @@ export function collectSetupHoistRenderRoots(
   const roots = new Set<AstNode>()
   walkProgramBody(bodyNodes, {
     onCallExpression: (node, walkCtx) => {
-      const cand = findSetupRenderHoistCandidate(node, walkCtx, analysis)
-      if (cand && canHoistToSetup(cand.rootJsx, analysis)) {
-        roots.add(cand.rootJsx)
+      const insertBefore = findSetupRenderInsertBefore(node, walkCtx)
+      if (
+        insertBefore &&
+        isJsxFactoryCall(node, analysis) &&
+        canHoistToSetup(node, analysis)
+      ) {
+        roots.add(node)
       }
     },
   })

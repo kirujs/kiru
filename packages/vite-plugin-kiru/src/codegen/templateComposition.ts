@@ -7,7 +7,7 @@ export function escapeTemplateLiteralStatic(segment: string): string {
     .replace(/\$\{/g, "\\${")
 }
 
-/** Emit `_template(...)` or `_template(\`...\${$t0}...\`, n)` when html contains ref markers. */
+/** Emit `_template(...)` or `_template(\`...\${$t0.html}...\`, n)` when html contains ref markers. */
 export function buildTemplateFactoryExpr(
   html: string,
   holeCount: number,
@@ -33,7 +33,7 @@ export function buildTemplateFactoryExpr(
         `[kiru]: missing template factory for folded component "${name}"`
       )
     }
-    parts.push(`\${${varName}}`)
+    parts.push(`\${${varName}.html}`)
     lastIndex = match.index + match[0].length
   }
   const tail = html.slice(lastIndex)

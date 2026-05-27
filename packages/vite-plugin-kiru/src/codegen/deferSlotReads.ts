@@ -8,6 +8,7 @@ import {
 import { deferSlotReadsInJsxCall, type RegionAnalysisCtx } from "./compileRegions.js"
 import { isKiruJsxFactoryCall } from "./scope.js"
 import { buildProgramBindingResolve, walkProgramBody } from "./scopeWalk.js"
+import type { ProgramCallIndex } from "./programCallIndex.js"
 import type { TransformCTX } from "./shared.js"
 
 type AstNode = AST.AstNode
@@ -26,22 +27,34 @@ function createRegionCtx(resolve: RegionAnalysisCtx["resolve"]): RegionAnalysisC
 export function analyzeDeferSlotReads(
   ast: ProgramNode,
   source: string,
-  resolve: RegionAnalysisCtx["resolve"]
+  resolve: RegionAnalysisCtx["resolve"],
+  callIndex?: ProgramCallIndex
 ): DeferPlan {
   const bodyNodes = ast.body as AstNode[]
-  const analysis = createRegionCtx(resolve)
   const wraps: DeferPlan["wraps"] = []
-
-  walkProgramBody(bodyNodes, {
-    onCallExpression: (node) => {
-      deferSlotReadsInJsxCall(node, analysis, (elem) => {
+  if (callIndex) {
+    callIndex.forEachCall((site) => {
+      const analysis = createRegionCtx(site.resolve)
+      deferSlotReadsInJsxCall(site.node, analysis, (elem) => {
         wraps.push({
           node: elem,
           text: wrapDeferredExpr(source, elem),
         })
       })
-    },
-  })
+    })
+  } else {
+    const analysis = createRegionCtx(resolve)
+    walkProgramBody(bodyNodes, {
+      onCallExpression: (node) => {
+        deferSlotReadsInJsxCall(node, analysis, (elem) => {
+          wraps.push({
+            node: elem,
+            text: wrapDeferredExpr(source, elem),
+          })
+        })
+      },
+    })
+  }
 
   return { wraps }
 }
