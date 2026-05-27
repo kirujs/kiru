@@ -10,6 +10,8 @@ import { __DEV__ } from "../env.js"
 import { postEffectCleanups, renderMode } from "../globals.js"
 import { isHmrUpdate } from "../hmr.js"
 import { unmountDomProps, updateDomProps } from "./props.js"
+import { unmountTemplateBindings } from "../templateBindings.js"
+import { FLAG_TEMPLATE } from "../constants.js"
 import { HostNode, getDomParent, placeDom } from "./nodes.js"
 import type { AppHandle } from "../appHandle.js"
 import type { DomVNode, ElementVNode } from "../types.utils.js"
@@ -116,6 +118,10 @@ function commitDeletion(vNode: VNode) {
       if (dom instanceof Element) {
         delete dom.__kiruNode
       }
+    }
+
+    if (node.flags & FLAG_TEMPLATE) {
+      unmountTemplateBindings(node)
     }
 
     if (dom) {

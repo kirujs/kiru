@@ -287,12 +287,35 @@ Implementation: per-file scope registry (`moduleSignal` vs `setupConst`) in `pre
 
 | Piece | Location |
 |-------|----------|
-| `_template(html, holeCount?)`, `createHoledTemplate` | `packages/lib/src/template.ts` |
+| `_template(html, holeCount?, structuralNodeCount?)`, `createHoledTemplate` | `packages/lib/src/template.ts` |
 | Static HTML emission (aligned with `headlessRender`) | `packages/lib/src/utils/staticHtml.ts` (`kiru/utils`) |
 | Partial shell + `<!--#-->` markers | `packages/vite-plugin-kiru/src/codegen/templateHTML.ts` |
+| Behavior-only intrinsic lowering (`ref`, `on*`, `bind:*`) | `trySerializeBehaviorOnlyIntrinsic` in `templateHTML.ts` |
+| Binding apply at compile-time coordinates | `packages/lib/src/templateBindings.ts` |
 | Hole mount / update | `reconcileTemplateHoles` in `packages/lib/src/reconciler.ts` |
 
-**Fully static** subtrees use `_template(html)` (zero holes), which returns a `TemplateRoot` descriptor `{ html, holeCount }` used directly (e.g. `mount($t0)` — no call). **Mixed shells** use one template with comment anchors; dynamic children mount via `createHoledTemplate($tN, […])` at reconcile time. Nested static markup in composed shells inlines via `` _template(`…${$t0.html}…`, n) ``. Attribute dynamics (`bind:`, `className={signal}`) on the template root stay on hoisted `jsx` or prop patches — not DOM holes.
+**Fully static** subtrees use `_template(html)` (zero holes), which returns a `TemplateRoot` descriptor `{ html, holeCount }` used directly (e.g. `mount($t0)` — no call). **Mixed shells** use one template with comment anchors; dynamic children mount via `createHoledTemplate($tN, […])` at reconcile time. Nested static markup in composed shells inlines via `` _template(`…${$t0.html}…`, n) ``. Attribute dynamics (`bind:`, `className={signal}`) on the **template root shell** stay on hoisted `jsx` or prop patches — not DOM holes (shell props with `bind:` / `ref` are still rejected by `isTemplateShellProps`).
+
+**Behavior-only template bindings:** When an intrinsic host has **static structure** and its only dynamic props are behavior (`ref`, keys starting with `on`, keys starting with `bind:`), the compiler inlines the host into template HTML instead of emitting a structural `node` region + hole. Examples: a `<button onclick={…}>` beside a text hole (Counter), a ref-only `<div>`, or a `bind:value`-only `<input>` with static `type`.
+
+| Piece | Role |
+|-------|------|
+| `bindings` | Compile-time descriptors `{ kind, prop, nodeIndex }` on `TemplateRoot` |
+| `bindingPayloads` | Sparse array keyed by `nodeIndex` — behavior prop bags applied at mount/update |
+| `structuralNodeCount` | Optional count of descendant elements in serialization order (excludes shell root); third `_template` argument when codegen emits it (`_template(html, holeCount, count)`) |
+| `buildTemplateStructuralNodeMap` | DFS over cloned template DOM (skips `<!--#-->`) → `map[nodeIndex]` |
+| `applyTemplateBindings` | Applies payloads via `updateDomProps` proxies; no `childNodes` lookup at apply time |
+
+Nested inlined templates share one compile-time coordinate allocator per root shell serialize, so rebased `nodeIndex` values stay aligned with DOM walk order (e.g. outer `<h1>` → index `0`, inlined `<button onclick>` → index `1`). In `__DEV__`, `applyTemplateBindings` asserts `map.length === templateStructuralNodeCount` when the count is present.
+
+Codegen shape:
+
+```typescript
+createHoledTemplate($t0, [holePayloads…], regions, bindings, bindingPayloads)
+// $t0 = _template("<div>…<button>…</button>…", 1, 3)
+```
+
+**Still structural holes (fallback):** hosts with dynamic non-behavior props (`className={signal}`), dynamic children, component tags, or uncertain lowering continue to use `node` regions + `<!--#-->` anchors.
 
 **Codegen pipeline:** [`applyJsxHoistAndTemplates`](../../packages/vite-plugin-kiru/src/codegen/jsxHoistPipeline.ts) parses each module once (`parseAst` with `allowReturnOutsideFunction: true`), runs three read-only analysis passes on that AST and the original source string, merges a [`CodegenPlan`](../../packages/vite-plugin-kiru/src/codegen/codegenPlan.ts), then applies every edit through a single `MagicString` instance. Analysis order is defer slot reads → template bindings → JSX hoisting (hoist skips nodes absorbed by the template plan). Apply order is `prepend` (template import) first, then all `replace` edits from highest `start` to lowest so spans stay valid, then `appendLeft` / `appendRight` by descending position. Hole payloads and hoist expressions use `sliceNode`, which can apply a virtual defer wrap without re-parsing between phases.
 
@@ -374,6 +397,7 @@ The original phase-2 reference grouped techniques as follows; numbers match that
 | 6 | Hoist static subtrees | 2C shipped |
 | 7 | Skip recursive diff (hoisted) | **2E.1 shipped** ([status](./phase-2e-status.md)) |
 | 8 | DOM templates / `cloneNode` | **Phase 3 shipped** (`kiru/template`, `prepareJSXTemplates`) |
+| 8b | Behavior-only template bindings (`ref` / `on*` / `bind:`) | **Shipped** — static intrinsics + compile-time `nodeIndex` ([Phase 3](#phase-3--dom-templates-shipped--structural-holes)) |
 | 9 | Dynamic slot mask | **2E.2 shipped** ([status](./phase-2e-status.md)) |
 | 10 | Shape-based patch dispatch | **2D shipped** |
 | 11 | Better hydration | **2E.3 partial** ([status](./phase-2e-status.md)) |

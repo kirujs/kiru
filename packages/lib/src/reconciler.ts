@@ -24,6 +24,7 @@ import {
   isTemplateRoot,
   type TemplateRoot,
 } from "./template.js"
+import { applyTemplateBindings } from "./templateBindings.js"
 import {
   getVNodeApp,
   isElement,
@@ -831,6 +832,21 @@ function applyElementFlags(node: VNode, element: KElement) {
   }
 }
 
+function syncTemplateBindingMetadata(
+  vNode: VNode,
+  template: TemplateRoot
+): void {
+  if (template.bindings !== undefined) {
+    vNode.templateBindings = template.bindings
+  }
+  if (template.bindingPayloads !== undefined) {
+    vNode.templateBindingPayloads = template.bindingPayloads
+  }
+  if (template.structuralNodeCount !== undefined) {
+    vNode.templateStructuralNodeCount = template.structuralNodeCount
+  }
+}
+
 /** Sync hole children from a new `createHoledTemplate` value and reconcile mounted holes. */
 function refreshReusedTemplateHoles(
   vNode: VNode,
@@ -844,6 +860,7 @@ function refreshReusedTemplateHoles(
   if (template.regions !== undefined) {
     vNode.templateRegions = template.regions
   }
+  syncTemplateBindingMetadata(vNode, template)
   if (count > 0 && vNode.dom) {
     reconcileTemplateHoles(vNode)
     // Holes are already reconciled; mark so performUnitOfWork descends into hole
@@ -851,6 +868,7 @@ function refreshReusedTemplateHoles(
     // re-weaving holes before stale cross-hole sibling links are cleared).
     vNode.flags |= FLAG_TEMPLATE_HOLES_SYNCED
   }
+  applyTemplateBindings(vNode)
 }
 
 /** Remove a stale weave from the previous hole's tail into `toHead`. */
@@ -956,6 +974,8 @@ function hydrateVNode(vNode: VNode): void {
     if (vNode.flags & FLAG_TEMPLATE) {
       if ((vNode.templateHoleCount ?? 0) > 0) {
         reconcileTemplateHoles(vNode)
+      } else {
+        applyTemplateBindings(vNode)
       }
       return
     }
@@ -1075,6 +1095,7 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
   }
 
   vNode.child = first
+  applyTemplateBindings(vNode)
   return first
 }
 
@@ -1095,6 +1116,7 @@ function createTemplateVNode(parent: VNode, template: TemplateRoot): VNode {
     if (template.regions) {
       node.templateRegions = template.regions
     }
+    syncTemplateBindingMetadata(node, template)
     node.dom = dom as Kiru.VNode["dom"]
     if (holeCount > 0) {
       node.templateHoleAnchors = resolveTemplateHoleAnchors(
@@ -1102,6 +1124,7 @@ function createTemplateVNode(parent: VNode, template: TemplateRoot): VNode {
         holeCount
       )
     }
+    applyTemplateBindings(node)
     if (__DEV__) {
       ;(dom as Element).__kiruNode = node
     }
@@ -1118,6 +1141,7 @@ function createTemplateVNode(parent: VNode, template: TemplateRoot): VNode {
   if (template.regions) {
     node.templateRegions = template.regions
   }
+  syncTemplateBindingMetadata(node, template)
   return node
 }
 

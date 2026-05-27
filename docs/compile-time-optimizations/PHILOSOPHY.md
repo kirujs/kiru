@@ -49,6 +49,7 @@ Semantic `kind` describes **what** is bound; update **strategy** (direct text, s
 |---------|--------|
 | Cloned DOM shell | `TemplateRoot` / template host vnode |
 | Hole anchor comments | Template HTML + `templateRegions` |
+| Behavior props on inlined static intrinsics | `templateBindings` + `bindingPayloads` at compile-time `nodeIndex` (not structural holes) |
 | Per-hole mounted subtree | `templateHoleHeads[i]` + anchor region ops |
 | Mixed `jsxs` static siblings | Parent host + `slotRegions` mask |
 | Subscriptions / effects | Component vnodes & inline fns |
@@ -70,7 +71,9 @@ Break template extraction at **dynamic** boundaries:
 - Loops / `For` (when supported)
 - Reactive text and signal reads
 - Slots / outlets (`children`)
-- Non-static props (`bind:`, events, refs)
+- Non-static props on the **template shell root** (`bind:`, events, refs on the outermost serialized host)
+
+**Behavior-only intrinsics** (static tag + static children; only `ref` / `on*` / `bind:*` dynamic) may stay in template HTML with compile-time binding coordinates instead of a structural `node` hole — see [Phase 3 behavior bindings](./static-children-and-jsx-hoisting.md#phase-3--dom-templates-shipped--structural-holes).
 
 **Static leaf FCs** may be **folded into the parent shell HTML** when the call site has only static props, the component is module-pure, and its render root serializes to a zero-hole intrinsic template (e.g. `<Badge />` → `<span class="badge">OK</span>` inlined in the outer `$t0`). The component may still keep its own `$tN` factory for direct use elsewhere.
 

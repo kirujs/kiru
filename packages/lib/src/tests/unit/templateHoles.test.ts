@@ -11,6 +11,7 @@ import { RouterProvider } from "../../router/routerContext.js"
 import { createStaticRouter } from "../../router/csr.js"
 import { createRoute, createRouteTree } from "../../router/createRouteTree.js"
 import { compileRouteTree } from "../../router/manifest.js"
+import { signal } from "../../signals/index.js"
 import { withJSDOM } from "./jsdom.js"
 
 const linkManifest = compileRouteTree(
@@ -485,6 +486,135 @@ describe("template holes", () => {
       kiru.mount(makeOuter(), container)
       const app = container.__kiruNode!.app!
       assert.doesNotThrow(() => app.render(makeOuter()))
+    })
+  })
+
+  it("applies template bindings to static event hosts without a hole vnode", async () => {
+    await withJSDOM(async (container, kiru) => {
+      let clicks = 0
+      const html = `<div><button type="button">Click</button></div>`
+      const tpl = createHoledTemplate(
+        _template(html, 0),
+        [],
+        undefined,
+        [{ kind: "event", prop: "onclick", nodeIndex: 0 }],
+        [{ onclick: () => clicks++ }]
+      )
+      kiru.mount(tpl, container)
+      const btn = container.querySelector("button")!
+      assert.strictEqual(btn.textContent, "Click")
+      btn.click()
+      assert.strictEqual(clicks, 1)
+      assert.strictEqual(
+        container.querySelectorAll("button").length,
+        1,
+        "behavior-only host must not mount a second button via a hole"
+      )
+    })
+  })
+
+  it("reuses cached structural map across binding updates", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const html = `<div><button>Go</button></div>`
+      const factory = _template(html, 0)
+      let generation = 0
+      const makeTpl = () =>
+        createHoledTemplate(
+          factory,
+          [],
+          undefined,
+          [{ kind: "event", prop: "onclick", nodeIndex: 0 }],
+          [{ onclick: () => generation++ }]
+        )
+      kiru.mount(makeTpl(), container)
+      const root = container.querySelector("div") as Element & {
+        __kiruNode?: Kiru.VNode
+      }
+      const vnode = root.__kiruNode!
+      const map = vnode.templateStructuralNodes
+      assert.ok(map?.length === 1)
+      assert.strictEqual(map[0], container.querySelector("button"))
+      const app = container.__kiruNode!.app!
+      app.render(makeTpl())
+      assert.strictEqual(vnode.templateStructuralNodes, map)
+      container.querySelector("button")!.click()
+      assert.strictEqual(generation, 1)
+    })
+  })
+
+  it("ref callback attaches to inlined template element at nodeIndex 0", async () => {
+    await withJSDOM(async (container, kiru) => {
+      let attached: HTMLButtonElement | null = null
+      const html = `<div><button type="button">Save</button></div>`
+      const tpl = createHoledTemplate(
+        _template(html, 0, 1),
+        [],
+        undefined,
+        [{ kind: "ref", prop: "ref", nodeIndex: 0 }],
+        [{ ref: (el: HTMLButtonElement | null) => (attached = el) }]
+      )
+      kiru.mount(tpl, container)
+      const btn = container.querySelector("button")!
+      assert.strictEqual(attached, btn)
+    })
+  })
+
+  it("bind:value on inlined input updates signal and DOM", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const value = signal("hi")
+      const html = `<div><input type="text" /></div>`
+      const tpl = createHoledTemplate(
+        _template(html, 0, 1),
+        [],
+        undefined,
+        [{ kind: "bind", prop: "bind:value", nodeIndex: 0 }],
+        [{ "bind:value": value }]
+      )
+      kiru.mount(tpl, container)
+      const input = container.querySelector("input") as HTMLInputElement
+      assert.strictEqual(input.value, "hi")
+      value.set("bye")
+      assert.strictEqual(input.value, "bye")
+      input.value = "next"
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+      assert.strictEqual(value(), "next")
+    })
+  })
+
+  it("nested inlined binding onclick targets correct nodeIndex", async () => {
+    await withJSDOM(async (container, kiru) => {
+      let clicks = 0
+      const html = `<div><h1>Title</h1><button type="button">Go</button></div>`
+      const tpl = createHoledTemplate(
+        _template(html, 0, 2),
+        [],
+        undefined,
+        [{ kind: "event", prop: "onclick", nodeIndex: 1 }],
+        [undefined, { onclick: () => clicks++ }]
+      )
+      kiru.mount(tpl, container)
+      container.querySelector("button")!.click()
+      assert.strictEqual(clicks, 1)
+    })
+  })
+
+  it("hydrates template bindings from structural coordinates", async () => {
+    await withJSDOM(async (container) => {
+      const html = `<div><button>Save</button></div>`
+      let saved = false
+      const tpl = createHoledTemplate(
+        _template(html, 0),
+        [],
+        undefined,
+        [{ kind: "event", prop: "onclick", nodeIndex: 0 }],
+        [{ onclick: () => (saved = true) }]
+      )
+      let ssr = ""
+      headlessRender({ write: (c) => (ssr += c) }, tpl)
+      container.innerHTML = ssr
+      hydrate(tpl, container)
+      container.querySelector("button")!.click()
+      assert.strictEqual(saved, true)
     })
   })
 

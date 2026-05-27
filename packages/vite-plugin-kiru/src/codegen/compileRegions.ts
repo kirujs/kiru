@@ -1,4 +1,4 @@
-import type { CompileRegion } from "kiru/template"
+import type { CompileRegion, TemplateBindingDescriptor } from "kiru/template"
 import * as AST from "./ast.js"
 import {
   blocksModuleHoist,
@@ -28,6 +28,23 @@ export function formatRegionsLiteral(
     return `{${fields.join(",")}}`
   })
   return `[${parts.join(",")}]`
+}
+
+export function formatTemplateBindingsLiteral(
+  bindings: readonly TemplateBindingDescriptor[]
+): string {
+  if (bindings.length === 0) return ""
+  const parts = bindings.map((b) => {
+    return `{kind:"${b.kind}",prop:"${b.prop}",nodeIndex:${b.nodeIndex}}`
+  })
+  return `[${parts.join(",")}]`
+}
+
+export function formatBindingPayloadsLiteral(
+  payloads: readonly string[]
+): string {
+  if (payloads.length === 0) return ""
+  return `[${payloads.join(",")}]`
 }
 
 export function classifyTemplateHoleRegion(

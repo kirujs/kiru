@@ -15,7 +15,7 @@ This folder documents how Kiru uses **compiler hints** (JSX factories, Vite tran
 | Doc | Contents |
 |-----|----------|
 | [Compiler philosophy](./PHILOSOPHY.md) | Constitution: DOM shells + typed regions (read before changing codegen) |
-| [Static children and JSX hoisting](./static-children-and-jsx-hoisting.md) | Full roadmap: phases 1–2D, 2E design, research, acceptance criteria |
+| [Static children and JSX hoisting](./static-children-and-jsx-hoisting.md) | Full roadmap: phases 1–2D, 2E design, Phase 3 templates + behavior bindings, research, acceptance criteria |
 | [Phase 2E status](./phase-2e-status.md) | Shipped status and verification evidence for static-children/hoisting follow-ups |
 
 ---
@@ -50,7 +50,8 @@ Automatic JSX is configured with `jsxImportSource: "kiru"` in the plugin default
 | Area | Package / path |
 |------|----------------|
 | JSX factories, element flags | `packages/lib/src/jsx.ts`, `element.ts`, `constants.ts` |
+| Template shells, behavior bindings | `packages/lib/src/template.ts`, `templateBindings.ts` |
 | Reconciler patchers | `packages/lib/src/reconciler.ts` |
 | Scheduler / host updates | `packages/lib/src/scheduler.ts` |
-| Hoist transform | `packages/vite-plugin-kiru/src/codegen/hoistJSX.ts` |
-| Tests | `packages/lib/src/tests/unit/jsxStaticChildren.test.tsx`, `packages/vite-plugin-kiru/src/codegen/hoistJSX.test.ts`, `packages/vite-plugin-kiru/src/codegen/template*.test.ts`, `e2e/compile-opts` (Cypress) |
+| Hoist + template transforms | `packages/vite-plugin-kiru/src/codegen/hoistJSX.ts`, `templateHTML.ts`, `prepareJSXTemplates.ts` |
+| Tests | `packages/lib/src/tests/unit/jsxStaticChildren.test.tsx`, `templateHoles.test.ts`, `packages/vite-plugin-kiru/src/codegen/hoistJSX.test.ts`, `templateHTML.test.ts`, `e2e/compile-opts` (Cypress) |

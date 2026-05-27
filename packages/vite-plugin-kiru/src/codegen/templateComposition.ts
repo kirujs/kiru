@@ -7,16 +7,27 @@ export function escapeTemplateLiteralStatic(segment: string): string {
     .replace(/\$\{/g, "\\${")
 }
 
+function templateFactoryArgs(
+  holeCount: number,
+  structuralNodeCount?: number
+): string {
+  if (structuralNodeCount === undefined) {
+    return holeCount === 0 ? "" : `, ${holeCount}`
+  }
+  return `, ${holeCount}, ${structuralNodeCount}`
+}
+
 /** Emit `_template(...)` or `_template(\`...\${$t0.html}...\`, n)` when html contains ref markers. */
 export function buildTemplateFactoryExpr(
   html: string,
   holeCount: number,
-  refVarMap: Map<string, string>
+  refVarMap: Map<string, string>,
+  structuralNodeCount?: number
 ): string {
+  const extraArgs = templateFactoryArgs(holeCount, structuralNodeCount)
   const markerRe = /<!--@kiru-tpl-ref:([^@]+)@-->/g
   if (!html.includes("<!--@kiru-tpl-ref:")) {
-    if (holeCount === 0) return `_template(${JSON.stringify(html)})`
-    return `_template(${JSON.stringify(html)}, ${holeCount})`
+    return `_template(${JSON.stringify(html)}${extraArgs})`
   }
 
   const parts: string[] = []
@@ -40,8 +51,7 @@ export function buildTemplateFactoryExpr(
   if (tail) parts.push(escapeTemplateLiteralStatic(tail))
 
   const inner = parts.join("")
-  if (holeCount === 0) return `_template(\`${inner}\`)`
-  return `_template(\`${inner}\`, ${holeCount})`
+  return `_template(\`${inner}\`${extraArgs})`
 }
 
 export function htmlUsesTemplateRefs(html: string): boolean {

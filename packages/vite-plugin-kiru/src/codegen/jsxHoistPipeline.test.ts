@@ -125,14 +125,14 @@ const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 
       out,
       /\$t0 = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
     )
-    assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 2\)/)
+    assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 1(?:, \d+)?\)/)
     assert.doesNotMatch(
       out,
       /\$t1 = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
     )
     assert.match(
       out,
-      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+, \[\[[\s\S]*\], jsxDEV\("button"/
+      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+, \[\[[\s\S]*count[\s\S]*\]\], \[\{kind:"text",anchor:0\}\]/
     )
     assert.match(out, /return \$r0/)
     assert.doesNotMatch(out, /^const \$k\d+ = jsxDEV\("button"/m)
@@ -163,7 +163,7 @@ const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 
       out,
       /\$t0 = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
     )
-    assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 2\)/)
+    assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 1(?:, \d+)?\)/)
     assert.match(out, /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t1/)
     assert.match(out, /return \(\) =>[\s\S]*\$r0/)
   })
@@ -218,7 +218,7 @@ export const Counter = () => {
 `
     const out = transformLikeJsxHoistPlugin(source)
     assert.ok(out)
-    assert.match(out, /_template\([^)]*, 2\)/)
+    assert.match(out, /_template\([^)]*, 1(?:, \d+)?\)/)
     assert.match(out, /const count = signal\(0\)/)
     assert.match(
       out,
@@ -247,14 +247,14 @@ describe("jsx-hoist plugin pipeline (production jsx/jsxs)", () => {
       out,
       /\$t0 = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
     )
-    assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 2\)/)
+    assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 1(?:, \d+)?\)/)
     assert.doesNotMatch(
       out,
       /\$t1 = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
     )
     assert.match(
       out,
-      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+, \[\[[\s\S]*\], jsx\("button"/
+      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+, \[\[[\s\S]*count[\s\S]*\]\], \[\{kind:"text",anchor:0\}\]/
     )
     assert.match(out, /return \$r0/)
     assert.doesNotMatch(out, /^const \$k\d+ = jsx\("button"/m)
@@ -269,7 +269,7 @@ describe("jsx-hoist plugin pipeline (production jsx/jsxs)", () => {
       out,
       /\$t0 = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
     )
-    assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 2\)/)
+    assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 1(?:, \d+)?\)/)
     assert.match(out, /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t1/)
     assert.match(out, /return \(\) => \$r0/)
   })
@@ -289,7 +289,7 @@ describe("jsx-hoist plugin pipeline (production jsx/jsxs)", () => {
   it("setup-hoists holed template payloads for setup Counter shape", () => {
     const out = transformLikeJsxHoistPlugin(COUNTER_SETUP_RETURN_SETUP_COUNT)
     assert.ok(out)
-    assert.match(out, /_template\([^)]*, 2\)/)
+    assert.match(out, /_template\([^)]*, 1(?:, \d+)?\)/)
     assert.match(out, /const count = signal\(0\)/)
     assert.match(
       out,
@@ -303,7 +303,7 @@ describe("jsx-hoist plugin pipeline (production jsx/jsxs)", () => {
     assert.ok(out)
     assert.match(
       out,
-      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+,[\s\S]*jsx\("button"/
+      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+,[\s\S]*\{kind:"event",prop:"onclick",nodeIndex:1\}/
     )
     assert.match(out, /\(\) => \(toggled\(\) &&/)
     assert.match(out, /\{kind:"conditional"/)

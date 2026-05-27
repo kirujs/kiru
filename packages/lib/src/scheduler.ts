@@ -43,6 +43,7 @@ import {
   reconcileTemplateHoles,
   tryReconcileStaticChildrenInPlace,
 } from "./reconciler.js"
+import { applyTemplateBindings } from "./templateBindings.js"
 import { isHmrUpdate } from "./hmr.js"
 import type { AppHandle } from "./appHandle.js"
 import { isSignal } from "./signals/base.js"
@@ -492,6 +493,7 @@ function updateHostComponent(vNode: DomVNode): VNode | null {
         }
         return reconcileTemplateHoles(vNode)
       }
+      applyTemplateBindings(vNode)
       return vNode.child
     }
     if (

@@ -359,6 +359,10 @@ declare global {
       readonly html: string
       readonly holeCount: number
       readonly holeChildren?: readonly unknown[]
+      readonly regions?: readonly import("./compileRegions.js").CompileRegion[]
+      readonly bindings?: readonly import("./template.js").TemplateBindingDescriptor[]
+      readonly bindingPayloads?: readonly (Record<string, unknown> | undefined)[]
+      readonly structuralNodeCount?: number
     }
 
     interface Element {
@@ -418,6 +422,16 @@ declare global {
       templateHoleHeads?: (VNode | null)[]
       /** @internal Shell `<!--#-->` anchors (cached; excludes nested template markers). */
       templateHoleAnchors?: readonly Comment[]
+      /** Copied from `TemplateRoot.bindings`. */
+      templateBindings?: readonly import("./template.js").TemplateBindingDescriptor[]
+      /** Copied from `TemplateRoot.bindingPayloads`. */
+      templateBindingPayloads?: readonly (Record<string, unknown> | undefined)[]
+      /** Copied from `TemplateRoot.structuralNodeCount` for dev coordinate checks. */
+      templateStructuralNodeCount?: number
+      /** @internal Cached structural targets for `templateBindings` (descendants in serialize order). */
+      templateStructuralNodes?: readonly import("./types.utils.js").SomeElement[]
+      /** @internal Prop/cleanup state for template binding application. */
+      templateBindingStates?: unknown[]
     }
     interface VNodeSnapshot {
       props: Kiru.VNode["props"]

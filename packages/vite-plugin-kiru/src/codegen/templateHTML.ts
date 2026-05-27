@@ -1,4 +1,4 @@
-import type { CompileRegion } from "kiru/template"
+import type { CompileRegion, TemplateBindingDescriptor } from "kiru/template"
 import {
   encodeStaticText,
   KIRU_HOLE_MARKER,
@@ -30,12 +30,104 @@ export type TemplateSerializeCtx = {
   strictHoledShell?: boolean
 }
 
+export type TemplateBindingHost = {
+  nodeIndex: number
+  call: AstNode
+}
+
 export type TemplateSerializeResult = {
   html: string
   holeCount: number
   /** Dynamic child expression nodes (for codegen source slices). */
   holeNodes: AstNode[]
   regions: CompileRegion[]
+  bindings: TemplateBindingDescriptor[]
+  bindingHosts: TemplateBindingHost[]
+  /** Intrinsic elements serialized in this subtree (for parent merge rebase). */
+  structuralNodeCount: number
+}
+
+type TemplateCoordinateAllocator = {
+  alloc: () => number
+  count: () => number
+  reset: (count: number) => void
+}
+
+/** Shared coordinate state when inlining nested template shells into a parent. */
+export type TemplateSerializeShared = {
+  coords: TemplateCoordinateAllocator
+  bindings: TemplateBindingDescriptor[]
+  bindingHosts: TemplateBindingHost[]
+}
+
+function createTemplateCoordinateAllocator(): TemplateCoordinateAllocator {
+  let next = 0
+  return {
+    alloc: () => next++,
+    count: () => next,
+    reset: (count: number) => {
+      next = count
+    },
+  }
+}
+
+const VOID_HTML_TAGS = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
+])
+
+/** Assign coords for descendant elements in markup (DFS open-tag order). */
+function allocateStructuralCoordsFromMarkup(
+  html: string,
+  coords: TemplateCoordinateAllocator
+): void {
+  let pos = 0
+  while (pos < html.length) {
+    if (html.startsWith(KIRU_HOLE_MARKER, pos)) {
+      pos += KIRU_HOLE_MARKER.length
+      continue
+    }
+    if (html[pos] !== "<") {
+      pos++
+      continue
+    }
+    const close = html.indexOf(">", pos)
+    if (close === -1) break
+    const tagSlice = html.slice(pos, close + 1)
+    pos = close + 1
+    const closeTag = /^<\/([a-z][\w-]*)\s*>/i.exec(tagSlice)
+    if (closeTag) continue
+    const openTag = /^<([a-z][\w-]*)\b/i.exec(tagSlice)
+    if (!openTag) continue
+    const name = openTag[1]!.toLowerCase()
+    const selfClosing =
+      /\/>\s*$/.test(tagSlice) || VOID_HTML_TAGS.has(name)
+    coords.alloc()
+    if (selfClosing) continue
+  }
+}
+
+function returnInlinedMarkup(
+  html: string,
+  coords: TemplateCoordinateAllocator,
+  options?: { skipStructuralAlloc?: boolean }
+): string {
+  if (!options?.skipStructuralAlloc && html.includes("<")) {
+    allocateStructuralCoordsFromMarkup(html, coords)
+  }
+  return html
 }
 
 function isAnyJsxFactoryCall(
@@ -108,7 +200,8 @@ export function shellHtmlHasStaticMarkupBesideHoles(html: string): boolean {
 
 export function serializeJsxCallToTemplate(
   callNode: AstNode,
-  ctx: TemplateSerializeCtx
+  ctx: TemplateSerializeCtx,
+  shared?: TemplateSerializeShared
 ): TemplateSerializeResult | null {
   if (!isAnyJsxFactoryCall(callNode, ctx)) return null
   if (!isTemplateShellEligibleJsxCall(callNode, ctx)) return null
@@ -124,12 +217,27 @@ export function serializeJsxCallToTemplate(
   const propsArg = callNode.arguments?.[1]
   const holeNodes: AstNode[] = []
   const regions: CompileRegion[] = []
+  const coords = shared?.coords ?? createTemplateCoordinateAllocator()
+  const bindings: TemplateBindingDescriptor[] = shared?.bindings ?? []
+  const bindingHosts: TemplateBindingHost[] = shared?.bindingHosts ?? []
+  const coordStart = coords.count()
+  const allBindingsStart = bindings.length
+  const allHostsStart = bindingHosts.length
+  const bindStart = bindings.length
+  const hostStart = bindingHosts.length
+  const accum: TemplateSerializeShared = { coords, bindings, bindingHosts }
+
+  if (shared) {
+    coords.alloc()
+  }
+
   const props = collectStaticProps(propsArg, ctx)
   const innerHtml = serializeChildrenToInnerHtml(
     propsArg,
     ctx,
     holeNodes,
-    regions
+    regions,
+    accum
   )
   const html = serializeStaticElementToHtml(tag, props, innerHtml)
   if (
@@ -138,9 +246,22 @@ export function serializeJsxCallToTemplate(
     !shellHtmlHasStaticContent(html) &&
     !shellHtmlHasStaticMarkupBesideHoles(html)
   ) {
+    if (shared) {
+      coords.reset(coordStart)
+      bindings.length = allBindingsStart
+      bindingHosts.length = allHostsStart
+    }
     return null
   }
-  return { html, holeCount: holeNodes.length, holeNodes, regions }
+  return {
+    html,
+    holeCount: holeNodes.length,
+    holeNodes,
+    regions,
+    bindings: shared ? bindings.slice(bindStart) : bindings,
+    bindingHosts: shared ? bindingHosts.slice(hostStart) : bindingHosts,
+    structuralNodeCount: coords.count(),
+  }
 }
 
 /** Serialize-first, then outermost among successful shells (failed parents do not suppress children). */
@@ -403,7 +524,9 @@ function collectStaticProps(
       key === "children" ||
       key === "innerHTML" ||
       key === "key" ||
-      key === "ref"
+      key === "ref" ||
+      key.startsWith("on") ||
+      key.startsWith("bind:")
     ) {
       continue
     }
@@ -418,7 +541,8 @@ function serializeChildrenToInnerHtml(
   propsArg: AstNode | undefined | null,
   ctx: TemplateSerializeCtx,
   holeNodes: AstNode[],
-  regions: CompileRegion[]
+  regions: CompileRegion[],
+  accum: TemplateSerializeShared
 ): string {
   if (propsHasInnerHTML(propsArg)) {
     return serializeInnerHTMLValue(
@@ -430,7 +554,7 @@ function serializeChildrenToInnerHtml(
   }
   const childrenNode = findObjectPropValue(propsArg, "children")
   if (!childrenNode) return ""
-  return serializeChildInner(childrenNode, ctx, holeNodes, regions)
+  return serializeChildInner(childrenNode, ctx, holeNodes, regions, accum)
 }
 
 function pushTemplateHole(
@@ -444,16 +568,41 @@ function pushTemplateHole(
   regions.push(classifyTemplateHoleRegion(node, ctx, anchor))
 }
 
+function absorbInnerTemplateMetadata(
+  inner: TemplateSerializeResult,
+  bindings: TemplateBindingDescriptor[],
+  bindingHosts: TemplateBindingHost[],
+  coords: TemplateCoordinateAllocator
+): void {
+  const base = coords.count()
+  for (const b of inner.bindings) {
+    bindings.push({ ...b, nodeIndex: base + b.nodeIndex })
+  }
+  for (const h of inner.bindingHosts) {
+    bindingHosts.push({ nodeIndex: base + h.nodeIndex, call: h.call })
+  }
+  for (let i = 0; i < inner.structuralNodeCount; i++) {
+    coords.alloc()
+  }
+}
+
 function mergeInnerTemplateHoles(
   inner: TemplateSerializeResult,
   holeNodes: AstNode[],
-  regions: CompileRegion[]
+  regions: CompileRegion[],
+  bindings: TemplateBindingDescriptor[],
+  bindingHosts: TemplateBindingHost[],
+  coords: TemplateCoordinateAllocator,
+  sharedCoords: boolean
 ): void {
   const base = holeNodes.length
   for (let i = 0; i < inner.holeNodes.length; i++) {
     holeNodes.push(inner.holeNodes[i]!)
     const r = inner.regions[i]!
     regions.push({ ...r, anchor: base + (r.anchor ?? i) })
+  }
+  if (!sharedCoords) {
+    absorbInnerTemplateMetadata(inner, bindings, bindingHosts, coords)
   }
 }
 
@@ -554,52 +703,83 @@ function isRegionEligibleChildArray(
 }
 
 /**
- * Intrinsic host with static children and only event/bind props dynamic — one template
- * hole for the hoisted jsx call (full host element + events). No static host wrapper.
+ * Intrinsic host with static children and only behavior props (ref, on*, bind:*)
+ * dynamic — inlined static markup with compile-time binding coordinates.
  */
-function trySerializeEventHostShell(
+function trySerializeBehaviorOnlyIntrinsic(
   callNode: AstNode,
   ctx: TemplateSerializeCtx,
   holeNodes: AstNode[],
-  regions: CompileRegion[]
+  regions: CompileRegion[],
+  accum: TemplateSerializeShared
 ): string | null {
   const typeArg = callNode.arguments?.[0]
   if (typeArg?.type !== "Literal" || typeof typeArg.value !== "string") {
     return null
   }
+  const tag = typeArg.value as string
   const propsArg = callNode.arguments?.[1]
   if (!propsArg || propsArg.type !== "ObjectExpression") return null
 
-  let hasEventOrBind = false
+  let hasBehavior = false
   for (const prop of propsArg.properties ?? []) {
     if (prop.type !== "Property") return null
     const key = propKeyName(prop)
-    if (!key || key === "children" || key === "key" || key === "ref") continue
+    if (!key || key === "children" || key === "key") continue
+    if (key === "ref") {
+      hasBehavior = true
+      continue
+    }
     if (key.startsWith("on") || key.startsWith("bind:")) {
-      hasEventOrBind = true
+      hasBehavior = true
       continue
     }
     if (!isTemplatePropValue(prop.value as AstNode, ctx)) return null
   }
-  if (!hasEventOrBind) return null
+  if (!hasBehavior) return null
 
   const scratchHoles: AstNode[] = []
   const scratchRegions: CompileRegion[] = []
-  serializeChildrenToInnerHtml(propsArg, ctx, scratchHoles, scratchRegions)
+  serializeChildrenToInnerHtml(
+    propsArg,
+    ctx,
+    scratchHoles,
+    scratchRegions,
+    {
+      coords: createTemplateCoordinateAllocator(),
+      bindings: [],
+      bindingHosts: [],
+    }
+  )
   if (scratchHoles.length > 0) return null
 
-  pushTemplateHole(callNode, ctx, holeNodes, regions)
-  // Hole payload is the full hoisted jsx call (host tag + static children + events).
-  // Do not wrap in a static host element — reconcile inserts before <!--#--> inside parentEl.
-  return KIRU_HOLE_MARKER
+  const { coords, bindings, bindingHosts } = accum
+  const nodeIndex = coords.alloc()
+  bindings.push(...extractTemplateBindingsForIntrinsicCall(callNode, nodeIndex))
+  bindingHosts.push({ nodeIndex, call: callNode })
+  const staticProps = collectStaticProps(propsArg, ctx)
+  const innerHtml = serializeChildrenToInnerHtml(
+    propsArg,
+    ctx,
+    holeNodes,
+    regions,
+    accum
+  )
+  return returnInlinedMarkup(
+    serializeStaticElementToHtml(tag, staticProps, innerHtml),
+    coords,
+    { skipStructuralAlloc: true }
+  )
 }
 
 function serializeChildInner(
   node: AstNode,
   ctx: TemplateSerializeCtx,
   holeNodes: AstNode[],
-  regions: CompileRegion[]
+  regions: CompileRegion[],
+  accum: TemplateSerializeShared
 ): string {
+  const { coords, bindings, bindingHosts } = accum
   // Only primitive literals encode as text; isStaticLiteral is also true for arrays/objects.
   if (node.type === "Literal" && isStaticLiteral(node)) {
     return encodeStaticText(String(node.value ?? ""))
@@ -609,16 +789,34 @@ function serializeChildInner(
     return KIRU_HOLE_MARKER
   }
   if (node.type === "CallExpression" && isAnyJsxFactoryCall(node, ctx)) {
-    const eventHost = trySerializeEventHostShell(node, ctx, holeNodes, regions)
-    if (eventHost) return eventHost
-    const folded = tryFoldStaticComponentHtml(node, ctx, (jsx) =>
-      serializeJsxCallToTemplate(jsx, ctx)
+    const behaviorHost = trySerializeBehaviorOnlyIntrinsic(
+      node,
+      ctx,
+      holeNodes,
+      regions,
+      accum
     )
-    if (folded) return folded
-    const inner = serializeJsxCallToTemplate(node, ctx)
-    if (inner && inner.holeCount === 0) return inner.html
+    if (behaviorHost) return behaviorHost
+    const folded = tryFoldStaticComponentHtml(node, ctx, (jsx) =>
+      serializeJsxCallToTemplate(jsx, ctx, accum)
+    )
+    if (folded) {
+      return returnInlinedMarkup(folded, coords)
+    }
+    const inner = serializeJsxCallToTemplate(node, ctx, accum)
+    if (inner && inner.holeCount === 0) {
+      return inner.html
+    }
     if (inner && inner.holeCount > 0) {
-      mergeInnerTemplateHoles(inner, holeNodes, regions)
+      mergeInnerTemplateHoles(
+        inner,
+        holeNodes,
+        regions,
+        bindings,
+        bindingHosts,
+        coords,
+        true
+      )
       return inner.html
     }
     pushTemplateHole(node, ctx, holeNodes, regions)
@@ -635,7 +833,9 @@ function serializeChildInner(
     }
     return ((node as { elements?: (AstNode | null)[] }).elements ?? [])
       .filter(Boolean)
-      .map((e) => serializeChildInner(e as AstNode, ctx, holeNodes, regions))
+      .map((e) =>
+        serializeChildInner(e as AstNode, ctx, holeNodes, regions, accum)
+      )
       .join("")
   }
   if (!isAnyJsxFactoryCall(node, ctx)) {
@@ -643,6 +843,36 @@ function serializeChildInner(
     return KIRU_HOLE_MARKER
   }
   return ""
+}
+
+function extractTemplateBindingsForIntrinsicCall(
+  callNode: AstNode,
+  nodeIndex: number
+): TemplateBindingDescriptor[] {
+  if (callNode.type !== "CallExpression") return []
+  const typeArg = callNode.arguments?.[0]
+  if (typeArg?.type !== "Literal" || typeof typeArg.value !== "string") return []
+  const propsArg = callNode.arguments?.[1]
+  if (propsArg?.type !== "ObjectExpression") return []
+
+  const bindings: TemplateBindingDescriptor[] = []
+  for (const prop of propsArg.properties ?? []) {
+    if (prop.type !== "Property") continue
+    const key = propKeyName(prop)
+    if (!key) continue
+    if (key === "ref") {
+      bindings.push({ kind: "ref", prop: key, nodeIndex })
+      continue
+    }
+    if (key.startsWith("on")) {
+      bindings.push({ kind: "event", prop: key, nodeIndex })
+      continue
+    }
+    if (key.startsWith("bind:")) {
+      bindings.push({ kind: "bind", prop: key, nodeIndex })
+    }
+  }
+  return bindings
 }
 
 function propKeyName(prop: AstNode): string | undefined {

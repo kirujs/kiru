@@ -366,8 +366,9 @@ const Toggler = () => {
     assert.match(out, /\(\) => \(toggled\(\) &&/)
     assert.match(
       out,
-      /createHoledTemplate\(\$t\d+,[\s\S]*kind:"conditional",anchor:1/
+      /createHoledTemplate\(\$t\d+,[\s\S]*kind:"conditional",anchor:0/
     )
+    assert.match(out, /kind:"event",prop:"onclick",nodeIndex:0/)
   })
 
   it("does not hoist jsx with inline fn children that close over render locals", () => {
@@ -481,10 +482,15 @@ const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 
       out,
       /\$t\d+ = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
     )
-    assert.match(out, /_template\([^)]*, 2\)/)
+    assert.match(out, /_template\([^)]+, 1(?:, \d+)?\)/)
+    assert.match(out, /<button>Increment<\/button>/)
     assert.match(
       out,
-      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+, \[\[[\s\S]*\], jsxDEV\("button"/
+      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+, \[\[[\s\S]*\]\]/
+    )
+    assert.doesNotMatch(
+      out,
+      /createHoledTemplate\([\s\S]*jsxDEV\("button"/
     )
     assert.match(out, /return \$r0/)
     assert.doesNotMatch(out, /^const \$k\d+ = jsxDEV\("button"/m)
@@ -747,7 +753,8 @@ export const Counter = () => {
       out,
       /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+,[\s\S]*jsxDEV\("h1"/
     )
-    assert.match(out, /jsxDEV\("button"/)
+    assert.match(out, /<button>Increment<\/button>/)
+    assert.match(out, /kind:"event",prop:"onclick",nodeIndex:1/)
     assert.match(out, /return \(\) => \$r0/)
     assert.doesNotMatch(out, /const \$k\d+ = regionElement\(\s*jsxDEV\("h1"/)
     assert.doesNotMatch(out, /const \$k\d+ = jsxDEV\("button"/)

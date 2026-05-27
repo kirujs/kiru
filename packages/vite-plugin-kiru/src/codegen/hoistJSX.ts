@@ -10,9 +10,13 @@ import {
 } from "./codegenPlan.js"
 import {
   classifyChildSlotRegion,
+  formatBindingPayloadsLiteral,
   formatRegionsLiteral,
+  formatTemplateBindingsLiteral,
   getCompileRegionsForJsxs,
 } from "./compileRegions.js"
+import { formatBindingPayloadSlots } from "./prepareJSXTemplates.js"
+import type { TemplateBindingHost } from "./templateHTML.js"
 import { TransformCTX } from "./shared.js"
 import {
   buildProgramCallIndex,
@@ -88,6 +92,8 @@ export type TemplateHoistPlanSlice = {
     holeNodes: AstNode[]
     varName: string
     regions: import("kiru/template").CompileRegion[]
+    bindings: import("kiru/template").TemplateBindingDescriptor[]
+    bindingHosts: TemplateBindingHost[]
   }[]
 }
 
@@ -969,6 +975,8 @@ function collectRenderRootCacheDecls(
     factoryVar: string,
     holeNodes: AstNode[],
     regions: import("kiru/template").CompileRegion[],
+    bindings: import("kiru/template").TemplateBindingDescriptor[],
+    bindingHosts: TemplateBindingHost[],
     setupInsert: AstNode | null,
     componentInsert: AstNode | null,
     resolve: (name: string) => BindingInfo | null
@@ -987,6 +995,8 @@ function collectRenderRootCacheDecls(
         factoryVar,
         holeNodes,
         regions,
+        bindings,
+        bindingHosts,
         tier,
         setupInsert,
         componentInsert,
@@ -1013,6 +1023,8 @@ function collectRenderRootCacheDecls(
         binding.varName,
         binding.holeNodes,
         binding.regions,
+        binding.bindings,
+        binding.bindingHosts,
         site.setupInsertBefore,
         site.componentInsertBefore,
         site.resolve
@@ -1036,11 +1048,15 @@ function collectRenderRootCacheDecls(
         ? factory.name
         : sliceNode(source, factory!, deferByNode)
     const regions: import("kiru/template").CompileRegion[] = []
+    const bindings: import("kiru/template").TemplateBindingDescriptor[] = []
+    const bindingHosts: TemplateBindingHost[] = []
     tryClaimRenderRoot(
       node,
       factoryVar,
       holeNodes,
       regions,
+      bindings,
+      bindingHosts,
       site.setupInsertBefore,
       site.componentInsertBefore,
       site.resolve
@@ -1055,6 +1071,8 @@ function tryBuildRenderRootCacheDecl(
   factoryVar: string,
   holeNodes: AstNode[],
   regions: import("kiru/template").CompileRegion[],
+  bindings: import("kiru/template").TemplateBindingDescriptor[],
+  bindingHosts: TemplateBindingHost[],
   tier: RenderRootCacheTier,
   setupInsert: AstNode | null,
   componentInsert: AstNode | null,
@@ -1095,7 +1113,22 @@ function tryBuildRenderRootCacheDecl(
     regions.length > 0
       ? `, ${formatRegionsLiteral(regions)}`
       : ""
-  const codeExpr = `createHoledTemplate(${factoryVar}, [${holeCodes.join(", ")}]${regionsPart})`
+  const bindingsPart =
+    bindings.length > 0
+      ? `, ${formatTemplateBindingsLiteral(bindings)}`
+      : ""
+  const payloadsPart =
+    bindingHosts.length > 0
+      ? `, ${formatBindingPayloadsLiteral(
+          formatBindingPayloadSlots(
+            bindingHosts,
+            source,
+            deferByNode,
+            hoistByNode
+          )
+        )}`
+      : ""
+  const codeExpr = `createHoledTemplate(${factoryVar}, [${holeCodes.join(", ")}]${regionsPart}${bindingsPart}${payloadsPart})`
 
   const insertBefore =
     tier === "module"

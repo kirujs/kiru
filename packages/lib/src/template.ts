@@ -20,12 +20,28 @@ export const $KIRU_TEMPLATE = Symbol.for("kiru.template")
 /** Comment `data` for structural holes (`<!--#-->`). */
 export const KIRU_HOLE_COMMENT_DATA = "#"
 
+export type TemplateBindingKind = "event" | "ref" | "bind"
+
+export type TemplateBindingDescriptor = {
+  /** Deterministic compile-time template coordinate. */
+  readonly nodeIndex: number
+  /** Binding category applied to the target template node. */
+  readonly kind: TemplateBindingKind
+  /** Original jsx prop key, e.g. onclick, ref, bind:value. */
+  readonly prop: string
+}
+
 export type TemplateRoot = {
   readonly __kiruTemplate: typeof $KIRU_TEMPLATE
   readonly html: string
   readonly holeCount: number
   readonly holeChildren?: readonly unknown[]
   readonly regions?: readonly CompileRegion[]
+  readonly bindings?: readonly TemplateBindingDescriptor[]
+  /** Behavior prop bags keyed by compile-time `nodeIndex`. */
+  readonly bindingPayloads?: readonly (Record<string, unknown> | undefined)[]
+  /** Descendant element count in template serialization order (excludes shell root). */
+  readonly structuralNodeCount?: number
 }
 
 const fragmentCache = new Map<string, DocumentFragment>()
@@ -38,11 +54,16 @@ export function isTemplateRoot(thing: unknown): thing is TemplateRoot {
   )
 }
 
-export function _template(html: string, holeCount = 0): TemplateRoot {
+export function _template(
+  html: string,
+  holeCount = 0,
+  structuralNodeCount?: number
+): TemplateRoot {
   return {
     __kiruTemplate: $KIRU_TEMPLATE,
     html,
     holeCount,
+    ...(structuralNodeCount !== undefined ? { structuralNodeCount } : {}),
   }
 }
 
@@ -59,7 +80,9 @@ export function tagStaticChildrenList<T>(children: T[]): T[] {
 export function createHoledTemplate(
   template: TemplateRoot,
   holeChildren: unknown[],
-  regions?: readonly CompileRegion[]
+  regions?: readonly CompileRegion[],
+  bindings?: readonly TemplateBindingDescriptor[],
+  bindingPayloads?: readonly (Record<string, unknown> | undefined)[]
 ): TemplateRoot {
   const count = template.holeCount
   if (__DEV__ && holeChildren.length !== count) {
@@ -81,8 +104,15 @@ export function createHoledTemplate(
     holeCount: count,
     holeChildren,
     regions,
+    bindings,
+    bindingPayloads,
+    ...(template.structuralNodeCount !== undefined
+      ? { structuralNodeCount: template.structuralNodeCount }
+      : {}),
   }
 }
+
+export { buildTemplateStructuralNodeMap } from "./templateBindings.js"
 
 export function getTemplateFragment(html: string): DocumentFragment {
   let fragment = fragmentCache.get(html)

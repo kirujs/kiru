@@ -13,7 +13,12 @@ import {
 } from "./scopeWalk.js"
 import { isKiruJsxFactoryCall } from "./scope.js"
 import type { ProgramCallIndex } from "./programCallIndex.js"
-import { formatRegionsLiteral } from "./compileRegions.js"
+import {
+  formatBindingPayloadsLiteral,
+  formatRegionsLiteral,
+  formatTemplateBindingsLiteral,
+} from "./compileRegions.js"
+import type { TemplateBindingHost } from "./templateHTML.js"
 import {
   bindingMatchesComponentRender,
   parseTemplateRefMarkers,
@@ -42,6 +47,9 @@ export type TemplateBinding = {
   holeCount: number
   holeNodes: AstNode[]
   regions: CompileRegion[]
+  bindings: import("kiru/template").TemplateBindingDescriptor[]
+  bindingHosts: TemplateBindingHost[]
+  structuralNodeCount: number
   varName: string
 }
 
@@ -252,7 +260,17 @@ export function prepareJSXTemplates(ctx: TransformCTX): void {
 }
 
 function planTemplateBindings(
-  selected: { call: AstNode; result: { html: string; holeCount: number; holeNodes: AstNode[]; regions: CompileRegion[] } }[],
+  selected: {
+    call: AstNode
+    result: {
+      html: string
+      holeCount: number
+      holeNodes: AstNode[]
+      regions: CompileRegion[]
+      bindings: import("kiru/template").TemplateBindingDescriptor[]
+      bindingHosts: TemplateBindingHost[]
+    }
+  }[],
   bodyNodes: AstNode[],
   analysis: TemplateSerializeCtx
 ): { bindings: TemplateBinding[]; refVarMap: Map<string, string> } {
@@ -262,6 +280,9 @@ function planTemplateBindings(
     holeCount: s.result.holeCount,
     holeNodes: s.result.holeNodes,
     regions: s.result.regions,
+    bindings: s.result.bindings,
+    bindingHosts: s.result.bindingHosts,
+    structuralNodeCount: s.result.structuralNodeCount,
     varName: `$t${i}`,
   }))
 
@@ -286,6 +307,9 @@ function planTemplateBindings(
       holeCount: 0,
       holeNodes: [],
       regions: [],
+      bindings: [],
+      bindingHosts: [],
+      structuralNodeCount: leaf.structuralNodeCount,
       varName: `$t${bindings.length}`,
     })
   }
@@ -384,7 +408,12 @@ function templateDeclExpr(
   b: TemplateBinding,
   refVarMap: Map<string, string>
 ): string {
-  return buildTemplateFactoryExpr(b.html, b.holeCount, refVarMap)
+  return buildTemplateFactoryExpr(
+    b.html,
+    b.holeCount,
+    refVarMap,
+    b.structuralNodeCount
+  )
 }
 
 function templateUse(
@@ -399,7 +428,73 @@ function templateUse(
   )
   const regionsLit = formatRegionsLiteral(b.regions)
   const regionsArg = regionsLit ? `, ${regionsLit}` : ""
-  return `createHoledTemplate(${b.varName}, [${parts.join(", ")}]${regionsArg})`
+  const bindingsLit = formatTemplateBindingsLiteral(b.bindings)
+  const bindingsArg = bindingsLit ? `, ${bindingsLit}` : ""
+  const payloadsLit = formatBindingPayloadsLiteral(
+    formatBindingPayloadSlots(
+      b.bindingHosts,
+      source,
+      deferByNode,
+      hoistByNode
+    )
+  )
+  const payloadsArg = payloadsLit ? `, ${payloadsLit}` : ""
+  return `createHoledTemplate(${b.varName}, [${parts.join(", ")}]${regionsArg}${bindingsArg}${payloadsArg})`
+}
+
+export function formatBindingPayloadSlots(
+  hosts: TemplateBindingHost[],
+  source: string,
+  deferByNode: Map<AstNode, string>,
+  hoistByNode: Map<AstNode, string>
+): string[] {
+  if (hosts.length === 0) return []
+  const max = Math.max(...hosts.map((h) => h.nodeIndex))
+  const slots = Array.from({ length: max + 1 }, () => "undefined")
+  for (const host of hosts) {
+    slots[host.nodeIndex] = behaviorPropsObjectExpr(
+      source,
+      host.call,
+      deferByNode,
+      hoistByNode
+    )
+  }
+  return slots
+}
+
+function behaviorPropsObjectExpr(
+  source: string,
+  callNode: AstNode,
+  deferByNode: Map<AstNode, string>,
+  hoistByNode: Map<AstNode, string>
+): string {
+  const propsArg = callNode.arguments?.[1]
+  if (propsArg?.type !== "ObjectExpression") return "{}"
+  const parts: string[] = []
+  for (const prop of propsArg.properties ?? []) {
+    if (prop.type !== "Property") continue
+    const key =
+      prop.key?.type === "Identifier" && prop.key.name
+        ? prop.key.name
+        : prop.key?.type === "Literal" && typeof prop.key.value === "string"
+          ? prop.key.value
+          : undefined
+    if (!key) continue
+    if (
+      key !== "ref" &&
+      !key.startsWith("on") &&
+      !key.startsWith("bind:")
+    ) {
+      continue
+    }
+    const value = prop.value as AstNode
+    const hoisted = hoistByNode.get(value)
+    const expr =
+      hoisted !== undefined ? hoisted : sliceNode(source, value, deferByNode)
+    const keyText = key.startsWith("bind:") ? `"${key}"` : key
+    parts.push(`${keyText}: ${expr}`)
+  }
+  return `{${parts.join(", ")}}`
 }
 
 function findHoistedVarNames(

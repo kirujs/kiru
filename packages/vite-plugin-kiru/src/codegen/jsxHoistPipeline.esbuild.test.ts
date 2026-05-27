@@ -59,13 +59,13 @@ describe("jsx-hoist pipeline on esbuild production output", () => {
     assert.match(out, /\$k\d+ = jsx\(Toggler/)
     assert.match(
       out,
-      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t1,[\s\S]*\$k\d+[\s\S]*kind:"component",anchor:2/
+      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t1,[\s\S]*\$k\d+[\s\S]*kind:"component",anchor:1/
     )
     assert.match(out, /return(?:\s*\/\* @__PURE__ \*\/)?\s*\$r0/)
-    assert.match(out, /\$t3 = _template\("<div><!--#--><!--#--><\/div>/)
+    assert.match(out, /\$t3 = _template\("<div><button>Toggle<\/button><!--#--><\/div>", 1, 1\)/)
     assert.match(
       out,
-      /const \$r\d+ = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t3,[\s\S]*jsx\("button"[\s\S]*\(\) => \(\s*toggled\(\) &&[\s\S]*kind:"conditional",anchor:1/
+      /const \$r\d+ = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t3,[\s\S]*\(\) => \(\s*toggled\(\) &&[\s\S]*kind:"conditional",anchor:0/
     )
     assert.doesNotMatch(out, /jsx\(Badge/)
     assert.doesNotMatch(out, /jsxDEV\(/)
