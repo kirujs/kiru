@@ -61,7 +61,10 @@ const Badge = () =>
     const appIdx = out.indexOf("export function App")
     assert.ok(signalIdx !== -1)
     assert.ok(hoistIdx !== -1)
-    assert.ok(signalIdx < hoistIdx, "module signal must be declared before hoisted JSX")
+    assert.ok(
+      signalIdx < hoistIdx,
+      "module signal must be declared before hoisted JSX"
+    )
     assert.ok(hoistIdx < appIdx, "hoisted JSX must precede first use in App")
   })
 
@@ -84,10 +87,7 @@ mount(
     assert.ok(declIdx !== -1, "expected hoisted declaration")
     assert.ok(mountIdx !== -1, "expected mount call")
     assert.ok(declIdx < mountIdx, "hoisted const must be declared before use")
-    assert.match(
-      out,
-      /const \$k0 = markHoisted\(jsxDEV/
-    )
+    assert.match(out, /const \$k0 = markHoisted\(jsxDEV/)
   })
 
   it("hoists static jsxs subtrees imported from kiru/jsx-runtime", () => {
@@ -229,10 +229,7 @@ export function Page() {
   })
 }
 `)
-    assert.match(
-      out,
-      /const \$k\d+ = markHoisted\(jsx/
-    )
+    assert.match(out, /const \$k\d+ = markHoisted\(jsx/)
   })
 
   it("does not mark hoisted jsxs when a child slot is dynamic", () => {
@@ -245,10 +242,7 @@ export function Page({ label }) {
   })
 }
 `)
-    assert.doesNotMatch(
-      out,
-      /const \$k\d+ = regionElement\(jsx/
-    )
+    assert.doesNotMatch(out, /const \$k\d+ = regionElement\(jsx/)
   })
 
   it("emits compile regions for mixed static hoisted jsxs children", () => {
@@ -283,10 +277,7 @@ export function Page() {
   })
 }
 `)
-    assert.doesNotMatch(
-      out,
-      /const \$k\d+ = regionElement\(jsx/
-    )
+    assert.doesNotMatch(out, /const \$k\d+ = regionElement\(jsx/)
   })
 
   it("does not mark FLAG_HOISTED for arbitrary impure calls like formatTitle()", () => {
@@ -303,10 +294,7 @@ export function Page() {
   })
 }
 `)
-    assert.doesNotMatch(
-      out,
-      /const \$k\d+ = regionElement\(jsx/
-    )
+    assert.doesNotMatch(out, /const \$k\d+ = regionElement\(jsx/)
   })
 
   it("allows count.peek() inside an otherwise static hoisted child", () => {
@@ -322,10 +310,7 @@ export function Page() {
   })
 }
 `)
-    assert.match(
-      out,
-      /const \$k\d+ = markHoisted\(jsx/
-    )
+    assert.match(out, /const \$k\d+ = markHoisted\(jsx/)
   })
 
   it("marks compile regions for count() in a mixed jsxs children array", () => {
@@ -379,7 +364,10 @@ const Toggler = () => {
 }
 `)
     assert.match(out, /\(\) => \(toggled\(\) &&/)
-    assert.match(out, /createHoledTemplate\(\$t\d+,[\s\S]*kind:"conditional",anchor:1/)
+    assert.match(
+      out,
+      /createHoledTemplate\(\$t\d+,[\s\S]*kind:"conditional",anchor:1/
+    )
   })
 
   it("does not hoist jsx with inline fn children that close over render locals", () => {
@@ -490,7 +478,10 @@ const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 
 `)
     assert.match(out, /const count = signal\(0\)/)
     assert.match(out, /^const \$k0 = jsxDEV\("button"/m)
-    assert.match(out, /\$t\d+ = _template\([^)]*<span class=\\"badge\\">OK<\/span>/)
+    assert.match(
+      out,
+      /\$t\d+ = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
+    )
     assert.match(out, /_template\([^)]*, 2\)/)
     assert.match(
       out,
@@ -646,10 +637,7 @@ export function App() {
 }
 `)
     assert.match(out, /const \$k\d+ = markHoisted\(jsxDEV\([\s\S]*"input"/)
-    assert.match(
-      out,
-      /const \$k\d+ = markHoisted\(jsx/
-    )
+    assert.match(out, /const \$k\d+ = markHoisted\(jsx/)
   })
 
   it("does not hoist when subtree contains a signal read call", () => {
@@ -716,7 +704,10 @@ export default function Layout({ children }) {
 }
 `)
     assert.match(out, /const \$k0 = tagStaticChildrenList\(\[/)
-    assert.match(out, /createHoledTemplate\(\$t0,\s*\[\s*\$k0,\s*children\s*,?\s*\]/)
+    assert.match(
+      out,
+      /createHoledTemplate\(\$t0,\s*\[\s*\$k0,\s*children\s*,?\s*\]/
+    )
     assert.doesNotMatch(out, /return[\s\S]*jsxDEV\("a"/)
   })
 
@@ -783,6 +774,83 @@ export const Counter = () => {
       /const count = signal\(0\)[\s\S]*const \$k\d+ = jsxDEV\("h1"/
     )
     assert.match(out, /count\(\)/)
+  })
+
+  it("module-hoists conditional template hole when only module signals are referenced", () => {
+    const out = transformPipeline(`
+import { jsx, jsxs } from "kiru/jsx-runtime"
+import { signal } from "kiru"
+
+const count = signal(0)
+export const App = () =>
+  jsxs("div", { children: count() % 2 === 0 && jsx("p", { children: "even" }) })
+`)
+    assert.match(out, /\$k\d+ = \(\) => \(count\(\) % 2 === 0 &&/)
+    assert.match(out, /createHoledTemplate\(\$t\d+,\s*\[\s*\$k\d+/)
+    assert.doesNotMatch(out, /createHoledTemplate\([\s\S]*count\(\) % 2/)
+  })
+
+  it("setup-hoists conditional template hole when setup signal is referenced", () => {
+    const out = transformPipeline(`
+import { jsx, jsxs } from "kiru/jsx-runtime"
+import { signal } from "kiru"
+
+function Counter() {
+  return jsx("span", { children: "c" })
+}
+
+export function App() {
+  const toggled = signal(false)
+  return () =>
+    jsxs("div", { children: [
+      jsx("span", { children: "label" }),
+      toggled() && jsx(Counter, {}),
+    ] })
+}
+`)
+    assert.match(
+      out,
+      /const toggled = signal\(false\)[\s\S]*\$k\d+ = \(\) => \(toggled\(\) &&/
+    )
+    assert.match(out, /createHoledTemplate\(\$t\d+,\s*\[\s*\$k\d+/)
+    assert.doesNotMatch(
+      out,
+      /createHoledTemplate\([\s\S]*toggled\(\) &&\s*jsx\(Counter/
+    )
+  })
+
+  it("module-hoists static component jsx in a direct template hole", () => {
+    const out = transformPipeline(`
+import { jsx, jsxs } from "kiru/jsx-runtime"
+
+function Toggler() {
+  return jsx("button", { children: "t" })
+}
+
+export const Counter = () => jsxs("div", { children: [jsx(Toggler, {})] })
+`)
+    assert.match(out, /const \$k\d+ = jsx\(Toggler/)
+    assert.match(
+      out,
+      /createHoledTemplate\(\$t\d+,[\s\S]*\$k\d+[\s\S]*kind:"component"/
+    )
+    assert.doesNotMatch(out, /children:\s*\[jsx\(Toggler/)
+  })
+
+  it("does not hoist conditional template hole that references renderLocal", () => {
+    const out = transformPipeline(`
+import { jsx, jsxs } from "kiru/jsx-runtime"
+import { signal } from "kiru"
+
+export function App() {
+  return () => {
+    const local = signal(false)
+    return jsxs("div", { children: local() && jsx("p", { children: "x" }) })
+  }
+}
+`)
+    assert.match(out, /local\(\) &&\s*\$t0\(\)/)
+    assert.doesNotMatch(out, /\$k\d+ = \(\) => \(local\(\) &&/)
   })
 
   it("does not hoist layout shell when children is a destructured param", () => {

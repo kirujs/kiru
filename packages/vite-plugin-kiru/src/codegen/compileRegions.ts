@@ -1,4 +1,4 @@
-import type { CompileRegion, CompileRegionKind } from "kiru/template"
+import type { CompileRegion } from "kiru/template"
 import * as AST from "./ast.js"
 import {
   blocksModuleHoist,
@@ -17,7 +17,9 @@ export type RegionAnalysisCtx = {
   isJsxDev: (node: AstNode) => boolean
 }
 
-export function formatRegionsLiteral(regions: readonly CompileRegion[]): string {
+export function formatRegionsLiteral(
+  regions: readonly CompileRegion[]
+): string {
   if (regions.length === 0) return ""
   const parts = regions.map((r) => {
     const fields: string[] = [`kind:"${r.kind}"`]
@@ -56,7 +58,7 @@ function unwrapFunctionExpressionBody(node: AstNode): AstNode | null {
   return body
 }
 
-function classifyChildSlotRegion(
+export function classifyChildSlotRegion(
   node: AstNode,
   ctx: RegionAnalysisCtx
 ): Pick<CompileRegion, "kind"> {
@@ -106,7 +108,10 @@ function classifyChildSlotRegion(
   return { kind: "insert" }
 }
 
-function isTextBindingExpression(node: AstNode, ctx: RegionAnalysisCtx): boolean {
+function isTextBindingExpression(
+  node: AstNode,
+  ctx: RegionAnalysisCtx
+): boolean {
   if (isReactiveSignalRead(node, ctx)) return true
   if (node.type === "Identifier" && node.name) {
     const binding = ctx.resolve(node.name)
@@ -317,7 +322,10 @@ function isDynamicChildSlot(
     if (isReactiveSignalRead(node, ctx)) return true
     return true
   }
-  if (node.type === "ConditionalExpression" || node.type === "LogicalExpression") {
+  if (
+    node.type === "ConditionalExpression" ||
+    node.type === "LogicalExpression"
+  ) {
     return true
   }
   if (

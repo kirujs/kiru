@@ -306,6 +306,14 @@ Implementation: per-file scope registry (`moduleSignal` vs `setupConst`) in `pre
 
 **Layout target shape:** `_template(shellHtml, 2)` with `<nav>…<!--#-->…</nav>` and outlet `div` in HTML; `return createHoledTemplate($t0, [$k0, children])` where `$k0` is the hoisted nav link list.
 
+**Template-hole hoist tiers:** For `createHoledTemplate($tN, [ … ])` hole payloads, the JSX hoist pass may lift the hole *value expression* to one of three tiers:
+
+- **Module**: static component calls (`jsx(Toggler, …)`) and conditional holes whose expression only reads module-scoped bindings (e.g. `count() % 2 === 0 && <p>…</p>`).
+- **Setup**: conditional holes inside `return () => …` render closures when they only read setup-scoped bindings (e.g. `toggled() && <Counter />`), not render-local bindings.
+- **Render**: everything else stays in the hole payload array evaluated inside the render function.
+
+Conditional hole payloads are preserved as **lazy** expressions (`() => …`) so signal reads happen at the correct mount/update boundary rather than at component initialization time.
+
 SSR writes the same HTML string (markers included); client hydrate locates `<!--#-->` anchors. Hoisted region arrays tagged with `tagStaticChildrenList` use `FLAG_STATIC_CHILDREN` at the template hole fragment for fast list reconciliation.
 
 **Still research:** compile-to-imperative DOM (Solid full pipeline), `normalizeChildren` for dynamic `jsx` only.
