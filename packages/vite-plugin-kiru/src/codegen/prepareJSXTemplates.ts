@@ -1,6 +1,12 @@
-import { parseAst } from "rollup/parseAst"
+import type { ProgramNode } from "rollup"
 import * as AST from "./ast.js"
-import { MagicString, TransformCTX } from "./shared.js"
+import {
+  applyCodegenPlan,
+  emptyCodegenPlan,
+  sliceNode,
+  type CodegenPlan,
+} from "./codegenPlan.js"
+import { TransformCTX } from "./shared.js"
 import {
   buildProgramBindingResolve,
   walkProgramBody,
@@ -27,9 +33,9 @@ import type { CompileRegion } from "kiru/template"
 
 type AstNode = AST.AstNode
 
-const TEMPLATE_IMPORT = `import { _template, createHoledTemplate } from "kiru/template";\n`
+export const TEMPLATE_IMPORT = `import { _template, createHoledTemplate } from "kiru/template";\n`
 
-type TemplateBinding = {
+export type TemplateBinding = {
   node: AstNode
   html: string
   holeCount: number
@@ -38,14 +44,25 @@ type TemplateBinding = {
   varName: string
 }
 
-export function prepareJSXTemplates(ctx: TransformCTX) {
-  ctx.code = new MagicString(ctx.code.toString())
-  let code = ctx.code
-  const ast = parseAst(code.toString(), { allowReturnOutsideFunction: true })
-  ctx.ast = ast
-  const bodyNodes = ast.body as AstNode[]
+export type HoistedVarBinding = {
+  varName: string
+  declStart: number
+  declEnd: number
+  idNode: AstNode
+}
 
-  const resolve = buildProgramBindingResolve(bodyNodes)
+export type TemplatePlan = {
+  bindings: TemplateBinding[]
+  refVarMap: Map<string, string>
+  hoistedVarByNode: Map<AstNode, HoistedVarBinding>
+  bodyNodes: AstNode[]
+}
+
+export function analyzeTemplateBindings(
+  ast: ProgramNode,
+  resolve: TemplateSerializeCtx["resolve"]
+): TemplatePlan | null {
+  const bodyNodes = ast.body as AstNode[]
 
   const analysis: TemplateSerializeCtx = {
     resolve,
@@ -70,18 +87,29 @@ export function prepareJSXTemplates(ctx: TransformCTX) {
   })
 
   const selected = selectMaximalTemplateShellCalls(calls, analysis)
-  if (selected.length === 0) return
+  if (selected.length === 0) return null
 
   const { bindings, refVarMap } = planTemplateBindings(
     selected,
     bodyNodes,
     analysis
   )
+  if (bindings.length === 0) return null
 
-  if (bindings.length === 0) return
-
-  const origSrc = code.toString()
   const hoistedVarByNode = findHoistedVarNames(bodyNodes, bindings)
+  return { bindings, refVarMap, hoistedVarByNode, bodyNodes }
+}
+
+export function templatePlanToEdits(
+  plan: TemplatePlan,
+  source: string,
+  deferByNode: Map<AstNode, string>,
+  hoistByNode: Map<AstNode, string> = new Map()
+): CodegenPlan {
+  const edits: CodegenPlan["edits"] = [{ kind: "prepend", text: TEMPLATE_IMPORT }]
+
+  const { bindings, refVarMap, hoistedVarByNode, bodyNodes } = plan
+  const inline = bindings.filter((b) => !hoistedVarByNode.has(b.node))
 
   const moduleDecls: string[] = []
   for (const b of bindings) {
@@ -89,12 +117,13 @@ export function prepareJSXTemplates(ctx: TransformCTX) {
     moduleDecls.push(templateDecl(b, refVarMap))
   }
 
-  const inline = bindings.filter((b) => !hoistedVarByNode.has(b.node))
-  const hoisted = bindings.filter((b) => hoistedVarByNode.has(b.node))
-
-  for (let i = inline.length - 1; i >= 0; i--) {
-    const b = inline[i]!
-    code.update(b.node.start, b.node.end, templateUse(b, origSrc))
+  for (const b of inline) {
+    edits.push({
+      kind: "replace",
+      start: b.node.start,
+      end: b.node.end,
+      text: templateUse(b, source, deferByNode, hoistByNode),
+    })
   }
 
   if (moduleDecls.length > 0) {
@@ -107,29 +136,99 @@ export function prepareJSXTemplates(ctx: TransformCTX) {
     for (const node of bodyNodes) {
       if (node.end <= minStart) insertPos = Math.max(insertPos, node.end)
     }
-    code.appendRight(insertPos, `\n${moduleDecls.join("\n")}\n`)
+    edits.push({
+      kind: "appendRight",
+      pos: insertPos,
+      text: `\n${moduleDecls.join("\n")}\n`,
+    })
   }
 
-  for (const b of hoisted) {
-    const hoist = hoistedVarByNode.get(b.node)!
-    let src = code.toString()
-    src = src.replace(
-      new RegExp(`\\n${escapeRegExp(hoist.varName)}\\.meta=\\{[^\\n]*\\}`, "g"),
-      ""
-    )
-    src =
-      src.slice(0, hoist.declStart) +
-      `${b.varName} = ${templateDeclExpr(b, refVarMap)}` +
-      src.slice(hoist.declEnd)
-    src = src.replace(
-      new RegExp(escapeRegExp(hoist.varName), "g"),
-      templateUseIdentifier(b, origSrc)
-    )
-    code = ctx.code = new MagicString(src)
+  for (const b of bindings) {
+    const hoist = hoistedVarByNode.get(b.node)
+    if (!hoist) continue
+    edits.push({
+      kind: "replace",
+      start: hoist.declStart,
+      end: hoist.declEnd,
+      text: `${b.varName} = ${templateDeclExpr(b, refVarMap)}`,
+    })
+    const metaRange = findHoistedMetaAssignmentRange(source, hoist.varName)
+    if (metaRange) {
+      edits.push({
+        kind: "replace",
+        start: metaRange.start,
+        end: metaRange.end,
+        text: "",
+      })
+    }
+    const useText = templateUse(b, source, deferByNode, hoistByNode)
+    for (const ref of collectIdentifierRefs(
+      bodyNodes,
+      hoist.varName,
+      hoist.idNode
+    ).filter(
+      (r) =>
+        !metaRange ||
+        r.start < metaRange.start ||
+        r.end > metaRange.end
+    )) {
+      edits.push({
+        kind: "replace",
+        start: ref.start,
+        end: ref.end,
+        text: useText,
+      })
+    }
   }
 
-  code.prepend(TEMPLATE_IMPORT)
-  ctx.code = new MagicString(code.toString())
+  return { edits, imports: emptyCodegenPlan().imports }
+}
+
+/** Nodes replaced by template bindings (hoist pass should skip these subtrees). */
+export function templateAbsorbedNodes(plan: TemplatePlan | null): Set<AstNode> {
+  const nodes = new Set<AstNode>()
+  if (!plan) return nodes
+  for (const b of plan.bindings) nodes.add(b.node)
+  return nodes
+}
+
+/** Hole payload nodes that may still be module- or setup-hoisted inside a template shell. */
+export function templateHoleNodes(plan: TemplatePlan | null): Set<AstNode> {
+  const nodes = new Set<AstNode>()
+  if (!plan) return nodes
+  for (const b of plan.bindings) {
+    for (const n of b.holeNodes) {
+      nodes.add(n)
+      if (n.type === "ArrayExpression") {
+        for (const elem of (n as { elements?: (AstNode | null)[] }).elements ??
+          []) {
+          if (elem) nodes.add(elem)
+        }
+      }
+    }
+  }
+  return nodes
+}
+
+export function buildTemplateCodegenPlan(
+  ast: ProgramNode,
+  source: string,
+  resolve: TemplateSerializeCtx["resolve"],
+  deferByNode: Map<AstNode, string>,
+  hoistByNode: Map<AstNode, string> = new Map()
+): CodegenPlan {
+  const analyzed = analyzeTemplateBindings(ast, resolve)
+  if (!analyzed) return emptyCodegenPlan()
+  return templatePlanToEdits(analyzed, source, deferByNode, hoistByNode)
+}
+
+/** @deprecated Use buildTemplateCodegenPlan via jsxHoistPipeline */
+export function prepareJSXTemplates(ctx: TransformCTX): void {
+  const source = ctx.code.toString()
+  const bodyNodes = ctx.ast.body as AstNode[]
+  const resolve = buildProgramBindingResolve(bodyNodes)
+  const plan = buildTemplateCodegenPlan(ctx.ast, source, resolve, new Map())
+  applyCodegenPlan(ctx.code, plan)
 }
 
 function planTemplateBindings(
@@ -238,6 +337,26 @@ function findBindingInitInStmt(stmt: AstNode, name: string): AstNode | null {
   return null
 }
 
+function exprTextForTemplateHole(
+  source: string,
+  node: AstNode,
+  deferByNode: Map<AstNode, string>,
+  hoistByNode: Map<AstNode, string>
+): string {
+  if (node.type === "ArrayExpression") {
+    const parts: string[] = []
+    for (const elem of (node as { elements?: (AstNode | null)[] }).elements ??
+      []) {
+        if (!elem) continue
+        parts.push(exprTextForTemplateHole(source, elem, deferByNode, hoistByNode))
+      }
+    return `[${parts.join(", ")}]`
+  }
+  const hoisted = hoistByNode.get(node)
+  if (hoisted !== undefined) return hoisted
+  return sliceNode(source, node, deferByNode)
+}
+
 function templateDecl(b: TemplateBinding, refVarMap: Map<string, string>): string {
   return `const ${b.varName} = ${templateDeclExpr(b, refVarMap)}`
 }
@@ -249,27 +368,27 @@ function templateDeclExpr(
   return buildTemplateFactoryExpr(b.html, b.holeCount, refVarMap)
 }
 
-function templateUse(b: TemplateBinding, origSrc: string): string {
+function templateUse(
+  b: TemplateBinding,
+  source: string,
+  deferByNode: Map<AstNode, string>,
+  hoistByNode: Map<AstNode, string>
+): string {
   if (b.holeCount === 0) return `${b.varName}()`
-  const parts = b.holeNodes.map((n) => origSrc.slice(n.start, n.end))
+  const parts = b.holeNodes.map((n) =>
+    exprTextForTemplateHole(source, n, deferByNode, hoistByNode)
+  )
   const regionsLit = formatRegionsLiteral(b.regions)
   const regionsArg = regionsLit ? `, ${regionsLit}` : ""
   return `createHoledTemplate(${b.varName}, [${parts.join(", ")}]${regionsArg})`
 }
 
-function templateUseIdentifier(b: TemplateBinding, origSrc: string): string {
-  return templateUse(b, origSrc)
-}
-
 function findHoistedVarNames(
   bodyNodes: AstNode[],
   bindings: TemplateBinding[]
-): Map<AstNode, { varName: string; declStart: number; declEnd: number }> {
+): Map<AstNode, HoistedVarBinding> {
   const byNode = new Map(bindings.map((b) => [b.node, b] as const))
-  const out = new Map<
-    AstNode,
-    { varName: string; declStart: number; declEnd: number }
-  >()
+  const out = new Map<AstNode, HoistedVarBinding>()
 
   for (const stmt of bodyNodes) {
     visitModuleAst([stmt], (node) => {
@@ -285,6 +404,7 @@ function findHoistedVarNames(
             varName: id.name,
             declStart: decl.start,
             declEnd: decl.end,
+            idNode: id as AstNode,
           })
         }
       }
@@ -293,8 +413,28 @@ function findHoistedVarNames(
   return out
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+function findHoistedMetaAssignmentRange(
+  source: string,
+  varName: string
+): { start: number; end: number } | null {
+  const pattern = new RegExp(`\\n${varName.replace(/\$/g, "\\$")}\\.meta=\\{[^\\n]*\\}`, "g")
+  const match = pattern.exec(source)
+  if (!match) return null
+  return { start: match.index, end: match.index + match[0].length }
+}
+
+function collectIdentifierRefs(
+  bodyNodes: AstNode[],
+  name: string,
+  excludeId: AstNode
+): { start: number; end: number }[] {
+  const refs: { start: number; end: number }[] = []
+  visitModuleAst(bodyNodes, (node) => {
+    if (node.type !== "Identifier" || node.name !== name) return
+    if (node === excludeId) return
+    refs.push({ start: node.start, end: node.end })
+  })
+  return refs
 }
 
 function visitModuleAst(nodes: AstNode[], fn: (n: AstNode) => void): void {

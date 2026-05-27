@@ -1,5 +1,10 @@
-import { parseAst } from "rollup/parseAst"
+import type { ProgramNode } from "rollup"
 import * as AST from "./ast.js"
+import {
+  deferPlanToEdits,
+  type DeferPlan,
+  wrapDeferredExpr,
+} from "./codegenPlan.js"
 import { deferSlotReadsInJsxCall, type RegionAnalysisCtx } from "./compileRegions.js"
 import { isKiruJsxFactoryCall } from "./scope.js"
 import { buildProgramBindingResolve, walkProgramBody } from "./scopeWalk.js"
@@ -18,29 +23,39 @@ function createRegionCtx(resolve: RegionAnalysisCtx["resolve"]): RegionAnalysisC
   }
 }
 
-/** Wrap signal-reading jsxs slot expressions in `() => …` for deferred subscription. */
-export function prepareDeferSlotReads(ctx: TransformCTX): void {
-  const source = ctx.code.toString()
-  const ast = ctx.ast ?? parseAst(source, { allowReturnOutsideFunction: true })
+export function analyzeDeferSlotReads(
+  ast: ProgramNode,
+  source: string,
+  resolve: RegionAnalysisCtx["resolve"]
+): DeferPlan {
   const bodyNodes = ast.body as AstNode[]
-  const resolve = buildProgramBindingResolve(bodyNodes)
   const analysis = createRegionCtx(resolve)
-
-  const wraps: { start: number; end: number }[] = []
+  const wraps: DeferPlan["wraps"] = []
 
   walkProgramBody(bodyNodes, {
     onCallExpression: (node) => {
       deferSlotReadsInJsxCall(node, analysis, (elem) => {
-        wraps.push({ start: elem.start, end: elem.end })
+        wraps.push({
+          node: elem,
+          text: wrapDeferredExpr(source, elem),
+        })
       })
     },
   })
 
-  if (wraps.length === 0) return
+  return { wraps }
+}
 
-  const code = ctx.code
-  for (const { start, end } of wraps.sort((a, b) => b.start - a.start)) {
-    const expr = source.slice(start, end)
-    code.update(start, end, `() => (${expr})`)
+/** @deprecated Use analyzeDeferSlotReads + applyCodegenPlan via jsxHoistPipeline */
+export function prepareDeferSlotReads(ctx: TransformCTX): void {
+  const source = ctx.code.toString()
+  const resolve = buildProgramBindingResolve(ctx.ast.body as AstNode[])
+  const plan = analyzeDeferSlotReads(ctx.ast, source, resolve)
+  for (const edit of deferPlanToEdits(plan)) {
+    if (edit.kind === "replace") {
+      ctx.code.update(edit.start, edit.end, edit.text)
+    }
   }
 }
+
+export { deferPlanToEdits }

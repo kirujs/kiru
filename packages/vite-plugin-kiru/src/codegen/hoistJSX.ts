@@ -1,4 +1,13 @@
+import type { ProgramNode } from "rollup"
 import * as AST from "./ast.js"
+import {
+  applyCodegenPlan,
+  emptyCodegenPlan,
+  sliceNode,
+  type CodegenImportFlags,
+  type CodegenPlan,
+  type SourceEdit,
+} from "./codegenPlan.js"
 import {
   formatRegionsLiteral,
   getCompileRegionsForJsxs,
@@ -68,9 +77,76 @@ const NON_TRACKING_SIGNAL_METHODS = new Set(["peek", "set", "sneak"])
 /** Matches `FLAG_HOISTED` in packages/lib/src/constants.ts (1 << 5). */
 const FLAG_HOISTED_BIT = 32
 
-export function prepareJSXHoisting(ctx: TransformCTX) {
-  const { code, ast } = ctx
+export type TemplateHoistPlanSlice = {
+  bindings: { node: AstNode; holeNodes: AstNode[] }[]
+}
+
+export type AnalyzeJsxHoistingOpts = {
+  templateAbsorbed: Set<AstNode>
+  templateHoleNodes: Set<AstNode>
+  templatePlan: TemplateHoistPlanSlice | null
+  deferByNode: Map<AstNode, string>
+}
+
+function mayHoistInsideTemplateShell(
+  node: AstNode,
+  templateAbsorbed: Set<AstNode>,
+  templateHoleNodes: Set<AstNode>
+): boolean {
+  if (!isInsideTemplateBindingRoot(node, templateAbsorbed)) return true
+  if (node.type === "ArrayExpression") return true
+  return templateHoleNodes.has(node)
+}
+
+export type HoistPlan = {
+  allHoistables: Hoistable[]
+  setupHoistDecls: {
+    insertBefore: AstNode
+    replaceNode: AstNode
+    varName: string
+    codeExpr: string
+  }[]
+  dynamicSlotWraps: { node: AstNode; regions: import("kiru/template").CompileRegion[] }[]
+  hoistedNodes: Set<AstNode>
+  setupRootNodes: Set<AstNode>
+  regionElementLines: string[]
+  declarations: string | null
+  moduleInsertPos: number
+  imports: CodegenImportFlags
+  bodyNodes: AstNode[]
+}
+
+function isTemplateBindingRoot(
+  node: AstNode,
+  templateAbsorbed: Set<AstNode>
+): boolean {
+  return templateAbsorbed.has(node)
+}
+
+function isInsideTemplateBindingRoot(
+  node: AstNode,
+  templateAbsorbed: Set<AstNode>
+): boolean {
+  for (const root of templateAbsorbed) {
+    if (node !== root && nodeContains(root, node)) return true
+  }
+  return false
+}
+
+export function buildHoistVarByNode(plan: HoistPlan): Map<AstNode, string> {
+  const byNode = new Map<AstNode, string>()
+  for (const h of plan.allHoistables) byNode.set(h.node, h.varName)
+  for (const s of plan.setupHoistDecls) byNode.set(s.replaceNode, s.varName)
+  return byNode
+}
+
+export function analyzeJsxHoisting(
+  ast: ProgramNode,
+  source: string,
+  opts: AnalyzeJsxHoistingOpts
+): HoistPlan | null {
   const bodyNodes = ast.body as AstNode[]
+  const { templateAbsorbed, templateHoleNodes, templatePlan, deferByNode } = opts
 
   const hoistableCalls: AstNode[] = []
   const hoistableRegionArrays: AstNode[] = []
@@ -85,7 +161,10 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
     onCallExpression: (node, walkCtx) => {
       const analysis = createAnalysisCtx(walkCtx.resolve)
       const setupCand = findSetupRenderHoistCandidate(node, walkCtx, analysis)
-      if (setupCand) {
+      if (
+        setupCand &&
+        !isTemplateBindingRoot(setupCand.rootJsx, templateAbsorbed)
+      ) {
         setupHoistCandidates.push(setupCand)
       }
       if (isCreateHoledTemplateCall(node)) {
@@ -96,7 +175,10 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
           )
         }
       }
-      if (canHoistToModule(node, analysis)) {
+      if (
+        canHoistToModule(node, analysis) &&
+        !isTemplateBindingRoot(node, templateAbsorbed)
+      ) {
         hoistableCalls.push(node)
       }
       const regions = getCompileRegionsForJsxs(node, analysis)
@@ -112,7 +194,8 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
           walkCtx.parent(),
           walkCtx.grandparent()
         ) &&
-        canHoistRegionArray(node, analysis)
+        canHoistRegionArray(node, analysis) &&
+        mayHoistInsideTemplateShell(node, templateAbsorbed, templateHoleNodes)
       ) {
         hoistableRegionArrays.push(node)
       }
@@ -122,6 +205,40 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
   const resolve = (name: string) => scope.resolve(name)
   const analysis = createAnalysisCtx(resolve)
 
+  if (templatePlan) {
+    for (const binding of templatePlan.bindings) {
+      let insertBefore: AstNode | null = null
+      walkProgramBody(bodyNodes, {
+        onCallExpression: (node, walkCtx) => {
+          if (node !== binding.node || insertBefore) return
+          insertBefore = findSetupRenderInsertBefore(node, walkCtx)
+        },
+      })
+      for (const hole of binding.holeNodes) {
+        const hoistTargets = expandTemplateHoleHoistTargets(hole, analysis)
+        for (const target of hoistTargets) {
+          if (isTemplateBindingRoot(target, templateAbsorbed)) continue
+          const payload = extractSetupHoistableHolePayload(target, analysis)
+          if (insertBefore && payload) {
+            setupHolePayloadCandidates.push({
+              exprNode: payload.exprNode,
+              jsxNode: payload.jsxNode,
+              insertBefore,
+            })
+            continue
+          }
+          if (
+            canHoistToModule(target, analysis) ||
+            (target.type === "CallExpression" &&
+              isIntrinsicJsxTag(target.arguments?.[0]))
+          ) {
+            hoistableCalls.push(target)
+          }
+        }
+      }
+    }
+  }
+
   const setupHoists = dedupeSetupHoistCandidates(setupHoistCandidates).filter(
     (c) => canHoistToSetup(c.rootJsx, analysis)
   )
@@ -130,7 +247,6 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
   ).filter((c) => canHoistHolePayloadToSetup(c, analysis))
   const setupRootNodes = new Set(setupHoists.map((c) => c.rootJsx))
   const setupHoleExprNodes = new Set(setupHoleHoists.map((c) => c.exprNode))
-
   if (
     hoistableCalls.length === 0 &&
     hoistableRegionArrays.length === 0 &&
@@ -138,21 +254,30 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
     setupHoists.length === 0 &&
     setupHoleHoists.length === 0
   ) {
-    return
+    return null
   }
 
-  const source = code.toString()
   let counter = 0
   const allHoistables: Hoistable[] = []
   const hoistedNodes = new Set<AstNode>()
   const regionArraysToHoist = new Set(hoistableRegionArrays)
 
-  const callsForHoist = hoistableCalls.filter(
+  const seenHoistCalls = new Set<number>()
+  const dedupedHoistableCalls: AstNode[] = []
+  for (const call of hoistableCalls) {
+    if (seenHoistCalls.has(call.start)) continue
+    seenHoistCalls.add(call.start)
+    dedupedHoistableCalls.push(call)
+  }
+
+  const callsForHoist = dedupedHoistableCalls.filter(
     (call) =>
       !isDirectChildOfAnyArray(call, regionArraysToHoist) &&
       !setupRootNodes.has(call) &&
       !setupHoleExprNodes.has(call) &&
-      !isStrictlyInsideAnyNode(call, setupRootNodes)
+      !isStrictlyInsideAnyNode(call, setupRootNodes) &&
+      !isExistingModuleHoistInit(call, bodyNodes) &&
+      mayHoistInsideTemplateShell(call, templateAbsorbed, templateHoleNodes)
   )
 
   const maximalHoists = filterMaximalHoistCandidates(callsForHoist)
@@ -171,7 +296,7 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
   for (const node of sortedAllNodes) {
     const varName = `$k${counter++}`
     if (node.type === "ArrayExpression") {
-      const arrayCode = source.slice(node.start, node.end)
+      const arrayCode = sliceNode(source, node, deferByNode)
       const fullyStatic = isFullyStaticRegionArray(node, analysis)
       if (fullyStatic) needsTagStaticChildrenList = true
       const codeExpr = fullyStatic
@@ -179,7 +304,7 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
         : arrayCode
       allHoistables.push({ node, code: codeExpr, varName })
     } else {
-      let codeExpr = source.slice(node.start, node.end)
+      let codeExpr = sliceNode(source, node, deferByNode)
       if (node.type === "CallExpression" && isJsxFactoryCall(node, analysis)) {
         const wrapped = buildRegionElementWrap(node, analysis, codeExpr)
         if (wrapped) {
@@ -230,10 +355,7 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
   }[] = []
   for (const candidate of setupHoists) {
     const varName = `$k${counter++}`
-    let codeExpr = source.slice(
-      candidate.rootJsx.start,
-      candidate.rootJsx.end
-    )
+    let codeExpr = sliceNode(source, candidate.rootJsx, deferByNode)
     const wrapped = buildRegionElementWrap(
       candidate.rootJsx,
       analysis,
@@ -263,7 +385,7 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
   }
   for (const candidate of setupHoleHoists) {
     const varName = `$k${counter++}`
-    const codeExpr = source.slice(candidate.exprNode.start, candidate.exprNode.end)
+    const codeExpr = sliceNode(source, candidate.exprNode, deferByNode)
     setupHoistDecls.push({
       insertBefore: candidate.insertBefore,
       replaceNode: candidate.exprNode,
@@ -274,63 +396,197 @@ export function prepareJSXHoisting(ctx: TransformCTX) {
     hoistedNodes.add(candidate.jsxNode)
   }
 
-  // Hoist leaf replacements first, then wrap mixed parents with the updated tree.
-  for (let i = allHoistables.length - 1; i >= 0; i--) {
-    const h = allHoistables[i]!
+  for (const h of allHoistables) {
     hoistedNodes.add(h.node)
-    code.update(h.node.start, h.node.end, h.varName)
   }
 
-  for (const { insertBefore, replaceNode, varName, codeExpr } of [
-    ...setupHoistDecls,
-  ].sort(
-    (a, b) => b.replaceNode.start - a.replaceNode.start
-  )) {
-    code.appendLeft(
-      insertBefore.start,
-      `const ${varName} = ${codeExpr};\n`
-    )
-    code.update(replaceNode.start, replaceNode.end, varName)
+  const imports: CodegenImportFlags = {
+    needTagStaticChildrenList: needsTagStaticChildrenList,
+    needRegionElement: needsRegionElement,
+    needMarkHoisted: needsMarkHoisted,
   }
 
-  const sortedDynamicSlots = [...dynamicSlotCalls].sort(
-    (a, b) => b.node.start - a.node.start
-  )
-  for (const { node, regions } of sortedDynamicSlots) {
-    if (hoistedNodes.has(node)) continue
-    if (isStrictlyInsideAnyNode(node, setupRootNodes)) continue
-    const current = code.slice(node.start, node.end)
-    code.update(
-      node.start,
-      node.end,
-      `regionElement(${current}, ${formatRegionsLiteral(regions)})`
-    )
-    needsRegionElement = true
-  }
-
-  if (needsTagStaticChildrenList || needsRegionElement || needsMarkHoisted) {
-    ensureTemplateCodegenImports(
-      code,
-      bodyNodes,
-      source,
-      needsTagStaticChildrenList,
-      needsRegionElement,
-      needsMarkHoisted
-    )
-  }
-
-  if (declarations) {
+  let moduleInsertPos = 0
+  if (declarations && allHoistables.length > 0) {
     const minHoistStart = Math.min(...allHoistables.map((h) => h.node.start))
     const moduleDeps = collectReferencedModuleBindings(allHoistables, resolve)
-    const insertPos = findModuleHoistInsertPosition(
+    moduleInsertPos = findModuleHoistInsertPosition(
       bodyNodes,
       minHoistStart,
       source,
       moduleDeps
     )
-    const hoistBlock = ["", declarations, ...regionElementLines, ""].join("\n")
-    code.appendRight(insertPos, hoistBlock)
   }
+
+  const dynamicSlotWraps: HoistPlan["dynamicSlotWraps"] = []
+  for (const { node, regions } of dynamicSlotCalls) {
+    if (hoistedNodes.has(node)) continue
+    if (isStrictlyInsideAnyNode(node, setupRootNodes)) continue
+    if (
+      isTemplateBindingRoot(node, templateAbsorbed) ||
+      isInsideTemplateBindingRoot(node, templateAbsorbed)
+    ) {
+      continue
+    }
+    dynamicSlotWraps.push({ node, regions })
+    imports.needRegionElement = true
+  }
+
+  return {
+    allHoistables,
+    setupHoistDecls,
+    dynamicSlotWraps,
+    hoistedNodes,
+    setupRootNodes,
+    regionElementLines,
+    declarations,
+    moduleInsertPos,
+    imports,
+    bodyNodes,
+  }
+}
+
+export function hoistPlanToEdits(
+  plan: HoistPlan,
+  source: string,
+  templateAbsorbed: Set<AstNode>
+): CodegenPlan {
+  const edits: SourceEdit[] = []
+
+  for (const h of plan.allHoistables) {
+    if (isInsideTemplateBindingRoot(h.node, templateAbsorbed)) continue
+    edits.push({
+      kind: "replace",
+      start: h.node.start,
+      end: h.node.end,
+      text: h.varName,
+    })
+  }
+
+  for (const { insertBefore, replaceNode, varName, codeExpr } of plan.setupHoistDecls) {
+    edits.push({
+      kind: "appendLeft",
+      pos: insertBefore.start,
+      text: `const ${varName} = ${codeExpr};\n`,
+    })
+    if (isInsideTemplateBindingRoot(replaceNode, templateAbsorbed)) continue
+    edits.push({
+      kind: "replace",
+      start: replaceNode.start,
+      end: replaceNode.end,
+      text: varName,
+    })
+  }
+
+  for (const { node, regions } of plan.dynamicSlotWraps) {
+    edits.push({
+      kind: "dynamicSlotWrap",
+      start: node.start,
+      end: node.end,
+      regions: formatRegionsLiteral(regions),
+    })
+  }
+
+  edits.push(
+    ...templateCodegenImportEdits(
+      plan.bodyNodes,
+      source,
+      plan.imports
+    )
+  )
+
+  if (plan.declarations) {
+    const hoistBlock = [
+      "",
+      plan.declarations,
+      ...plan.regionElementLines,
+      "",
+    ].join("\n")
+    edits.push({
+      kind: "appendRight",
+      pos: plan.moduleInsertPos,
+      text: hoistBlock,
+    })
+  }
+
+  return { edits, imports: plan.imports }
+}
+
+export function buildHoistCodegenPlan(
+  ast: ProgramNode,
+  source: string,
+  opts: AnalyzeJsxHoistingOpts
+): CodegenPlan {
+  const analyzed = analyzeJsxHoisting(ast, source, opts)
+  if (!analyzed) return emptyCodegenPlan()
+  return hoistPlanToEdits(analyzed, source, opts.templateAbsorbed)
+}
+
+/** @deprecated Use buildHoistCodegenPlan via jsxHoistPipeline */
+export function prepareJSXHoisting(ctx: TransformCTX): void {
+  const source = ctx.code.toString()
+  const plan = buildHoistCodegenPlan(ctx.ast, source, {
+    templateAbsorbed: new Set(),
+    templateHoleNodes: new Set(),
+    templatePlan: null,
+    deferByNode: new Map(),
+  })
+  applyCodegenPlan(ctx.code, plan)
+}
+
+function templateCodegenImportEdits(
+  bodyNodes: AstNode[],
+  source: string,
+  flags: CodegenImportFlags
+): SourceEdit[] {
+  const needTagStaticChildrenList = flags.needTagStaticChildrenList
+  const needRegionElement = flags.needRegionElement
+  const needMarkHoisted = flags.needMarkHoisted
+  const names: string[] = []
+  if (needTagStaticChildrenList) names.push("tagStaticChildrenList")
+  if (needRegionElement) names.push("regionElement")
+  if (needMarkHoisted) names.push("markHoisted")
+  if (names.length === 0) return []
+
+  for (const node of bodyNodes) {
+    if (node.type !== "ImportDeclaration") continue
+    const src = node.source
+    if (
+      src?.type !== "Literal" ||
+      typeof src.value !== "string" ||
+      src.value !== "kiru/template"
+    ) {
+      continue
+    }
+    const end = node.end
+    const slice = source.slice(node.start, end)
+    const missing = names.filter((n) => !slice.includes(n))
+    if (missing.length === 0) return []
+    const braceFrom = slice.indexOf("} from")
+    if (braceFrom === -1) return []
+    const start = node.start + braceFrom
+    return [
+      {
+        kind: "replace",
+        start,
+        end: start + "} from".length,
+        text: `, ${missing.join(", ")} } from`,
+      },
+    ]
+  }
+  const insertAt = findModuleHoistInsertPosition(
+    bodyNodes,
+    source.length,
+    source,
+    new Set()
+  )
+  return [
+    {
+      kind: "appendRight",
+      pos: insertAt,
+      text: `import { ${names.join(", ")} } from "kiru/template";\n`,
+    },
+  ]
 }
 
 function isCreateHoledTemplateCall(node: AstNode): boolean {
@@ -380,6 +636,36 @@ function isFullyStaticRegionArray(
     if (subtreeHasImpureCall(elem, ctx)) return false
   }
   return elems.length > 0
+}
+
+function isExistingModuleHoistInit(
+  callNode: AstNode,
+  bodyNodes: AstNode[]
+): boolean {
+  let found = false
+  visitModuleAst(bodyNodes, (node) => {
+    if (node.type !== "VariableDeclaration") return
+    for (const decl of node.declarations ?? []) {
+      if (decl.type !== "VariableDeclarator") continue
+      const id = decl.id
+      const init = decl.init as AstNode | undefined
+      if (id?.type !== "Identifier" || !id.name || !init) continue
+      if (!/^\$k\d+$/.test(id.name)) continue
+      if (init === callNode) found = true
+    }
+  })
+  return found
+}
+
+function visitModuleAst(nodes: AstNode[], visit: (node: AstNode) => void): void {
+  for (const node of nodes) {
+    AST.walk(node, {
+      "*": (n, ctx) => {
+        visit(n)
+        if (ctx.stack.length >= 200) ctx.exitBranch()
+      },
+    })
+  }
 }
 
 function isDirectChildOfAnyArray(
@@ -566,6 +852,26 @@ function findSetupHolePayloadCandidates(
     })
   }
   return out
+}
+
+function expandTemplateHoleHoistTargets(
+  hole: AstNode,
+  analysis: AnalysisCtx
+): AstNode[] {
+  if (hole.type === "ArrayExpression") {
+    const targets: AstNode[] = []
+    for (const elem of (hole as { elements?: (AstNode | null)[] }).elements ??
+      []) {
+      if (!elem || elem.type !== "CallExpression") continue
+      if (!isJsxFactoryCall(elem, analysis) && !looksLikeJsxFactoryCall(elem)) {
+        continue
+      }
+      targets.push(elem)
+    }
+    return targets
+  }
+  const payload = extractSetupHoistableHolePayload(hole, analysis)
+  return payload ? [payload.jsxNode] : []
 }
 
 function extractSetupHoistableHolePayload(

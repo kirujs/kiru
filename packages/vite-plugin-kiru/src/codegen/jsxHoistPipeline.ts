@@ -1,21 +1,84 @@
-import { parseAst } from "rollup/parseAst"
 import type { TransformCTX } from "./shared.js"
-import { prepareDeferSlotReads } from "./deferSlotReads.js"
-import { prepareJSXHoisting } from "./hoistJSX.js"
-import { prepareJSXTemplates } from "./prepareJSXTemplates.js"
+import {
+  applyCodegenPlan,
+  deferWrapMap,
+  emptyCodegenPlan,
+  mergeCodegenPlans,
+} from "./codegenPlan.js"
+import { analyzeDeferSlotReads, deferPlanToEdits } from "./deferSlotReads.js"
+import {
+  analyzeJsxHoisting,
+  buildHoistVarByNode,
+  hoistPlanToEdits,
+} from "./hoistJSX.js"
+import {
+  analyzeTemplateBindings,
+  templateAbsorbedNodes,
+  templateHoleNodes,
+  templatePlanToEdits,
+} from "./prepareJSXTemplates.js"
+import { buildProgramBindingResolve } from "./scopeWalk.js"
+import type * as AST from "./ast.js"
+
+type AstNode = AST.AstNode
 
 /** Template shells (with holes) first, then hoist remaining static JSX. */
 export function applyJsxHoistAndTemplates(ctx: TransformCTX): void {
-  const before = ctx.code.toString()
-  prepareDeferSlotReads(ctx)
-  ctx.ast = parseAst(ctx.code.toString(), { allowReturnOutsideFunction: true })
-  prepareJSXTemplates(ctx)
-  ctx.ast = parseAst(ctx.code.toString(), { allowReturnOutsideFunction: true })
-  prepareJSXHoisting(ctx)
-  ctx.ast = parseAst(ctx.code.toString(), { allowReturnOutsideFunction: true })
-  ctx.didTransform = ctx.code.toString() !== before
+  const source = ctx.code.toString()
+  const bodyNodes = ctx.ast.body as AstNode[]
+  const resolve = buildProgramBindingResolve(bodyNodes)
+
+  const templatePlan = analyzeTemplateBindings(ctx.ast, resolve)
+  const templateAbsorbed = templateAbsorbedNodes(templatePlan)
+
+  const deferPlanFull = analyzeDeferSlotReads(ctx.ast, source, resolve)
+  const deferByNode = deferWrapMap(deferPlanFull)
+  const deferPlan = filterDeferOutsideTemplates(deferPlanFull, templateAbsorbed)
+  const hoistPlan = analyzeJsxHoisting(ctx.ast, source, {
+    templateAbsorbed,
+    templateHoleNodes: templateHoleNodes(templatePlan),
+    templatePlan,
+    deferByNode,
+  })
+  const hoistByNode = hoistPlan ? buildHoistVarByNode(hoistPlan) : new Map()
+
+  const templateCodegen = templatePlan
+    ? templatePlanToEdits(templatePlan, source, deferByNode, hoistByNode)
+    : emptyCodegenPlan()
+
+  const hoistCodegen = hoistPlan
+    ? hoistPlanToEdits(hoistPlan, source, templateAbsorbed)
+    : emptyCodegenPlan()
+
+  const deferCodegen = {
+    edits: deferPlanToEdits(deferPlan),
+    imports: emptyCodegenPlan().imports,
+  }
+
+  const plan = mergeCodegenPlans(deferCodegen, templateCodegen, hoistCodegen)
+  applyCodegenPlan(ctx.code, plan)
+  ctx.didTransform = ctx.code.toString() !== source
 }
 
 export function jsxTransformChanged(ctx: TransformCTX): boolean {
   return ctx.didTransform === true
+}
+
+function nodeContains(outer: AstNode, inner: AstNode): boolean {
+  return inner.start >= outer.start && inner.end <= outer.end
+}
+
+function filterDeferOutsideTemplates(
+  plan: import("./codegenPlan.js").DeferPlan,
+  templateAbsorbed: Set<AstNode>
+): import("./codegenPlan.js").DeferPlan {
+  if (templateAbsorbed.size === 0) return plan
+  return {
+    wraps: plan.wraps.filter((w) => {
+      for (const root of templateAbsorbed) {
+        if (w.node === root || nodeContains(root, w.node)) return false
+      }
+      return true
+    }),
+  }
 }

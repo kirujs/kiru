@@ -98,7 +98,7 @@ export function shellHtmlHasStaticContent(html: string): boolean {
 
 /**
  * True when the shell has static markup beside holes (e.g. `<div><button>Toggle</button><!--#--></div>`).
- * Hole-only shells (`<div><!--#--></div>`) stay ineligible under strictHoledShell.
+ * Single-hole shells with no static markup (e.g. `{children}` outlets) stay ineligible.
  */
 export function shellHtmlHasStaticMarkupBesideHoles(html: string): boolean {
   if (html.includes(KIRU_TEMPLATE_REF_PREFIX)) return false
@@ -134,7 +134,7 @@ export function serializeJsxCallToTemplate(
   const html = serializeStaticElementToHtml(tag, props, innerHtml)
   if (
     ctx.strictHoledShell &&
-    holeNodes.length > 0 &&
+    holeNodes.length === 1 &&
     !shellHtmlHasStaticContent(html) &&
     !shellHtmlHasStaticMarkupBesideHoles(html)
   ) {
@@ -554,8 +554,8 @@ function isRegionEligibleChildArray(
 }
 
 /**
- * Intrinsic host with static children and only event/bind props dynamic — emit static
- * markup and one hole for the jsx call (props/events) at reconcile time.
+ * Intrinsic host with static children and only event/bind props dynamic — one template
+ * hole for the hoisted jsx call (full host element + events). No static host wrapper.
  */
 function trySerializeEventHostShell(
   callNode: AstNode,
@@ -585,17 +585,13 @@ function trySerializeEventHostShell(
 
   const scratchHoles: AstNode[] = []
   const scratchRegions: CompileRegion[] = []
-  const innerHtml = serializeChildrenToInnerHtml(
-    propsArg,
-    ctx,
-    scratchHoles,
-    scratchRegions
-  )
+  serializeChildrenToInnerHtml(propsArg, ctx, scratchHoles, scratchRegions)
   if (scratchHoles.length > 0) return null
 
   pushTemplateHole(callNode, ctx, holeNodes, regions)
-  const props = collectStaticProps(propsArg, ctx)
-  return serializeStaticElementToHtml(typeArg.value as string, props, innerHtml)
+  // Hole payload is the full hoisted jsx call (host tag + static children + events).
+  // Do not wrap in a static host element — reconcile inserts before <!--#--> inside parentEl.
+  return KIRU_HOLE_MARKER
 }
 
 function serializeChildInner(

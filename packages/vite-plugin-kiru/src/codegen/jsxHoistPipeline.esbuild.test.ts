@@ -60,7 +60,7 @@ describe("jsx-hoist pipeline on esbuild production output", () => {
     assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\}/)
     assert.match(out, /<div>123 asdasd<p>Hello world<\/p>/)
     assert.match(out, /createHoledTemplate\(\$t1/)
-    assert.match(out, /\$t3 = _template\("<div><button>Toggle<\/button>/)
+    assert.match(out, /\$t3 = _template\("<div><!--#--><!--#--><\/div>/)
     assert.match(out, /createHoledTemplate\(\$t3,[\s\S]*kind:"conditional",anchor:1/)
     assert.doesNotMatch(out, /jsx\(Badge/)
     assert.doesNotMatch(out, /jsxDEV\(/)

@@ -57,6 +57,11 @@ function runPipeline(
     log: () => {},
   }
   applyJsxHoistAndTemplates(ctx)
+  assert.strictEqual(
+    ctx.code,
+    initialCode,
+    "pipeline must mutate the same MagicString instance"
+  )
   return { ctx, initialCode }
 }
 
@@ -213,12 +218,11 @@ export const Counter = () => {
   it("regression: returning the initial MagicString ref drops template lowering", () => {
     const { ctx, initialCode } = runPipeline(HOISTED_COMMA_SOURCE)
     const fromCtx = ctx.code.toString()
-    const stale = initialCode.toString()
 
+    assert.strictEqual(ctx.code, initialCode)
     assert.match(fromCtx, /\$t\d+ = _template\(/)
-    assert.doesNotMatch(stale, /\$t\d+ = _template\(/)
-    assert.match(stale, /\$k1 = jsxDEV\("span"/)
-    assert.notEqual(stale, fromCtx)
+    assert.doesNotMatch(HOISTED_COMMA_SOURCE, /\$t\d+ = _template\(/)
+    assert.notEqual(fromCtx, HOISTED_COMMA_SOURCE)
   })
 })
 

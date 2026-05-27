@@ -309,6 +309,11 @@ const Badge = () => jsx("span", { className: "badge", children: "OK" })
     const result = serializeJsxCallToTemplate(call, ctx)
     assert.ok(result)
     assert.strictEqual(result!.holeCount, 2)
+    assert.strictEqual(
+      (result!.html.match(/<!--#-->/g) ?? []).length,
+      result!.holeCount
+    )
+    assert.ok(!result!.html.includes("<button>"))
     assert.ok(result!.html.includes("<!--@kiru-tpl-ref:Badge@-->"))
     assert.ok(!result!.html.includes('<span class="badge">OK</span>'))
     assert.ok(result!.html.includes("<div>123</div>"))
@@ -339,8 +344,16 @@ const Toggler = () => {
     const selected = selectMaximalTemplateShellCalls(calls, ctx)
     const shell = selected.find((s) => s.call === togglerDiv!.node)
     assert.ok(shell, "Toggler div should serialize under strictHoledShell")
-    assert.ok(shell!.result.html.includes("<button>Toggle</button>"))
+    assert.ok(
+      shell!.result.html.includes("<div><!--#-->"),
+      "event-host children are a marker only; hoisted jsx supplies the button"
+    )
+    assert.ok(!shell!.result.html.includes("<button>"))
     assert.strictEqual(shell!.result.holeCount, 2)
+    assert.strictEqual(
+      (shell!.result.html.match(/<!--#-->/g) ?? []).length,
+      shell!.result.holeCount
+    )
     assert.ok(
       shell!.result.regions.some((r) => r.kind === "conditional"),
       "expected a conditional template region"
@@ -411,6 +424,11 @@ const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 
     const result = serializeJsxCallToTemplate(call, ctx)
     assert.ok(result)
     assert.strictEqual(result!.holeCount, 2)
+    assert.strictEqual(
+      (result!.html.match(/<!--#-->/g) ?? []).length,
+      result!.holeCount
+    )
+    assert.ok(!result!.html.includes("<button>"))
     assert.ok(result!.html.includes("<!--@kiru-tpl-ref:Badge@-->"))
     assert.ok(!result!.html.includes('<span class="badge">OK</span>'))
     assert.ok(result!.html.includes("<div>123</div>"))

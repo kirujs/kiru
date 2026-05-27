@@ -1,3 +1,4 @@
+import { parseAst } from "rollup/parseAst"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
 import {
   prepareHMR,
@@ -902,7 +903,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       if (!state?.features.staticHoisting) return null
       if (!shouldTransformFile(id, state)) return null
 
-      const ast = this.parse(src)
+      const ast = parseAst(src, { allowReturnOutsideFunction: true })
       const code = new MagicString(src)
       const ctx: TransformCTX = {
         code,

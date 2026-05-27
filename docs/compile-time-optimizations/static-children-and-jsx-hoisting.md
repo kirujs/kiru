@@ -294,7 +294,9 @@ Implementation: per-file scope registry (`moduleSignal` vs `setupConst`) in `pre
 
 **Fully static** subtrees use `_template(html)` (zero holes). **Mixed shells** use one template with comment anchors; dynamic children mount via `createHoledTemplate(factory, […])` at reconcile time. Attribute dynamics (`bind:`, `className={signal}`) on the template root stay on hoisted `jsx` or prop patches — not DOM holes.
 
-**Pipeline order:** `prepareJSXTemplates` runs before `prepareJSXHoisting` ([`jsxHoistPipeline.ts`](../../packages/vite-plugin-kiru/src/codegen/jsxHoistPipeline.ts)). Hoist handles remaining static `jsxDEV` subtrees.
+**Codegen pipeline:** [`applyJsxHoistAndTemplates`](../../packages/vite-plugin-kiru/src/codegen/jsxHoistPipeline.ts) parses each module once (`parseAst` with `allowReturnOutsideFunction: true`), runs three read-only analysis passes on that AST and the original source string, merges a [`CodegenPlan`](../../packages/vite-plugin-kiru/src/codegen/codegenPlan.ts), then applies every edit through a single `MagicString` instance. Analysis order is defer slot reads → template bindings → JSX hoisting (hoist skips nodes absorbed by the template plan). Apply order is `prepend` (template import) first, then all `replace` edits from highest `start` to lowest so spans stay valid, then `appendLeft` / `appendRight` by descending position. Hole payloads and hoist expressions use `sliceNode`, which can apply a virtual defer wrap without re-parsing between phases.
+
+**Pipeline order (semantics):** template shells are chosen before module/setup hoists run on the remaining static `jsxDEV` subtrees.
 
 **Shell selection (serialize-first maximal):** [`prepareJSXTemplates.ts`](../../packages/vite-plugin-kiru/src/codegen/prepareJSXTemplates.ts) calls `serializeJsxCallToTemplate` on every shell-eligible call, then applies [`filterOutermostShellCalls`](../../packages/vite-plugin-kiru/src/codegen/templateHTML.ts) only to calls that **successfully** serialized. A parent that fails (e.g. cannot lower) no longer suppresses templatable children (layout `h1`).
 
