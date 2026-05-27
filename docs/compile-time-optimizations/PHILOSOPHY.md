@@ -73,7 +73,7 @@ Break template extraction at **dynamic** boundaries:
 - Slots / outlets (`children`)
 - Non-static props on the **template shell root** (`bind:`, events, refs on the outermost serialized host)
 
-**Behavior-only intrinsics** (static tag + static children; only `ref` / `on*` / `bind:*` dynamic) may stay in template HTML with compile-time binding coordinates instead of a structural `node` hole — see [Phase 3 behavior bindings](./static-children-and-jsx-hoisting.md#phase-3--dom-templates-shipped--structural-holes).
+**Behavior-only intrinsics** (static tag + static children; only `ref` / `on*` / `bind:*` dynamic) may stay in template HTML with compile-time binding coordinates instead of a structural `node` hole — see [Phase 3 behavior bindings](./static-children-and-jsx-hoisting.md#phase-3--dom-templates-shipped--structural-holes) and [Workstream C scope](./static-children-and-jsx-hoisting.md#workstream-c-scope-phase-2-addendum).
 
 **Static leaf FCs** may be **folded into the parent shell HTML** when the call site has only static props, the component is module-pure, and its render root serializes to a zero-hole intrinsic template (e.g. `<Badge />` → `<span class="badge">OK</span>` inlined in the outer `$t0`). The component may still keep its own `$tN` factory for direct use elsewhere.
 

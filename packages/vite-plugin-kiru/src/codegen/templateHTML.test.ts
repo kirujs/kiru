@@ -362,7 +362,7 @@ const Toggler = () => {
     ])
   })
 
-  it("emits behavior binding descriptors for event-host holes", () => {
+  it("emits behavior binding descriptors for behavior-only intrinsics", () => {
     const source = `
 import { jsxDEV } from "kiru/jsx-dev-runtime"
 export function Page() {
@@ -378,6 +378,31 @@ export function Page() {
     assert.deepStrictEqual(result!.bindings, [
       { kind: "event", prop: "onclick", nodeIndex: 0 },
     ])
+  })
+
+  it("preserves behavior-only host coordinates with static nested children", () => {
+    const source = `
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+export function Page() {
+  return jsxDEV("div", { children: [
+    jsxDEV("button", { onclick: () => {}, children:
+      jsxDEV("span", { children: "Inner" }, void 0, false, void 0, void 0)
+    }, void 0, false, void 0, void 0),
+    jsxDEV("p", { children: "Tail" }, void 0, false, void 0, void 0),
+  ] }, void 0, false, void 0, void 0)
+}
+`
+    const ctx = buildCtx(source)
+    const call = findOutermostJsxCall(source, ctx)
+    const result = serializeJsxCallToTemplate(call, ctx)
+    assert.ok(result)
+    assert.strictEqual(result!.holeCount, 0)
+    assert.deepStrictEqual(result!.bindings, [
+      { kind: "event", prop: "onclick", nodeIndex: 0 },
+    ])
+    assert.strictEqual(result!.structuralNodeCount, 3)
+    assert.ok(result!.html.includes("<button><span>Inner</span></button>"))
+    assert.ok(result!.html.includes("<p>Tail</p>"))
   })
 
   it("serializes jsxs div with multiple static literal children", () => {

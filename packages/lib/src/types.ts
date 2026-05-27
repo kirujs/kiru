@@ -418,6 +418,8 @@ declare global {
       templateHoleChildren?: readonly unknown[]
       /** @internal Anchor comment used to place new hole children before marker. */
       templateHoleAnchor?: Comment
+      /** @internal Retained per-hole parents for anchor-scoped payload ownership. */
+      templateHoleHosts?: (VNode | null)[]
       /** @internal Per-hole reconciled vnode heads for updates. */
       templateHoleHeads?: (VNode | null)[]
       /** @internal Shell `<!--#-->` anchors (cached; excludes nested template markers). */

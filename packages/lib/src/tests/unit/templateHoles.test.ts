@@ -47,6 +47,14 @@ describe("template holes", () => {
       const factory = _template(html, 1)
       const dynamic = createElement("span", { className: "dyn", children: "live" })
       kiru.mount(createHoledTemplate(factory, [dynamic]), container)
+      const host = container.querySelector("div") as Element & {
+        __kiruNode?: Kiru.VNode
+      }
+      const hostVNode = host.__kiruNode!
+      const holeHost = hostVNode.templateHoleHosts?.[0]
+      assert.ok(holeHost, "expected retained hole host parent")
+      assert.strictEqual(holeHost!.parent, hostVNode)
+      assert.strictEqual(hostVNode.templateHoleHeads?.[0]?.parent, holeHost)
       assert.strictEqual(
         container.querySelector(".dyn")?.textContent,
         "live"

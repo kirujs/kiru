@@ -80,7 +80,7 @@ function commitDom(
     unmountDomProps(vNode, dom, prev.props, cleanups)
     vNode.prev = null
   }
-  if (!vNode.prev || vNode.flags & FLAG_UPDATE) {
+  if (!(vNode.flags & FLAG_TEMPLATE) && (!vNode.prev || vNode.flags & FLAG_UPDATE)) {
     updateDomProps(vNode)
   }
   hostNode.lastChild = vNode.dom

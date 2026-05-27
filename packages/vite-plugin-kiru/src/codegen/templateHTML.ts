@@ -659,11 +659,14 @@ function arrayElementWouldProduceHole(
   ctx: TemplateSerializeCtx
 ): boolean {
   if (elem.type === "CallExpression" && isAnyJsxFactoryCall(elem, ctx)) {
+    const nestedCtx = ctx.strictHoledShell
+      ? { ...ctx, strictHoledShell: false }
+      : ctx
     const folded = tryFoldStaticComponentHtml(elem, ctx, (jsx) =>
-      serializeJsxCallToTemplate(jsx, ctx)
+      serializeJsxCallToTemplate(jsx, nestedCtx)
     )
     if (folded) return false
-    const inner = serializeJsxCallToTemplate(elem, ctx)
+    const inner = serializeJsxCallToTemplate(elem, nestedCtx)
     if (inner && inner.holeCount > 0) return true
     if (inner && inner.holeCount === 0) return false
     return true
@@ -709,8 +712,8 @@ function isRegionEligibleChildArray(
 function trySerializeBehaviorOnlyIntrinsic(
   callNode: AstNode,
   ctx: TemplateSerializeCtx,
-  holeNodes: AstNode[],
-  regions: CompileRegion[],
+  _holeNodes: AstNode[],
+  _regions: CompileRegion[],
   accum: TemplateSerializeShared
 ): string | null {
   const typeArg = callNode.arguments?.[0]
@@ -738,17 +741,20 @@ function trySerializeBehaviorOnlyIntrinsic(
   }
   if (!hasBehavior) return null
 
+  const scratchCoords = createTemplateCoordinateAllocator()
   const scratchHoles: AstNode[] = []
   const scratchRegions: CompileRegion[] = []
-  serializeChildrenToInnerHtml(
+  const scratchBindings: TemplateBindingDescriptor[] = []
+  const scratchHosts: TemplateBindingHost[] = []
+  const innerHtml = serializeChildrenToInnerHtml(
     propsArg,
     ctx,
     scratchHoles,
     scratchRegions,
     {
-      coords: createTemplateCoordinateAllocator(),
-      bindings: [],
-      bindingHosts: [],
+      coords: scratchCoords,
+      bindings: scratchBindings,
+      bindingHosts: scratchHosts,
     }
   )
   if (scratchHoles.length > 0) return null
@@ -757,14 +763,19 @@ function trySerializeBehaviorOnlyIntrinsic(
   const nodeIndex = coords.alloc()
   bindings.push(...extractTemplateBindingsForIntrinsicCall(callNode, nodeIndex))
   bindingHosts.push({ nodeIndex, call: callNode })
+
+  const childBase = coords.count()
+  for (const b of scratchBindings) {
+    bindings.push({ ...b, nodeIndex: childBase + b.nodeIndex })
+  }
+  for (const h of scratchHosts) {
+    bindingHosts.push({ ...h, nodeIndex: childBase + h.nodeIndex })
+  }
+  for (let i = 0; i < scratchCoords.count(); i++) {
+    coords.alloc()
+  }
+
   const staticProps = collectStaticProps(propsArg, ctx)
-  const innerHtml = serializeChildrenToInnerHtml(
-    propsArg,
-    ctx,
-    holeNodes,
-    regions,
-    accum
-  )
   return returnInlinedMarkup(
     serializeStaticElementToHtml(tag, staticProps, innerHtml),
     coords,
@@ -789,6 +800,9 @@ function serializeChildInner(
     return KIRU_HOLE_MARKER
   }
   if (node.type === "CallExpression" && isAnyJsxFactoryCall(node, ctx)) {
+    const nestedCtx = ctx.strictHoledShell
+      ? { ...ctx, strictHoledShell: false }
+      : ctx
     const behaviorHost = trySerializeBehaviorOnlyIntrinsic(
       node,
       ctx,
@@ -797,13 +811,13 @@ function serializeChildInner(
       accum
     )
     if (behaviorHost) return behaviorHost
-    const folded = tryFoldStaticComponentHtml(node, ctx, (jsx) =>
-      serializeJsxCallToTemplate(jsx, ctx, accum)
+    const folded = tryFoldStaticComponentHtml(node, nestedCtx, (jsx) =>
+      serializeJsxCallToTemplate(jsx, nestedCtx, accum)
     )
     if (folded) {
       return returnInlinedMarkup(folded, coords)
     }
-    const inner = serializeJsxCallToTemplate(node, ctx, accum)
+    const inner = serializeJsxCallToTemplate(node, nestedCtx, accum)
     if (inner && inner.holeCount === 0) {
       return inner.html
     }

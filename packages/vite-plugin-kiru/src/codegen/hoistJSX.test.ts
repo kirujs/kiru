@@ -751,8 +751,9 @@ export const Counter = () => {
 `)
     assert.match(
       out,
-      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+,[\s\S]*jsxDEV\("h1"/
+      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+,[\s\S]*\["Count: ", count\]/
     )
+    assert.match(out, /\[\{kind:"text",anchor:0\}\]/)
     assert.match(out, /<button>Increment<\/button>/)
     assert.match(out, /kind:"event",prop:"onclick",nodeIndex:1/)
     assert.match(out, /return \(\) => \$r0/)

@@ -298,6 +298,13 @@ Implementation: per-file scope registry (`moduleSignal` vs `setupConst`) in `pre
 
 **Behavior-only template bindings:** When an intrinsic host has **static structure** and its only dynamic props are behavior (`ref`, keys starting with `on`, keys starting with `bind:`), the compiler inlines the host into template HTML instead of emitting a structural `node` region + hole. Examples: a `<button onclick={…}>` beside a text hole (Counter), a ref-only `<div>`, or a `bind:value`-only `<input>` with static `type`.
 
+### Workstream C scope (phase 2 addendum)
+
+- **In scope:** static intrinsic hosts with behavior-only dynamics (`ref` / `on*` / `bind:*`) lower to template HTML + compile-time binding coordinates.
+- **Out of scope:** signal-backed non-behavior attrs (for example `className={signal}`) still take the structural hole path.
+- **Out of scope:** template shell root `bind:` / `ref` props remain rejected by `isTemplateShellProps`.
+- **Runtime ownership rule:** template shell markup is not mirrored as a vnode tree; runtime ownership is holes + binding coordinates.
+
 | Piece | Role |
 |-------|------|
 | `bindings` | Compile-time descriptors `{ kind, prop, nodeIndex }` on `TemplateRoot` |

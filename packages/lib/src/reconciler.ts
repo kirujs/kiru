@@ -957,6 +957,14 @@ function reconcileTemplateHoleContent(
   })
 }
 
+function setTemplateHoleHeadParent(head: VNode | null, parent: VNode): void {
+  let node = head
+  while (node) {
+    node.parent = parent
+    node = node.sibling
+  }
+}
+
 function hydrateVNodeChain(head: VNode | null): void {
   let node = head
   while (node) {
@@ -997,7 +1005,10 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
   const root = vNode.dom
   if (!(root instanceof Element)) return null
   const holeCount = vNode.templateHoleCount ?? 0
-  if (holeCount === 0) return vNode.child
+  if (holeCount === 0) {
+    vNode.templateHoleHosts = undefined
+    return vNode.child
+  }
 
   const holeChildren = vNode.templateHoleChildren ?? []
   const anchors = resolveTemplateHoleAnchors(
@@ -1011,6 +1022,10 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
 
   let first: VNode | null = null
   let prevTail: VNode | null = null
+  if (!vNode.templateHoleHosts) {
+    vNode.templateHoleHosts = []
+  }
+  vNode.templateHoleHosts.length = holeCount
 
   for (let i = 0; i < holeCount; i++) {
     const anchor = anchors[i]!
@@ -1026,6 +1041,7 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
     const slotParent = createVNode(vNode, $FRAGMENT, {})
     slotParent.dom = parentEl as Kiru.VNode["dom"]
     slotParent.templateHoleAnchor = anchor
+    vNode.templateHoleHosts[i] = slotParent
 
     const holeChild = holeChildren[i]
     const region = regionAt(vNode.templateRegions, i, "template")
@@ -1057,6 +1073,7 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
       region,
       existing
     )
+    setTemplateHoleHeadParent(head, slotParent)
     adoptTemplateHoleDeletions(vNode, slotParent)
     if (hydrating && head) {
       hydrateVNodeChain(head)
