@@ -4,6 +4,8 @@ import { KiruError } from "./error.js"
 import type { TemplateBindingDescriptor } from "./template.js"
 import type { HydratedTemplateInstance } from "./templateHydration.js"
 import type { DomVNode, SomeElement } from "./types.utils.js"
+import { traceReadiness } from "./hydration.js"
+import { isBrowser } from "./env.js"
 
 type VNode = Kiru.VNode
 
@@ -76,7 +78,16 @@ export function activateTemplateBindings(
   for (const [nodeIndex, nextProps] of propsByIndex) {
     seen.add(nodeIndex)
     const target = map[nodeIndex]
-    if (!target) continue
+    if (!target) {
+      if (isBrowser) {
+        traceReadiness("binding", {
+          nodeIndex,
+          missing: true,
+          projected: map.length,
+        })
+      }
+      continue
+    }
 
     let state = states.find((s) => s.proxy.dom === target)
     if (!state) {
@@ -94,6 +105,17 @@ export function activateTemplateBindings(
     if (prevProps === nextProps) continue
     state.proxy.props = nextProps
     state.proxy.prev = { props: prevProps } as DomVNode["prev"]
+    if (isBrowser) {
+      const kinds = Object.keys(nextProps)
+        .filter((k) => k.startsWith("on"))
+        .join(",")
+      traceReadiness("binding", {
+        nodeIndex,
+        tag: target.tagName.toLowerCase(),
+        testid: target.getAttribute("data-testid") ?? "",
+        props: kinds || "attrs",
+      })
+    }
     updateDomProps(state.proxy)
     state.props = nextProps
     state.proxy.prev = { props: nextProps } as DomVNode["prev"]

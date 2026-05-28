@@ -43,6 +43,7 @@ import {
   hydrationStack,
   traceHydrationError,
   traceHydrationVNodeEvent,
+  traceReadiness,
 } from "./hydration.js"
 import { renderMode } from "./globals.js"
 import type { AppHandle } from "./appHandle.js"
@@ -917,7 +918,11 @@ function refreshReusedTemplateHoles(
   vNode: VNode,
   template: TemplateRoot
 ): void {
-  const count = template.holeCount ?? 0
+  const normalizedHoleCount =
+    template.holeCount === 0 && Array.isArray(template.holeChildren)
+      ? template.holeChildren.length
+      : (template.holeCount ?? 0)
+  const count = normalizedHoleCount
   vNode.templateHoleCount = count
   if (template.holeChildren !== undefined) {
     vNode.templateHoleChildren = template.holeChildren
@@ -1048,6 +1053,38 @@ function countHoleDomSpan(anchor: Comment, nextAnchor: Comment | null): number {
   return n
 }
 
+/** DOM nodes a holed region owns during hydration (see compile `templateRegions`). */
+function holeHydrationDomSpan(
+  region: ReturnType<typeof regionAt>,
+  _holeChild: unknown,
+  anchor: Comment,
+  nextAnchor: Comment | null
+): number {
+  // Node/component holes replace a single payload root. Using the full DOM
+  // range up to the next anchor can swallow static template markup (e.g. the
+  // following <p> before an inline conditional hole).
+  if (region.kind === "node" || region.kind === "component") {
+    return 1
+  }
+  return countHoleDomSpan(anchor, nextAnchor)
+}
+
+/** Next hole anchor that shares the same parent container. */
+function nextAnchorInSameParent(
+  anchors: readonly Comment[],
+  fromIndex: number
+): Comment | null {
+  const current = anchors[fromIndex]
+  if (!current) return null
+  const parent = current.parentNode
+  if (!parent) return null
+  for (let i = fromIndex + 1; i < anchors.length; i++) {
+    const candidate = anchors[i]
+    if (candidate?.parentNode === parent) return candidate
+  }
+  return null
+}
+
 function hydrateVNode(vNode: VNode): void {
   traceHydrationVNodeEvent("hydrateVNode", "reconcile", {
     vnode: vnodeLabel(vNode),
@@ -1082,6 +1119,20 @@ function hydrateVNode(vNode: VNode): void {
 }
 
 export function reconcileTemplateHoles(vNode: VNode): VNode | null {
+  if (typeof vNode.type === "string") {
+    traceReadiness("scheduler", {
+      phase: "reconcile-template-holes",
+      type: vNode.type,
+      testid:
+        typeof vNode.props?.["data-testid"] === "string"
+          ? vNode.props["data-testid"]
+          : "",
+      holeCount: vNode.templateHoleCount ?? 0,
+      hasHoleChildren:
+        Array.isArray(vNode.templateHoleChildren) &&
+        vNode.templateHoleChildren.length > 0,
+    })
+  }
   traceHydrationVNodeEvent("reconcileTemplateHoles", "reconcile", {
     vnode: vnodeLabel(vNode),
     note: `holeCount=${vNode.templateHoleCount ?? 0}`,
@@ -1149,9 +1200,11 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
     )
     if (hydrating && head) {
       slotParent.templateHoleHydrationPending = true
-      slotParent.templateHoleHydrationSpan = countHoleDomSpan(
+      slotParent.templateHoleHydrationSpan = holeHydrationDomSpan(
+        region,
+        holeChild,
         anchor,
-        anchors[i + 1] ?? null
+        nextAnchorInSameParent(anchors, i)
       )
       slotParent.templateHoleHydrationOffset = 0
     } else {
@@ -1197,7 +1250,10 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
 }
 
 function createTemplateVNode(parent: VNode, template: TemplateRoot): VNode {
-  const holeCount = template.holeCount ?? 0
+  const holeCount =
+    template.holeCount === 0 && Array.isArray(template.holeChildren)
+      ? template.holeChildren.length
+      : (template.holeCount ?? 0)
   const tagName = inferTemplateShellTagName(template.html)
   const type = (
     svgTags.has(tagName) ? tagName : tagName.toLowerCase()

@@ -14,6 +14,7 @@ import {
   FLAG_HOISTED,
   FLAG_TEMPLATE,
   FLAG_STATIC_CHILDREN,
+  FLAG_UPDATE,
 } from "./constants.js"
 import {
   captureFocus,
@@ -37,7 +38,7 @@ import {
 import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
 import { node, postEffectCleanups, renderMode, setups } from "./globals.js"
-import { hydrationStack } from "./hydration.js"
+import { hydrationStack, traceReadiness } from "./hydration.js"
 import {
   reconcileChildren,
   reconcileTemplateHoles,
@@ -278,9 +279,23 @@ function performUnitOfWork(vNode: VNode): VNode | null {
 function updateVNode(vNode: VNode): VNode | null {
   const { type, props, prev, flags } = vNode
 
+  if (
+    renderMode.current === "hydrate" &&
+    (flags & (FLAG_TEMPLATE | FLAG_UPDATE | FLAG_STATIC_CHILDREN))
+  ) {
+    traceReadiness("scheduler", {
+      type: String(type),
+      template: !!(flags & FLAG_TEMPLATE),
+      update: !!(flags & FLAG_UPDATE),
+      staticChildren: !!(flags & FLAG_STATIC_CHILDREN),
+    })
+  }
+
+  const hostNeedsDomBind = typeof type === "string" && !vNode.dom
   if (__DEV__ && isHmrUpdate()) {
   } else if (
     prev &&
+    !hostNeedsDomBind &&
     (flags & (FLAG_DIRTY | FLAG_TEMPLATE_HOLES_SYNCED)) === 0 &&
     (prev.props === props || !propsChanged(prev.props, props))
   ) {
@@ -476,8 +491,37 @@ function updateHostComponent(vNode: DomVNode): VNode | null {
   }
   if (!vNode.dom) {
     if (renderMode.current === "hydrate") {
+      if (typeof type === "string") {
+        traceReadiness("scheduler", {
+          phase: "hydrate-host-enter",
+          type,
+          testid:
+            typeof props?.["data-testid"] === "string"
+              ? props["data-testid"]
+              : "",
+          holeCount: vNode.templateHoleCount ?? 0,
+          hasHoleChildren:
+            Array.isArray(vNode.templateHoleChildren) &&
+            vNode.templateHoleChildren.length > 0,
+          templateFlag: !!(vNode.flags & FLAG_TEMPLATE),
+        })
+      }
       if (vNode.flags & FLAG_TEMPLATE) {
-        ensureTemplateVNodeHydrated(vNode)
+        try {
+          ensureTemplateVNodeHydrated(vNode)
+        } catch (error) {
+          traceReadiness("scheduler", {
+            phase: "template-hydrate-throw",
+            type,
+            message:
+              error instanceof Error
+                ? error.message
+                : typeof error === "string"
+                ? error
+                : "unknown",
+          })
+          throw error
+        }
       } else {
         hydrateDom(vNode)
       }
@@ -489,8 +533,24 @@ function updateHostComponent(vNode: DomVNode): VNode | null {
     }
   }
   // text should _never_ have children
+  if (renderMode.current === "hydrate" && typeof type === "string") {
+    traceReadiness("scheduler", {
+      phase: "post-host-dom-bind",
+      type,
+      holeCount: vNode.templateHoleCount ?? 0,
+      templateFlag: !!(vNode.flags & FLAG_TEMPLATE),
+    })
+  }
   if (type !== "#text") {
     if (vNode.flags & FLAG_TEMPLATE) {
+      traceReadiness("scheduler", {
+        phase: "template-branch-enter",
+        type: typeof type === "string" ? type : String(type),
+        holeCount: vNode.templateHoleCount ?? 0,
+        hasHoleChildren:
+          Array.isArray(vNode.templateHoleChildren) &&
+          vNode.templateHoleChildren.length > 0,
+      })
       if (!vNode.templateHydrated) {
         ensureTemplateVNodeHydrated(vNode)
       }

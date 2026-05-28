@@ -22,7 +22,7 @@ type HydrationTraceEntry = {
   note?: string
 }
 
-const TRACE_LIMIT = 400
+const TRACE_LIMIT = 4000
 
 function describeNode(node: Node | null | undefined): string {
   if (!node) return "null"
@@ -74,6 +74,18 @@ export function traceHydrationError(message: string): void {
     __kiruHydrationErrors?: string[]
   }
   ;(w.__kiruHydrationErrors ??= []).push(message)
+}
+
+/** Dev/test readiness diagnostics (resource, scheduler, forms, bindings). */
+export function traceReadiness(
+  kind: "resource" | "scheduler" | "form" | "binding",
+  detail: Record<string, string | number | boolean | undefined>
+): void {
+  const note = Object.entries(detail)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `${k}=${String(v)}`)
+    .join(" ")
+  traceHydration({ op: "cursorContext", ctx: `readiness:${kind}`, note })
 }
 
 export const hydrationStack = {

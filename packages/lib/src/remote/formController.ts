@@ -10,6 +10,8 @@ import { requestToken } from "../globals.js"
 import { applyActionResponseHeaders } from "../router/routerGlobal.js"
 import { __DEV__, __KIRU_PURE_CLIENT__ } from "../env.js"
 import { REMOTE_ACTION_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
+import { traceReadiness } from "../hydration.js"
+import { isBrowser } from "../env.js"
 
 export type { FormActionClientOutput } from "./action.js"
 
@@ -33,6 +35,12 @@ export function createFormController<Output>(
   const submitEnhanced = async (form: HTMLFormElement) => {
     if (__DEV__ && __KIRU_PURE_CLIENT__) {
       throw new Error(REMOTE_ACTION_PURE_CLIENT_DEV_MSG)
+    }
+    if (isBrowser) {
+      traceReadiness("form", {
+        phase: "submit-start",
+        actionId: ref.__kiruFormActionId,
+      })
     }
     isPending.set(true)
     result.set(null)
@@ -69,12 +77,32 @@ export function createFormController<Output>(
       }
 
       if (isKiruRedirect(data)) {
+        if (isBrowser) {
+          traceReadiness("form", {
+            phase: "redirect",
+            actionId: ref.__kiruFormActionId,
+            location: (data as KiruRedirect).location,
+          })
+        }
         window.location.assign(
           new URL((data as KiruRedirect).location, window.location.href).href
         )
         return
       }
 
+      if (isBrowser) {
+        const payload = data as FormActionClientOutput<Output>
+        traceReadiness("form", {
+          phase: "result",
+          actionId: ref.__kiruFormActionId,
+          ok:
+            payload != null &&
+            typeof payload === "object" &&
+            "ok" in payload
+              ? String((payload as { ok: unknown }).ok)
+              : "unknown",
+        })
+      }
       result.set(data as FormActionClientOutput<Output>)
     } finally {
       isPending.set(false)

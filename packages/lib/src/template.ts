@@ -102,7 +102,13 @@ export function createHoledTemplate(
   bindings?: readonly TemplateBindingDescriptor[],
   bindingPayloads?: readonly (Record<string, unknown> | undefined)[]
 ): TemplateRoot {
-  const count = template.holeCount
+  // Production transforms can occasionally leave `holeCount` stale (0) while
+  // still emitting dynamic hole children. Fall back to runtime hole arity so
+  // hydration/reconciliation does not silently skip dynamic regions.
+  const count =
+    template.holeCount === 0 && holeChildren.length > 0
+      ? holeChildren.length
+      : template.holeCount
   if (__DEV__ && holeChildren.length !== count) {
     throw new KiruError({
       message: `[kiru]: createHoledTemplate expected ${count} hole children, got ${holeChildren.length}`,

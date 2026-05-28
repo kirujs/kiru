@@ -35,13 +35,13 @@ export function withPendingTemplateHoleHydration<T>(
   const pendingHoleHost = findPendingTemplateHoleHost(vNode)
   if (!pendingHoleHost) return fn()
   if (!isTopLevelHoleHydrationCandidate(vNode, pendingHoleHost)) return fn()
-  const remaining = pendingHoleHost.templateHoleHydrationSpan ?? 1
+  const span = pendingHoleHost.templateHoleHydrationSpan ?? 1
   const offset = pendingHoleHost.templateHoleHydrationOffset ?? 0
   let consumed = 0
   const out = withHydrationInTemplateHole(
     pendingHoleHost.dom as Element,
     pendingHoleHost.templateHoleAnchor!,
-    remaining,
+    span,
     offset,
     fn,
     (count) => {
@@ -49,15 +49,15 @@ export function withPendingTemplateHoleHydration<T>(
     }
   )
   const step = Math.max(1, consumed)
-  const nextRemaining = remaining - step
-  pendingHoleHost.templateHoleHydrationOffset = offset + step
-  if (nextRemaining <= 0) {
+  const nextOffset = Math.min(span, offset + step)
+  pendingHoleHost.templateHoleHydrationOffset = nextOffset
+  if (nextOffset >= span) {
     pendingHoleHost.templateHoleHydrationPending = false
     pendingHoleHost.templateHoleHydrationSpan = undefined
     pendingHoleHost.templateHoleHydrationOffset = undefined
   } else {
     pendingHoleHost.templateHoleHydrationPending = true
-    pendingHoleHost.templateHoleHydrationSpan = nextRemaining
+    pendingHoleHost.templateHoleHydrationSpan = span
   }
   return out
 }

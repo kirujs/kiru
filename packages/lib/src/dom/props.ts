@@ -13,6 +13,7 @@ import { __DEV__, isBrowser } from "../env.js"
 import { wrapFocusEventHandler } from "./focus.js"
 import type { StyleObject } from "../types.dom.js"
 import type { DomVNode, SomeDom, SomeElement } from "../types.utils.js"
+import { traceReadiness } from "../hydration.js"
 
 export { updateDomProps, unmountDomProps, setSignalProp }
 
@@ -210,12 +211,31 @@ function updateDomProps(vNode: DomVNode) {
       if (!nextVal) {
         if (evtObj) {
           dom.removeEventListener(evtName, evtObj)
+          if (isBrowser && dom instanceof Element) {
+            traceReadiness("binding", {
+              phase: "dom-update-event-unbind",
+              event: evtName,
+              tag: dom.tagName.toLowerCase(),
+              testid: dom.getAttribute("data-testid") ?? "",
+            })
+          }
           delete events[evtName]
         }
         continue
       }
 
-      let handleEvent = nextVal.bind(void 0)
+      const boundEvent = nextVal.bind(void 0)
+      let handleEvent: any = (event: Event) => {
+        if (isBrowser && dom instanceof Element) {
+          traceReadiness("binding", {
+            phase: "dom-event-fired",
+            event: evtName,
+            tag: dom.tagName.toLowerCase(),
+            testid: dom.getAttribute("data-testid") ?? "",
+          })
+        }
+        return boundEvent(event)
+      }
       if (evtName === "focus" || evtName === "blur")
         handleEvent = wrapFocusEventHandler(handleEvent)
 
@@ -225,6 +245,14 @@ function updateDomProps(vNode: DomVNode) {
       }
 
       dom.addEventListener(evtName, (events[evtName] = { handleEvent }))
+      if (isBrowser && dom instanceof Element) {
+        traceReadiness("binding", {
+          phase: "dom-update-event-bind",
+          event: evtName,
+          tag: dom.tagName.toLowerCase(),
+          testid: dom.getAttribute("data-testid") ?? "",
+        })
+      }
       continue
     }
 
@@ -371,7 +399,18 @@ function mountDomProps(
       const evtName = key.replace(EVENT_PREFIX_REGEX, "")
       const evtObj = events[evtName]
 
-      let handleEvent = value.bind(void 0)
+      const boundEvent = value.bind(void 0)
+      let handleEvent: any = (event: Event) => {
+        if (isBrowser && dom instanceof Element) {
+          traceReadiness("binding", {
+            phase: "dom-event-fired",
+            event: evtName,
+            tag: dom.tagName.toLowerCase(),
+            testid: dom.getAttribute("data-testid") ?? "",
+          })
+        }
+        return boundEvent(event)
+      }
       if (evtName === "focus" || evtName === "blur") {
         handleEvent = wrapFocusEventHandler(handleEvent)
       }
@@ -380,6 +419,14 @@ function mountDomProps(
         evtObj.handleEvent = handleEvent
       } else {
         dom.addEventListener(evtName, (events[evtName] = { handleEvent }))
+        if (isBrowser && dom instanceof Element) {
+          traceReadiness("binding", {
+            phase: "dom-mount-event-bind",
+            event: evtName,
+            tag: dom.tagName.toLowerCase(),
+            testid: dom.getAttribute("data-testid") ?? "",
+          })
+        }
       }
       continue
     }

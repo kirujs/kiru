@@ -11,9 +11,11 @@ import { withPendingTemplateHoleHydration } from "./templateHoleHydration.js"
 import {
   $KIRU_TEMPLATE,
   executeStructuralControlStream,
+  findTemplateHoleAnchors,
   type TemplateRoot,
 } from "./template.js"
 import type { SomeElement } from "./types.utils.js"
+import { traceReadiness } from "./hydration.js"
 
 type VNode = Kiru.VNode
 
@@ -153,7 +155,35 @@ export function ensureTemplateVNodeHydrated(
   })
 
   const template = templateMetaFromVNode(vNode)
-  const instance = hydrateTemplateInstance(template, root, null)
+  let instance: HydratedTemplateInstance
+  try {
+    instance = hydrateTemplateInstance(template, root, null)
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : String(error ?? "unknown")
+    const recoverableStructuralProjectionError =
+      message.includes("structuralWalk") ||
+      message.includes("could not project marker")
+    if (!recoverableStructuralProjectionError) {
+      throw error
+    }
+    // Fall back to marker-scan anchors when structural-walk projection fails.
+    // This preserves hole hydration (and host/event wiring inside holes) even if
+    // compile-emitted structural walk metadata drifted for this template.
+    const holeCount = vNode.templateHoleCount ?? 0
+    instance = {
+      root,
+      anchors: holeCount > 0 ? findTemplateHoleAnchors(root, holeCount) : [],
+      nodes: [],
+    }
+    traceReadiness("scheduler", {
+      phase: "template-structural-fallback",
+      type: String(vNode.type),
+      holeCount,
+      projectedAnchors: instance.anchors.length,
+      message,
+    })
+  }
   vNode.dom = instance.root as Kiru.VNode["dom"]
   vNode.templateHydrated = instance
   vNode.templateStructuralNodes = instance.nodes
@@ -164,6 +194,24 @@ export function ensureTemplateVNodeHydrated(
     instance.root.__kiruNode = vNode
   }
   return instance
+}
+
+/** Re-project structural nodes after hole payloads mount (bindings target live DOM). */
+export function refreshTemplateStructuralProjection(vNode: VNode): void {
+  const root = vNode.dom
+  if (!(root instanceof Element)) return
+  const template = templateMetaFromVNode(vNode)
+  const { nodes, anchors } = projectStructuralNodes(root, template)
+  const instance: HydratedTemplateInstance = {
+    root,
+    anchors,
+    nodes,
+  }
+  vNode.templateHydrated = instance
+  vNode.templateStructuralNodes = nodes
+  if (anchors.length > 0) {
+    vNode.templateHoleAnchors = anchors
+  }
 }
 
 export { withHydrationAfterAnchor }

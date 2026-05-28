@@ -561,6 +561,25 @@ export function Outer() {
     assert.strictEqual(result!.structuralNodeCount, 2)
   })
 
+  it("rolls back behavior-only bindings when intrinsic child forces hole bailout", () => {
+    const source = `
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+const dyn = () => "x"
+export function Outer() {
+  return jsxDEV("div", { children:
+    jsxDEV("button", { onclick: () => {}, children: dyn() }, void 0, false, void 0, void 0)
+  }, void 0, false, void 0, void 0)
+}
+`
+    const ctx = buildCtx(source)
+    const call = findOutermostJsxCall(source, ctx)
+    const result = serializeJsxCallToTemplate(call, ctx)
+    assert.ok(result)
+    assert.strictEqual(result!.holeCount, 1)
+    assert.ok(result!.html.includes("<!--#-->"))
+    assert.deepStrictEqual(result!.bindings, [])
+  })
+
   it("emits container descent for nav with many sibling holes and static separators", () => {
     const source = `
 import { jsxDEV } from "kiru/jsx-dev-runtime"

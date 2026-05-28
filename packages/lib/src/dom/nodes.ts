@@ -112,7 +112,7 @@ function hydrateDomAtCurrentCursor(vNode: VNode) {
 
   let prev = vNode
   let sibling = vNode.sibling
-  while (sibling && sibling.type === "#text") {
+  while (sibling && sibling.type === "#text" && sibling.parent === vNode.parent) {
     const sib = sibling
     hydrationStack.bumpChildIndex()
     const prevText = String(unwrap(prev.props.nodeValue) ?? "")
@@ -238,12 +238,38 @@ function findFirstHostDom(vNode: VNode): MaybeDom {
 function getOrCreateTextNode(vNode: VNode): MaybeDom {
   const sig = vNode.props.nodeValue
   if (!isSignal(sig)) {
-    return hydrationStack.getCurrentChild()
+    const currentChild = hydrationStack.getCurrentChild()
+    if (currentChild?.nodeType === Node.TEXT_NODE) {
+      return currentChild
+    }
+    if (sig === "") {
+      const dom = document.createTextNode("")
+      if (!currentChild) {
+        return hydrationStack.getCurrentParent().appendChild(dom)
+      }
+      currentChild.before(dom)
+      return dom
+    }
+    return currentChild
   }
 
   const value = sig.peek()
   if (isValidTextChild(value)) {
-    return hydrationStack.getCurrentChild()
+    const currentChild = hydrationStack.getCurrentChild()
+    if (currentChild?.nodeType === Node.TEXT_NODE) {
+      return currentChild
+    }
+    // SSR often omits empty text payloads inside template holes.
+    // Materialize an empty text node so hydration can continue and attach events.
+    if ((value as unknown) === "") {
+      const dom = createSignalTextNode(vNode, sig)
+      if (!currentChild) {
+        return hydrationStack.getCurrentParent().appendChild(dom)
+      }
+      currentChild.before(dom)
+      return dom
+    }
+    return currentChild
   }
 
   const dom = createSignalTextNode(vNode, sig)

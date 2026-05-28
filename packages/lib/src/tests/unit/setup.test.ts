@@ -80,5 +80,35 @@ describe("setup", () => {
 
     node.current = null
   })
+
+  it("keeps vnode id stable across template-hole host wrappers", () => {
+    const root = createVNode("main")
+    const logicalParent = createVNode(
+      Symbol.for("kiru.fragment") as any,
+      root,
+      {},
+      null,
+      3
+    )
+    const child = createVNode("p", logicalParent, {}, null, 2)
+    const withSyntheticHost = createVNode(
+      Symbol.for("kiru.fragment") as any,
+      logicalParent,
+      {},
+      null,
+      99
+    ) as any
+    withSyntheticHost.templateHoleAnchor = {} as Comment
+    child.parent = withSyntheticHost
+
+    const syntheticId = createVNodeId(child)
+    child.parent = logicalParent
+    const logicalId = createVNodeId(child)
+    assert.strictEqual(
+      syntheticId,
+      logicalId,
+      "template-hole host wrappers should not affect vnode ids"
+    )
+  })
 })
 

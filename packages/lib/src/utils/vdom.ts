@@ -198,12 +198,20 @@ function createVNodeId(vNode: Kiru.VNode): string {
   const accumulator: number[] = []
   let n: Kiru.VNode | null = vNode
   while (n) {
-    if (!(n.flags & FLAG_STATIC_DOM)) {
+    // Template-hole host wrappers are hydration/runtime-only ownership nodes.
+    // Exclude them from identity paths so SSR and hydration ids remain stable.
+    if (!(n.flags & FLAG_STATIC_DOM) && !n.templateHoleAnchor) {
       accumulator.push(n.index)
     }
     n = n.parent
   }
-  return `k:${BigInt(accumulator.join("")).toString(36)}`
+  // Encode path segments with separators to avoid decimal-concatenation collisions
+  // (e.g. [1,11] vs [11,1]) which can produce duplicate streamed resource ids.
+  const encoded =
+    accumulator.length === 0
+      ? "0"
+      : accumulator.map((part) => part.toString(36)).join(".")
+  return `k:${encoded}`
 }
 
 function registerVNodeCleanup(

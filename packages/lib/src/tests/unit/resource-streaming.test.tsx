@@ -103,6 +103,46 @@ describe("resource streamed SSR client hydration", () => {
     })
   })
 
+  it("resolves primed stream cache when server id differs but resource suffix is unique", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const cache = new window.Map<string, { data?: unknown; error?: string }>()
+      ;(window as unknown as Record<string, unknown>)[STREAMED_DATA_EVENT] =
+        cache
+
+      const serverId = "k:server-path:resource:0"
+      const payload = ["from server tail"]
+      cache.set(serverId, { data: payload })
+
+      let loaderCalls = 0
+      let reviews!: ReturnType<typeof kiru.resource<string[]>>
+
+      function ReviewsCard() {
+        reviews = kiru.resource(() => {
+          loaderCalls++
+          return Promise.resolve(["client fetch"])
+        })
+        return () => (
+          <span data-testid="reviews">{reviews()?.[0] ?? ""}</span>
+        )
+      }
+
+      const prev = renderMode.current
+      renderMode.current = "dom"
+      kiru.mount(<ReviewsCard />, container)
+      await reviews.promise
+      for (let i = 0; i < 5; i++) await waitForMicrotask()
+
+      assert.strictEqual(loaderCalls, 0)
+      assert.notStrictEqual(reviews.promise.id, serverId)
+      assert.strictEqual(reviews()?.[0], "from server tail")
+      assert.strictEqual(
+        container.querySelector('[data-testid="reviews"]')?.textContent,
+        "from server tail"
+      )
+      renderMode.current = prev
+    })
+  })
+
   it("fetches after streamed SSR state is cleared (client navigation)", async () => {
     await withJSDOM(async (container, kiru) => {
       const cache = new window.Map<string, { data?: unknown; error?: string }>()

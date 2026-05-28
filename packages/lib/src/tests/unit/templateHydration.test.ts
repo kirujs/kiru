@@ -76,6 +76,40 @@ describe("template hydration", () => {
     })
   })
 
+  it("keeps static p wrappers between node holes (forms-demo shape)", async () => {
+    await withJSDOM(async (container) => {
+      const formA = createElement("form", {
+        "data-testid": "form-a",
+        children: createElement("button", { type: "submit", children: "A" }),
+      })
+      const formB = createElement("form", {
+        "data-testid": "form-b",
+        children: createElement("button", { type: "submit", children: "B" }),
+      })
+      const html = `<section>${KIRU_HOLE_MARKER}<p data-testid="between"><!--#--></p>${KIRU_HOLE_MARKER}</section>`
+      const tpl = createHoledTemplate(_template(html, 3, 1), [
+        formA,
+        "ok",
+        formB,
+      ], [
+        { kind: "node", anchor: 0 },
+        { kind: "conditional", anchor: 1 },
+        { kind: "node", anchor: 2 },
+      ])
+      let ssr = ""
+      headlessRender({ write: (c) => (ssr += c) }, tpl)
+      container.innerHTML = ssr
+      hydrate(tpl, container)
+      assert.ok(container.querySelector('[data-testid="form-a"]'))
+      assert.ok(container.querySelector('[data-testid="form-b"]'))
+      assert.ok(container.querySelector('[data-testid="between"]'))
+      assert.strictEqual(
+        container.querySelector('[data-testid="between"]')?.textContent,
+        "ok"
+      )
+    })
+  })
+
   it("hydrates template shell payload under hole cursor context", async () => {
     await withJSDOM(async (container) => {
       const homeTpl = _template(`<p data-testid="ssr-home">SSR e2e home</p>`, 0, 0)

@@ -37,6 +37,7 @@ import { __DEV__, __KIRU_PURE_CLIENT__ } from "../env.js"
 import { REMOTE_ACTION_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
 import { ensureLoaderClient } from "../router/loaderClient.js"
 import { loadClientHydrationChunksManifest } from "../router/hydrationChunks.js"
+import { traceReadiness } from "../hydration.js"
 import { getRouterRuntime } from "../router/routerRuntime.js"
 
 type ServerActionsClient = {
@@ -184,6 +185,11 @@ async function buildSsrClientOutlet(
   scope?: NavigationScope,
   getNavGeneration?: () => number
 ): Promise<JSX.Element | null> {
+  traceReadiness("scheduler", {
+    phase: "ssr-outlet-build-start",
+    routeId: committedMatch?.route.id ?? "null",
+    path: committedMatch?.pathname ?? "null",
+  })
   const runtime = getRouterRuntime(router)
   const gen = getNavGeneration ?? runtime.getNavGeneration
   const signal = scope?.signal ?? runtime.getNavSignal()
@@ -201,7 +207,7 @@ async function buildSsrClientOutlet(
   }
   router.isLoaderPending.set(true)
   try {
-    return buildClientOutletSubtree({
+    const subtree = await buildClientOutletSubtree({
       router,
       match: committedMatch,
       pathname: router.pathname.peek(),
@@ -222,6 +228,12 @@ async function buildSsrClientOutlet(
         )
       },
     })
+    traceReadiness("scheduler", {
+      phase: "ssr-outlet-build-done",
+      routeId: committedMatch?.route.id ?? "null",
+      hasSubtree: subtree !== null,
+    })
+    return subtree
   } finally {
     if (!signal.aborted) router.isLoaderPending.set(false)
   }
@@ -288,6 +300,12 @@ function subscribeSsrClientOutlet(
     const ctrl = new AbortController()
     outletAbort = ctrl
     const match = router.match.peek()
+    traceReadiness("scheduler", {
+      phase: "ssr-refresh-start",
+      routeId: match?.route.id ?? "null",
+      path: match?.pathname ?? "null",
+      forceReload,
+    })
     const outletErr = router.outletRenderError.peek()
     if (outletErr) {
       router.isLoaderPending.set(true)
@@ -335,6 +353,12 @@ function subscribeSsrClientOutlet(
         getNavGeneration
       )
       if (ctrl.signal.aborted || !isScopeCurrent(scope, getNavGeneration)) {
+        traceReadiness("scheduler", {
+          phase: "ssr-refresh-abort",
+          routeId: match?.route.id ?? "null",
+          path: match?.pathname ?? "null",
+          aborted: true,
+        })
         return
       }
       const pendingErr = router.outletRenderError.peek()
@@ -354,7 +378,24 @@ function subscribeSsrClientOutlet(
           outlet.set(errOut)
         }
       } else {
-        outlet.set(subtree)
+        // Keep the last committed outlet when refresh builds no subtree (typically
+        // a transient/stale navigation scope during hydration churn).
+        if (subtree !== null) {
+          traceReadiness("scheduler", {
+            phase: "ssr-refresh-commit",
+            routeId: match?.route.id ?? "null",
+            path: match?.pathname ?? "null",
+            hasSubtree: true,
+          })
+          outlet.set(subtree)
+        } else {
+          traceReadiness("scheduler", {
+            phase: "ssr-refresh-commit-skip-null",
+            routeId: match?.route.id ?? "null",
+            path: match?.pathname ?? "null",
+            hasSubtree: false,
+          })
+        }
       }
       tryClearClientNavigation(router)
     } catch {
@@ -399,6 +440,11 @@ export async function bootstrapSsrClient(
 
   const requestContext = readHydratedRequestContext()
   const match = router.match.peek()
+  traceReadiness("scheduler", {
+    phase: "ssr-bootstrap-match",
+    routeId: match?.route.id ?? "null",
+    path: match?.pathname ?? "null",
+  })
 
   const outlet = signal<JSX.Element | null>(null)
   if (match) {
@@ -462,7 +508,9 @@ export async function bootstrapSsrClient(
     )
     router.forceLoaderReload.set(false)
     if (ctrl.signal.aborted || !isScopeCurrent(scope, getNavGeneration)) return
-    outlet.set(subtree)
+    if (subtree !== null) {
+      outlet.set(subtree)
+    }
     tryClearClientNavigation(router)
   }
   router.loaderEpoch.subscribe(() => {

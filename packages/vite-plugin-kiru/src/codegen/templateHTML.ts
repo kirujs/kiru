@@ -846,6 +846,11 @@ function trySerializeBehaviorOnlyIntrinsic(
     [],
     []
   )
+  const coordsStart = accum.coords.count()
+  const walkStart = accum.walk.length
+  const depthStart = accum.depth
+  const bindingsStart = accum.bindings.length
+  const bindingHostsStart = accum.bindingHosts.length
   const { bindings, bindingHosts } = accum
   const nodeIndex = structuralCoordAlloc(accum)
   bindings.push(...extractTemplateBindingsForIntrinsicCall(callNode, nodeIndex))
@@ -858,7 +863,15 @@ function trySerializeBehaviorOnlyIntrinsic(
     scratchRegions,
     scratchAccum
   )
-  if (scratchHoles.length > 0) return null
+  if (scratchHoles.length > 0) {
+    // Abort atomically: this host must fall back to a template hole.
+    accum.coords.reset(coordsStart)
+    accum.walk.length = walkStart
+    accum.depth = depthStart
+    accum.bindings.length = bindingsStart
+    accum.bindingHosts.length = bindingHostsStart
+    return null
+  }
 
   if (innerHtml.includes("<")) {
     allocateStructuralFromMarkup(innerHtml, accum)

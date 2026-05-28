@@ -3,7 +3,7 @@ import {
   STREAMED_DATA_DESCENDANTS,
   STREAMED_DATA_EVENT,
 } from "./constants.js"
-import { hydrationMode, node, renderMode } from "./globals.js"
+import { node, renderMode } from "./globals.js"
 import {
   SignalHelpers,
   getSignalState,
@@ -17,6 +17,7 @@ import { generateRandomID } from "./utils/generateId.js"
 import { __DEV__, isBrowser } from "./env.js"
 import { GenericHMRAcceptor, performHmrAccept } from "./hmr.js"
 import { isInitialSsrStreamPending } from "./router/pageData.js"
+import { traceReadiness } from "./hydration.js"
 
 export type ResourceSource = Record<string, Signal<any>> | Signal<any>
 
@@ -121,9 +122,9 @@ function getAnnouncedStreamDescendants(): Set<string> | undefined {
 }
 
 function shouldResolveDeferredPromise(promiseId: string): boolean {
-  if (renderMode.current === "hydrate" && hydrationMode.current === "dynamic") {
-    return true
-  }
+  // Hydration mode alone is not enough to conclude deferred data is available.
+  // Only switch to deferred-resolution when stream metadata/cache indicates this id
+  // (or the initial SSR stream tail is still pending).
   const announced = getAnnouncedStreamDescendants()
   if (announced?.has(promiseId)) {
     return true
@@ -137,10 +138,82 @@ function shouldResolveDeferredPromise(promiseId: string): boolean {
 }
 
 function isRelevantStreamId(localId: string, streamId: string): boolean {
-  return (
-    localId === streamId ||
-    getAnnouncedStreamDescendants()?.has(streamId) === true
-  )
+  return localId === streamId
+}
+
+const RESOURCE_ID_SUFFIX = ":resource:"
+
+function resourceSuffixFromPromiseId(id: string): string | null {
+  const at = id.lastIndexOf(RESOURCE_ID_SUFFIX)
+  if (at < 0) return null
+  return id.slice(at)
+}
+
+/**
+ * SSR stream scripts often run before hydrate registers listeners. When the
+ * server-computed stream id differs from the client vnode id, claim the next
+ * unclaimed cache entry for this resource slot (`:resource:N`) in insertion order.
+ */
+function tryConsumeStreamedByResourceSuffix<T>(
+  localId: string,
+  deferralCache: Map<string, { data?: unknown; error?: string }>,
+  announced: Set<string> | undefined,
+  resolve: (value: T) => void,
+  reject: (reason: Error) => void
+): boolean {
+  if (!localId.startsWith("k:")) {
+    return false
+  }
+  const suffix = resourceSuffixFromPromiseId(localId)
+  if (!suffix) return false
+  const matches: string[] = []
+  for (const streamId of deferralCache.keys()) {
+    if (!streamId.endsWith(suffix)) continue
+    matches.push(streamId)
+  }
+  for (let i = 0; i < matches.length; i++) {
+    const streamId = matches[i]
+    if (
+      consumeStreamedPayload(
+        streamId,
+        deferralCache,
+        announced,
+        resolve,
+        reject
+      )
+    ) {
+      traceReadiness("resource", {
+        path: "suffix-cache",
+        localId,
+        streamId,
+        suffix,
+      })
+      return true
+    }
+  }
+  return false
+}
+
+function hasPotentialStreamedPayload(localId: string): boolean {
+  const deferralCache = getStreamedDataCache()
+  if (!deferralCache) return false
+  if (deferralCache.has(localId)) return true
+  if (localId.startsWith("k:")) {
+    const suffix = resourceSuffixFromPromiseId(localId)
+    if (suffix) {
+      for (const streamId of deferralCache.keys()) {
+        if (streamId.endsWith(suffix)) return true
+      }
+      const announced = getAnnouncedStreamDescendants()
+      if (announced) {
+        for (const streamId of announced) {
+          if (streamId.endsWith(suffix)) return true
+        }
+      }
+    }
+  }
+  const announced = getAnnouncedStreamDescendants()
+  return announced?.has(localId) ?? false
 }
 
 export function resource<T>(
@@ -294,9 +367,23 @@ export function resource<T, Source extends ResourceSource>(
         if (renderMode.current === "string") {
           // if we're rendering to a string, there's no need to fire the callback
           promise = Promise.resolve() as Promise<T>
-        } else if (!forceFetch && shouldResolveDeferredPromise(promiseId)) {
+    } else if (
+      !forceFetch &&
+      shouldResolveDeferredPromise(promiseId) &&
+      (renderMode.current === "hydrate" || hasPotentialStreamedPayload(promiseId))
+    ) {
+          traceReadiness("resource", {
+            path: "deferred",
+            promiseId,
+            renderMode: renderMode.current,
+          })
           promise = resolveDeferredPromise<T>(promiseId, ctrl.signal)
         } else {
+          traceReadiness("resource", {
+            path: "load",
+            promiseId,
+            renderMode: renderMode.current,
+          })
           // stream / dom / (hydrate + static)
           const ctx: ResourceLoaderContext = { signal: ctrl.signal }
           if (source == null) {
@@ -403,29 +490,31 @@ function resolveDeferredPromise<T>(
     const announced = getAnnouncedStreamDescendants()
 
     if (consumeStreamedPayload(id, deferralCache, announced, resolve, reject)) {
+      traceReadiness("resource", { path: "cache-hit", promiseId: id, streamId: id })
       return
     }
 
-    if (announced) {
-      for (const streamId of announced) {
-        if (
-          consumeStreamedPayload(
-            streamId,
-            deferralCache,
-            announced,
-            resolve,
-            reject
-          )
-        ) {
-          return
-        }
-      }
+    if (
+      tryConsumeStreamedByResourceSuffix(
+        id,
+        deferralCache,
+        announced,
+        resolve,
+        reject
+      )
+    ) {
+      return
     }
 
     const onDataEvent = (event: Event) => {
       const { detail } = event as CustomEvent<DeferredPromiseEventDetail<T>>
       if (!isRelevantStreamId(id, detail.id)) return
       window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
+      traceReadiness("resource", {
+        path: "event",
+        promiseId: id,
+        streamId: detail.id,
+      })
 
       if (
         consumeStreamedPayload(
