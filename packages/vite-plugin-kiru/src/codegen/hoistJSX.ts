@@ -190,8 +190,7 @@ export function analyzeJsxHoisting(
     templatePlan,
     deferByNode,
     callIndex: sharedCallIndex,
-  } =
-    opts
+  } = opts
   const moduleComponentNames = collectModuleComponentNames(bodyNodes)
 
   const hoistableCalls: AstNode[] = []
@@ -275,7 +274,10 @@ export function analyzeJsxHoisting(
           const targetSite = callIndex.getCall(target.start)
           if (!targetSite) continue
           const scopedAnalysis = createAnalysisCtx(targetSite.resolve)
-          const payload = extractSetupHoistableHolePayload(target, scopedAnalysis)
+          const payload = extractSetupHoistableHolePayload(
+            target,
+            scopedAnalysis
+          )
           if (insertBefore && payload) {
             const setupCand: SetupHolePayloadCandidate = {
               exprNode: payload.exprNode,
@@ -479,14 +481,14 @@ export function analyzeJsxHoisting(
     allHoistables.length === 0
       ? null
       : allHoistables.length === 1
-        ? `const ${allHoistables[0].varName} = ${allHoistables[0].code}`
-        : allHoistables
-            .map((h, i) =>
-              i === 0
-                ? `const ${h.varName} = ${h.code}`
-                : `  ${h.varName} = ${h.code}`
-            )
-            .join(",\n")
+      ? `const ${allHoistables[0].varName} = ${allHoistables[0].code}`
+      : allHoistables
+          .map((h, i) =>
+            i === 0
+              ? `const ${h.varName} = ${h.code}`
+              : `  ${h.varName} = ${h.code}`
+          )
+          .join(",\n")
 
   for (const candidate of setupHoleHoists) {
     if (foldedHoleExprNodes.has(candidate.exprNode)) continue
@@ -607,7 +609,11 @@ function collectHoistCandidatesFromIndex(
     }
     if (isCreateHoledTemplateCall(node) && site.setupInsertBefore) {
       setupHolePayloadCandidates.push(
-        ...findSetupHolePayloadCandidates(node, analysis, site.setupInsertBefore)
+        ...findSetupHolePayloadCandidates(
+          node,
+          analysis,
+          site.setupInsertBefore
+        )
       )
     }
     if (
@@ -684,7 +690,11 @@ export function hoistPlanToEdits(
   }
 
   for (const cache of plan.renderRootCacheDecls) {
-    if (cache.tier !== "module" && cache.insertBefore?.type === "ReturnStatement") {
+    if (cache.tier === "module") {
+      // Module-tier render-root expression replacement is owned by template pass.
+      continue
+    }
+    if (cache.insertBefore?.type === "ReturnStatement") {
       const ret = cache.insertBefore
       const renderFn = (ret as { argument?: AstNode }).argument
       const isSetupReturn =
@@ -727,11 +737,10 @@ export function hoistPlanToEdits(
   const moduleRenderCacheLines = plan.renderRootCacheDecls
     .filter((c) => c.tier === "module")
     .map((c) => `const ${c.varName} = /* @__PURE__ */ ${c.codeExpr}`)
-  if (plan.declarations || moduleRenderCacheLines.length > 0) {
+  if (plan.declarations || plan.regionElementLines.length > 0) {
     const hoistBlock = [
       "",
       ...(plan.declarations ? [plan.declarations] : []),
-      ...moduleRenderCacheLines,
       ...plan.regionElementLines,
       "",
     ].join("\n")
@@ -739,6 +748,13 @@ export function hoistPlanToEdits(
       kind: "appendRight",
       pos: plan.moduleInsertPos,
       text: hoistBlock,
+    })
+  }
+  if (moduleRenderCacheLines.length > 0) {
+    edits.push({
+      kind: "appendRight",
+      pos: source.length,
+      text: `\n${moduleRenderCacheLines.join("\n")}\n`,
     })
   }
 
@@ -1111,13 +1127,9 @@ function tryBuildRenderRootCacheDecl(
   }
 
   const regionsPart =
-    regions.length > 0
-      ? `, ${formatRegionsLiteral(regions)}`
-      : ""
+    regions.length > 0 ? `, ${formatRegionsLiteral(regions)}` : ""
   const bindingsPart =
-    bindings.length > 0
-      ? `, ${formatTemplateBindingsLiteral(bindings)}`
-      : ""
+    bindings.length > 0 ? `, ${formatTemplateBindingsLiteral(bindings)}` : ""
   const payloadsPart =
     bindingHosts.length > 0
       ? `, ${formatBindingPayloadsLiteral(
@@ -1129,14 +1141,16 @@ function tryBuildRenderRootCacheDecl(
           )
         )}`
       : ""
-  const codeExpr = `createHoledTemplate(${factoryVar}, [${holeCodes.join(", ")}]${regionsPart}${bindingsPart}${payloadsPart})`
+  const codeExpr = `createHoledTemplate(${factoryVar}, [${holeCodes.join(
+    ", "
+  )}]${regionsPart}${bindingsPart}${payloadsPart})`
 
   const insertBefore =
     tier === "module"
       ? null
       : tier === "componentBody"
-        ? componentInsert
-        : setupInsert
+      ? componentInsert
+      : setupInsert
 
   return {
     exprNode,
@@ -1347,7 +1361,9 @@ function looksLikeJsxFactoryCall(node: AstNode): boolean {
   )
 }
 
-function canHoistHolePayloadToSetup(candidate: SetupHolePayloadCandidate): boolean {
+function canHoistHolePayloadToSetup(
+  candidate: SetupHolePayloadCandidate
+): boolean {
   const ctx = createAnalysisCtx(candidate.resolve)
   if (candidate.isConditional) {
     // Conditional holes are validated for tier compatibility when they are

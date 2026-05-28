@@ -34,7 +34,7 @@ describe("codegenPlan", () => {
   it("sliceNode uses defer virtual wrap text", () => {
     const source = "count()"
     const ast = parseAst(source, { allowReturnOutsideFunction: true })
-    const node = (ast as { body: AstNode[] }).body[0] as AstNode
+    const node = (ast as unknown as { body: AstNode[] }).body[0] as AstNode
     const expr = (node as { expression: AstNode }).expression
     const deferByNode = new Map([[expr, wrapDeferredExpr(source, expr)]])
     assert.equal(sliceNode(source, expr, deferByNode), "() => (count())")
@@ -43,7 +43,7 @@ describe("codegenPlan", () => {
   it("deferPlanToEdits matches wrapDeferredExpr", () => {
     const source = "jsxs('div', { children: toggled() })"
     const ast = parseAst(source, { allowReturnOutsideFunction: true })
-    const call = (ast as { body: AstNode[] }).body[0] as AstNode
+    const call = (ast as unknown as { body: AstNode[] }).body[0] as AstNode
     const expr = (call as { expression: AstNode }).expression
     const args = (expr as { arguments: AstNode[] }).arguments
     const props = args[1]!
@@ -53,7 +53,9 @@ describe("codegenPlan", () => {
       }
     ).value
     const plan: DeferPlan = {
-      wraps: [{ node: childrenProp, text: wrapDeferredExpr(source, childrenProp) }],
+      wraps: [
+        { node: childrenProp, text: wrapDeferredExpr(source, childrenProp) },
+      ],
     }
     const code = new MagicString(source)
     applyCodegenPlan(code, {
@@ -65,5 +67,52 @@ describe("codegenPlan", () => {
       },
     })
     assert.match(code.toString(), /\(\) => \(toggled\(\)\)/)
+  })
+
+  it("composes exact-range replace + dynamicSlotWrap deterministically", () => {
+    const source = "foo(bar)"
+    const code = new MagicString(source)
+    applyCodegenPlan(code, {
+      edits: [
+        { kind: "replace", start: 0, end: 8, text: "x" },
+        {
+          kind: "dynamicSlotWrap",
+          start: 0,
+          end: 8,
+          regions: '[{kind:"insert",slot:0}]',
+        },
+      ],
+      imports: {
+        needTagStaticChildrenList: false,
+        needRegionElement: true,
+        needMarkHoisted: false,
+      },
+    })
+    assert.equal(code.toString(), 'regionElement(x, [{kind:"insert",slot:0}])')
+  })
+
+  it("throws for partial overlap between replace and dynamicSlotWrap", () => {
+    const source = "abcdef"
+    const code = new MagicString(source)
+    assert.throws(
+      () =>
+        applyCodegenPlan(code, {
+          edits: [
+            { kind: "replace", start: 1, end: 5, text: "X" },
+            {
+              kind: "dynamicSlotWrap",
+              start: 0,
+              end: 3,
+              regions: '[{kind:"insert",slot:0}]',
+            },
+          ],
+          imports: {
+            needTagStaticChildrenList: false,
+            needRegionElement: true,
+            needMarkHoisted: false,
+          },
+        }),
+      /dynamicSlotWrap overlaps replace/
+    )
   })
 })

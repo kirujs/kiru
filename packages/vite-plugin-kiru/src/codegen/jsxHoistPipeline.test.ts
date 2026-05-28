@@ -44,14 +44,15 @@ const VITE_RESOLVED_JSX_IMPORT =
 
 function runPipeline(
   source: string,
-  filePath = "/project/src/app.tsx"
+  filePath = "/project/src/app.tsx",
+  isBuild = false
 ): { ctx: TransformCTX; initialCode: MagicString } {
   const ast = parseAst(source, { allowReturnOutsideFunction: true })
   const initialCode = new MagicString(source)
   const ctx: TransformCTX = {
     code: initialCode,
     ast,
-    isBuild: false,
+    isBuild,
     fileLinkFormatter: (id: string) => id,
     filePath,
     log: () => {},
@@ -68,6 +69,12 @@ function runPipeline(
 /** Same return path as \`vite-plugin-kiru:jsx-hoist\` in src/index.ts */
 function transformLikeJsxHoistPlugin(source: string): string | null {
   const { ctx } = runPipeline(source)
+  if (!jsxTransformChanged(ctx)) return null
+  return ctx.code.toString()
+}
+
+function transformLikeBuildPipeline(source: string): string | null {
+  const { ctx } = runPipeline(source, "/project/src/app.tsx", true)
   if (!jsxTransformChanged(ctx)) return null
   return ctx.code.toString()
 }
@@ -125,7 +132,10 @@ const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 
       out,
       /\$t0 = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
     )
-    assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 1, \d+, \[[\d,]+\]\)/)
+    assert.match(
+      out,
+      /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 1, \d+, \[[\d,]+\]\)/
+    )
     assert.doesNotMatch(
       out,
       /\$t1 = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
@@ -163,8 +173,14 @@ const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 
       out,
       /\$t0 = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
     )
-    assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 1, \d+, \[[\d,]+\]\)/)
-    assert.match(out, /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t1/)
+    assert.match(
+      out,
+      /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 1, \d+, \[[\d,]+\]\)/
+    )
+    assert.match(
+      out,
+      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t1/
+    )
     assert.match(out, /return \(\) =>[\s\S]*\$r0/)
   })
 
@@ -237,6 +253,61 @@ export const Counter = () => {
     assert.doesNotMatch(HOISTED_COMMA_SOURCE, /\$t\d+ = _template\(/)
     assert.notEqual(fromCtx, HOISTED_COMMA_SOURCE)
   })
+
+  it("build mode handles signals-style conditional holes without overlap crashes", () => {
+    const source = `
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { signal } from "kiru"
+
+const amount = signal(10)
+const discount = signal(0)
+const toggled = signal(false)
+
+export const Cart = () => {
+  return () => jsxDEV("div", { children: [
+    jsxDEV("p", { children: ["Amount: ", amount] }, void 0, true, void 0, this),
+    discount() > 0 && jsxDEV("p", { children: ["Discount: ", discount] }, void 0, true, void 0, this),
+    () => toggled() && jsxDEV("span", { children: "ON" }, void 0, false, void 0, this),
+  ] }, void 0, true, void 0, this)
+}
+`
+    const out = transformLikeBuildPipeline(source)
+    assert.ok(out)
+    assert.match(out, /createHoledTemplate\(\$t\d+/)
+    assert.match(out, /\{kind:"conditional"/)
+    assert.match(out, /const \$k\d+ = \(\) =>/)
+  })
+
+  it("build mode keeps single render-root replacement ownership", () => {
+    const out = transformLikeBuildPipeline(COUNTER_SETUP_RETURN_MODULE_COUNT)
+    assert.ok(out)
+    assert.match(
+      out,
+      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t1/
+    )
+    assert.match(out, /return \(\) => \$r0/)
+  })
+
+  it("preserves behavior bindings for zero-hole templates", () => {
+    const source = `
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { useRouter } from "kiru/router/client"
+export default function ViewTransitionsPage() {
+  const router = useRouter()
+  return () =>
+    jsxDEV("div", { children: [
+      jsxDEV("h2", { children: "View transitions" }, void 0, false, void 0, this),
+      jsxDEV("button", { type: "button", onclick: () => router.navigate("/about"), children: "About with transition" }, void 0, false, void 0, this),
+    ] }, void 0, true, void 0, this)
+}
+`
+    const out = transformLikeJsxHoistPlugin(source)
+    assert.ok(out)
+    assert.match(
+      out,
+      /createHoledTemplate\(\$t\d+, \[\], \[\], \[\{kind:"event",prop:"onclick",nodeIndex:\d+\}\], \[/
+    )
+  })
 })
 
 describe("jsx-hoist plugin pipeline (production jsx/jsxs)", () => {
@@ -247,7 +318,10 @@ describe("jsx-hoist plugin pipeline (production jsx/jsxs)", () => {
       out,
       /\$t0 = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
     )
-    assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 1, \d+, \[[\d,]+\]\)/)
+    assert.match(
+      out,
+      /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 1, \d+, \[[\d,]+\]\)/
+    )
     assert.doesNotMatch(
       out,
       /\$t1 = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
@@ -269,8 +343,14 @@ describe("jsx-hoist plugin pipeline (production jsx/jsxs)", () => {
       out,
       /\$t0 = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
     )
-    assert.match(out, /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 1, \d+, \[[\d,]+\]\)/)
-    assert.match(out, /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t1/)
+    assert.match(
+      out,
+      /\$t1 = _template\(`[^`]*\$\{\$t0\.html\}[^`]*`, 1, \d+, \[[\d,]+\]\)/
+    )
+    assert.match(
+      out,
+      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t1/
+    )
     assert.match(out, /return \(\) => \$r0/)
   })
 

@@ -11,11 +11,9 @@ import { withPendingTemplateHoleHydration } from "./templateHoleHydration.js"
 import {
   $KIRU_TEMPLATE,
   executeStructuralControlStream,
-  findTemplateHoleAnchors,
   type TemplateRoot,
 } from "./template.js"
 import type { SomeElement } from "./types.utils.js"
-import { traceReadiness } from "./hydration.js"
 
 type VNode = Kiru.VNode
 
@@ -155,35 +153,7 @@ export function ensureTemplateVNodeHydrated(
   })
 
   const template = templateMetaFromVNode(vNode)
-  let instance: HydratedTemplateInstance
-  try {
-    instance = hydrateTemplateInstance(template, root, null)
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : String(error ?? "unknown")
-    const recoverableStructuralProjectionError =
-      message.includes("structuralWalk") ||
-      message.includes("could not project marker")
-    if (!recoverableStructuralProjectionError) {
-      throw error
-    }
-    // Fall back to marker-scan anchors when structural-walk projection fails.
-    // This preserves hole hydration (and host/event wiring inside holes) even if
-    // compile-emitted structural walk metadata drifted for this template.
-    const holeCount = vNode.templateHoleCount ?? 0
-    instance = {
-      root,
-      anchors: holeCount > 0 ? findTemplateHoleAnchors(root, holeCount) : [],
-      nodes: [],
-    }
-    traceReadiness("scheduler", {
-      phase: "template-structural-fallback",
-      type: String(vNode.type),
-      holeCount,
-      projectedAnchors: instance.anchors.length,
-      message,
-    })
-  }
+  const instance = hydrateTemplateInstance(template, root, null)
   vNode.dom = instance.root as Kiru.VNode["dom"]
   vNode.templateHydrated = instance
   vNode.templateStructuralNodes = instance.nodes

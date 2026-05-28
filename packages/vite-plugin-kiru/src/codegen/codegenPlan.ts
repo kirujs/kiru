@@ -105,43 +105,132 @@ function assertNoReplaceOverlaps(edits: SourceEdit[]): void {
   }
 }
 
+function normalizeSpanEdits(source: string, edits: SourceEdit[]): SourceEdit[] {
+  const byRange = new Map<string, SourceEdit & { kind: "replace" }>()
+  const rangeKey = (start: number, end: number) => `${start}:${end}`
+  const replaces = edits.filter((e) => e.kind === "replace")
+  const wraps = edits
+    .filter((e) => e.kind === "dynamicSlotWrap")
+    .sort((a, b) => a.end - a.start - (b.end - b.start))
+
+  for (const replace of replaces) {
+    const key = rangeKey(replace.start, replace.end)
+    const existing = byRange.get(key)
+    if (existing) {
+      if (existing.text !== replace.text) {
+        throw new Error(
+          `[vite-plugin-kiru]: duplicate replace range with mismatched text at ${replace.start}-${replace.end}`
+        )
+      }
+      continue
+    }
+    let skip = false
+    for (const prior of Array.from(byRange.values())) {
+      if (!rangesOverlap(replace.start, replace.end, prior.start, prior.end)) {
+        continue
+      }
+      const replaceContainsPrior =
+        replace.start <= prior.start && replace.end >= prior.end
+      const priorContainsReplace =
+        prior.start <= replace.start && prior.end >= replace.end
+      if (replaceContainsPrior && !priorContainsReplace) {
+        skip = true
+        break
+      }
+      if (priorContainsReplace && !replaceContainsPrior) {
+        byRange.delete(rangeKey(prior.start, prior.end))
+        continue
+      }
+      throw new Error(
+        `[vite-plugin-kiru]: overlapping codegen replaces at ${replace.start}-${replace.end} and ${prior.start}-${prior.end}`
+      )
+    }
+    if (skip) continue
+    byRange.set(key, { ...replace })
+  }
+
+  for (const wrap of wraps) {
+    const key = rangeKey(wrap.start, wrap.end)
+    const existing = byRange.get(key)
+    if (existing) {
+      existing.text = `regionElement(${existing.text}, ${wrap.regions})`
+      byRange.set(key, existing)
+      continue
+    }
+
+    const contained: (SourceEdit & { kind: "replace" })[] = []
+    for (const replace of Array.from(byRange.values())) {
+      if (!rangesOverlap(wrap.start, wrap.end, replace.start, replace.end))
+        continue
+      const fullyContains =
+        replace.start >= wrap.start && replace.end <= wrap.end
+      if (!fullyContains) {
+        throw new Error(
+          `[vite-plugin-kiru]: dynamicSlotWrap overlaps replace at ${wrap.start}-${wrap.end} and ${replace.start}-${replace.end}`
+        )
+      }
+      contained.push(replace)
+    }
+
+    let wrappedSource = source.slice(wrap.start, wrap.end)
+    contained.sort((a, b) => b.start - a.start)
+    for (const replace of contained) {
+      const localStart = replace.start - wrap.start
+      const localEnd = replace.end - wrap.start
+      wrappedSource =
+        wrappedSource.slice(0, localStart) +
+        replace.text +
+        wrappedSource.slice(localEnd)
+      byRange.delete(rangeKey(replace.start, replace.end))
+    }
+    byRange.set(key, {
+      kind: "replace",
+      start: wrap.start,
+      end: wrap.end,
+      text: `regionElement(${wrappedSource}, ${wrap.regions})`,
+    })
+  }
+
+  const out: SourceEdit[] = []
+  for (const edit of edits) {
+    if (edit.kind === "replace" || edit.kind === "dynamicSlotWrap") continue
+    out.push(edit)
+  }
+  out.push(...byRange.values())
+  return out
+}
+
 /** Apply plan edits to a single MagicString (end-to-start for spans). */
 export function applyCodegenPlan(code: MagicString, plan: CodegenPlan): void {
-  assertNoReplaceOverlaps(plan.edits)
+  const source = code.toString()
+  const normalizedEdits = normalizeSpanEdits(source, plan.edits)
+  assertNoReplaceOverlaps(normalizedEdits)
 
-  for (const edit of plan.edits) {
+  for (const edit of normalizedEdits) {
     if (edit.kind === "prepend") {
       code.prepend(edit.text)
     }
   }
 
-  const replaces = plan.edits
+  const replaces = normalizedEdits
     .filter((e) => e.kind === "replace")
     .sort((a, b) => b.start - a.start)
   for (const { start, end, text } of replaces) {
     code.update(start, end, text)
   }
 
-  const appendLeft = plan.edits
+  const appendLeft = normalizedEdits
     .filter((e) => e.kind === "appendLeft")
     .sort((a, b) => b.pos - a.pos)
   for (const { pos, text } of appendLeft) {
     code.appendLeft(pos, text)
   }
 
-  const appendRight = plan.edits
+  const appendRight = normalizedEdits
     .filter((e) => e.kind === "appendRight")
     .sort((a, b) => b.pos - a.pos)
   for (const { pos, text } of appendRight) {
     code.appendRight(pos, text)
-  }
-
-  const dynamicSlotWraps = plan.edits
-    .filter((e) => e.kind === "dynamicSlotWrap")
-    .sort((a, b) => b.start - a.start)
-  for (const { start, end, regions } of dynamicSlotWraps) {
-    const current = code.slice(start, end)
-    code.update(start, end, `regionElement(${current}, ${regions})`)
   }
 }
 

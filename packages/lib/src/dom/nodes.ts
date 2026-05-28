@@ -166,10 +166,12 @@ function getDomParent(vNode: VNode): ElementVNode {
   return parentNode as ElementVNode
 }
 
-/** Hole payloads mount before the shell anchor; inner DOM uses normal placement. */
-function resolveTemplateHoleAnchor(vNode: VNode): Comment | null {
+function resolveTemplateHoleAnchorBeforeHost(
+  vNode: VNode,
+  hostParent: VNode
+): Comment | null {
   let parent = vNode.parent
-  while (parent) {
+  while (parent && parent !== hostParent) {
     if (parent.templateHoleAnchor) return parent.templateHoleAnchor
     parent = parent.parent
   }
@@ -181,9 +183,7 @@ function placeDom(vNode: DomVNode, hostNode: HostNode) {
   const dom = vNode.dom
   const holeAnchor =
     parentVNodeWithDom.templateHoleAnchor ??
-    (vNode.parent !== parentVNodeWithDom
-      ? resolveTemplateHoleAnchor(vNode)
-      : null)
+    resolveTemplateHoleAnchorBeforeHost(vNode, parentVNodeWithDom)
   const insertParent = holeAnchor?.parentNode
   if (insertParent) {
     insertParent.insertBefore(dom, holeAnchor)

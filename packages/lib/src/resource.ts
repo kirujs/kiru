@@ -194,28 +194,6 @@ function tryConsumeStreamedByResourceSuffix<T>(
   return false
 }
 
-function hasPotentialStreamedPayload(localId: string): boolean {
-  const deferralCache = getStreamedDataCache()
-  if (!deferralCache) return false
-  if (deferralCache.has(localId)) return true
-  if (localId.startsWith("k:")) {
-    const suffix = resourceSuffixFromPromiseId(localId)
-    if (suffix) {
-      for (const streamId of deferralCache.keys()) {
-        if (streamId.endsWith(suffix)) return true
-      }
-      const announced = getAnnouncedStreamDescendants()
-      if (announced) {
-        for (const streamId of announced) {
-          if (streamId.endsWith(suffix)) return true
-        }
-      }
-    }
-  }
-  const announced = getAnnouncedStreamDescendants()
-  return announced?.has(localId) ?? false
-}
-
 export function resource<T>(
   callback: (ctx: ResourceLoaderContext) => Promise<T>
 ): NullableResource<T>
@@ -367,11 +345,7 @@ export function resource<T, Source extends ResourceSource>(
         if (renderMode.current === "string") {
           // if we're rendering to a string, there's no need to fire the callback
           promise = Promise.resolve() as Promise<T>
-    } else if (
-      !forceFetch &&
-      shouldResolveDeferredPromise(promiseId) &&
-      (renderMode.current === "hydrate" || hasPotentialStreamedPayload(promiseId))
-    ) {
+    } else if (!forceFetch && shouldResolveDeferredPromise(promiseId)) {
           traceReadiness("resource", {
             path: "deferred",
             promiseId,

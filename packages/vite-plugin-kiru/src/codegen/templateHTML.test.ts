@@ -618,6 +618,8 @@ export default function Layout({ children }) {
       0,
       StructuralWalkOp.Hole,
       0,
+      StructuralWalkOp.Leave,
+      0,
     ])
   })
 
@@ -631,5 +633,18 @@ const Input = () => jsxDEV("input", { bind: { value: count } }, void 0, false, v
     const ctx = buildCtx(source)
     const call = findFirstJsxCall(source, ctx)
     assert.equal(isTemplateEligibleCall(call, ctx), false)
+  })
+
+  it("serializes static style object css custom properties", () => {
+    const source = `
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+export const Page = () =>
+  jsxDEV("span", { style: { "--my-style": "12px", "--another-var": "2rem" }, children: "x" }, void 0, false, void 0, void 0)
+`
+    const ctx = buildCtx(source)
+    const call = findFirstJsxCall(source, ctx)
+    const result = serializeJsxCallToTemplate(call, ctx)
+    assert.ok(result)
+    assert.ok(result!.html.includes('style="--my-style: 12px; --another-var: 2rem"'))
   })
 })

@@ -8,6 +8,9 @@ export default defineConfig({
   },
   plugins: [
     kiru({
+      experimental: {
+        staticHoisting: true,
+      },
       router: {
         ssg: true,
       },

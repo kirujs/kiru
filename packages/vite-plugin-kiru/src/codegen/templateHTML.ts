@@ -1,5 +1,6 @@
 import {
   assertStructuralWalkInvariant,
+  buildStructuralWalkFromMarkup,
   countStructuralWalkOps,
   StructuralWalkOp,
   type CompileRegion,
@@ -170,8 +171,7 @@ function allocateStructuralFromMarkup(
     const openTag = /^<([a-z][\w-]*)\b/i.exec(tagSlice)
     if (!openTag) continue
     const name = openTag[1]!.toLowerCase()
-    const selfClosing =
-      /\/>\s*$/.test(tagSlice) || VOID_HTML_TAGS.has(name)
+    const selfClosing = /\/>\s*$/.test(tagSlice) || VOID_HTML_TAGS.has(name)
     if (options?.allocElements !== false) {
       structuralCoordAlloc(accum)
     }
@@ -289,7 +289,12 @@ export function serializeJsxCallToTemplate(
   const allHostsStart = bindingHosts.length
   const bindStart = bindings.length
   const hostStart = bindingHosts.length
-  const accum = createTemplateSerializeShared(coords, bindings, bindingHosts, shared)
+  const accum = createTemplateSerializeShared(
+    coords,
+    bindings,
+    bindingHosts,
+    shared
+  )
   const walkStart = accum.walk.length
   const depthStart = accum.depth
   const holeStart = holeNodes.length
@@ -331,17 +336,17 @@ export function serializeJsxCallToTemplate(
   if (includeCurrentElement && !isVoidTag) {
     structuralWalkPushLeave(accum)
   }
-  const structuralWalk = accum.walk.slice(walkStart)
+  // Derive final control stream directly from serialized HTML to keep
+  // compiler/runtime traversal semantics perfectly aligned.
+  const structuralWalk = buildStructuralWalkFromMarkup(html, {
+    excludeShellRoot: true,
+  })
   const holeCount = holeNodes.length - holeStart
   const structuralNodeCount = countStructuralWalkOps(
     structuralWalk,
     StructuralWalkOp.Element
   )
-  assertStructuralWalkInvariant(
-    structuralWalk,
-    structuralNodeCount,
-    holeCount
-  )
+  assertStructuralWalkInvariant(structuralWalk, structuralNodeCount, holeCount)
   return {
     html,
     holeCount,
@@ -577,9 +582,7 @@ function isShellInnerHTMLValue(
   if (node.type === "Identifier") {
     if (!node.name || node.name === "undefined") return true
     const binding = ctx.resolve(node.name)
-    return (
-      binding?.kind === "moduleStatic" || binding?.kind === "moduleSignal"
-    )
+    return binding?.kind === "moduleStatic" || binding?.kind === "moduleSignal"
   }
   return !isAnyJsxFactoryCall(node, ctx)
 }
@@ -888,12 +891,14 @@ function serializeChildInner(
   regions: CompileRegion[],
   accum: TemplateSerializeShared
 ): string {
-  const { bindings, bindingHosts } = accum
   // Only primitive literals encode as text; isStaticLiteral is also true for arrays/objects.
   if (node.type === "Literal" && isStaticLiteral(node)) {
     return encodeStaticText(String(node.value ?? ""))
   }
-  if (node.type === "ConditionalExpression" || node.type === "LogicalExpression") {
+  if (
+    node.type === "ConditionalExpression" ||
+    node.type === "LogicalExpression"
+  ) {
     pushTemplateHole(node, ctx, holeNodes, regions, accum)
     return KIRU_HOLE_MARKER
   }
@@ -955,7 +960,8 @@ function extractTemplateBindingsForIntrinsicCall(
 ): TemplateBindingDescriptor[] {
   if (callNode.type !== "CallExpression") return []
   const typeArg = callNode.arguments?.[0]
-  if (typeArg?.type !== "Literal" || typeof typeArg.value !== "string") return []
+  if (typeArg?.type !== "Literal" || typeof typeArg.value !== "string")
+    return []
   const propsArg = callNode.arguments?.[1]
   if (propsArg?.type !== "ObjectExpression") return []
 
@@ -992,6 +998,9 @@ function resolveStaticPropValue(
   value: AstNode,
   ctx: TemplateSerializeCtx
 ): string | number | boolean | undefined {
+  if (value.type === "ObjectExpression") {
+    return serializeStaticStyleObject(value, ctx)
+  }
   if (isStaticLiteral(value)) {
     const v = value.value
     if (
@@ -1010,6 +1019,26 @@ function resolveStaticPropValue(
     }
   }
   return undefined
+}
+
+function serializeStaticStyleObject(
+  value: AstNode,
+  ctx: TemplateSerializeCtx
+): string | undefined {
+  if (value.type !== "ObjectExpression") return undefined
+  const parts: string[] = []
+  for (const prop of value.properties ?? []) {
+    if (prop.type !== "Property") return undefined
+    const key = propKeyName(prop)
+    if (!key) return undefined
+    const propValue = resolveStaticPropValue(prop.value as AstNode, ctx)
+    if (propValue === undefined) return undefined
+    const cssKey = key.startsWith("--")
+      ? key
+      : key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)
+    parts.push(`${cssKey}: ${String(propValue)}`)
+  }
+  return parts.join("; ")
 }
 
 function subtreeHasImpureCallInStaticRegions(

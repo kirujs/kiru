@@ -1,4 +1,5 @@
 import type { TransformCTX } from "./shared.js"
+import MagicString from "magic-string"
 import {
   applyCodegenPlan,
   deferWrapMap,
@@ -32,7 +33,12 @@ export function applyJsxHoistAndTemplates(ctx: TransformCTX): void {
   const templatePlan = analyzeTemplateBindings(ctx.ast, resolve, callIndex)
   const templateAbsorbed = templateAbsorbedNodes(templatePlan)
 
-  const deferPlanFull = analyzeDeferSlotReads(ctx.ast, source, resolve, callIndex)
+  const deferPlanFull = analyzeDeferSlotReads(
+    ctx.ast,
+    source,
+    resolve,
+    callIndex
+  )
   const deferPlan = filterDeferOutsideTemplates(deferPlanFull, templateAbsorbed)
   const deferByNode = deferWrapMap(deferPlan)
   const hoistPlan = analyzeJsxHoisting(ctx.ast, source, {
@@ -76,8 +82,15 @@ export function applyJsxHoistAndTemplates(ctx: TransformCTX): void {
   }
 
   const plan = mergeCodegenPlans(deferCodegen, templateCodegen, hoistCodegen)
-  applyCodegenPlan(ctx.code, plan)
-  ctx.didTransform = ctx.code.toString() !== source
+  const next = new MagicString(source)
+  applyCodegenPlan(next, plan)
+  const out = next.toString()
+  if (out !== source) {
+    ctx.code.overwrite(0, source.length, out)
+    ctx.didTransform = true
+  } else {
+    ctx.didTransform = false
+  }
 }
 
 export function jsxTransformChanged(ctx: TransformCTX): boolean {

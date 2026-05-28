@@ -10,5 +10,11 @@ export default defineConfig({
       port: e2ePorts.csr.hmr,
     },
   },
-  plugins: [kiru()],
+  plugins: [
+    kiru({
+      experimental: {
+        staticHoisting: true,
+      },
+    }),
+  ],
 })

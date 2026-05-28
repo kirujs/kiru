@@ -426,14 +426,12 @@ function templateUse(
   deferByNode: Map<AstNode, string>,
   hoistByNode: Map<AstNode, string>
 ): string {
-  if (b.holeCount === 0) return b.varName
+  if (b.holeCount === 0 && b.bindings.length === 0) return b.varName
   const parts = b.holeNodes.map((n) =>
     exprTextForTemplateHole(source, n, deferByNode, hoistByNode)
   )
   const regionsLit = formatRegionsLiteral(b.regions)
-  const regionsArg = regionsLit ? `, ${regionsLit}` : ""
   const bindingsLit = formatTemplateBindingsLiteral(b.bindings)
-  const bindingsArg = bindingsLit ? `, ${bindingsLit}` : ""
   const payloadsLit = formatBindingPayloadsLiteral(
     formatBindingPayloadSlots(
       b.bindingHosts,
@@ -442,6 +440,14 @@ function templateUse(
       hoistByNode
     )
   )
+  const needsRegionPlaceholder =
+    !regionsLit && (bindingsLit.length > 0 || payloadsLit.length > 0)
+  const regionsArg = regionsLit
+    ? `, ${regionsLit}`
+    : needsRegionPlaceholder
+    ? ", []"
+    : ""
+  const bindingsArg = bindingsLit ? `, ${bindingsLit}` : ""
   const payloadsArg = payloadsLit ? `, ${payloadsLit}` : ""
   return `createHoledTemplate(${b.varName}, [${parts.join(", ")}]${regionsArg}${bindingsArg}${payloadsArg})`
 }
