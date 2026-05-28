@@ -60,6 +60,85 @@ export function App() {
     assert.strictEqual(blocksSetupHoist(pSite.resolve("local")), true)
   })
 
+  it("captures setup-local binding in jsx call snapshot resolve", () => {
+    const source = `
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { signal } from "kiru"
+
+export function Home() {
+  const remoteResult = signal("")
+  return () =>
+    jsxDEV("button", {
+      onclick: async () => {
+        remoteResult.set("ok")
+      },
+      children: "Call remote",
+    }, void 0, false, void 0, this)
+}
+`
+    const ast = parseAst(source, { allowReturnOutsideFunction: true })
+    const index = buildProgramCallIndex(ast.body as AstNode[])
+
+    let buttonSite: ReturnType<typeof index.getCall> | undefined
+    index.forEachCall((site) => {
+      const typeArg = site.node.arguments?.[0]
+      if (typeArg?.type === "Literal" && typeArg.value === "button") {
+        buttonSite = site
+      }
+    })
+    assert.ok(buttonSite)
+    assert.strictEqual(buttonSite.resolve("remoteResult")?.kind, "setupConst")
+    assert.strictEqual(blocksModuleHoist(buttonSite.resolve("remoteResult")), true)
+  })
+
+  it("captures setup-local binding for vite-resolved jsx import shape", () => {
+    const source = `
+import { Fragment, jsxDEV } from "/@fs/C:/repos/kiru/kiru/packages/lib/dist/jsx.js"
+import { onBeforeRouteLeave, useRequestContext } from "/@fs/C:/repos/kiru/kiru/packages/lib/dist/router/client.js"
+import { signal } from "/@fs/C:/repos/kiru/kiru/packages/lib/dist/index.js"
+import { getServerMessage } from "/src/pages/index.actions.ts"
+
+export default function Home() {
+  const ctx = useRequestContext()
+  const remoteResult = signal("")
+  onBeforeRouteLeave((to) => {
+    if (to.pathname === "/blocked") return false
+    return
+  })
+  return () =>
+    jsxDEV(Fragment, { children: [
+      jsxDEV("p", { children: [
+        "User: ",
+        () => (ctx.user?.name ?? "none")
+      ] }, void 0, true, void 0, this),
+      jsxDEV("button", {
+        onclick: async () => {
+          try {
+            remoteResult.set(await getServerMessage())
+          } catch (e) {
+            remoteResult.set(e instanceof Error ? e.message : "failed")
+          }
+        },
+        children: "Call remote",
+      }, void 0, false, void 0, this),
+      jsxDEV("p", { children: remoteResult }, void 0, false, void 0, this),
+    ] }, void 0, true, void 0, this)
+}
+`
+    const ast = parseAst(source, { allowReturnOutsideFunction: true })
+    const index = buildProgramCallIndex(ast.body as AstNode[])
+
+    let buttonSite: ReturnType<typeof index.getCall> | undefined
+    index.forEachCall((site) => {
+      const typeArg = site.node.arguments?.[0]
+      if (typeArg?.type === "Literal" && typeArg.value === "button") {
+        buttonSite = site
+      }
+    })
+    assert.ok(buttonSite)
+    assert.strictEqual(buttonSite.resolve("remoteResult")?.kind, "setupConst")
+  })
+
   it("tracks module-scope $kN hoist inits", () => {
     const source = `
 import { jsxDEV } from "kiru/jsx-dev-runtime"

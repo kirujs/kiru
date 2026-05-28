@@ -64,6 +64,8 @@ type SetupHolePayloadCandidate = {
   jsxNode: AstNode
   /** Setup `return () =>` statement — insert `const $kN` immediately before. */
   insertBefore: AstNode
+  /** Lexical resolver for the candidate's call site. */
+  resolve: (name: string) => BindingInfo | null
   /** Lazy conditional hole (`toggled() && jsx(...)`) — not intrinsic-only jsx payload. */
   isConditional?: boolean
 }
@@ -261,6 +263,7 @@ export function analyzeJsxHoisting(
                   exprNode: conditionalExpr,
                   jsxNode: conditionalExpr,
                   insertBefore,
+                  resolve: site.resolve,
                   isConditional: true,
                 })
                 decided = true
@@ -269,14 +272,18 @@ export function analyzeJsxHoisting(
             continue
           }
 
-          const payload = extractSetupHoistableHolePayload(target, analysis)
+          const targetSite = callIndex.getCall(target.start)
+          if (!targetSite) continue
+          const scopedAnalysis = createAnalysisCtx(targetSite.resolve)
+          const payload = extractSetupHoistableHolePayload(target, scopedAnalysis)
           if (insertBefore && payload) {
             const setupCand: SetupHolePayloadCandidate = {
               exprNode: payload.exprNode,
               jsxNode: payload.jsxNode,
               insertBefore,
+              resolve: targetSite.resolve,
             }
-            if (canHoistHolePayloadToSetup(setupCand, analysis)) {
+            if (canHoistHolePayloadToSetup(setupCand)) {
               setupHolePayloadCandidates.push(setupCand)
               continue
             }
@@ -285,9 +292,7 @@ export function analyzeJsxHoisting(
             templateHoleNodes.has(target) &&
             !isElementOfRegionArrayHole(target, binding.holeNodes)
           ) {
-            const targetSite = callIndex.getCall(target.start)
             if (
-              targetSite &&
               canHoistComponentCallToModule(
                 target,
                 createAnalysisCtx(targetSite.resolve),
@@ -298,11 +303,7 @@ export function analyzeJsxHoisting(
             }
             continue
           }
-          if (
-            canHoistToModule(target, analysis) ||
-            (target.type === "CallExpression" &&
-              isIntrinsicJsxTag(target.arguments?.[0]))
-          ) {
+          if (canHoistToModule(target, scopedAnalysis)) {
             hoistableCalls.push(target)
           }
         }
@@ -315,7 +316,7 @@ export function analyzeJsxHoisting(
   )
   const setupHoleHoists = dedupeSetupHolePayloadCandidates(
     setupHolePayloadCandidates
-  ).filter((c) => canHoistHolePayloadToSetup(c, analysis))
+  ).filter((c) => canHoistHolePayloadToSetup(c))
   const setupRootNodes = new Set(setupHoists.map((c) => c.rootJsx))
   const setupHoleExprNodes = new Set(setupHoleHoists.map((c) => c.exprNode))
   let counter = 0
@@ -1260,6 +1261,7 @@ function findSetupHolePayloadCandidates(
         exprNode: conditionalExpr,
         jsxNode: conditionalExpr,
         insertBefore,
+        resolve: ctx.resolve,
         isConditional: true,
       })
       continue
@@ -1270,6 +1272,7 @@ function findSetupHolePayloadCandidates(
       exprNode: candidate.exprNode,
       jsxNode: candidate.jsxNode,
       insertBefore,
+      resolve: ctx.resolve,
     })
   }
   return out
@@ -1344,10 +1347,8 @@ function looksLikeJsxFactoryCall(node: AstNode): boolean {
   )
 }
 
-function canHoistHolePayloadToSetup(
-  candidate: SetupHolePayloadCandidate,
-  ctx: AnalysisCtx
-): boolean {
+function canHoistHolePayloadToSetup(candidate: SetupHolePayloadCandidate): boolean {
+  const ctx = createAnalysisCtx(candidate.resolve)
   if (candidate.isConditional) {
     // Conditional holes are validated for tier compatibility when they are
     // collected (with a scoped resolver). Re-validating here would require

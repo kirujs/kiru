@@ -19,6 +19,9 @@ export default defineConfig({
         ssg: true,
         remote: "**/*.actions.ts",
       },
+      experimental: {
+        staticHoisting: true,
+      },
     }),
   ],
 })

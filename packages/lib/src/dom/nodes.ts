@@ -1,11 +1,18 @@
 import {
+  $INLINE_FN,
   svgTags,
   FLAG_PLACEMENT,
   FLAG_STATIC_DOM,
+  FLAG_TEMPLATE,
 } from "../constants.js"
 import { isSignal, type Signal } from "../signals/base.js"
 import { unwrap } from "../signals/utils.js"
-import { hydrationStack } from "../hydration.js"
+import {
+  hydrationStack,
+  traceHydrationCursorContext,
+  traceHydrationError,
+} from "../hydration.js"
+import { withPendingTemplateHoleHydration } from "../templateHoleHydration.js"
 import {
   getVNodeApp,
   isValidTextChild,
@@ -44,6 +51,18 @@ function createDom(vNode: DomVNode): SomeDom {
 }
 
 function hydrateDom(vNode: VNode) {
+  withPendingTemplateHoleHydration(vNode, () =>
+    hydrateDomAtCurrentCursor(vNode)
+  )
+}
+
+function hydrateDomAtCurrentCursor(vNode: VNode) {
+  traceHydrationCursorContext(`dom:${String(vNode.type)}`)
+  // if (vNode.props["data-testid"] === "ssr-user") debugger
+  // if (vNode.props.children === "Home") debugger
+  if (vNode.flags & FLAG_TEMPLATE) {
+    return
+  }
   const dom =
     vNode.type === "#text"
       ? getOrCreateTextNode(vNode)
@@ -51,7 +70,19 @@ function hydrateDom(vNode: VNode) {
 
   hydrationStack.bumpChildIndex()
 
+  if (!dom && vNode.type === "#text") {
+    const split = trySplitMergedInlineTextNode(vNode)
+    if (split) {
+      vNode.dom = split
+      if (isSignal(vNode.props.nodeValue)) {
+        subTextNode(vNode, split, vNode.props.nodeValue)
+      }
+      return
+    }
+  }
+
   if (!dom) {
+    traceHydrationError(`Hydration mismatch - no node found (${String(vNode.type)})`)
     throw new KiruError({
       message: `Hydration mismatch - no node found`,
       vNode,
@@ -62,6 +93,9 @@ function hydrateDom(vNode: VNode) {
     nodeName = nodeName.toLowerCase()
   }
   if ((vNode.type as string) !== nodeName) {
+    traceHydrationError(
+      `Hydration mismatch - expected ${String(vNode.type)} but received ${nodeName}`
+    )
     throw new KiruError({
       message: `Hydration mismatch - expected node of type ${vNode.type.toString()} but received ${nodeName}`,
       vNode,
@@ -90,6 +124,25 @@ function hydrateDom(vNode: VNode) {
     prev = sibling
     sibling = sibling.sibling
   }
+}
+
+function trySplitMergedInlineTextNode(vNode: VNode): Text | null {
+  const inlineParent = vNode.parent
+  const hostParent = inlineParent?.parent
+  if (!inlineParent || !hostParent || inlineParent.type !== $INLINE_FN) {
+    return null
+  }
+  let prev: VNode | null = null
+  let node = hostParent.child
+  while (node && node !== inlineParent) {
+    prev = node
+    node = node.sibling
+  }
+  if (!prev || prev.type !== "#text" || !(prev.dom instanceof Text)) {
+    return null
+  }
+  const prevText = String(unwrap(prev.props.nodeValue) ?? "")
+  return prev.dom.splitText(prevText.length)
 }
 
 function getDomParent(vNode: VNode): ElementVNode {

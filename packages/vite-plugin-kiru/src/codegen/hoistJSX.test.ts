@@ -398,6 +398,48 @@ export default function Page() {
     assert.match(out, /nav\?\.from/)
   })
 
+  it("does not module-hoist template hole payload with setup-captured onclick", () => {
+    const out = transformPipeline(`
+import { Fragment, jsxDEV } from "kiru/jsx-dev-runtime"
+import { signal } from "kiru"
+import { getServerMessage } from "./index.actions"
+
+export default function Home() {
+  const ctx = { user: { name: "x" } }
+  const remoteResult = signal("")
+  return () =>
+    jsxDEV(Fragment, { children: [
+      jsxDEV("p", { children: [
+        "User: ",
+        () => (ctx.user?.name ?? "none")
+      ] }, void 0, true, void 0, this),
+      jsxDEV(
+        "button",
+        {
+          onclick: async () => {
+            try {
+              remoteResult.set(await getServerMessage())
+            } catch (e) {
+              remoteResult.set(e instanceof Error ? e.message : "failed")
+            }
+          },
+          children: "Call remote",
+        },
+        void 0,
+        false,
+        void 0,
+        this
+      ),
+      jsxDEV("p", { children: remoteResult }, void 0, false, void 0, this),
+    ] }, void 0, true, void 0, this)
+}
+`)
+    assert.doesNotMatch(out, /^const \$k\d+ = jsxDEV\("button"/m)
+    assert.doesNotMatch(out, /\nconst \$k\d+ = jsxDEV\([\s\S]*"button"/m)
+    assert.match(out, /onclick: async \(\) => \{/)
+    assert.match(out, /remoteResult\.set\(await getServerMessage\(\)\)/)
+  })
+
   it("setup-hoists render JSX that closes over setup-scoped signal identifier", () => {
     const out = transformHoist(`
 import { jsxs, jsx } from "kiru/jsx-runtime"
@@ -482,7 +524,7 @@ const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 
       out,
       /\$t\d+ = _template\([^)]*<span class=\\"badge\\">OK<\/span>/
     )
-    assert.match(out, /_template\([^)]+, 1(?:, \d+)?\)/)
+    assert.match(out, /_template\([^)]+, 1, \d+, \[[\d,]+\]\)/)
     assert.match(out, /<button>Increment<\/button>/)
     assert.match(
       out,

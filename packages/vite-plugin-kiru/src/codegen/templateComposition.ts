@@ -9,12 +9,17 @@ export function escapeTemplateLiteralStatic(segment: string): string {
 
 function templateFactoryArgs(
   holeCount: number,
-  structuralNodeCount?: number
+  structuralNodeCount?: number,
+  structuralWalk?: readonly number[]
 ): string {
   if (structuralNodeCount === undefined) {
     return holeCount === 0 ? "" : `, ${holeCount}`
   }
-  return `, ${holeCount}, ${structuralNodeCount}`
+  const base = `, ${holeCount}, ${structuralNodeCount}`
+  if (structuralWalk === undefined || structuralWalk.length === 0) {
+    return base
+  }
+  return `${base}, ${JSON.stringify(structuralWalk)}`
 }
 
 /** Emit `_template(...)` or `_template(\`...\${$t0.html}...\`, n)` when html contains ref markers. */
@@ -22,9 +27,14 @@ export function buildTemplateFactoryExpr(
   html: string,
   holeCount: number,
   refVarMap: Map<string, string>,
-  structuralNodeCount?: number
+  structuralNodeCount?: number,
+  structuralWalk?: readonly number[]
 ): string {
-  const extraArgs = templateFactoryArgs(holeCount, structuralNodeCount)
+  const extraArgs = templateFactoryArgs(
+    holeCount,
+    structuralNodeCount,
+    structuralWalk
+  )
   const markerRe = /<!--@kiru-tpl-ref:([^@]+)@-->/g
   if (!html.includes("<!--@kiru-tpl-ref:")) {
     return `_template(${JSON.stringify(html)}${extraArgs})`

@@ -1,51 +1,15 @@
 import { updateDomProps, unmountDomProps } from "./dom/props.js"
 import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
-import { KIRU_HOLE_COMMENT_DATA } from "./template.js"
 import type { TemplateBindingDescriptor } from "./template.js"
+import type { HydratedTemplateInstance } from "./templateHydration.js"
 import type { DomVNode, SomeElement } from "./types.utils.js"
 
 type VNode = Kiru.VNode
 
-/** Descendant elements in template serialization order (excludes root and hole comments). */
-export function buildTemplateStructuralNodeMap(root: Element): SomeElement[] {
-  const nodes: SomeElement[] = []
-  const walk = (parent: Element) => {
-    for (const child of parent.childNodes) {
-      if (
-        child.nodeType === Node.COMMENT_NODE &&
-        (child as Comment).data === KIRU_HOLE_COMMENT_DATA
-      ) {
-        continue
-      }
-      if (child.nodeType === Node.ELEMENT_NODE) {
-        nodes.push(child as SomeElement)
-        walk(child as Element)
-      }
-    }
-  }
-  walk(root)
-  return nodes
-}
-
 type TemplateBindingState = {
   readonly proxy: DomVNode
   props: Record<string, unknown>
-}
-
-function ensureStructuralMap(vNode: VNode, root: Element): readonly SomeElement[] {
-  const cached = vNode.templateStructuralNodes
-  if (cached) return cached
-  const map = buildTemplateStructuralNodeMap(root)
-  if (__DEV__ && vNode.templateStructuralNodeCount !== undefined) {
-    if (map.length !== vNode.templateStructuralNodeCount) {
-      throw new KiruError({
-        message: `[kiru]: template structural node count mismatch (expected ${vNode.templateStructuralNodeCount}, map has ${map.length})`,
-      })
-    }
-  }
-  vNode.templateStructuralNodes = map
-  return map
 }
 
 function ensureBindingStates(vNode: VNode): TemplateBindingState[] {
@@ -93,14 +57,15 @@ function mergedPropsByNodeIndex(
   return byIndex
 }
 
-/** Apply compiled template bindings using a cached structural coordinate map. */
-export function applyTemplateBindings(vNode: VNode): void {
+/** Binding phase: attach behaviors using projected nodes and compile-time nodeIndex. */
+export function activateTemplateBindings(
+  vNode: VNode,
+  instance: HydratedTemplateInstance
+): void {
   const bindings = vNode.templateBindings
   if (!bindings?.length) return
-  const root = vNode.dom
-  if (!(root instanceof Element)) return
 
-  const map = ensureStructuralMap(vNode, root)
+  const map = instance.nodes
   const payloads = vNode.templateBindingPayloads
   const propsByIndex = mergedPropsByNodeIndex(bindings, payloads)
   if (propsByIndex.size === 0) return
@@ -143,6 +108,23 @@ export function applyTemplateBindings(vNode: VNode): void {
       states.splice(i, 1)
     }
   }
+}
+
+export function applyTemplateBindings(vNode: VNode): void {
+  const bindings = vNode.templateBindings
+  if (!bindings?.length) return
+
+  const instance = vNode.templateHydrated
+  if (instance) {
+    activateTemplateBindings(vNode, instance)
+    return
+  }
+
+  throw new KiruError({
+    message:
+      "[kiru]: applyTemplateBindings requires hydrated template projections (structuralWalk)",
+    vNode,
+  })
 }
 
 export function unmountTemplateBindings(vNode: VNode): void {

@@ -20,11 +20,16 @@ import { runAnchorRegionOp, runSlotRegionOp } from "./regionOps.js"
 import { hydrateDom } from "./dom/nodes.js"
 import {
   cloneTemplateDom,
+  inferTemplateShellTagName,
   resolveTemplateHoleAnchors,
   isTemplateRoot,
   type TemplateRoot,
 } from "./template.js"
 import { applyTemplateBindings } from "./templateBindings.js"
+import {
+  ensureTemplateVNodeHydrated,
+  hydrateTemplateInstance,
+} from "./templateHydration.js"
 import {
   getVNodeApp,
   isElement,
@@ -34,7 +39,11 @@ import {
 } from "./utils/index.js"
 import { isSignal, type Signal } from "./signals/base.js"
 import { __DEV__, isBrowser } from "./env.js"
-import { hydrationStack } from "./hydration.js"
+import {
+  hydrationStack,
+  traceHydrationError,
+  traceHydrationVNodeEvent,
+} from "./hydration.js"
 import { renderMode } from "./globals.js"
 import type { AppHandle } from "./appHandle.js"
 import { createVNode as createBaseVNode } from "./vNode.js"
@@ -42,6 +51,16 @@ import { createVNode as createBaseVNode } from "./vNode.js"
 type VNode = Kiru.VNode
 type KElement = Kiru.Element
 let app: AppHandle
+
+function vnodeLabel(vNode: VNode | null | undefined): string {
+  if (!vNode) return "null"
+  const t = String(vNode.type)
+  const testId =
+    typeof vNode.props?.["data-testid"] === "string"
+      ? vNode.props["data-testid"]
+      : undefined
+  return testId ? `${t}[data-testid=${testId}]` : t
+}
 
 export function reconcileChildren(
   parent: VNode,
@@ -417,6 +436,10 @@ function updateSlot(
   oldChild: VNode | null,
   child: unknown
 ): VNode | null {
+  traceHydrationVNodeEvent("updateSlot", "reconcile", {
+    vnode: vnodeLabel(oldChild),
+    note: `parent=${vnodeLabel(parent)}`,
+  })
   // Update the node if the keys match, otherwise return null.
   const key = oldChild === null ? null : oldChild.key
   if (isValidTextChild(child)) {
@@ -564,30 +587,60 @@ function updateInlineFnChild(
 
 function createChild(parent: VNode, child: unknown): VNode | null {
   if (isValidTextChild(child)) {
-    return createVNode(parent, "#text", { nodeValue: "" + child })
+    const node = createVNode(parent, "#text", { nodeValue: "" + child })
+    traceHydrationVNodeEvent("createChild", "reconcile", {
+      vnode: vnodeLabel(node),
+      note: `parent=${vnodeLabel(parent)}`,
+    })
+    return node
   }
 
   if (isSignal(child)) {
-    return createVNode(parent, "#text", { nodeValue: child })
+    const node = createVNode(parent, "#text", { nodeValue: child })
+    traceHydrationVNodeEvent("createChild", "reconcile", {
+      vnode: vnodeLabel(node),
+      note: `parent=${vnodeLabel(parent)}`,
+    })
+    return node
   }
 
   if (isTemplateRoot(child)) {
-    return createTemplateVNode(parent, child)
+    const node = createTemplateVNode(parent, child)
+    traceHydrationVNodeEvent("createChild", "reconcile", {
+      vnode: vnodeLabel(node),
+      note: `template parent=${vnodeLabel(parent)}`,
+    })
+    return node
   }
 
   if (isElement(child)) {
-    return createVNodeFromElement(parent, child)
+    const node = createVNodeFromElement(parent, child)
+    traceHydrationVNodeEvent("createChild", "reconcile", {
+      vnode: vnodeLabel(node),
+      note: `element parent=${vnodeLabel(parent)}`,
+    })
+    return node
   }
 
   if (Array.isArray(child)) {
     if (__DEV__) {
       markListChild(child)
     }
-    return createVNode(parent, $FRAGMENT, { children: child })
+    const node = createVNode(parent, $FRAGMENT, { children: child })
+    traceHydrationVNodeEvent("createChild", "reconcile", {
+      vnode: vnodeLabel(node),
+      note: `array parent=${vnodeLabel(parent)}`,
+    })
+    return node
   }
 
   if (typeof child === "function") {
-    return createVNode(parent, $INLINE_FN, { expr: child })
+    const node = createVNode(parent, $INLINE_FN, { expr: child })
+    traceHydrationVNodeEvent("createChild", "reconcile", {
+      vnode: vnodeLabel(node),
+      note: `inlineFn parent=${vnodeLabel(parent)}`,
+    })
+    return node
   }
 
   return null
@@ -741,6 +794,15 @@ function mapRemainingChildren(child: VNode | null) {
 }
 
 function deleteChild(parent: VNode, child: VNode) {
+  traceHydrationVNodeEvent("deleteChild", "reconcile", {
+    vnode: vnodeLabel(child),
+    note: `parent=${vnodeLabel(parent)}`,
+  })
+  if (child.props?.["data-testid"] === "ssr-home") {
+    traceHydrationError(
+      `Unexpected deletion scheduled for ssr-home (parent=${vnodeLabel(parent)})`
+    )
+  }
   if (parent.deletions === null) {
     parent.deletions = [child]
   } else {
@@ -844,6 +906,9 @@ function syncTemplateBindingMetadata(
   }
   if (template.structuralNodeCount !== undefined) {
     vNode.templateStructuralNodeCount = template.structuralNodeCount
+  }
+  if (template.structuralWalk !== undefined) {
+    vNode.templateStructuralWalk = template.structuralWalk
   }
 }
 
@@ -973,13 +1038,24 @@ function hydrateVNodeChain(head: VNode | null): void {
   }
 }
 
+function countHoleDomSpan(anchor: Comment, nextAnchor: Comment | null): number {
+  let n = 0
+  let node = anchor.nextSibling
+  while (node && node !== nextAnchor) {
+    n++
+    node = node.nextSibling
+  }
+  return n
+}
+
 function hydrateVNode(vNode: VNode): void {
+  traceHydrationVNodeEvent("hydrateVNode", "reconcile", {
+    vnode: vnodeLabel(vNode),
+    note: `parent=${vnodeLabel(vNode.parent)}`,
+  })
   if (typeof vNode.type === "string") {
-    if (!vNode.dom) {
-      hydrateDom(vNode)
-    }
-    if (vNode.type === "#text") return
     if (vNode.flags & FLAG_TEMPLATE) {
+      ensureTemplateVNodeHydrated(vNode)
       if ((vNode.templateHoleCount ?? 0) > 0) {
         reconcileTemplateHoles(vNode)
       } else {
@@ -987,6 +1063,10 @@ function hydrateVNode(vNode: VNode): void {
       }
       return
     }
+    if (!vNode.dom) {
+      hydrateDom(vNode)
+    }
+    if (vNode.type === "#text") return
     if (vNode.child && vNode.dom) {
       hydrationStack.push(
         vNode.dom as unknown as import("./types.utils.js").SomeDom
@@ -1002,6 +1082,10 @@ function hydrateVNode(vNode: VNode): void {
 }
 
 export function reconcileTemplateHoles(vNode: VNode): VNode | null {
+  traceHydrationVNodeEvent("reconcileTemplateHoles", "reconcile", {
+    vnode: vnodeLabel(vNode),
+    note: `holeCount=${vNode.templateHoleCount ?? 0}`,
+  })
   const root = vNode.dom
   if (!(root instanceof Element)) return null
   const holeCount = vNode.templateHoleCount ?? 0
@@ -1011,11 +1095,10 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
   }
 
   const holeChildren = vNode.templateHoleChildren ?? []
-  const anchors = resolveTemplateHoleAnchors(
-    root,
-    holeCount,
-    vNode.templateHoleAnchors
-  )
+  const hydrated = vNode.templateHydrated
+  const anchors = hydrated
+    ? hydrated.anchors
+    : resolveTemplateHoleAnchors(root, holeCount, vNode.templateHoleAnchors)
   if (!vNode.templateHoleAnchors) {
     vNode.templateHoleAnchors = anchors
   }
@@ -1058,29 +1141,26 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
       unlinkTemplateHoleWeave(existing, nextStoredHead)
     }
     const hydrating = renderMode.current === "hydrate"
-    if (hydrating) {
-      const nodeIndex = [...parentEl.childNodes].indexOf(anchor)
-      if (nodeIndex >= 0) {
-        hydrationStack.push(
-          parentEl as unknown as import("./types.utils.js").SomeDom
-        )
-        hydrationStack.setChildIndex(nodeIndex + 1)
-      }
-    }
     const head = reconcileTemplateHoleContent(
       slotParent,
       holeChild,
       region,
       existing
     )
+    if (hydrating && head) {
+      slotParent.templateHoleHydrationPending = true
+      slotParent.templateHoleHydrationSpan = countHoleDomSpan(
+        anchor,
+        anchors[i + 1] ?? null
+      )
+      slotParent.templateHoleHydrationOffset = 0
+    } else {
+      slotParent.templateHoleHydrationPending = false
+      slotParent.templateHoleHydrationSpan = undefined
+      slotParent.templateHoleHydrationOffset = undefined
+    }
     setTemplateHoleHeadParent(head, slotParent)
     adoptTemplateHoleDeletions(vNode, slotParent)
-    if (hydrating && head) {
-      hydrateVNodeChain(head)
-    }
-    if (hydrating) {
-      hydrationStack.pop()
-    }
 
     if (head && !existing) {
       let n: VNode | null = head
@@ -1118,40 +1198,16 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
 
 function createTemplateVNode(parent: VNode, template: TemplateRoot): VNode {
   const holeCount = template.holeCount ?? 0
-  let type: VNode["type"] = "div"
-  if (renderMode.current !== "hydrate" && typeof document !== "undefined") {
-    const dom = cloneTemplateDom(template.html)
-    const tagName = dom.tagName.toLowerCase()
-    type = (svgTags.has(tagName) ? dom.tagName : tagName) as VNode["type"]
-    const node = createVNode(parent, type, {})
-    node.flags |= FLAG_TEMPLATE
-    node.templateHtml = template.html
-    node.templateHoleCount = holeCount
-    if (holeCount > 0 && template.holeChildren) {
-      node.templateHoleChildren = template.holeChildren
-    }
-    if (template.regions) {
-      node.templateRegions = template.regions
-    }
-    syncTemplateBindingMetadata(node, template)
-    node.dom = dom as Kiru.VNode["dom"]
-    if (holeCount > 0) {
-      node.templateHoleAnchors = resolveTemplateHoleAnchors(
-        dom as Element,
-        holeCount
-      )
-    }
-    applyTemplateBindings(node)
-    if (__DEV__) {
-      ;(dom as Element).__kiruNode = node
-    }
-    return node
-  }
-  type = inferTemplateRootType(template.html)
+  const tagName = inferTemplateShellTagName(template.html)
+  const type = (
+    svgTags.has(tagName) ? tagName : tagName.toLowerCase()
+  ) as VNode["type"]
+
   const node = createVNode(parent, type, {})
   node.flags |= FLAG_TEMPLATE
   node.templateHtml = template.html
   node.templateHoleCount = holeCount
+  node.templateRootRef = template
   if (holeCount > 0 && template.holeChildren) {
     node.templateHoleChildren = template.holeChildren
   }
@@ -1159,16 +1215,23 @@ function createTemplateVNode(parent: VNode, template: TemplateRoot): VNode {
     node.templateRegions = template.regions
   }
   syncTemplateBindingMetadata(node, template)
-  return node
-}
 
-function inferTemplateRootType(html: string): VNode["type"] {
-  const m = /^<([a-zA-Z][\w-]*)/.exec(html.trim())
-  if (!m) return "div"
-  const tag = m[1]!
-  return svgTags.has(tag)
-    ? (tag as VNode["type"])
-    : (tag.toLowerCase() as VNode["type"])
+  if (renderMode.current !== "hydrate" && typeof document !== "undefined") {
+    const dom = cloneTemplateDom(template.html)
+    const instance = hydrateTemplateInstance(template, dom)
+    node.dom = instance.root as Kiru.VNode["dom"]
+    node.templateHydrated = instance
+    node.templateStructuralNodes = instance.nodes
+    if (holeCount > 0) {
+      node.templateHoleAnchors = instance.anchors
+    }
+    applyTemplateBindings(node)
+    if (__DEV__) {
+      instance.root.__kiruNode = node
+    }
+  }
+
+  return node
 }
 
 function createVNodeFromElement(

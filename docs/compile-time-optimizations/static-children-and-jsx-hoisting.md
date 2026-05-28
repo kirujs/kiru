@@ -309,17 +309,20 @@ Implementation: per-file scope registry (`moduleSignal` vs `setupConst`) in `pre
 |-------|------|
 | `bindings` | Compile-time descriptors `{ kind, prop, nodeIndex }` on `TemplateRoot` |
 | `bindingPayloads` | Sparse array keyed by `nodeIndex` — behavior prop bags applied at mount/update |
-| `structuralNodeCount` | Optional count of descendant elements in serialization order (excludes shell root); third `_template` argument when codegen emits it (`_template(html, holeCount, count)`) |
-| `buildTemplateStructuralNodeMap` | DFS over cloned template DOM (skips `<!--#-->`) → `map[nodeIndex]` |
-| `applyTemplateBindings` | Applies payloads via `updateDomProps` proxies; no `childNodes` lookup at apply time |
+| `structuralNodeCount` | Descendant element count in serialization order (excludes shell root) |
+| `structuralWalk` | Compile-emitted **traversal control stream** (`Element` / `Hole` / `Leave`) — drives execution order, not a data model |
+| `executeStructuralControlStream` | Deterministic non-semantic executor over live DOM; materializes `nodes[]` / `anchors[]` projections |
+| `activateTemplateBindings` | Separate binding phase: `instance.nodes[nodeIndex]` + `updateDomProps` proxies |
 
-Nested inlined templates share one compile-time coordinate allocator per root shell serialize, so rebased `nodeIndex` values stay aligned with DOM walk order (e.g. outer `<h1>` → index `0`, inlined `<button onclick>` → index `1`). In `__DEV__`, `applyTemplateBindings` asserts `map.length === templateStructuralNodeCount` when the count is present.
+**Invariant:** `structuralWalk` order === `nodeIndex` order === binding emission order === `nodes[]` projection order.
+
+`structuralWalk` is a **traversal recipe**, not a hydration language. `Leave` is a required stack control token (no semantic meaning). Hydration does not parse HTML, match tags, or infer structure in production.
 
 Codegen shape:
 
 ```typescript
 createHoledTemplate($t0, [holePayloads…], regions, bindings, bindingPayloads)
-// $t0 = _template("<div>…<button>…</button>…", 1, 3)
+// $t0 = _template("<div>…", holeCount, structuralNodeCount, structuralWalk)
 ```
 
 **Still structural holes (fallback):** hosts with dynamic non-behavior props (`className={signal}`), dynamic children, component tags, or uncertain lowering continue to use `node` regions + `<!--#-->` anchors.

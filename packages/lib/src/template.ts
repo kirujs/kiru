@@ -3,6 +3,10 @@ import type { CompileRegion } from "./compileRegions.js"
 import { validateRegions } from "./compileRegions.js"
 import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
+import {
+  assertStructuralWalkInvariant,
+  buildStructuralWalkFromMarkup,
+} from "./templateStructuralWalk.js"
 
 export type {
   CompileRegion,
@@ -42,6 +46,8 @@ export type TemplateRoot = {
   readonly bindingPayloads?: readonly (Record<string, unknown> | undefined)[]
   /** Descendant element count in template serialization order (excludes shell root). */
   readonly structuralNodeCount?: number
+  /** Compile-emitted traversal control stream `[op, depth, ...]`. */
+  readonly structuralWalk?: readonly number[]
 }
 
 const fragmentCache = new Map<string, DocumentFragment>()
@@ -57,13 +63,25 @@ export function isTemplateRoot(thing: unknown): thing is TemplateRoot {
 export function _template(
   html: string,
   holeCount = 0,
-  structuralNodeCount?: number
+  structuralNodeCount?: number,
+  structuralWalk?: readonly number[]
 ): TemplateRoot {
+  let walk = structuralWalk
+  if (walk === undefined || walk.length === 0) {
+    const built = buildStructuralWalkFromMarkup(html, { excludeShellRoot: true })
+    if (built.length > 0) {
+      walk = built
+      if (__DEV__ && structuralNodeCount !== undefined) {
+        assertStructuralWalkInvariant(walk, structuralNodeCount, holeCount)
+      }
+    }
+  }
   return {
     __kiruTemplate: $KIRU_TEMPLATE,
     html,
     holeCount,
     ...(structuralNodeCount !== undefined ? { structuralNodeCount } : {}),
+    ...(walk !== undefined && walk.length > 0 ? { structuralWalk: walk } : {}),
   }
 }
 
@@ -98,6 +116,12 @@ export function createHoledTemplate(
     }
     validateRegions(regions, "template")
   }
+  const bindingNodeCount =
+    bindings?.reduce((max, b) => Math.max(max, b.nodeIndex), -1) ?? -1
+  const structuralNodeCount =
+    template.structuralNodeCount ??
+    (bindingNodeCount >= 0 ? bindingNodeCount + 1 : undefined)
+
   return {
     __kiruTemplate: $KIRU_TEMPLATE,
     html: template.html,
@@ -106,13 +130,22 @@ export function createHoledTemplate(
     regions,
     bindings,
     bindingPayloads,
-    ...(template.structuralNodeCount !== undefined
-      ? { structuralNodeCount: template.structuralNodeCount }
+    ...(structuralNodeCount !== undefined ? { structuralNodeCount } : {}),
+    ...(template.structuralWalk !== undefined
+      ? { structuralWalk: template.structuralWalk }
       : {}),
   }
 }
 
-export { buildTemplateStructuralNodeMap } from "./templateBindings.js"
+export {
+  StructuralWalkOp,
+  STRUCTURAL_WALK_STRIDE,
+  buildStructuralWalkFromMarkup,
+  countStructuralWalkOps,
+  executeStructuralControlStream,
+  assertStructuralWalkInvariant,
+} from "./templateStructuralWalk.js"
+export type { StructuralControlProjections } from "./templateStructuralWalk.js"
 
 export function getTemplateFragment(html: string): DocumentFragment {
   let fragment = fragmentCache.get(html)
@@ -125,6 +158,17 @@ export function getTemplateFragment(html: string): DocumentFragment {
 
 function hasBrowserDocument(): boolean {
   return typeof document !== "undefined"
+}
+
+/** Shell opening tag from static template HTML (vnode type only; not structural hydration). */
+export function inferTemplateShellTagName(html: string): string {
+  const match = html.trimStart().match(/^<([a-zA-Z][\w:.-]*)/)
+  if (!match?.[1]) {
+    throw new KiruError({
+      message: "[kiru]: cannot infer template shell tag from html",
+    })
+  }
+  return match[1]
 }
 
 export function cloneTemplateDom(html: string): Element {

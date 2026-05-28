@@ -363,6 +363,7 @@ declare global {
       readonly bindings?: readonly import("./template.js").TemplateBindingDescriptor[]
       readonly bindingPayloads?: readonly (Record<string, unknown> | undefined)[]
       readonly structuralNodeCount?: number
+      readonly structuralWalk?: readonly number[]
     }
 
     interface Element {
@@ -420,6 +421,12 @@ declare global {
       templateHoleAnchor?: Comment
       /** @internal Retained per-hole parents for anchor-scoped payload ownership. */
       templateHoleHosts?: (VNode | null)[]
+      /** @internal Marks a hole host whose first host descendant must seed hydration from its anchor. */
+      templateHoleHydrationPending?: boolean
+      /** @internal Top-level vnode count in this hole segment. */
+      templateHoleHydrationSpan?: number
+      /** @internal Number of top-level hole nodes already hydrated under this anchor. */
+      templateHoleHydrationOffset?: number
       /** @internal Per-hole reconciled vnode heads for updates. */
       templateHoleHeads?: (VNode | null)[]
       /** @internal Shell `<!--#-->` anchors (cached; excludes nested template markers). */
@@ -430,10 +437,16 @@ declare global {
       templateBindingPayloads?: readonly (Record<string, unknown> | undefined)[]
       /** Copied from `TemplateRoot.structuralNodeCount` for dev coordinate checks. */
       templateStructuralNodeCount?: number
+      /** Copied from `TemplateRoot.structuralWalk`. */
+      templateStructuralWalk?: readonly number[]
       /** @internal Cached structural targets for `templateBindings` (descendants in serialize order). */
       templateStructuralNodes?: readonly import("./types.utils.js").SomeElement[]
       /** @internal Prop/cleanup state for template binding application. */
       templateBindingStates?: unknown[]
+      /** @internal Resolved template shell (anchors, indexed nodes). */
+      templateHydrated?: import("./templateHydration.js").HydratedTemplateInstance
+      /** @internal Source descriptor for template-root caching during hydrate. */
+      templateRootRef?: TemplateRoot
     }
     interface VNodeSnapshot {
       props: Kiru.VNode["props"]

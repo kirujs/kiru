@@ -61,6 +61,38 @@ function createScopedProgramVisitor(
 ): AST.AstVisitor {
   const resolve = (name: string) => scope.resolve(name)
 
+  const predeclareFunctionBodyBindings = (node: AstNode): void => {
+    const body = (node as { body?: AstNode }).body
+    if (!body || body.type !== "BlockStatement") return
+    const statements = (body as { body?: AstNode[] }).body ?? []
+    for (const stmt of statements) {
+      if (stmt.type === "FunctionDeclaration") {
+        const id = (stmt as { id?: AstNode }).id
+        if (id?.type === "Identifier" && id.name) {
+          scope.declare(id.name, {
+            kind: bindingKindAtDepth(fnDepthRef.current, undefined, resolve),
+            name: id.name,
+          })
+        }
+        continue
+      }
+      if (stmt.type !== "VariableDeclaration") continue
+      for (const decl of stmt.declarations ?? []) {
+        if (decl.type !== "VariableDeclarator") continue
+        const id = decl.id
+        if (id?.type !== "Identifier" || !id.name) continue
+        scope.declare(id.name, {
+          kind: bindingKindAtDepth(
+            fnDepthRef.current,
+            decl.init as AstNode,
+            resolve
+          ),
+          name: id.name,
+        })
+      }
+    }
+  }
+
   const enterFunction = (node: AstNode) => {
     fnDepthRef.current++
     scope.push()
@@ -69,6 +101,9 @@ function createScopedProgramVisitor(
       scope,
       fnDepthRef.current >= 2 ? "renderLocal" : "param"
     )
+    // Predeclare function-body bindings so call-site resolver snapshots are
+    // lexical-scope complete even before traversal reaches each declaration.
+    predeclareFunctionBodyBindings(node)
     return () => {
       scope.pop()
       fnDepthRef.current--

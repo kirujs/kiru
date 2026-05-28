@@ -32,7 +32,7 @@ describe("sandbox/primitive production build", () => {
     const bundle = readProdBundle()
     assert.doesNotMatch(bundle, /jsxDEV/)
     assert.match(bundle, /badge/)
-    assert.match(bundle, /<div><h1>Static content<\/h1><!--#-->/)
+    assert.match(bundle, /<div><h1>Static content<\/h1><button>Toggle<\/button><!--#-->/)
     assert.match(bundle, /conditional.*anchor:1|anchor:1.*conditional/)
     assert.doesNotMatch(bundle, /jsx\(Badge/)
   })

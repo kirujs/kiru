@@ -154,7 +154,7 @@ export default function Layout({ children }) {
     assert.match(out, /import \{[^}]*createHoledTemplate[^}]*\} from "kiru\/template"/)
     assert.doesNotMatch(out, /tagStaticChildrenList/)
     assert.match(out, /\$t\d+ = _template\([^)]*<h1>Title<\/h1>/)
-    assert.match(out, /_template\([^)]*, 2\)/)
+    assert.match(out, /_template\([^)]*, 2, \d+, \[[\d,]+\]\)/)
     assert.match(out, /_template\([^)]*class=\\"outlet\\"/)
     const navMarkers = out.match(
       /<nav[^>]*>([\s\S]*?)<\/nav>/

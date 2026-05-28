@@ -1,6 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert"
 import { parseAst } from "rollup/parseAst"
+import { StructuralWalkOp } from "kiru/template"
 import { isKiruJsxFactoryCall } from "./scope.js"
 import { buildProgramBindingResolve, walkProgramBody } from "./scopeWalk.js"
 import {
@@ -401,6 +402,12 @@ export function Page() {
       { kind: "event", prop: "onclick", nodeIndex: 0 },
     ])
     assert.strictEqual(result!.structuralNodeCount, 3)
+    assert.ok(result!.structuralWalk.length > 0)
+    assert.strictEqual(
+      result!.structuralWalk.filter((_, i) => i % 2 === 0 && result!.structuralWalk[i] === 0)
+        .length,
+      3
+    )
     assert.ok(result!.html.includes("<button><span>Inner</span></button>"))
     assert.ok(result!.html.includes("<p>Tail</p>"))
   })
@@ -552,6 +559,47 @@ export function Outer() {
       { kind: "event", prop: "onclick", nodeIndex: 1 },
     ])
     assert.strictEqual(result!.structuralNodeCount, 2)
+  })
+
+  it("emits container descent for nav with many sibling holes and static separators", () => {
+    const source = `
+import { jsxDEV } from "kiru/jsx-dev-runtime"
+import { Link } from "kiru/router"
+export default function Layout({ children }) {
+  return jsxDEV("main", { "data-testid": "ssr-layout", children: [
+    jsxDEV("nav", { children: [
+      jsxDEV(Link, { to: "/", children: "Home" }, void 0, false, void 0, this),
+      " | ",
+      jsxDEV(Link, { to: "/about", children: "About" }, void 0, false, void 0, this),
+      " | ",
+      jsxDEV(Link, { to: "/docs", children: "Docs" }, void 0, false, void 0, this),
+    ] }, void 0, true, void 0, this),
+    children,
+  ] }, void 0, true, void 0, this)
+}
+`
+    const ctx = buildCtx(source)
+    const call = findOutermostJsxCall(source, ctx)
+    const result = serializeJsxCallToTemplate(call, ctx)
+    assert.ok(result)
+    assert.strictEqual(result!.holeCount, 4)
+    assert.strictEqual(result!.structuralNodeCount, 1)
+    assert.ok(result!.html.includes("<!--#--> | <!--#--> | <!--#-->"))
+    assert.ok(result!.html.includes("<nav>"))
+    assert.deepStrictEqual(result!.structuralWalk, [
+      StructuralWalkOp.Element,
+      0,
+      StructuralWalkOp.Hole,
+      1,
+      StructuralWalkOp.Hole,
+      1,
+      StructuralWalkOp.Hole,
+      1,
+      StructuralWalkOp.Leave,
+      0,
+      StructuralWalkOp.Hole,
+      0,
+    ])
   })
 
   it("rejects bind: props", () => {

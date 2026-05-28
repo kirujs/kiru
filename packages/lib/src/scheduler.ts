@@ -44,6 +44,7 @@ import {
   tryReconcileStaticChildrenInPlace,
 } from "./reconciler.js"
 import { applyTemplateBindings } from "./templateBindings.js"
+import { ensureTemplateVNodeHydrated } from "./templateHydration.js"
 import { isHmrUpdate } from "./hmr.js"
 import type { AppHandle } from "./appHandle.js"
 import { isSignal } from "./signals/base.js"
@@ -475,7 +476,11 @@ function updateHostComponent(vNode: DomVNode): VNode | null {
   }
   if (!vNode.dom) {
     if (renderMode.current === "hydrate") {
-      hydrateDom(vNode)
+      if (vNode.flags & FLAG_TEMPLATE) {
+        ensureTemplateVNodeHydrated(vNode)
+      } else {
+        hydrateDom(vNode)
+      }
     } else {
       vNode.dom = createDom(vNode)
     }
@@ -486,6 +491,9 @@ function updateHostComponent(vNode: DomVNode): VNode | null {
   // text should _never_ have children
   if (type !== "#text") {
     if (vNode.flags & FLAG_TEMPLATE) {
+      if (!vNode.templateHydrated) {
+        ensureTemplateVNodeHydrated(vNode)
+      }
       if ((vNode.templateHoleCount ?? 0) > 0) {
         if (vNode.flags & FLAG_TEMPLATE_HOLES_SYNCED) {
           vNode.flags &= ~FLAG_TEMPLATE_HOLES_SYNCED

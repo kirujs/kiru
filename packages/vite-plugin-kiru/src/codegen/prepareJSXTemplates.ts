@@ -50,6 +50,7 @@ export type TemplateBinding = {
   bindings: import("kiru/template").TemplateBindingDescriptor[]
   bindingHosts: TemplateBindingHost[]
   structuralNodeCount: number
+  structuralWalk: number[]
   varName: string
 }
 
@@ -283,6 +284,7 @@ function planTemplateBindings(
     bindings: s.result.bindings,
     bindingHosts: s.result.bindingHosts,
     structuralNodeCount: s.result.structuralNodeCount,
+    structuralWalk: s.result.structuralWalk,
     varName: `$t${i}`,
   }))
 
@@ -310,6 +312,7 @@ function planTemplateBindings(
       bindings: [],
       bindingHosts: [],
       structuralNodeCount: leaf.structuralNodeCount,
+      structuralWalk: leaf.structuralWalk,
       varName: `$t${bindings.length}`,
     })
   }
@@ -412,7 +415,8 @@ function templateDeclExpr(
     b.html,
     b.holeCount,
     refVarMap,
-    b.structuralNodeCount
+    b.structuralNodeCount,
+    b.structuralWalk
   )
 }
 

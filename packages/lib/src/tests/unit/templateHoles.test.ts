@@ -453,6 +453,44 @@ describe("template holes", () => {
     })
   })
 
+  it("hydrates nav-like consecutive holes before their anchors", async () => {
+    await withJSDOM(async (container) => {
+      const html = `<main><nav>${KIRU_HOLE_MARKER} | ${KIRU_HOLE_MARKER}</nav>${KIRU_HOLE_MARKER}</main>`
+      const Home = () =>
+        createElement("a", { href: "/", "data-testid": "home", children: "Home" })
+      const About = () =>
+        createElement("a", {
+          href: "/about",
+          "data-testid": "about",
+          children: "About",
+        })
+      const tpl = createHoledTemplate(
+        _template(html, 3),
+        [createElement(Home), createElement(About), createElement("section", { "data-testid": "outlet", children: "Outlet" })]
+      )
+      let ssr = ""
+      headlessRender({ write: (c) => (ssr += c) }, tpl)
+      container.innerHTML = ssr
+      hydrate(tpl, container)
+      const nav = container.querySelector("nav")!
+      const home = nav.querySelector('[data-testid="home"]')
+      const about = nav.querySelector('[data-testid="about"]')
+      assert.ok(home)
+      assert.ok(about)
+      assert.strictEqual(home?.textContent, "Home")
+      assert.strictEqual(about?.textContent, "About")
+      assert.strictEqual(
+        container.querySelector('[data-testid="outlet"]')?.textContent,
+        "Outlet"
+      )
+      assert.ok(
+        [...nav.childNodes].some(
+          (n) => n.nodeType === Node.COMMENT_NODE && (n as Comment).data === "#"
+        )
+      )
+    })
+  })
+
   it("removes prior outlet DOM when a template hole child is replaced", async () => {
     await withJSDOM(async (container, kiru) => {
       const html = `<div>${KIRU_HOLE_MARKER}</div>`

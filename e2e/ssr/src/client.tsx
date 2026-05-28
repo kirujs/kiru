@@ -9,8 +9,21 @@ declare global {
     __kiruHydratedAt?: number
     /** Snapshot of a streaming/loader fallback presence the moment hydration completes — `cy.visit` blocks on `load`, so it's the only honest way to assert "fallback was visible while we hydrated". */
     __kiruFallbackVisibleAtHydration?: boolean
+    /** Hydration cursor trace entries from lib/hydration (dev only). */
+    __kiruHydrationTrace?: unknown[]
+    /** Hydration mismatch/error messages captured during client bootstrap. */
+    __kiruHydrationErrors?: string[]
   }
 }
+
+window.__kiruHydrationTrace = []
+window.__kiruHydrationErrors = []
+window.addEventListener("error", (event) => {
+  window.__kiruHydrationErrors?.push(String(event.error ?? event.message))
+})
+window.addEventListener("unhandledrejection", (event) => {
+  window.__kiruHydrationErrors?.push(String(event.reason))
+})
 
 createRouterApp({
   routes,

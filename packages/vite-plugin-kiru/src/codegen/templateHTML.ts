@@ -1,4 +1,10 @@
-import type { CompileRegion, TemplateBindingDescriptor } from "kiru/template"
+import {
+  assertStructuralWalkInvariant,
+  countStructuralWalkOps,
+  StructuralWalkOp,
+  type CompileRegion,
+  type TemplateBindingDescriptor,
+} from "kiru/template"
 import {
   encodeStaticText,
   KIRU_HOLE_MARKER,
@@ -45,6 +51,8 @@ export type TemplateSerializeResult = {
   bindingHosts: TemplateBindingHost[]
   /** Intrinsic elements serialized in this subtree (for parent merge rebase). */
   structuralNodeCount: number
+  /** Compile-emitted traversal control stream. */
+  structuralWalk: number[]
 }
 
 type TemplateCoordinateAllocator = {
@@ -56,8 +64,53 @@ type TemplateCoordinateAllocator = {
 /** Shared coordinate state when inlining nested template shells into a parent. */
 export type TemplateSerializeShared = {
   coords: TemplateCoordinateAllocator
+  walk: number[]
+  depth: number
   bindings: TemplateBindingDescriptor[]
   bindingHosts: TemplateBindingHost[]
+}
+
+function createTemplateSerializeShared(
+  coords: TemplateCoordinateAllocator,
+  bindings: TemplateBindingDescriptor[],
+  bindingHosts: TemplateBindingHost[],
+  shared?: TemplateSerializeShared
+): TemplateSerializeShared {
+  if (shared) {
+    return {
+      coords: shared.coords,
+      walk: shared.walk,
+      depth: shared.depth,
+      bindings,
+      bindingHosts,
+    }
+  }
+  return { coords, walk: [], depth: 0, bindings, bindingHosts }
+}
+
+function structuralCoordAlloc(accum: TemplateSerializeShared): number {
+  const nodeIndex = accum.coords.alloc()
+  accum.walk.push(StructuralWalkOp.Element, accum.depth)
+  return nodeIndex
+}
+
+function structuralWalkPushHole(accum: TemplateSerializeShared): void {
+  accum.walk.push(StructuralWalkOp.Hole, accum.depth)
+}
+
+function structuralWalkPushLeave(accum: TemplateSerializeShared): void {
+  accum.depth = Math.max(0, accum.depth - 1)
+  accum.walk.push(StructuralWalkOp.Leave, accum.depth)
+}
+
+function appendInnerStructuralWalk(
+  accum: TemplateSerializeShared,
+  innerWalk: readonly number[]
+): void {
+  const baseDepth = accum.depth
+  for (let i = 0; i < innerWalk.length; i += 2) {
+    accum.walk.push(innerWalk[i]!, innerWalk[i + 1]! + baseDepth)
+  }
 }
 
 function createTemplateCoordinateAllocator(): TemplateCoordinateAllocator {
@@ -88,14 +141,16 @@ const VOID_HTML_TAGS = new Set([
   "wbr",
 ])
 
-/** Assign coords for descendant elements in markup (DFS open-tag order). */
-function allocateStructuralCoordsFromMarkup(
+/** Assign coords + walk ops from markup (DFS open-tag order). */
+function allocateStructuralFromMarkup(
   html: string,
-  coords: TemplateCoordinateAllocator
+  accum: TemplateSerializeShared,
+  options?: { allocElements?: boolean }
 ): void {
   let pos = 0
   while (pos < html.length) {
     if (html.startsWith(KIRU_HOLE_MARKER, pos)) {
+      // Hole walk ops are emitted when JSX holes are pushed (avoid duplicates).
       pos += KIRU_HOLE_MARKER.length
       continue
     }
@@ -108,24 +163,33 @@ function allocateStructuralCoordsFromMarkup(
     const tagSlice = html.slice(pos, close + 1)
     pos = close + 1
     const closeTag = /^<\/([a-z][\w-]*)\s*>/i.exec(tagSlice)
-    if (closeTag) continue
+    if (closeTag) {
+      structuralWalkPushLeave(accum)
+      continue
+    }
     const openTag = /^<([a-z][\w-]*)\b/i.exec(tagSlice)
     if (!openTag) continue
     const name = openTag[1]!.toLowerCase()
     const selfClosing =
       /\/>\s*$/.test(tagSlice) || VOID_HTML_TAGS.has(name)
-    coords.alloc()
-    if (selfClosing) continue
+    if (options?.allocElements !== false) {
+      structuralCoordAlloc(accum)
+    }
+    if (!selfClosing) {
+      accum.depth++
+    }
   }
 }
 
 function returnInlinedMarkup(
   html: string,
-  coords: TemplateCoordinateAllocator,
+  accum: TemplateSerializeShared,
   options?: { skipStructuralAlloc?: boolean }
 ): string {
-  if (!options?.skipStructuralAlloc && html.includes("<")) {
-    allocateStructuralCoordsFromMarkup(html, coords)
+  if (html.includes("<")) {
+    allocateStructuralFromMarkup(html, accum, {
+      allocElements: !options?.skipStructuralAlloc,
+    })
   }
   return html
 }
@@ -225,10 +289,19 @@ export function serializeJsxCallToTemplate(
   const allHostsStart = bindingHosts.length
   const bindStart = bindings.length
   const hostStart = bindingHosts.length
-  const accum: TemplateSerializeShared = { coords, bindings, bindingHosts }
+  const accum = createTemplateSerializeShared(coords, bindings, bindingHosts, shared)
+  const walkStart = accum.walk.length
+  const depthStart = accum.depth
+  const holeStart = holeNodes.length
+  const regionStart = regions.length
+  const includeCurrentElement = shared !== undefined
+  const isVoidTag = VOID_HTML_TAGS.has(tag.toLowerCase())
 
-  if (shared) {
-    coords.alloc()
+  if (includeCurrentElement) {
+    structuralCoordAlloc(accum)
+    if (!isVoidTag) {
+      accum.depth++
+    }
   }
 
   const props = collectStaticProps(propsArg, ctx)
@@ -246,21 +319,38 @@ export function serializeJsxCallToTemplate(
     !shellHtmlHasStaticContent(html) &&
     !shellHtmlHasStaticMarkupBesideHoles(html)
   ) {
-    if (shared) {
-      coords.reset(coordStart)
-      bindings.length = allBindingsStart
-      bindingHosts.length = allHostsStart
-    }
+    coords.reset(coordStart)
+    bindings.length = allBindingsStart
+    bindingHosts.length = allHostsStart
+    accum.walk.length = walkStart
+    accum.depth = depthStart
+    holeNodes.length = holeStart
+    regions.length = regionStart
     return null
   }
+  if (includeCurrentElement && !isVoidTag) {
+    structuralWalkPushLeave(accum)
+  }
+  const structuralWalk = accum.walk.slice(walkStart)
+  const holeCount = holeNodes.length - holeStart
+  const structuralNodeCount = countStructuralWalkOps(
+    structuralWalk,
+    StructuralWalkOp.Element
+  )
+  assertStructuralWalkInvariant(
+    structuralWalk,
+    structuralNodeCount,
+    holeCount
+  )
   return {
     html,
-    holeCount: holeNodes.length,
-    holeNodes,
-    regions,
+    holeCount,
+    holeNodes: holeNodes.slice(holeStart),
+    regions: regions.slice(regionStart),
     bindings: shared ? bindings.slice(bindStart) : bindings,
     bindingHosts: shared ? bindingHosts.slice(hostStart) : bindingHosts,
-    structuralNodeCount: coords.count(),
+    structuralNodeCount,
+    structuralWalk,
   }
 }
 
@@ -549,7 +639,8 @@ function serializeChildrenToInnerHtml(
       findObjectPropValue(propsArg, "innerHTML"),
       ctx,
       holeNodes,
-      regions
+      regions,
+      accum
     )
   }
   const childrenNode = findObjectPropValue(propsArg, "children")
@@ -561,28 +652,31 @@ function pushTemplateHole(
   node: AstNode,
   ctx: TemplateSerializeCtx,
   holeNodes: AstNode[],
-  regions: CompileRegion[]
+  regions: CompileRegion[],
+  accum?: TemplateSerializeShared
 ): void {
   const anchor = holeNodes.length
   holeNodes.push(node)
   regions.push(classifyTemplateHoleRegion(node, ctx, anchor))
+  if (accum) structuralWalkPushHole(accum)
 }
 
 function absorbInnerTemplateMetadata(
   inner: TemplateSerializeResult,
   bindings: TemplateBindingDescriptor[],
   bindingHosts: TemplateBindingHost[],
-  coords: TemplateCoordinateAllocator
+  accum: TemplateSerializeShared
 ): void {
-  const base = coords.count()
+  const base = accum.coords.count()
   for (const b of inner.bindings) {
     bindings.push({ ...b, nodeIndex: base + b.nodeIndex })
   }
   for (const h of inner.bindingHosts) {
     bindingHosts.push({ nodeIndex: base + h.nodeIndex, call: h.call })
   }
+  appendInnerStructuralWalk(accum, inner.structuralWalk)
   for (let i = 0; i < inner.structuralNodeCount; i++) {
-    coords.alloc()
+    accum.coords.alloc()
   }
 }
 
@@ -590,9 +684,7 @@ function mergeInnerTemplateHoles(
   inner: TemplateSerializeResult,
   holeNodes: AstNode[],
   regions: CompileRegion[],
-  bindings: TemplateBindingDescriptor[],
-  bindingHosts: TemplateBindingHost[],
-  coords: TemplateCoordinateAllocator,
+  accum: TemplateSerializeShared,
   sharedCoords: boolean
 ): void {
   const base = holeNodes.length
@@ -602,7 +694,12 @@ function mergeInnerTemplateHoles(
     regions.push({ ...r, anchor: base + (r.anchor ?? i) })
   }
   if (!sharedCoords) {
-    absorbInnerTemplateMetadata(inner, bindings, bindingHosts, coords)
+    absorbInnerTemplateMetadata(
+      inner,
+      accum.bindings,
+      accum.bindingHosts,
+      accum
+    )
   }
 }
 
@@ -610,7 +707,8 @@ function serializeInnerHTMLValue(
   node: AstNode | undefined,
   ctx: TemplateSerializeCtx,
   holeNodes: AstNode[],
-  regions: CompileRegion[]
+  regions: CompileRegion[],
+  accum: TemplateSerializeShared
 ): string {
   if (!node) return ""
   if (isStaticLiteral(node)) {
@@ -625,7 +723,7 @@ function serializeInnerHTMLValue(
       return ""
     }
   }
-  pushTemplateHole(node, ctx, holeNodes, regions)
+  pushTemplateHole(node, ctx, holeNodes, regions, accum)
   return KIRU_HOLE_MARKER
 }
 
@@ -741,46 +839,33 @@ function trySerializeBehaviorOnlyIntrinsic(
   }
   if (!hasBehavior) return null
 
-  const scratchCoords = createTemplateCoordinateAllocator()
   const scratchHoles: AstNode[] = []
   const scratchRegions: CompileRegion[] = []
-  const scratchBindings: TemplateBindingDescriptor[] = []
-  const scratchHosts: TemplateBindingHost[] = []
+  const scratchAccum = createTemplateSerializeShared(
+    createTemplateCoordinateAllocator(),
+    [],
+    []
+  )
+  const { bindings, bindingHosts } = accum
+  const nodeIndex = structuralCoordAlloc(accum)
+  bindings.push(...extractTemplateBindingsForIntrinsicCall(callNode, nodeIndex))
+  bindingHosts.push({ nodeIndex, call: callNode })
+
   const innerHtml = serializeChildrenToInnerHtml(
     propsArg,
     ctx,
     scratchHoles,
     scratchRegions,
-    {
-      coords: scratchCoords,
-      bindings: scratchBindings,
-      bindingHosts: scratchHosts,
-    }
+    scratchAccum
   )
   if (scratchHoles.length > 0) return null
 
-  const { coords, bindings, bindingHosts } = accum
-  const nodeIndex = coords.alloc()
-  bindings.push(...extractTemplateBindingsForIntrinsicCall(callNode, nodeIndex))
-  bindingHosts.push({ nodeIndex, call: callNode })
-
-  const childBase = coords.count()
-  for (const b of scratchBindings) {
-    bindings.push({ ...b, nodeIndex: childBase + b.nodeIndex })
-  }
-  for (const h of scratchHosts) {
-    bindingHosts.push({ ...h, nodeIndex: childBase + h.nodeIndex })
-  }
-  for (let i = 0; i < scratchCoords.count(); i++) {
-    coords.alloc()
+  if (innerHtml.includes("<")) {
+    allocateStructuralFromMarkup(innerHtml, accum)
   }
 
   const staticProps = collectStaticProps(propsArg, ctx)
-  return returnInlinedMarkup(
-    serializeStaticElementToHtml(tag, staticProps, innerHtml),
-    coords,
-    { skipStructuralAlloc: true }
-  )
+  return serializeStaticElementToHtml(tag, staticProps, innerHtml)
 }
 
 function serializeChildInner(
@@ -790,13 +875,13 @@ function serializeChildInner(
   regions: CompileRegion[],
   accum: TemplateSerializeShared
 ): string {
-  const { coords, bindings, bindingHosts } = accum
+  const { bindings, bindingHosts } = accum
   // Only primitive literals encode as text; isStaticLiteral is also true for arrays/objects.
   if (node.type === "Literal" && isStaticLiteral(node)) {
     return encodeStaticText(String(node.value ?? ""))
   }
   if (node.type === "ConditionalExpression" || node.type === "LogicalExpression") {
-    pushTemplateHole(node, ctx, holeNodes, regions)
+    pushTemplateHole(node, ctx, holeNodes, regions, accum)
     return KIRU_HOLE_MARKER
   }
   if (node.type === "CallExpression" && isAnyJsxFactoryCall(node, ctx)) {
@@ -812,37 +897,29 @@ function serializeChildInner(
     )
     if (behaviorHost) return behaviorHost
     const folded = tryFoldStaticComponentHtml(node, nestedCtx, (jsx) =>
-      serializeJsxCallToTemplate(jsx, nestedCtx, accum)
+      serializeJsxCallToTemplate(jsx, nestedCtx)
     )
     if (folded) {
-      return returnInlinedMarkup(folded, coords)
+      return returnInlinedMarkup(folded, accum)
     }
     const inner = serializeJsxCallToTemplate(node, nestedCtx, accum)
     if (inner && inner.holeCount === 0) {
       return inner.html
     }
     if (inner && inner.holeCount > 0) {
-      mergeInnerTemplateHoles(
-        inner,
-        holeNodes,
-        regions,
-        bindings,
-        bindingHosts,
-        coords,
-        true
-      )
+      mergeInnerTemplateHoles(inner, holeNodes, regions, accum, true)
       return inner.html
     }
-    pushTemplateHole(node, ctx, holeNodes, regions)
+    pushTemplateHole(node, ctx, holeNodes, regions, accum)
     return KIRU_HOLE_MARKER
   }
   if (node.type === "ArrayExpression") {
     if (arrayExpressionHasMixedTextAndBinding(node, ctx)) {
-      pushTemplateHole(node, ctx, holeNodes, regions)
+      pushTemplateHole(node, ctx, holeNodes, regions, accum)
       return KIRU_HOLE_MARKER
     }
     if (isRegionEligibleChildArray(node, ctx)) {
-      pushTemplateHole(node, ctx, holeNodes, regions)
+      pushTemplateHole(node, ctx, holeNodes, regions, accum)
       return KIRU_HOLE_MARKER
     }
     return ((node as { elements?: (AstNode | null)[] }).elements ?? [])
@@ -853,7 +930,7 @@ function serializeChildInner(
       .join("")
   }
   if (!isAnyJsxFactoryCall(node, ctx)) {
-    pushTemplateHole(node, ctx, holeNodes, regions)
+    pushTemplateHole(node, ctx, holeNodes, regions, accum)
     return KIRU_HOLE_MARKER
   }
   return ""
