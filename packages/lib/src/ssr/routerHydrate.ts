@@ -38,6 +38,11 @@ import { REMOTE_ACTION_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
 import { ensureLoaderClient } from "../router/loaderClient.js"
 import { loadClientHydrationChunksManifest } from "../router/hydrationChunks.js"
 import { traceReadiness } from "../hydration.js"
+import {
+  isRpcTraceEnabled,
+  newRpcTraceId,
+  rpcTrace,
+} from "../remote/rpcTrace.js"
 import { getRouterRuntime } from "../router/routerRuntime.js"
 
 type ServerActionsClient = {
@@ -55,16 +60,36 @@ function ensureServerActionsClient() {
 
   if (g.__kiru_serverActions) return
 
+  if (isRpcTraceEnabled()) {
+    void import("../diagnostics.js").then((m) => {
+      const w = window as typeof window & {
+        dumpKiruDiagnostics?: () => ReturnType<typeof m.dumpKiruDiagnostics>
+        __kiruDumpRpcTrace?: () => ReturnType<typeof m.dumpKiruDiagnostics>["rpcTrace"]
+      }
+      w.dumpKiruDiagnostics = () => m.dumpKiruDiagnostics()
+      w.__kiruDumpRpcTrace = () => m.dumpKiruDiagnostics().rpcTrace
+    })
+  }
+
   g.__kiru_serverActions = {
     dispatch: async (id, call) => {
       if (__DEV__ && __KIRU_PURE_CLIENT__) {
         throw new ActionDispatchError(500, REMOTE_ACTION_PURE_CLIENT_DEV_MSG)
       }
       const callEnvelope = call ?? {}
+      const traceId = newRpcTraceId()
+      const fetchStart = Date.now()
+      rpcTrace({
+        channel: "action",
+        phase: "fetch_start",
+        traceId,
+        rpcId: id,
+      })
       const headers = buildActionRpcHeaders(
         requestToken.current,
         callEnvelope.headers
       )
+      headers["x-kiru-trace-parent"] = traceId
       const init: RequestInit = {
         method: "POST",
         signal: callEnvelope.signal,
@@ -81,9 +106,25 @@ function ensureServerActionsClient() {
         ? `/?action=${encodeURIComponent(id)}&${queryString}`
         : `/?action=${encodeURIComponent(id)}`
       const r = await fetch(actionUrl, init)
+      const responseTraceId = r.headers.get("x-kiru-trace-id") ?? traceId
+      rpcTrace({
+        channel: "action",
+        phase: "fetch_done",
+        traceId: responseTraceId,
+        rpcId: id,
+        status: r.status,
+        durationMs: Date.now() - fetchStart,
+      })
       applyActionResponseHeaders(r.headers)
 
       if (!r.ok) {
+        rpcTrace({
+          channel: "action",
+          phase: "fetch_error",
+          traceId: responseTraceId,
+          rpcId: id,
+          status: r.status,
+        })
         throw new ActionDispatchError(r.status || 500, "Action failed")
       }
 
@@ -93,7 +134,20 @@ function ensureServerActionsClient() {
       let data: unknown
       try {
         data = JSON.parse(text) as unknown
+        rpcTrace({
+          channel: "action",
+          phase: "json_parse",
+          traceId: responseTraceId,
+          rpcId: id,
+        })
       } catch {
+        rpcTrace({
+          channel: "action",
+          phase: "json_parse",
+          traceId: responseTraceId,
+          rpcId: id,
+          error: "invalid_json",
+        })
         throw new ActionDispatchError(500, "Invalid action response")
       }
 

@@ -84,7 +84,7 @@ export function applyJsxHoistAndTemplates(ctx: TransformCTX): void {
   const plan = mergeCodegenPlans(deferCodegen, templateCodegen, hoistCodegen)
   const next = new MagicString(source)
   applyCodegenPlan(next, plan)
-  const out = next.toString()
+  const out = stripOrphanPureAnnotations(next.toString())
   if (out !== source) {
     ctx.code.overwrite(0, source.length, out)
     ctx.didTransform = true
@@ -99,6 +99,11 @@ export function jsxTransformChanged(ctx: TransformCTX): boolean {
 
 function nodeContains(outer: AstNode, inner: AstNode): boolean {
   return inner.start >= outer.start && inner.end <= outer.end
+}
+
+// Strip esbuild jsx PURE comments left before hoisted refs after codegen edits.
+function stripOrphanPureAnnotations(code: string): string {
+  return code.replace(/\/\*\s*@__PURE__\s*\*\/\s*/g, "")
 }
 
 function filterDeferOutsideTemplates(

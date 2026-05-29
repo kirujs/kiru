@@ -1,5 +1,5 @@
 describe("client parity (CSR)", () => {
-  const port = () => Cypress.env("port")
+  const port = () => Cypress.expose("port")
 
   it("shows middleware { error: 403 } on client navigation (not /login)", () => {
     cy.visit(`http://localhost:${port()}/`)

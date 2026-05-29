@@ -11,6 +11,8 @@ import {
   DEFAULT_LOADER_GC_TIME_MS,
   DEFAULT_LOADER_STALE_TIME_MS,
 } from "./loaderCache.js"
+import { isServer } from "../env.js"
+import { isRpcTraceEnabled, rpcTrace } from "../remote/rpcTrace.js"
 
 export type {
   EnforceLoaderValidation,
@@ -134,9 +136,47 @@ function wrapLoader<T>(
     gcTime?: number
   }
 ): KiruLoader<T> {
+  const invoke = async (ctx: LoaderContext): Promise<T> => {
+    const routeId = ctx.route?.id
+    const rpcId = routeId ? `${routeId}:load` : undefined
+    const start = Date.now()
+    if (isRpcTraceEnabled() && isServer) {
+      rpcTrace({
+        channel: "loader",
+        phase: "loader_invoke_start",
+        rpcId,
+        meta: { kind },
+      })
+    }
+    try {
+      const result = await Promise.resolve(fn(ctx))
+      if (isRpcTraceEnabled() && isServer) {
+        rpcTrace({
+          channel: "loader",
+          phase: "loader_invoke_end",
+          rpcId,
+          durationMs: Date.now() - start,
+          meta: { kind },
+        })
+      }
+      return result
+    } catch (err) {
+      if (isRpcTraceEnabled() && isServer) {
+        rpcTrace({
+          channel: "loader",
+          phase: "loader_invoke_end",
+          rpcId,
+          durationMs: Date.now() - start,
+          error: err instanceof Error ? err.message : String(err),
+          meta: { kind },
+        })
+      }
+      throw err
+    }
+  }
   return {
     __kiruLoader: kind,
-    __kiruInvoke: (ctx) => Promise.resolve(fn(ctx)),
+    __kiruInvoke: invoke,
     ...(options?.fallback !== undefined ? { __kiruFallback: options.fallback } : {}),
     ...(options?.validation !== undefined
       ? { __kiruValidation: options.validation }

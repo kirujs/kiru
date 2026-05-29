@@ -35,7 +35,7 @@ async function getKiruHandle(): Promise<KiruHandle> {
   return kiruHandle
 }
 
-const app = new Elysia({ adapter: CloudflareAdapter })
+const app = new Elysia({ adapter: CloudflareAdapter, aot: false })
   .get("/api/health", () => ({ ok: true }))
   .all("*", async ({ request }) => {
     const handle = await getKiruHandle()
@@ -43,7 +43,6 @@ const app = new Elysia({ adapter: CloudflareAdapter })
     if (out === null) return new Response("Not Found", { status: 404 })
     return out
   })
-  .compile()
 
 export default {
   fetch(
@@ -52,6 +51,6 @@ export default {
     _ctx: ExecutionContext
   ): Response | Promise<Response> {
     workerEnv = env
-    return app.handle(request)
+    return app.fetch(request)
   },
 }

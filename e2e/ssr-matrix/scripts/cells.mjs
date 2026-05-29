@@ -1,3 +1,5 @@
+import { cellServerIndex } from "./cell-dist.mjs"
+
 /** @typedef {"node" | "bun" | "cloudflare"} MatrixAdapter */
 
 /** @typedef {"vite" | "bun-vite"} MatrixBuild */
@@ -30,151 +32,119 @@ export const MATRIX_CELL_IDS = [
   "worker-elysia",
 ]
 
+/**
+ * @param {string} id
+ * @param {Omit<MatrixCell, "id" | "start"> & { start?: MatrixCell["start"] }} spec
+ * @returns {MatrixCell}
+ */
+function cell(id, spec) {
+  const serverIndex = cellServerIndex(id)
+  let start = spec.start
+  if (!start) {
+    if (spec.runtime === "node") {
+      start = () => ({ command: "node", args: [serverIndex] })
+    } else if (spec.runtime === "bun") {
+      start = () => ({ command: "bun", args: [serverIndex] })
+    } else {
+      start = (port) => ({ command: "wrangler-dev", args: [String(port)] })
+    }
+  }
+  return { id, ...spec, start }
+}
+
 /** @type {MatrixCell[]} */
 export const cells = [
-  {
-    id: "node-fetch",
+  cell("node-fetch", {
     runtime: "node",
     adapter: "node",
     serverEntry: "./src/servers/node-fetch.ts",
     build: "vite",
     frameworkHealth: false,
-    start() {
-      return { command: "node", args: ["dist/server/index.js"] }
-    },
-  },
-  {
-    id: "node-hono",
+  }),
+  cell("node-hono", {
     runtime: "node",
     adapter: "node",
     serverEntry: "./src/servers/node-hono.ts",
     build: "vite",
     frameworkHealth: true,
-    start() {
-      return { command: "node", args: ["dist/server/index.js"] }
-    },
-  },
-  {
-    id: "node-express",
+  }),
+  cell("node-express", {
     runtime: "node",
     adapter: "node",
     serverEntry: "./src/servers/node-express.ts",
     build: "vite",
     frameworkHealth: true,
-    start() {
-      return { command: "node", args: ["dist/server/index.js"] }
-    },
-  },
-  {
-    id: "node-fastify",
+  }),
+  cell("node-fastify", {
     runtime: "node",
     adapter: "node",
     serverEntry: "./src/servers/node-fastify.ts",
     build: "vite",
     frameworkHealth: true,
-    start() {
-      return { command: "node", args: ["dist/server/index.js"] }
-    },
-  },
-  {
-    id: "node-elysia",
+  }),
+  cell("node-elysia", {
     runtime: "node",
     adapter: "node",
     serverEntry: "./src/servers/node-elysia.ts",
     build: "vite",
     frameworkHealth: true,
-    start() {
-      return { command: "node", args: ["dist/server/index.js"] }
-    },
-  },
-  {
-    id: "bun-fetch",
+  }),
+  cell("bun-fetch", {
     runtime: "bun",
     adapter: "bun",
     serverEntry: "./src/servers/bun-fetch.ts",
     build: "bun-vite",
     frameworkHealth: false,
-    start() {
-      return { command: "bun", args: ["dist/server/index.js"] }
-    },
-  },
-  {
-    id: "bun-hono",
+  }),
+  cell("bun-hono", {
     runtime: "bun",
     adapter: "bun",
     serverEntry: "./src/servers/bun-hono.ts",
     build: "bun-vite",
     frameworkHealth: true,
-    start() {
-      return { command: "bun", args: ["dist/server/index.js"] }
-    },
-  },
-  {
-    id: "bun-express",
+  }),
+  cell("bun-express", {
     runtime: "bun",
     adapter: "bun",
     serverEntry: "./src/servers/bun-express.ts",
     build: "bun-vite",
     frameworkHealth: true,
-    start() {
-      return { command: "bun", args: ["dist/server/index.js"] }
-    },
-  },
-  {
-    id: "bun-fastify",
+  }),
+  cell("bun-fastify", {
     runtime: "bun",
     adapter: "bun",
     serverEntry: "./src/servers/bun-fastify.ts",
     build: "bun-vite",
     frameworkHealth: true,
-    start() {
-      return { command: "bun", args: ["dist/server/index.js"] }
-    },
-  },
-  {
-    id: "bun-elysia",
+  }),
+  cell("bun-elysia", {
     runtime: "bun",
     adapter: "bun",
     serverEntry: "./src/servers/bun-elysia.ts",
     build: "bun-vite",
     frameworkHealth: true,
-    start() {
-      return { command: "bun", args: ["dist/server/index.js"] }
-    },
-  },
-  {
-    id: "worker-fetch",
+  }),
+  cell("worker-fetch", {
     runtime: "wrangler",
     adapter: "cloudflare",
     serverEntry: "./src/servers/worker-fetch.ts",
     build: "vite",
     frameworkHealth: true,
-    start(port) {
-      return { command: "wrangler-dev", args: [String(port)] }
-    },
-  },
-  {
-    id: "worker-hono",
+  }),
+  cell("worker-hono", {
     runtime: "wrangler",
     adapter: "cloudflare",
     serverEntry: "./src/servers/worker-hono.ts",
     build: "vite",
     frameworkHealth: true,
-    start(port) {
-      return { command: "wrangler-dev", args: [String(port)] }
-    },
-  },
-  {
-    id: "worker-elysia",
+  }),
+  cell("worker-elysia", {
     runtime: "wrangler",
     adapter: "cloudflare",
     serverEntry: "./src/servers/worker-elysia.ts",
     build: "vite",
     frameworkHealth: true,
-    start(port) {
-      return { command: "wrangler-dev", args: [String(port)] }
-    },
-  },
+  }),
 ]
 
 /**
@@ -183,11 +153,11 @@ export const cells = [
  */
 export function getCellConfig(cellId) {
   const id = cellId ?? process.env.KIRU_MATRIX_CELL ?? "node-fetch"
-  const cell = cells.find((c) => c.id === id)
-  if (!cell) {
+  const found = cells.find((c) => c.id === id)
+  if (!found) {
     throw new Error(
       `Unknown KIRU_MATRIX_CELL="${id}". Valid: ${cells.map((c) => c.id).join(", ")}`
     )
   }
-  return cell
+  return found
 }

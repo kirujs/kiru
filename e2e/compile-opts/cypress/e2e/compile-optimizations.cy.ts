@@ -1,6 +1,6 @@
 describe("compile-time optimizations (staticHoisting + templates)", () => {
   const visitApp = () => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://127.0.0.1:${port}/`)
   }
 
@@ -52,7 +52,7 @@ describe("compile-time optimizations (staticHoisting + templates)", () => {
       cy.get('[data-testid="counter-value"]').should("have.text", "Count: 0")
       cy.get('[data-testid="counter-items"]').should(
         "have.text",
-        'Items: [0,2,3]'
+        "Items: [0,2,3]"
       )
 
       cy.get('[data-testid="counter-increment"]').click()
@@ -61,7 +61,7 @@ describe("compile-time optimizations (staticHoisting + templates)", () => {
       cy.get('[data-testid="count-input"]').clear().type("5")
       cy.get('[data-testid="counter-items"]').should(
         "have.text",
-        'Items: [5,2,3]'
+        "Items: [5,2,3]"
       )
       cy.get('[data-testid="counter-value"]').should("have.text", "Count: 5")
     })
@@ -75,7 +75,9 @@ describe("compile-time optimizations (staticHoisting + templates)", () => {
       cy.get('[data-testid="two-hole-host"]').then(($host) => {
         const children = Array.from($host[0]!.childNodes)
         const inputIndex = children.findIndex(
-          (n) => n.nodeType === Node.ELEMENT_NODE && (n as Element).tagName === "INPUT"
+          (n) =>
+            n.nodeType === Node.ELEMENT_NODE &&
+            (n as Element).tagName === "INPUT"
         )
         const panelIndex = children.findIndex(
           (n) =>

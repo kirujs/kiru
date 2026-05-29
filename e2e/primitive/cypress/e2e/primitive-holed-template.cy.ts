@@ -4,7 +4,7 @@
  */
 describe("primitive sandbox holed template", () => {
   const visitApp = () => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://127.0.0.1:${port}/`)
   }
 
@@ -15,7 +15,10 @@ describe("primitive sandbox holed template", () => {
       .should("be.visible")
       .and("have.value", "0")
     cy.get('[data-testid="counter-value"]').should("have.text", "Count: 0")
-    cy.get('[data-testid="counter-items"]').should("have.text", "Items: [0,2,3]")
+    cy.get('[data-testid="counter-items"]').should(
+      "have.text",
+      "Items: [0,2,3]"
+    )
   })
 
   it("keeps both holed children in the DOM (not marker-only shell)", () => {
@@ -34,14 +37,18 @@ describe("primitive sandbox holed template", () => {
   it("increments counter independently of initial input", () => {
     cy.get('[data-testid="counter-increment"]').click()
     cy.get('[data-testid="counter-value"]').should("have.text", "Count: 1")
-    cy.get('[data-testid="counter-items"]').should("have.text", "Items: [0,2,3]")
+    cy.get('[data-testid="counter-items"]').should(
+      "have.text",
+      "Items: [0,2,3]"
+    )
   })
 
   it("orders input before counter in the holed shell", () => {
     cy.get('[data-testid="app-root"]').then(($root) => {
       const children = Array.from($root[0]!.childNodes)
       const inputIndex = children.findIndex(
-        (n) => n.nodeType === Node.ELEMENT_NODE && (n as Element).tagName === "INPUT"
+        (n) =>
+          n.nodeType === Node.ELEMENT_NODE && (n as Element).tagName === "INPUT"
       )
       const counterIndex = children.findIndex(
         (n) =>

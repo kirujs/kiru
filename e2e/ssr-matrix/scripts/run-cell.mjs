@@ -1,4 +1,7 @@
+import fs from "node:fs/promises"
+import path from "node:path"
 import { getCellConfig } from "./cells.mjs"
+import { cellWranglerConfig } from "./cell-dist.mjs"
 import {
   cellBuildCommand,
   cellStartCommand,
@@ -28,6 +31,12 @@ await run(build.command, build.args, {
     NODE_ENV: "development",
   },
 })
+
+if (cell.runtime === "wrangler") {
+  const generated = path.join(packageRoot, "wrangler.toml.generated")
+  const perCell = path.join(packageRoot, cellWranglerConfig(cell.id))
+  await fs.copyFile(generated, perCell)
+}
 
 const port = await getFreePort()
 const start = cellStartCommand(cell, port)

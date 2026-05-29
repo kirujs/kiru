@@ -705,8 +705,8 @@ export function hoistPlanToEdits(
         start: ret.start,
         end: ret.end,
         text: isSetupReturn
-          ? `const ${cache.varName} = /* @__PURE__ */ ${cache.codeExpr};\nreturn () => ${cache.varName}`
-          : `const ${cache.varName} = /* @__PURE__ */ ${cache.codeExpr};\nreturn ${cache.varName}`,
+          ? `const ${cache.varName} = ${cache.codeExpr};\nreturn () => ${cache.varName}`
+          : `const ${cache.varName} = ${cache.codeExpr};\nreturn ${cache.varName}`,
       })
       continue
     }
@@ -736,7 +736,7 @@ export function hoistPlanToEdits(
 
   const moduleRenderCacheLines = plan.renderRootCacheDecls
     .filter((c) => c.tier === "module")
-    .map((c) => `const ${c.varName} = /* @__PURE__ */ ${c.codeExpr}`)
+    .map((c) => `const ${c.varName} = ${c.codeExpr}`)
   if (plan.declarations || plan.regionElementLines.length > 0) {
     const hoistBlock = [
       "",

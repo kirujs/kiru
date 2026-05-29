@@ -1,6 +1,6 @@
 describe("debug refresh churn", () => {
   it("captures refresh phases around forms hydration", () => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://127.0.0.1:${port}/forms/demo`)
     cy.window().its("__kiruHydratedAt").should("be.a", "number")
     cy.window().then((w) => {
@@ -8,8 +8,9 @@ describe("debug refresh churn", () => {
         .filter((e) => e?.ctx === "readiness:scheduler")
         .map((e) => String(e.note ?? ""))
         .join("\n")
-      expect(txt).to.include("phase=ssr-refresh-start")
-      expect(txt).to.not.include("phase=ssr-refresh-commit-skip-null path=/forms/demo")
+      expect(txt).to.include("phase=reconcile-template-holes type=section")
+      expect(txt).to.include("holeCount=5")
+      expect(txt).to.not.include("phase=template-hydrate-throw")
     })
   })
 })

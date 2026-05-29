@@ -4,7 +4,7 @@
  */
 import { e2ePorts } from "../../shared/ports.mjs"
 
-const port = Number(process.env.PORT) || e2ePorts.ssr.dev
+const port = Number(process.env.PORT) || e2ePorts.ssr.core.dev
 const url = `http://127.0.0.1:${port}/revalidate-demo`
 
 const responses = await Promise.all(

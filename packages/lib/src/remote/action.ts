@@ -14,6 +14,7 @@ import {
   type HandlerWithScopeResult,
 } from "./actionResponseScope.js"
 import { RemoteError } from "./errors.js"
+import { isRpcTraceEnabled, rpcTrace } from "./rpcTrace.js"
 import {
   getActionExecutionContext,
   getActiveActionContext,
@@ -238,6 +239,9 @@ async function validateActionPayload<Body, Query>(
   validation: ActionValidation<Body, Query>,
   raw: { body: unknown; query: unknown }
 ): Promise<{ body: Body; query: Query }> {
+  if (isRpcTraceEnabled()) {
+    rpcTrace({ channel: "action", phase: "validation_start" })
+  }
   let body = raw.body as Body
   let query = raw.query as Query
 
@@ -245,6 +249,9 @@ async function validateActionPayload<Body, Query>(
     try {
       body = await parseInput(validation.bodySchema, raw.body)
     } catch {
+      if (isRpcTraceEnabled()) {
+        rpcTrace({ channel: "action", phase: "validation_end", error: "INVALID_BODY" })
+      }
       throw new RemoteError("Invalid remote action body", "INVALID_BODY", {
         status: 400,
       })
@@ -255,12 +262,18 @@ async function validateActionPayload<Body, Query>(
     try {
       query = await parseInput(validation.querySchema, raw.query)
     } catch {
+      if (isRpcTraceEnabled()) {
+        rpcTrace({ channel: "action", phase: "validation_end", error: "INVALID_QUERY" })
+      }
       throw new RemoteError("Invalid remote action query", "INVALID_QUERY", {
         status: 400,
       })
     }
   }
 
+  if (isRpcTraceEnabled()) {
+    rpcTrace({ channel: "action", phase: "validation_end" })
+  }
   return { body, query }
 }
 

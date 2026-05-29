@@ -30,6 +30,7 @@ import {
   type NavigationScope,
   throwIfAborted,
 } from "./navigationScope.js"
+import { isRpcTraceEnabled, rpcTrace } from "../remote/rpcTrace.js"
 export type LoaderFetchContext = {
   params: Record<string, unknown>
   pathname: string
@@ -192,6 +193,14 @@ export type ResolvePagePropsResult = {
 }
 
 /** Run `load` and shape props for the page component (no loading state). */
+function pageTrace(
+  phase: string,
+  meta?: Record<string, string | number | boolean>
+): void {
+  if (!isRpcTraceEnabled()) return
+  rpcTrace({ channel: "page", phase, meta })
+}
+
 export async function resolvePagePropsFromModule(
   mod: unknown,
   ctx: LoaderContext,
@@ -199,6 +208,11 @@ export async function resolvePagePropsFromModule(
 ): Promise<ResolvePagePropsResult> {
   const load = readPageLoadExport(mod)
   if (!load) return { props: {} }
+  pageTrace("page_load_start", {
+    routeId: options?.routeId ?? "",
+    pathname: ctx.url.pathname,
+    loaderKind: load.__kiruLoader,
+  })
   const useHydrated =
     options?.forceReload === true ? false : options?.useHydratedPageData !== false
   const cacheOpts = readLoaderCacheOptions(load)
@@ -215,7 +229,10 @@ export async function resolvePagePropsFromModule(
   const canCommit = () =>
     canCommitLoaderResult(scope, getNavGeneration, cacheKey)
 
-  const discard = (): ResolvePagePropsResult => ({ props: {}, discarded: true })
+  const discard = (): ResolvePagePropsResult => {
+    pageTrace("page_load_discarded", { discarded: true })
+    return { props: {}, discarded: true }
+  }
 
   const seedLoaderCacheFromHydrated = (data: unknown): void => {
     if (
@@ -245,6 +262,8 @@ export async function resolvePagePropsFromModule(
         load.__kiruLoader === "universal"
       ) {
         seedLoaderCacheFromHydrated(hydrated)
+        pageTrace("hydrate_seed", { loaderKind: load.__kiruLoader })
+        pageTrace("page_load_done", { source: "hydrate" })
         return { props: buildPageProps(hydrated) }
       }
     }
@@ -272,11 +291,16 @@ export async function resolvePagePropsFromModule(
       // staleTime 0: serve cached data for prefetch + in-flight navigation dedupe
       // without background revalidate (which would loop with loaderEpoch).
       if (cached.staleTime === 0) {
+        pageTrace("cache_hit", { staleTimeZero: true })
+        pageTrace("page_load_done", { source: "cache" })
         return { props: buildPageProps(cached.data), isStale: false }
       }
       if (!isLoaderCacheStale(cached)) {
+        pageTrace("cache_hit", { stale: false })
+        pageTrace("page_load_done", { source: "cache" })
         return { props: buildPageProps(cached.data), isStale: false }
       }
+      pageTrace("cache_stale_served", {})
       const revalidateScope = scope
       const revalidateKey = cacheKey
       scheduleStaleLoaderRevalidate(key, async () => {
@@ -303,8 +327,14 @@ export async function resolvePagePropsFromModule(
           // keep showing stale data until invalidate or next navigation
         }
       })
+      pageTrace("page_load_done", { source: "cache_stale" })
       return { props: buildPageProps(cached.data), isStale: true }
     }
+    pageTrace("cache_miss", {})
+  }
+
+  if (load.__kiruLoader === "server" && typeof window !== "undefined") {
+    pageTrace("loader_rpc_dispatch", { routeId: routeId ?? "" })
   }
 
   try {
@@ -319,10 +349,12 @@ export async function resolvePagePropsFromModule(
         gcTime: cacheOpts.gcTime,
       })
     }
+    pageTrace("page_load_done", { source: "fetch", hasError: false })
     return { props: buildPageProps(data), isStale: false }
   } catch (err) {
     if (isAbortError(err) || ctx.signal.aborted) return discard()
     if (!canCommit()) return discard()
+    pageTrace("page_load_done", { source: "fetch", hasError: true })
     return { props: buildPageErrorProps(err), isStale: false }
   }
 }

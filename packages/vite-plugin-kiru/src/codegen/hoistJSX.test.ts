@@ -528,7 +528,7 @@ const Badge = () => jsxDEV("span", { className: "badge", children: "OK" }, void 
     assert.match(out, /<button>Increment<\/button>/)
     assert.match(
       out,
-      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+, \[\[[\s\S]*\]\]/
+      /const \$r0 = createHoledTemplate\(\$t\d+, \[\[[\s\S]*\]\]/
     )
     assert.doesNotMatch(
       out,
@@ -793,7 +793,7 @@ export const Counter = () => {
 `)
     assert.match(
       out,
-      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t\d+,[\s\S]*\["Count: ", count\]/
+      /const \$r0 = createHoledTemplate\(\$t\d+,[\s\S]*\["Count: ", count\]/
     )
     assert.match(out, /\[\{kind:"text",anchor:0\}\]/)
     assert.match(out, /<button>Increment<\/button>/)
@@ -860,7 +860,7 @@ export function App() {
 `)
     assert.match(
       out,
-      /const \$r0 = \/\* @__PURE__ \*\/ createHoledTemplate\(\$t1,[\s\S]*\(\) => \(toggled\(\) &&/
+      /const \$r0 = createHoledTemplate\(\$t1,[\s\S]*\(\) => \(toggled\(\) &&/
     )
     assert.match(out, /return \(\) => \$r0/)
     assert.doesNotMatch(out, /const \$k\d+ = \(\) =>/)

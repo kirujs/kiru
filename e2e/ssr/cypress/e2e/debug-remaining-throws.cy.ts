@@ -1,14 +1,14 @@
 describe("debug remaining throw pages", () => {
   const pages = [
     "/nested-streaming-test",
-    "/rpc",
+    "/actions-composition-demo",
     "/default-export-demo",
-    "/loaders-server",
+    "/loaders/server",
   ]
 
   for (const page of pages) {
     it(`checks template-hydrate-throw on ${page}`, () => {
-      const port = Cypress.env("port")
+      const port = Cypress.expose("port")
       cy.visit(`http://127.0.0.1:${port}${page}`)
       cy.window().its("__kiruHydratedAt").should("be.a", "number")
       cy.window().then((w) => {

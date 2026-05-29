@@ -147,7 +147,8 @@ async function startProductionServer(): Promise<{
 
 export default defineConfig({
   e2e: {
-    env: {
+    allowCypressEnv: false,
+    expose: {
       port,
     },
     specPattern: "cypress/e2e/tier3-wave1.cy.ts",

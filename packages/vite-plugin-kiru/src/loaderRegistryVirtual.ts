@@ -3,10 +3,9 @@ import path from "node:path"
 
 export const LOADER_MODULES_MANIFEST = "kiru-loader-modules.json"
 
-export function devLoaderManifestPath(projectRoot: string): string {
-  return path
-    .join(projectRoot, "node_modules/.vite", LOADER_MODULES_MANIFEST)
-    .replace(/\\/g, "/")
+/** Dev manifest path scoped to Vite's resolved `cacheDir` (isolates parallel e2e shards). */
+export function loaderManifestPath(cacheDir: string): string {
+  return path.join(cacheDir, LOADER_MODULES_MANIFEST).replace(/\\/g, "/")
 }
 
 export function renderLoaderRegistryVirtual(
@@ -23,15 +22,19 @@ export function renderLoaderRegistryVirtual(
   return `import { __INTERNAL_LOADER_REGISTRY } from "kiru/router/loaderRegistry";\n${lines.join("\n")}\nexport {};\n`
 }
 
-export async function readLoaderModuleManifest(
-  projectRoot: string,
+export type ReadLoaderModuleManifestOptions = {
+  cacheDir: string
   clientOutDir?: string
+}
+
+export async function readLoaderModuleManifest(
+  options: ReadLoaderModuleManifestOptions
 ): Promise<Record<string, string>> {
   const merged: Record<string, string> = {}
   const candidates = [
-    devLoaderManifestPath(projectRoot),
-    clientOutDir
-      ? path.join(clientOutDir, LOADER_MODULES_MANIFEST).replace(/\\/g, "/")
+    loaderManifestPath(options.cacheDir),
+    options.clientOutDir
+      ? path.join(options.clientOutDir, LOADER_MODULES_MANIFEST).replace(/\\/g, "/")
       : null,
   ].filter((p): p is string => !!p)
 
@@ -47,10 +50,10 @@ export async function readLoaderModuleManifest(
 }
 
 export async function writeDevLoaderManifest(
-  projectRoot: string,
+  cacheDir: string,
   modules: Record<string, string>
 ): Promise<void> {
-  const filePath = devLoaderManifestPath(projectRoot)
+  const filePath = loaderManifestPath(cacheDir)
   await fs.mkdir(path.dirname(filePath), { recursive: true })
   await fs.writeFile(filePath, JSON.stringify(modules, null, 2))
 }

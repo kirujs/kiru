@@ -3,7 +3,7 @@
  * Requires production build (`pnpm test` in e2e/ssr runs build + server).
  */
 describe("Tier 3 wave 1", () => {
-  const port = Cypress.env("port")
+  const port = Cypress.expose("port")
 
   describe("Hydration module prewarm", () => {
     it("includes route modulepreload links on first paint", () => {
@@ -43,14 +43,14 @@ describe("Tier 3 wave 1", () => {
       cy.request(`http://127.0.0.1:${port}/revalidate-demo`).then((res) => {
         expect(res.status).to.eq(200)
         expect(res.headers["cache-control"]).to.match(/s-maxage=1/)
-        expect(res.body).to.match(/revalidate-generation[^>]*>1</)
+        expect(res.body).to.match(/revalidate-generation[^>]*>(?:<!--#-->)?1</)
       })
     })
 
     it("revalidates after form action and serves updated generation", () => {
       cy.intercept("POST", /\?action=/).as("revalidateAction")
       cy.request(`http://127.0.0.1:${port}/revalidate-demo`).then((res) => {
-        expect(res.body).to.match(/revalidate-generation[^>]*>1</)
+        expect(res.body).to.match(/revalidate-generation[^>]*>(?:<!--#-->)?1</)
       })
       cy.visit(`http://127.0.0.1:${port}/revalidate-demo`)
       cy.window().its("__kiruHydratedAt").should("be.a", "number")
@@ -58,10 +58,9 @@ describe("Tier 3 wave 1", () => {
       cy.get('[data-testid="revalidate-bump"]').click()
       cy.wait("@revalidateAction").its("response.statusCode").should("eq", 200)
       cy.request(`http://127.0.0.1:${port}/revalidate-demo`).then((res) => {
-        expect(res.body).to.match(/revalidate-generation[^>]*>2</)
+        expect(res.body).to.match(/revalidate-generation[^>]*>(?:<!--#-->)?2</)
       })
     })
-
   })
 
   describe("Loader cache", () => {
@@ -77,17 +76,24 @@ describe("Tier 3 wave 1", () => {
       cy.window().its("__kiruHydratedAt").should("be.a", "number")
       cy.get('[data-testid="loader-cache-count"]').then(($el) => {
         const cached = $el.text()
-        cy.get<LoaderInterception[]>("@loaderPost.all").then((callsAfterVisit) => {
-          const postsAfterVisit = loaderCachePosts(callsAfterVisit)
-          cy.contains("a", "Home").click()
-          cy.contains("a", "Loader cache").click()
-          cy.get('[data-testid="loader-cache-count"]').should("have.text", cached)
-          cy.get<LoaderInterception[]>("@loaderPost.all").then(
-            (callsAfterRoundTrip) => {
-              expect(loaderCachePosts(callsAfterRoundTrip)).to.eq(postsAfterVisit)
-            }
-          )
-        })
+        cy.get<LoaderInterception[]>("@loaderPost.all").then(
+          (callsAfterVisit) => {
+            const postsAfterVisit = loaderCachePosts(callsAfterVisit)
+            cy.contains("a", "Home").click()
+            cy.contains("a", "Loader cache").click()
+            cy.get('[data-testid="loader-cache-count"]').should(
+              "have.text",
+              cached
+            )
+            cy.get<LoaderInterception[]>("@loaderPost.all").then(
+              (callsAfterRoundTrip) => {
+                expect(loaderCachePosts(callsAfterRoundTrip)).to.eq(
+                  postsAfterVisit
+                )
+              }
+            )
+          }
+        )
       })
     })
 
@@ -197,17 +203,25 @@ describe("Tier 3 wave 1", () => {
   describe("PPR-lite / ISR dynamic", () => {
     it("force-dynamic skips disk prerender and increments SSR loader hits", () => {
       cy.readFile("dist/client/ppr/force-dynamic.html").then((html) => {
-        expect(String(html)).to.match(/ppr-force-dynamic-hit[^>]*>1</)
+        expect(String(html)).to.match(
+          /ppr-force-dynamic-hit[^>]*>(?:<!--#-->)?1</
+        )
       })
       cy.request(`http://127.0.0.1:${port}/ppr/force-dynamic`).then((first) => {
         expect(first.status).to.eq(200)
-        const hit1 = first.body.match(/ppr-force-dynamic-hit[^>]*>(\d+)</)?.[1]
+        const hit1 = first.body.match(
+          /ppr-force-dynamic-hit[^>]*>(?:<!--#-->)?(\d+)</
+        )?.[1]
         expect(hit1).to.eq("1")
-        cy.request(`http://127.0.0.1:${port}/ppr/force-dynamic`).then((second) => {
-          expect(second.status).to.eq(200)
-          const hit2 = second.body.match(/ppr-force-dynamic-hit[^>]*>(\d+)</)?.[1]
-          expect(Number(hit2)).to.be.greaterThan(Number(hit1))
-        })
+        cy.request(`http://127.0.0.1:${port}/ppr/force-dynamic`).then(
+          (second) => {
+            expect(second.status).to.eq(200)
+            const hit2 = second.body.match(
+              /ppr-force-dynamic-hit[^>]*>(?:<!--#-->)?(\d+)</
+            )?.[1]
+            expect(Number(hit2)).to.be.greaterThan(Number(hit1))
+          }
+        )
       })
     })
 
@@ -223,12 +237,12 @@ describe("Tier 3 wave 1", () => {
 
   describe("PPR-lite / streaming", () => {
     it("includes streaming shell markers for serverLoader + fallback route", () => {
-      cy.request(`http://127.0.0.1:${port}/loaders/server-immediate-shell`).then(
-        (res) => {
-          expect(res.status).to.eq(200)
-          expect(res.body).to.match(/server@|loader|streaming/i)
-        }
-      )
+      cy.request(
+        `http://127.0.0.1:${port}/loaders/server-immediate-shell`
+      ).then((res) => {
+        expect(res.status).to.eq(200)
+        expect(res.body).to.match(/server@|loader|streaming/i)
+      })
     })
 
     it("streams deferred loader data on streaming-test route", () => {

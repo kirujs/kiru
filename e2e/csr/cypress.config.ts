@@ -1,50 +1,20 @@
-import { defineConfig } from "cypress"
-import { createServer, type ViteDevServer } from "vite"
+import { createViteCypressConfig } from "../shared/create-vite-cypress-config"
 import { registerHmrFileTasks } from "../shared/cypress-hmr-file-tasks"
-import { freeListeningPort } from "../shared/free-listening-port.mjs"
 import { e2ePorts } from "../shared/ports.mjs"
 
-const port = e2ePorts.csr.dev
-const hmrPort = e2ePorts.csr.hmr
+const { dev: port, hmr: hmrPort } = e2ePorts.csr.core
 
-async function startServer() {
-  const server = await createServer({
-    configFile: "./vite.config.ts",
-    server: {
-      host: "127.0.0.1",
-      port,
-      strictPort: true,
-      hmr: {
-        port: hmrPort,
-      },
-    },
-  })
-  return await server.listen()
-}
+let restoreAllHmrFiles: (() => Promise<void>) | undefined
 
-export default defineConfig({
-  e2e: {
-    env: {
-      port,
-    },
-    setupNodeEvents(on) {
-      let server: ViteDevServer | null = null
-      const restoreAllHmrFiles = registerHmrFileTasks(on)
-
-      on("before:run", async () => {
-        freeListeningPort(port)
-        freeListeningPort(hmrPort)
-        server = await startServer()
-      })
-      on("after:run", async () => {
-        await restoreAllHmrFiles()
-        if (server) {
-          await server.close()
-          server = null
-        }
-      })
-    },
+/** Default config: all CSR specs (single Vite server). */
+export default createViteCypressConfig({
+  port,
+  hmrPort,
+  enableHmr: true,
+  extraSetup(on) {
+    restoreAllHmrFiles = registerHmrFileTasks(on)
   },
-  video: false,
-  screenshotOnRunFailure: false,
+  afterServerClose: async () => {
+    await restoreAllHmrFiles?.()
+  },
 })

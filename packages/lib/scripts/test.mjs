@@ -1,5 +1,6 @@
 import * as esbuild from "esbuild"
 import { spawnSync } from "node:child_process"
+import os from "node:os"
 import { mkdirSync, rmSync } from "node:fs"
 import { readdirSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
@@ -34,7 +35,14 @@ rmSync(outDir, { recursive: true, force: true })
 mkdirSync(outDir, { recursive: true })
 
 const tests = collectTests(srcTests)
-for (const entry of tests) {
+const ESBUILD_CONCURRENCY = Math.min(12, os.availableParallelism?.() ?? 8)
+const testConcurrency = Math.max(
+  1,
+  Number(process.env.KIRU_LIB_TEST_CONCURRENCY) ||
+    Math.min(os.availableParallelism?.() ?? 8, 12)
+)
+
+async function buildTestBundle(entry) {
   const rel = relative(join(root, "src"), entry).replace(/\\/g, "/")
   const outfile = join(outDir, rel.replace(/\.tsx?$/, ".js"))
   const bootstrap = bootstrapForTestFile(entry)
@@ -53,9 +61,20 @@ for (const entry of tests) {
   })
 }
 
+for (let i = 0; i < tests.length; i += ESBUILD_CONCURRENCY) {
+  await Promise.all(
+    tests.slice(i, i + ESBUILD_CONCURRENCY).map((entry) => buildTestBundle(entry))
+  )
+}
+
+const testFiles = tests.map((entry) => {
+  const rel = relative(join(root, "src"), entry).replace(/\\/g, "/")
+  return join(outDir, rel.replace(/\.tsx?$/, ".js"))
+})
+
 const result = spawnSync(
   process.execPath,
-  ["--test", "dist-test/**/*.test.js"],
+  ["--test", "--test-concurrency", String(testConcurrency), ...testFiles],
   {
     cwd: root,
     env: { ...process.env, NODE_ENV: "development" },

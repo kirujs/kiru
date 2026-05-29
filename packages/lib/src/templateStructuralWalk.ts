@@ -1,3 +1,4 @@
+import { regionAt, type CompileRegion } from "./compileRegions.js"
 import { __DEV__ } from "./env.js"
 import { KiruError } from "./error.js"
 import { KIRU_HOLE_COMMENT_DATA } from "./template.js"
@@ -108,14 +109,28 @@ export type StructuralControlProjections = {
   readonly anchors: readonly Comment[]
 }
 
+function skipNextElementSibling(frame: WalkFrame, children: NodeList): void {
+  while (frame.childIdx < children.length) {
+    const child = children[frame.childIdx]!
+    frame.childIdx++
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      break
+    }
+  }
+}
+
 /** Deterministic non-semantic interpreter of the compile-emitted control stream. */
 export function executeStructuralControlStream(
   root: Element,
-  walk: readonly number[]
+  walk: readonly number[],
+  regions?: readonly CompileRegion[],
+  options?: { skipNodeHolePayloads?: boolean }
 ): StructuralControlProjections {
   const nodes: SomeElement[] = []
   const anchors: Comment[] = []
   const stack: WalkFrame[] = [{ parent: root, childIdx: 0 }]
+  let holeIndex = 0
+  const skipNodeHolePayloads = options?.skipNodeHolePayloads ?? false
 
   for (let i = 0; i < walk.length; i += STRUCTURAL_WALK_STRIDE) {
     const op = walk[i] as StructuralWalkOpcode
@@ -169,6 +184,13 @@ export function executeStructuralControlStream(
         if (isHoleComment(child)) {
           anchors.push(child)
           found = true
+          if (regions && skipNodeHolePayloads) {
+            const region = regionAt(regions, holeIndex, "template")
+            if (region.kind === "node" || region.kind === "component") {
+              skipNextElementSibling(frame, children)
+            }
+          }
+          holeIndex++
           break
         }
       }

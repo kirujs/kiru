@@ -1,10 +1,11 @@
 describe("home page hydration proof", () => {
   it("hydrates / without hydration mismatches and with full home DOM", () => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://127.0.0.1:${port}/`, {
       onBeforeLoad(win) {
-        ;(win as typeof win & { __e2eConsoleErrors?: string[] }).__e2eConsoleErrors =
-          []
+        ;(
+          win as typeof win & { __e2eConsoleErrors?: string[] }
+        ).__e2eConsoleErrors = []
         const prevError = win.console.error.bind(win.console)
         win.console.error = (...args: unknown[]) => {
           ;(
@@ -32,15 +33,19 @@ describe("home page hydration proof", () => {
         hydrationErrors,
         `unexpected hydration errors: ${hydrationErrors.join(" | ")}`
       ).to.deep.eq([])
-      const consoleErrors = (
-        win as typeof win & { __e2eConsoleErrors?: string[] }
-      ).__e2eConsoleErrors ?? []
+      const consoleErrors =
+        (win as typeof win & { __e2eConsoleErrors?: string[] })
+          .__e2eConsoleErrors ?? []
       const hydrationConsoleErrors = consoleErrors.filter((line) =>
-        /hydration mismatch|no template shell element found|kiruerror/i.test(line)
+        /hydration mismatch|no template shell element found|kiruerror/i.test(
+          line
+        )
       )
       expect(
         hydrationConsoleErrors,
-        `unexpected hydration console errors: ${hydrationConsoleErrors.join(" | ")}`
+        `unexpected hydration console errors: ${hydrationConsoleErrors.join(
+          " | "
+        )}`
       ).to.deep.eq([])
     })
 
@@ -53,7 +58,10 @@ describe("home page hydration proof", () => {
     })
     cy.get('[data-testid="ssr-home"]').should("have.text", "SSR e2e home")
     cy.get('[data-testid="ssr-user"]').should("contain", "User:")
-    cy.get('[data-testid="ssr-remote-button"]').should("have.text", "Call remote")
+    cy.get('[data-testid="ssr-remote-button"]').should(
+      "have.text",
+      "Call remote"
+    )
     cy.get('[data-testid="ssr-remote-result"]').should("exist")
   })
 })

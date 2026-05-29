@@ -1,5 +1,8 @@
 .vscode
 .builderman
+.cache/cypress-profiles
+.cache/cypress-binary
+.e2e-diag
 node_modules
 dist
 dist-test

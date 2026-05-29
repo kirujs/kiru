@@ -1,5 +1,5 @@
 describe("CSR error recovery", () => {
-  const port = () => Cypress.env("port")
+  const port = () => Cypress.expose("port")
 
   beforeEach(() => {
     cy.visit(`http://localhost:${port()}/`)

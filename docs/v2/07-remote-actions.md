@@ -214,6 +214,23 @@ Files: `devWarnings.remote-csr.test.ts`, `devWarnings.remote-ssr.test.ts`.
 
 ---
 
+## Diagnostics
+
+When `KIRU_RPC_TRACE=1` (or `KIRU_E2E_DIAG=1`), Kiru records a unified **RPC trace** for loaders and actions:
+
+- **Server:** `request_received`, `invoke_start` / `invoke_end`, `invoke_error`, middleware/validation phases, `x-kiru-trace-id` response header
+- **Client:** `fetch_start` / `fetch_done`, page-load cache phases (`cache_hit`, `page_load_discarded`, `nav_commit_blocked`), link prefetch phases
+- **Readiness:** existing `traceReadiness()` forwards to the same buffer as `channel: "readiness"`
+- **Actions:** per-request `TraceContext` spans merged via `flushRpcTraceSpans`
+
+API (browser): `window.dumpKiruDiagnostics()` returns `{ rpcTrace, hydrationTrace, loaderCacheSnapshot, hydratedAt }`.
+
+Implementation: [`packages/lib/src/remote/rpcTrace.ts`](../../packages/lib/src/remote/rpcTrace.ts), [`packages/lib/src/diagnostics.ts`](../../packages/lib/src/diagnostics.ts).
+
+E2E workflow: [`15-testing.md`](./15-testing.md#e2e-parallel-diagnostics).
+
+---
+
 ## Further reading
 
 - [08-renderer-ssr-and-streaming.md](./08-renderer-ssr-and-streaming.md)

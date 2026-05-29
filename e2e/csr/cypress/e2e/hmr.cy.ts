@@ -13,7 +13,7 @@ describe("hot module reload", () => {
     })
   )
   beforeEach(() => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://localhost:${port}/counter`)
     cy.get("#counter").should("be.visible")
   })
@@ -31,9 +31,7 @@ describe("hot module reload", () => {
           content: counterModifiedTsx,
         })
       )
-      .then(() =>
-        cy.get("#counter", { timeout: 10000 }).should("have.attr", "data-changed")
-      )
+      .then(() => cy.get("#counter").should("have.attr", "data-changed"))
       .then(() => cy.window().should("have.property", "test_marker"))
   })
   // we used to ensure that component state is persisted through HMR updates

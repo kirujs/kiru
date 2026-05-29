@@ -6,6 +6,7 @@ if (NODE_ENV !== "development" && NODE_ENV !== "production") {
 export const __DEV__ = NODE_ENV === "development"
 
 declare const __KIRU_ROUTER_BOOTSTRAP__: "csr" | "ssr" | "ssg" | undefined
+declare const __KIRU_RPC_TRACE__: boolean | undefined
 
 /** True when the client bundle was built for CSR or SSG (injected by vite-plugin-kiru on client builds). */
 export const __KIRU_PURE_CLIENT__ =

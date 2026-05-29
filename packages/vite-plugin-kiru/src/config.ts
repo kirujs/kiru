@@ -31,6 +31,8 @@ export function resolveMaxConcurrentRenders(
 export const defaultEsBuildOptions: ESBuildOptions = {
   jsx: "automatic",
   jsxImportSource: "kiru",
+  // Skip esbuild jsx PURE annotations; hoisting restructures returns and Rollup warns on misplaced ones.
+  jsxSideEffects: true,
   loader: "tsx",
   include: ["**/*.tsx", "**/*.ts", "**/*.jsx", "**/*.js"],
 }
@@ -42,6 +44,8 @@ export interface PluginState {
   devtoolsEnabled: boolean
   loggingEnabled: boolean
   projectRoot: string
+  /** Resolved Vite `cacheDir` (dev loader manifest lives here). */
+  cacheDir: string
   includedPaths: string[]
   outDir: string
   baseOutDir: string
@@ -210,6 +214,7 @@ export function updatePluginState(
     "dist") as string
   const normalizedOut = outDir.replace(/\\/g, "/")
   const baseOutDir = normalizedOut.replace(/\/(server|client)$/i, "") || "dist"
+  const cacheDir = path.resolve(config.cacheDir).replace(/\\/g, "/")
 
   return {
     ...state,
@@ -218,6 +223,7 @@ export function updatePluginState(
     isSSRBuild,
     devtoolsEnabled,
     projectRoot,
+    cacheDir,
     includedPaths,
     outDir,
     baseOutDir,

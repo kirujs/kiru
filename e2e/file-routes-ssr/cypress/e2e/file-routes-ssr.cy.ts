@@ -1,5 +1,5 @@
 describe("file-based routes (SSR)", () => {
-  const base = () => `http://127.0.0.1:${Cypress.env("port")}`
+  const base = () => `http://127.0.0.1:${Cypress.expose("port")}`
 
   it("renders home on full page load", () => {
     cy.visit(base())

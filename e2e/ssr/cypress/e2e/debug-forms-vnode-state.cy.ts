@@ -1,6 +1,6 @@
 describe("debug forms vnode state", () => {
   it("inspects template hole metadata on forms section", () => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://127.0.0.1:${port}/forms/demo`)
     cy.window().its("__kiruHydratedAt").should("be.a", "number")
     cy.get('[data-testid="forms-demo"]').then(($el) => {

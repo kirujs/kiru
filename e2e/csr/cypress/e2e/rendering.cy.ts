@@ -1,6 +1,6 @@
 describe("rendering", () => {
   beforeEach(() => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://localhost:${port}/counter`)
   })
   it("displays the correct text in the site heading", () => {

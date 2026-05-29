@@ -1,5 +1,5 @@
 describe("CSR i18n", () => {
-  const port = Cypress.env("port")
+  const port = Cypress.expose("port")
   const origin = () => `http://localhost:${port}`
 
   it("renders locale-specific content per URL prefix", () => {

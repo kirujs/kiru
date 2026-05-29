@@ -59,13 +59,19 @@ function requireStructuralWalk(template: TemplateRoot): readonly number[] {
 
 function projectStructuralNodes(
   root: Element,
-  template: TemplateRoot
+  template: TemplateRoot,
+  options?: { skipNodeHolePayloads?: boolean }
 ): Pick<HydratedTemplateInstance, "nodes" | "anchors"> {
   const walk = requireStructuralWalk(template)
   if (walk.length === 0) {
     return { nodes: [], anchors: [] }
   }
-  const { nodes, anchors } = executeStructuralControlStream(root, walk)
+  const { nodes, anchors } = executeStructuralControlStream(
+    root,
+    walk,
+    template.regions,
+    options
+  )
   if (__DEV__ && template.structuralNodeCount !== undefined) {
     if (nodes.length !== template.structuralNodeCount) {
       throw new KiruError({
@@ -88,7 +94,8 @@ function projectStructuralNodes(
 export function hydrateTemplateInstance(
   template: TemplateRoot,
   root: Element,
-  cached?: HydratedTemplateInstance | null
+  cached?: HydratedTemplateInstance | null,
+  options?: { skipNodeHolePayloads?: boolean }
 ): HydratedTemplateInstance {
   if (cached && cached.root === root) {
     return cached
@@ -100,7 +107,7 @@ export function hydrateTemplateInstance(
     return fromTemplate
   }
 
-  const { nodes, anchors } = projectStructuralNodes(root, template)
+  const { nodes, anchors } = projectStructuralNodes(root, template, options)
   const instance: HydratedTemplateInstance = { root, anchors, nodes }
   rootCache.set(root, instance)
   return instance
@@ -115,6 +122,7 @@ function templateMetaFromVNode(vNode: VNode): TemplateRoot {
     holeCount: vNode.templateHoleCount ?? 0,
     structuralNodeCount: vNode.templateStructuralNodeCount,
     structuralWalk: vNode.templateStructuralWalk,
+    regions: vNode.templateRegions,
   }
 }
 
@@ -153,7 +161,9 @@ export function ensureTemplateVNodeHydrated(
   })
 
   const template = templateMetaFromVNode(vNode)
-  const instance = hydrateTemplateInstance(template, root, null)
+  const instance = hydrateTemplateInstance(template, root, null, {
+    skipNodeHolePayloads: renderMode.current === "hydrate",
+  })
   vNode.dom = instance.root as Kiru.VNode["dom"]
   vNode.templateHydrated = instance
   vNode.templateStructuralNodes = instance.nodes
@@ -171,7 +181,9 @@ export function refreshTemplateStructuralProjection(vNode: VNode): void {
   const root = vNode.dom
   if (!(root instanceof Element)) return
   const template = templateMetaFromVNode(vNode)
-  const { nodes, anchors } = projectStructuralNodes(root, template)
+  const { nodes, anchors } = projectStructuralNodes(root, template, {
+    skipNodeHolePayloads: true,
+  })
   const instance: HydratedTemplateInstance = {
     root,
     anchors,

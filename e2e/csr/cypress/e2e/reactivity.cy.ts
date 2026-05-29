@@ -1,6 +1,6 @@
 describe("basic reactivity & state", () => {
   beforeEach(() => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://localhost:${port}/counter`)
   })
 
@@ -24,7 +24,7 @@ describe("basic reactivity & state", () => {
 
 describe("hooks & data", () => {
   beforeEach(() => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://localhost:${port}/todos`)
   })
 

@@ -4,6 +4,7 @@ import net from "node:net"
 import path from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 import { fileURLToPath } from "node:url"
+import { cellWranglerConfig } from "./cell-dist.mjs"
 
 export const packageRoot = fileURLToPath(new URL("..", import.meta.url))
 
@@ -47,9 +48,13 @@ export function cellBuildCommand(cell) {
 export function cellStartCommand(cell, port) {
   const spec = cell.start(port)
   if (spec.command === "wrangler-dev") {
+    const cellId = process.env.KIRU_MATRIX_CELL
+    const configFile = cellId ? cellWranglerConfig(cellId) : "wrangler.toml.generated"
     const { command, args } = pnpmExecArgs([
       "wrangler",
       "dev",
+      "--config",
+      configFile,
       "--port",
       spec.args[0],
       "--local",

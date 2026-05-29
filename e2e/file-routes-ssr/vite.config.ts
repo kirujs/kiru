@@ -1,12 +1,12 @@
 import { defineConfig } from "vite"
 import kiru from "vite-plugin-kiru"
-import { e2ePorts } from "../shared/ports.mjs"
+import { e2ePorts, envDevPort, envHmrPort } from "../shared/ports.mjs"
 
 export default defineConfig({
   server: {
-    port: e2ePorts.fileRoutesSsr.dev,
+    port: envDevPort(e2ePorts.fileRoutesSsr.dev),
     strictPort: true,
-    hmr: { port: e2ePorts.fileRoutesSsr.hmr },
+    hmr: { port: envHmrPort(e2ePorts.fileRoutesSsr.hmr) },
   },
   ssr: {
     external: ["kiru"],

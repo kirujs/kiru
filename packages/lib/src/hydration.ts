@@ -1,10 +1,11 @@
 import { isBrowser } from "./env.js"
+import { bridgeTraceReadiness } from "./remote/rpcTrace.js"
 import type { MaybeDom, SomeDom } from "./types.utils.js"
 
 const parents: SomeDom[] = []
 const childIdx: number[] = []
 
-type HydrationTraceEntry = {
+export type HydrationTraceEntry = {
   op:
     | "push"
     | "pop"
@@ -13,6 +14,7 @@ type HydrationTraceEntry = {
     | "getCurrentChild"
     | "clear"
     | "cursorContext"
+    | string
   parent?: string
   idx?: number
   node?: string
@@ -86,6 +88,23 @@ export function traceReadiness(
     .map(([k, v]) => `${k}=${String(v)}`)
     .join(" ")
   traceHydration({ op: "cursorContext", ctx: `readiness:${kind}`, note })
+  bridgeTraceReadiness(kind, detail)
+}
+
+/** Browser-only hydration ring buffer for Cypress / devtools. */
+export function dumpHydrationTrace(): {
+  trace: HydrationTraceEntry[]
+  errors: string[]
+} {
+  if (!isBrowser) return { trace: [], errors: [] }
+  const w = window as typeof window & {
+    __kiruHydrationTrace?: HydrationTraceEntry[]
+    __kiruHydrationErrors?: string[]
+  }
+  return {
+    trace: [...(w.__kiruHydrationTrace ?? [])],
+    errors: [...(w.__kiruHydrationErrors ?? [])],
+  }
 }
 
 export const hydrationStack = {

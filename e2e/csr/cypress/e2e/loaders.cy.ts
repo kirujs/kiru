@@ -1,5 +1,5 @@
 describe("route loaders (CSR)", () => {
-  const port = () => Cypress.env("port")
+  const port = () => Cypress.expose("port")
 
   it("runs clientLoader on direct visit", () => {
     cy.visit(`http://localhost:${port()}/loaders/client`)

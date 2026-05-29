@@ -1,6 +1,6 @@
 describe("router", () => {
   beforeEach(() => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://localhost:${port}`)
   })
 
@@ -32,13 +32,13 @@ describe("router", () => {
   })
 
   it("renders notFound route for unknown paths", () => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://localhost:${port}/this-route-does-not-exist`)
     cy.get('[data-testid="csr-not-found"]').should("contain", "Not Found")
   })
 
   it("awaitable navigate returns committed and updates matches", () => {
-    cy.visit(`http://localhost:${Cypress.env("port")}/navigation`)
+    cy.visit(`http://localhost:${Cypress.expose("port")}/navigation`)
     cy.get('[data-testid="match-depth"]').should("contain", "2")
     cy.get('[data-testid="nav-programmatic"]').click()
     cy.window().its("__KIRU_NAV_RESULT__").should("eq", "committed")

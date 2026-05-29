@@ -95,6 +95,35 @@ export function invalidateLoaderCache(
   }
 }
 
+export type LoaderCacheSnapshotEntry = {
+  key: string
+  routeId: string
+  pathname: string
+  fetchedAt: number
+  staleTime: number
+  stale: boolean
+}
+
+/** Metadata-only snapshot for diagnostics (no loader data payload). */
+export function snapshotLoaderCache(
+  maxEntries = 32
+): LoaderCacheSnapshotEntry[] {
+  const out: LoaderCacheSnapshotEntry[] = []
+  for (const [key, entry] of cache) {
+    if (out.length >= maxEntries) break
+    const { routeId, pathname } = parseLoaderCacheKey(key)
+    out.push({
+      key,
+      routeId,
+      pathname,
+      fetchedAt: entry.fetchedAt,
+      staleTime: entry.staleTime,
+      stale: isLoaderCacheStale(entry),
+    })
+  }
+  return out
+}
+
 /** @internal Test helper */
 export function clearLoaderCacheForTests(): void {
   cache.clear()

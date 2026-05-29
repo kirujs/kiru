@@ -13,8 +13,15 @@ import {
   createActionExecutionForRequest,
   runInActionExecution,
 } from "./actionInvokeScope.js"
+import { createTraceContext } from "./actionExecution.js"
 import { isAbortError } from "../router/navigationScope.js"
 import { isRemoteError } from "./errors.js"
+import {
+  flushRpcTraceSpans,
+  newRpcTraceId,
+  rpcTrace,
+  rpcTraceResponseHeaders,
+} from "./rpcTrace.js"
 import { unwrapKiruToken } from "./token.js"
 
 export {
@@ -126,6 +133,18 @@ export {
   isRemoteError,
 } from "./errors.js"
 
+export {
+  rpcTrace,
+  isRpcTraceEnabled,
+  dumpRpcTrace,
+  flushRpcTraceSpans,
+  newRpcTraceId,
+  bridgeTraceReadiness,
+  rpcTraceResponseHeaders,
+  type RpcTraceEvent,
+  type RpcTraceChannel,
+} from "./rpcTrace.js"
+
 type RegisteredRemoteAction = {
   __kiruRemoteAction: true
   __kiruInvalidateRoutes?: string[]
@@ -212,16 +231,24 @@ async function buildResponseFromInvoke(
     isEnhanced: boolean
     referer?: string
     extraHeaders?: Record<string, string>
+    traceId?: string
+    execution?: import("./actionExecution.js").ActionExecution
   }
 ): Promise<Response> {
+  if (init.execution) {
+    flushRpcTraceSpans(init.execution.runtime.tracing)
+  }
   const normalized = normalizeActionResult(handlerResult, meta)
+  const traceHeaders = init.traceId
+    ? rpcTraceResponseHeaders(init.traceId)
+    : {}
   return buildActionHttpResponse({
     normalized,
     secret,
     deployTarget: options?.deployTarget,
     isEnhanced: init.isEnhanced,
     referer: init.referer,
-    extraHeaders: init.extraHeaders,
+    extraHeaders: { ...init.extraHeaders, ...traceHeaders },
     committed: meta,
   })
 }
@@ -236,6 +263,25 @@ async function invokeJsonRemoteAction(
   secret: string,
   options?: CreateRemoteActionHandlerOptions
 ): Promise<Response> {
+  const traceId =
+    request.headers.get("x-kiru-trace-parent") ?? newRpcTraceId()
+  const trace = (
+    phase: string,
+    extra?: import("./rpcTrace.js").RpcTraceExtra
+  ): void => {
+    rpcTrace({
+      side: "server",
+      channel: "action",
+      phase,
+      traceId,
+      rpcId: rpcActionId,
+      requestId: undefined,
+      ...extra,
+    })
+  }
+
+  trace("request_received")
+
   const execution = createActionExecutionForRequest({
     context,
     signal: request.signal,
@@ -244,7 +290,9 @@ async function invokeJsonRemoteAction(
     body,
     query,
     entryActionId: rpcActionId,
+    tracing: createTraceContext(traceId),
   })
+
   const handlerArgs: RemoteActionInvokeArgs = {
     body,
     query,
@@ -255,25 +303,47 @@ async function invokeJsonRemoteAction(
   }
   try {
     if (request.signal.aborted) {
+      trace("response", { status: 499 })
       return new Response(null, { status: 499 })
     }
+    const invokeStart = Date.now()
+    trace("invoke_start")
     const { handlerResult, meta } = await runInActionExecution(execution, () =>
       handler.__kiruInvoke(handlerArgs)
     )
+    trace("invoke_end", { durationMs: Date.now() - invokeStart })
     const { applyServerRevalidate } = await import("../router/revalidate.js")
     await applyServerRevalidate(handler.__kiruRevalidate)
+    trace("response", { status: 200 })
     return buildResponseFromInvoke(handlerResult, meta, secret, options, {
       isEnhanced: true,
       extraHeaders: invalidateHeadersForAction(handler),
+      traceId,
+      execution,
     })
   } catch (e) {
     if (isAbortError(e) || request.signal.aborted) {
+      trace("response", { status: 499 })
       return new Response(null, { status: 499 })
     }
     if (isRemoteError(e)) {
-      return new Response(null, { status: e.status })
+      trace("remote_error", { status: e.status, error: e.code })
+      if (options?.exposeErrors) {
+        trace("expose_error_body", { error: e.message })
+      }
+      return new Response(null, {
+        status: e.status,
+        headers: rpcTraceResponseHeaders(traceId),
+      })
     }
-    return new Response(null, { status: 500 })
+    trace("invoke_error", {
+      error: e instanceof Error ? e.message : String(e),
+      status: 500,
+    })
+    return new Response(null, {
+      status: 500,
+      headers: rpcTraceResponseHeaders(traceId),
+    })
   }
 }
 
@@ -328,6 +398,22 @@ export function createRemoteActionHandler(
         }
 
         const rpcActionId = actionId
+        const formTraceId =
+          request.headers.get("x-kiru-trace-parent") ?? newRpcTraceId()
+        const formTrace = (
+          phase: string,
+          extra?: import("./rpcTrace.js").RpcTraceExtra
+        ): void => {
+          rpcTrace({
+            side: "server",
+            channel: "action",
+            phase,
+            traceId: formTraceId,
+            rpcId: rpcActionId,
+            ...extra,
+          })
+        }
+        formTrace("request_received", { meta: { form: true } })
         const execution = createActionExecutionForRequest({
           context,
           signal: request.signal,
@@ -335,6 +421,7 @@ export function createRemoteActionHandler(
           headers: request.headers,
           body: formData,
           entryActionId: rpcActionId,
+          tracing: createTraceContext(formTraceId),
         })
         const formArgs: RemoteFormActionInvokeArgs = {
           formData,
@@ -342,28 +429,47 @@ export function createRemoteActionHandler(
         }
         try {
           if (request.signal.aborted) {
+            formTrace("response", { status: 499 })
             return new Response(null, { status: 499 })
           }
+          const formInvokeStart = Date.now()
+          formTrace("invoke_start")
           const { handlerResult, meta } = await runInActionExecution(
             execution,
             () => handler.__kiruInvoke(formArgs)
           )
+          formTrace("invoke_end", { durationMs: Date.now() - formInvokeStart })
           const { applyServerRevalidate } = await import("../router/revalidate.js")
           await applyServerRevalidate(handler.__kiruRevalidate)
           const isEnhanced = !!request.headers.get("x-kiru-form")
+          formTrace("response", { status: 200 })
           return buildResponseFromInvoke(handlerResult, meta, secret, options, {
             isEnhanced,
             referer: request.headers.get("referer") ?? "/",
             extraHeaders: invalidateHeadersForAction(handler),
+            traceId: formTraceId,
+            execution,
           })
         } catch (e) {
           if (isAbortError(e) || request.signal.aborted) {
+            formTrace("response", { status: 499 })
             return new Response(null, { status: 499 })
           }
           if (isRemoteError(e)) {
-            return new Response(null, { status: e.status })
+            formTrace("remote_error", { status: e.status, error: e.code })
+            return new Response(null, {
+              status: e.status,
+              headers: rpcTraceResponseHeaders(formTraceId),
+            })
           }
-          return new Response(null, { status: 500 })
+          formTrace("invoke_error", {
+            error: e instanceof Error ? e.message : String(e),
+            status: 500,
+          })
+          return new Response(null, {
+            status: 500,
+            headers: rpcTraceResponseHeaders(formTraceId),
+          })
         }
       }
 

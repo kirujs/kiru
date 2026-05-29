@@ -174,6 +174,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   let log: (...data: any[]) => void
   let virtualModules: Record<string, () => string> = {}
   let resolvedViteConfig: ResolvedConfig | undefined
+  let invalidateLoaderRegistryRef: (() => void) | undefined
 
   const mainPlugin = {
     name: "vite-plugin-kiru",
@@ -379,6 +380,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           invalidateVirtualRegistry(REMOTE_REGISTRY_VIRTUAL_ID)
         const invalidateLoaderRegistry = () =>
           invalidateVirtualRegistry(LOADER_REGISTRY_VIRTUAL_ID)
+        invalidateLoaderRegistryRef = invalidateLoaderRegistry
         let serverEntryVersion = 0
         const getServerEntry = () =>
           serverEntryVersion === 0
@@ -570,10 +572,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         const clientOutDir = state.isSSRBuild
           ? path.join(path.dirname(path.resolve(state.projectRoot, state.outDir)), "client")
           : path.resolve(state.projectRoot, state.outDir)
-        const fromDisk = await readLoaderModuleManifest(
-          state.projectRoot,
-          clientOutDir
-        )
+        const fromDisk = await readLoaderModuleManifest({
+          cacheDir: state.cacheDir,
+          clientOutDir,
+        })
         const modules = mergeLoaderModules(
           state.loaderModulesByRouteId,
           fromDisk
@@ -931,7 +933,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
   const remotePlugin = {
     name: "vite-plugin-kiru:remote",
     enforce: "post" as const,
-    transform(src, id, options) {
+    async transform(src, id, options) {
       const normalizedId = normalizeModulePath(id, state!.projectRoot)
       const isRemote = state?.router?.remote
         ? state.remotePaths.some(
@@ -980,10 +982,11 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
 
       if (loaderRegistryTouched && state!.router.serverEntry) {
         if (!state!.isBuild) {
-          void writeDevLoaderManifest(
-            state!.projectRoot,
+          await writeDevLoaderManifest(
+            state!.cacheDir,
             Object.fromEntries(state!.loaderModulesByRouteId)
           )
+          invalidateLoaderRegistryRef?.()
         }
       }
 

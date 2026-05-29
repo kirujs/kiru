@@ -29,6 +29,7 @@ import { applyTemplateBindings } from "./templateBindings.js"
 import {
   ensureTemplateVNodeHydrated,
   hydrateTemplateInstance,
+  refreshTemplateStructuralProjection,
 } from "./templateHydration.js"
 import {
   getVNodeApp,
@@ -1245,6 +1246,10 @@ export function reconcileTemplateHoles(vNode: VNode): VNode | null {
   }
 
   vNode.child = first
+  if (renderMode.current === "hydrate" && holeCount > 0) {
+    refreshTemplateStructuralProjection(vNode)
+    vNode.templateBindingStates = undefined
+  }
   applyTemplateBindings(vNode)
   return first
 }

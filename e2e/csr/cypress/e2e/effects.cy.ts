@@ -14,7 +14,7 @@ const expectedLogs = [
 
 describe("effects", () => {
   beforeEach(() => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     // afterEach(() => cy.writeFile("src/Counter.tsx", counterTsx))
     cy.visit(`http://localhost:${port}/effects`)
   })

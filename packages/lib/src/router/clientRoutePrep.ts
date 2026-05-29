@@ -12,6 +12,10 @@ import {
   readPageHeadExport,
   syncDocumentHeadForPage,
 } from "./pageHead.js"
+import {
+  awaitInFlightPrefetch,
+  cancelInFlightPrefetch,
+} from "./prefetchRoute.js"
 import { prepareRouteForNavigation } from "./prepareRoute.js"
 import {
   buildLoaderContextForMatch,
@@ -153,6 +157,17 @@ export type BuildClientOutletSubtreeInput = {
   onLeafRenderError?: (err: unknown) => void
 }
 
+function prefetchHrefCandidates(
+  match: RouteMatch,
+  router: ClientOutletRouter
+): string[] {
+  const search = formatRouterSearch(router.query.peek())
+  const hash = router.hash.peek()
+  const withQuery = `${match.pathname}${search}${hash}`
+  if (withQuery === match.pathname) return [match.pathname]
+  return [withQuery, match.pathname]
+}
+
 export async function buildClientOutletSubtree(
   input: BuildClientOutletSubtreeInput
 ): Promise<JSX.Element | null> {
@@ -178,6 +193,14 @@ export async function buildClientOutletSubtree(
           )
         )
       : createNavigationScope(getNavGeneration(), signal)
+  if (match && !signal.aborted) {
+    const hrefs = prefetchHrefCandidates(match, router)
+    if (forceReload) {
+      cancelInFlightPrefetch(...hrefs)
+    } else {
+      await awaitInFlightPrefetch(...hrefs)
+    }
+  }
   try {
     const tree = match
       ? await loadRouteTree(match)

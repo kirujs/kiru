@@ -1,4 +1,5 @@
 import { buildLoaderCacheKey } from "./loaderCache.js"
+import { isRpcTraceEnabled, rpcTrace } from "../remote/rpcTrace.js"
 
 /** Stable, never-aborted signal for one-off static renders (tests, ad-hoc). */
 let staticLoaderAbort: AbortController | undefined
@@ -81,9 +82,35 @@ export function canCommitLoaderResult(
   cacheKey?: string
 ): boolean {
   if (!scope) return true
-  if (!isScopeCurrent(scope, getGeneration)) return false
+  if (!isScopeCurrent(scope, getGeneration)) {
+    if (isRpcTraceEnabled()) {
+      rpcTrace({
+        channel: "page",
+        phase: "nav_commit_blocked",
+        meta: {
+          reason: "generation",
+          scopeGeneration: scope.generation,
+          currentGeneration: getGeneration(),
+        },
+      })
+    }
+    return false
+  }
   if (cacheKey !== undefined && scope.cacheKey !== undefined) {
-    return scope.cacheKey === cacheKey
+    if (scope.cacheKey !== cacheKey) {
+      if (isRpcTraceEnabled()) {
+        rpcTrace({
+          channel: "page",
+          phase: "nav_commit_blocked",
+          meta: {
+            reason: "cacheKey",
+            scopeCacheKey: scope.cacheKey ?? "",
+            cacheKey,
+          },
+        })
+      }
+      return false
+    }
   }
   return true
 }

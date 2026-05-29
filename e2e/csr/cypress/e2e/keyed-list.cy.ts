@@ -1,6 +1,6 @@
 describe("keyed list diffing", () => {
   beforeEach(() => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://localhost:${port}/keyed-list`)
   })
 

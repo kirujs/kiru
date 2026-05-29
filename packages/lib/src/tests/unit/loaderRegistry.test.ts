@@ -3,6 +3,11 @@ import { describe, it } from "node:test"
 import { __INTERNAL_LOADER_REGISTRY, createLoaderHandler } from "../../router/loaderRegistry.js"
 import { serverLoader } from "../../router/loaders.js"
 import { makeKiruContextToken } from "../../remote/token.js"
+import {
+  __clearRpcTraceForTests,
+  __setRpcTraceEnabledForTests,
+  dumpRpcTrace,
+} from "../../remote/rpcTrace.js"
 
 const SECRET = "test-loader-secret"
 
@@ -32,12 +37,18 @@ const loaderBody = {
 
 describe("createLoaderHandler", () => {
   it("returns 500 when the server loader was never registered", async () => {
+    __setRpcTraceEnabledForTests(true)
+    __clearRpcTraceForTests()
     const handler = createLoaderHandler(SECRET)
     const token = makeKiruContextToken({}, SECRET)
     const res = await handler(
       makeLoaderRequest("r_missing:load", token, loaderBody)
     )
     assert.strictEqual(res?.status, 500)
+    const missing = dumpRpcTrace().find((e) => e.phase === "handler_missing")
+    assert.ok(missing)
+    assert.strictEqual(missing?.meta?.hadLazyImport, false)
+    __setRpcTraceEnabledForTests(false)
   })
 
   it("loads a lazy module on first request via ensure", async () => {
@@ -141,5 +152,45 @@ describe("createLoaderHandler", () => {
       })
     )
     assert.strictEqual(res?.status, 200)
+  })
+
+  it("emits rpcTrace phases when KIRU_RPC_TRACE=1", async () => {
+    __setRpcTraceEnabledForTests(true)
+    __clearRpcTraceForTests()
+    const routeId = "test/loader-trace"
+    __INTERNAL_LOADER_REGISTRY.register(routeId, {
+      load: serverLoader(async () => ({ traced: true })),
+    })
+    const handler = createLoaderHandler(SECRET)
+    const token = makeKiruContextToken({}, SECRET)
+    const res = await handler(
+      makeLoaderRequest(`${routeId}:load`, token, loaderBody)
+    )
+    assert.strictEqual(res?.status, 200)
+    const phases = dumpRpcTrace().map((e) => e.phase)
+    assert.ok(phases.includes("invoke_start"))
+    assert.ok(phases.includes("invoke_end"))
+    __setRpcTraceEnabledForTests(false)
+  })
+
+  it("emits invoke_error when loader throws", async () => {
+    __setRpcTraceEnabledForTests(true)
+    __clearRpcTraceForTests()
+    const routeId = "test/loader-throw"
+    __INTERNAL_LOADER_REGISTRY.register(routeId, {
+      load: serverLoader(async () => {
+        throw new Error("loader boom")
+      }),
+    })
+    const handler = createLoaderHandler(SECRET)
+    const token = makeKiruContextToken({}, SECRET)
+    const res = await handler(
+      makeLoaderRequest(`${routeId}:load`, token, loaderBody)
+    )
+    assert.strictEqual(res?.status, 500)
+    assert.ok(
+      dumpRpcTrace().some((e) => e.phase === "invoke_error" && e.error?.includes("boom"))
+    )
+    __setRpcTraceEnabledForTests(false)
   })
 })

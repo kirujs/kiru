@@ -53,4 +53,30 @@ describe("structural control stream", () => {
       assert.strictEqual(anchors[2]?.parentNode, root)
     })
   })
+
+  it("skips node-hole payload before next static shell (forms-demo shape)", async () => {
+    await withJSDOM(async () => {
+      const html = `<section>${KIRU_HOLE_MARKER}<p data-testid="between">${KIRU_HOLE_MARKER}</p>${KIRU_HOLE_MARKER}</section>`
+      const walk = buildStructuralWalkFromMarkup(html, { excludeShellRoot: true })
+      const container = document.createElement("div")
+      container.innerHTML = `<section>${KIRU_HOLE_MARKER}<form data-testid="form-a"></form><p data-testid="between">${KIRU_HOLE_MARKER}ok</p>${KIRU_HOLE_MARKER}<form data-testid="form-b"></form></section>`
+      const root = container.firstElementChild as Element
+      const regions = [
+        { kind: "node" as const, anchor: 0 },
+        { kind: "conditional" as const, anchor: 1 },
+        { kind: "node" as const, anchor: 2 },
+      ]
+      const { nodes, anchors } = executeStructuralControlStream(
+        root,
+        walk,
+        regions,
+        { skipNodeHolePayloads: true }
+      )
+      assert.strictEqual(anchors.length, 3)
+      assert.strictEqual(nodes.length, 1)
+      assert.strictEqual(nodes[0]?.getAttribute("data-testid"), "between")
+      assert.ok(container.querySelector('[data-testid="form-a"]'))
+      assert.ok(container.querySelector('[data-testid="form-b"]'))
+    })
+  })
 })

@@ -8,7 +8,7 @@ import type {
   RouteModule,
 } from "./types.js"
 import { toRenderError } from "./types.js"
-import { ErrorBoundary } from "../components/index.js"
+import { ErrorBoundary } from "../components/errorBoundary.js"
 
 export type LeafRouteProps =
   | ErrorPageProps

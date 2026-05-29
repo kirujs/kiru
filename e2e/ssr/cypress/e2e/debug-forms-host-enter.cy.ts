@@ -1,6 +1,6 @@
 describe("debug forms host enter", () => {
   it("records form host hydration entry", () => {
-    const port = Cypress.env("port")
+    const port = Cypress.expose("port")
     cy.visit(`http://127.0.0.1:${port}/forms/demo`)
     cy.window().its("__kiruHydratedAt").should("be.a", "number")
     cy.window().then((w) => {

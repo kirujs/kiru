@@ -4,15 +4,19 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "cross-env NODE_ENV=development vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "test": "pnpm exec cypress run"
+    "cy:run": "cypress run",
+    "test:shard-core": "pnpm exec cypress run --config-file cypress.shard-core.config.ts",
+    "test:shard-features": "pnpm exec cypress run --config-file cypress.shard-features.config.ts",
+    "test:shard-advanced": "pnpm exec cypress run --config-file cypress.shard-advanced.config.ts",
+    "test": "node ./scripts/run-csr-shards.mjs"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.17.0",
-    "cypress": "^13.17.0",
+    "cross-env": "^10.1.0",
+    "cypress": "^15.16.0",
     "vite": "^7.3.1",
     "vite-plugin-kiru": "workspace:^"
   },
