@@ -35,6 +35,8 @@ export type TemplateSerializeCtx = {
   bodyNodes?: readonly AstNode[]
   /** When true, reject holed shells with no static text (nested render fns). */
   strictHoledShell?: boolean
+  /** Dom codegen: allow dynamic setup/param props omitted from HTML. */
+  domCodegen?: boolean
 }
 
 export type TemplateBindingHost = {
@@ -397,8 +399,11 @@ function isTemplateShellEligibleJsxCall(
   const propsArg = callNode.arguments?.[1]
   if (!isTemplateShellProps(propsArg, ctx)) return false
   const keyArg = callNode.arguments?.[2]
-  if (!isAbsentOrStaticJsxKeyArg(keyArg)) return false
-  if (isKiruJsxFactoryCall(callNode, ctx.resolve, "jsxDEV")) {
+  if (!ctx.domCodegen && !isAbsentOrStaticJsxKeyArg(keyArg)) return false
+  if (
+    isKiruJsxFactoryCall(callNode, ctx.resolve, "jsxDEV") &&
+    !ctx.domCodegen
+  ) {
     const isStaticChildrenArg = callNode.arguments?.[3]
     if (
       isStaticChildrenArg !== undefined &&
@@ -466,6 +471,10 @@ function isTemplateShellProps(
       key.startsWith("on") ||
       key.startsWith("bind:")
     ) {
+      if (ctx.domCodegen && key && (key.startsWith("on") || key.startsWith("bind:"))) {
+        continue
+      }
+      if (ctx.domCodegen && key === "ref") continue
       return false
     }
     const value = prop.value as AstNode
@@ -475,10 +484,32 @@ function isTemplateShellProps(
     } else if (key === "innerHTML") {
       if (!isShellInnerHTMLValue(value, ctx)) return false
     } else if (!isTemplatePropValue(value, ctx)) {
+      if (ctx.domCodegen && isDomOmittableProp(value, ctx)) {
+        continue
+      }
+      if (ctx.domCodegen && key !== "children") {
+        continue
+      }
       return false
     }
   }
   return true
+}
+
+function isDomOmittableProp(
+  value: AstNode,
+  ctx: TemplateSerializeCtx
+): boolean {
+  if (value.type === "MemberExpression") return true
+  if (value.type === "Identifier" && value.name) {
+    const binding = ctx.resolve(value.name)
+    return (
+      binding?.kind === "setupConst" ||
+      binding?.kind === "param" ||
+      binding?.kind === "moduleSignal"
+    )
+  }
+  return false
 }
 
 function isTemplatePropValue(
@@ -803,6 +834,7 @@ function isRegionEligibleChildArray(
     return false
   }
   if (hasHole && hasFullyInlinedJsx) return false
+  if (ctx.domCodegen && hasHole && !hasFullyInlinedJsx) return false
   return hasHole
 }
 
@@ -838,17 +870,27 @@ function trySerializeBehaviorOnlyIntrinsic(
       hasBehavior = true
       continue
     }
-    if (!isTemplatePropValue(prop.value as AstNode, ctx)) return null
+    if (!isTemplatePropValue(prop.value as AstNode, ctx)) {
+      if (
+        ctx.domCodegen &&
+        (key === "checked" ||
+          key === "value" ||
+          key === "class" ||
+          key === "className" ||
+          key === "style" ||
+          key.startsWith("data-"))
+      ) {
+        continue
+      }
+      return null
+    }
   }
   if (!hasBehavior) return null
 
   const scratchHoles: AstNode[] = []
   const scratchRegions: CompileRegion[] = []
-  const scratchAccum = createTemplateSerializeShared(
-    createTemplateCoordinateAllocator(),
-    [],
-    []
-  )
+  const innerCoords = createTemplateCoordinateAllocator()
+  const innerAccum = createTemplateSerializeShared(innerCoords, [], [])
   const coordsStart = accum.coords.count()
   const walkStart = accum.walk.length
   const depthStart = accum.depth
@@ -864,16 +906,40 @@ function trySerializeBehaviorOnlyIntrinsic(
     ctx,
     scratchHoles,
     scratchRegions,
-    scratchAccum
+    innerAccum
   )
   if (scratchHoles.length > 0) {
-    // Abort atomically: this host must fall back to a template hole.
-    accum.coords.reset(coordsStart)
-    accum.walk.length = walkStart
-    accum.depth = depthStart
-    accum.bindings.length = bindingsStart
-    accum.bindingHosts.length = bindingHostsStart
-    return null
+    if (ctx.domCodegen) {
+      for (let i = 0; i < scratchHoles.length; i++) {
+        _holeNodes.push(scratchHoles[i]!)
+        _regions.push(scratchRegions[i] ?? { kind: "insert" })
+        structuralWalkPushHole(accum)
+      }
+    } else {
+      // Abort atomically: this host must fall back to a template hole.
+      accum.coords.reset(coordsStart)
+      accum.walk.length = walkStart
+      accum.depth = depthStart
+      accum.bindings.length = bindingsStart
+      accum.bindingHosts.length = bindingHostsStart
+      return null
+    }
+  }
+
+  const bindingOffset = accum.coords.count()
+  for (let i = 0; i < innerAccum.bindings.length; i++) {
+    const binding = innerAccum.bindings[i]!
+    bindings.push({
+      ...binding,
+      nodeIndex: bindingOffset + binding.nodeIndex,
+    })
+    const host = innerAccum.bindingHosts[i]
+    if (host) {
+      bindingHosts.push({
+        ...host,
+        nodeIndex: bindingOffset + host.nodeIndex,
+      })
+    }
   }
 
   if (innerHtml.includes("<")) {

@@ -31,8 +31,52 @@ export type ScopeWalkHooks = {
 export function buildProgramBindingResolve(
   bodyNodes: AstNode[]
 ): (name: string) => BindingInfo | null {
-  const scope = walkProgramBody(bodyNodes, {})
-  return (name: string) => scope.resolve(name)
+  const accumulated = new Map<string, BindingInfo>()
+  walkProgramBody(bodyNodes, {
+    onVariableDeclarator(decl, ctx) {
+      const id = decl.id
+      if (id?.type === "Identifier" && id.name) {
+        accumulated.set(id.name, {
+          kind: bindingKindAtDepth(
+            ctx.fnDepth,
+            decl.init as AstNode,
+            ctx.resolve
+          ),
+          name: id.name,
+        })
+      }
+    },
+  })
+
+  const captureParams = (node: AstNode, fnDepth: number) => {
+    for (const param of (node as { params?: AstNode[] }).params ?? []) {
+      if (param.type === "Identifier" && param.name) {
+        accumulated.set(param.name, {
+          kind: fnDepth >= 2 ? "renderLocal" : "param",
+          name: param.name,
+        })
+      }
+    }
+  }
+
+  const paramVisitor: AST.AstVisitor = {
+    FunctionDeclaration: (node) => captureParams(node, 1),
+    FunctionExpression: (node) => captureParams(node, 2),
+    ArrowFunctionExpression: (node) => captureParams(node, 2),
+  }
+  for (const stmt of bodyNodes) {
+    AST.walk(stmt, paramVisitor)
+  }
+
+  const moduleScope = buildModuleImportScope(bodyNodes)
+  for (const stmt of bodyNodes) {
+    if (stmt.type === "ImportDeclaration") {
+      registerImportDeclaration(stmt, moduleScope)
+    }
+  }
+
+  return (name: string) =>
+    accumulated.get(name) ?? moduleScope.resolve(name)
 }
 
 function toScopeWalkContext(

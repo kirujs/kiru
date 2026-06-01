@@ -1,0 +1,21 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 2rem;
+}
+
+.counter-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.counter-value {
+  min-width: 2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+button {
+  cursor: pointer;
+  padding: 0.25rem 0.75rem;
+}
+

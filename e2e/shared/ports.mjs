@@ -23,6 +23,7 @@ export const e2ePorts = {
   fileRoutesSsg: { dev: 5176, hmr: 8016 },
   compileOpts: { dev: 5177, hmr: 8017 },
   primitive: { dev: 5178, hmr: 8018 },
+  dom: { dev: 5179, hmr: 8019 },
 }
 
 /** @param {number} fallback */

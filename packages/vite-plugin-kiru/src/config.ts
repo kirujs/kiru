@@ -55,6 +55,7 @@ export interface PluginState {
   manifestPath: string
   features: {
     staticHoisting: boolean
+    domCodegen: boolean
   }
   staticProps: Record<string, Record<string, Record<string, any>>>
   remotePaths: string[]
@@ -169,6 +170,7 @@ export function createPluginState(
     loggingEnabled: opts.loggingEnabled === true,
     features: {
       staticHoisting: opts.experimental?.staticHoisting === true,
+      domCodegen: opts.experimental?.domCodegen === true,
     },
     staticProps: {},
     remotePaths: [],
@@ -235,6 +237,7 @@ export function updatePluginState(
     manifestPath: state.manifestPath!,
     features: {
       staticHoisting: state.features?.staticHoisting ?? false,
+      domCodegen: state.features?.domCodegen ?? false,
     },
     staticProps: {},
     remotePaths: [],

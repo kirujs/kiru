@@ -32,6 +32,11 @@ export interface ExperimentalOptions {
    * ```
    */
   staticHoisting?: boolean
+  /**
+   * Enable `"use dom"` JSX → kiru/dom imperative codegen.
+   * @default false
+   */
+  domCodegen?: boolean
 }
 
 export interface KiruPluginOptions {

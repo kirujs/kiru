@@ -1,11 +1,13 @@
 import { parseAst } from "rollup/parseAst"
 import { MagicString, TransformCTX } from "./codegen/shared.js"
+import { applyDomCodegen } from "./codegen/dom/index.js"
 import {
-  prepareHMR,
   applyJsxHoistAndTemplates,
-  prepareRemoteFunctions,
+  prepareHMR,
   preparePageLoaders,
+  prepareRemoteFunctions,
 } from "./codegen/index.js"
+import { hasUseDomPragma } from "./codegen/domPragma.js"
 import { ANSI } from "./ansi.js"
 import {
   createPluginState,
@@ -894,6 +896,39 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
   } satisfies Plugin
 
+  const domCodegenPlugin = {
+    name: "vite-plugin-kiru:dom-codegen",
+    enforce: "post" as const,
+    transform(src, id) {
+      if (!state?.features.domCodegen) return null
+      if (!shouldTransformFile(id, state)) return null
+
+      const ast = parseAst(src, { allowReturnOutsideFunction: true })
+      if (!hasUseDomPragma(ast)) return null
+
+      const code = new MagicString(src)
+      const ctx: TransformCTX = {
+        code,
+        ast,
+        isBuild: state.isBuild,
+        fileLinkFormatter: state.fileLinkFormatter,
+        filePath: id,
+        log,
+      }
+
+      const sourceBefore = src
+      if (!applyDomCodegen(ctx)) return null
+      if (ctx.code.toString() === sourceBefore) return null
+
+      return {
+        code: ctx.code.toString(),
+        map: ctx.code
+          .generateMap({ source: id, file: `${id}.map`, includeContent: true })
+          .toString(),
+      }
+    },
+  } satisfies Plugin
+
   // Runs after vite:esbuild so `this.parse` always receives compiled JS,
   // not raw TypeScript. This is required for `.actions.ts` files which may
   // contain TS type annotations that Rollup's Acorn parser can't handle.
@@ -906,6 +941,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       if (!shouldTransformFile(id, state)) return null
 
       const ast = parseAst(src, { allowReturnOutsideFunction: true })
+      if (hasUseDomPragma(ast)) return null
       const code = new MagicString(src)
       const ctx: TransformCTX = {
         code,
@@ -1010,7 +1046,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
     },
   } satisfies Plugin
 
-  return [mainPlugin, jsxHoistPlugin, remotePlugin]
+  return [mainPlugin, domCodegenPlugin, jsxHoistPlugin, remotePlugin]
 }
 
 // Export additional utilities

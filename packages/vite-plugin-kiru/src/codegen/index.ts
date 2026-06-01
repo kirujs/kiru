@@ -1,3 +1,5 @@
+export { applyDomCodegen } from "./dom/index.js"
+export { hasUseDomPragma, stripUseDomPragma } from "./domPragma.js"
 export { prepareHMR } from "./hmr.js"
 export { prepareJSXHoisting } from "./hoistJSX.js"
 export { applyJsxHoistAndTemplates } from "./jsxHoistPipeline.js"

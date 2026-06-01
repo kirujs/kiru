@@ -73,6 +73,7 @@ const CY_APPS = [
     port: e2ePorts.compileOpts.dev,
   },
   { name: "e2e:primitive", cwd: "e2e/primitive", port: e2ePorts.primitive.dev },
+  { name: "e2e:dom", cwd: "e2e/dom", port: e2ePorts.dom.dev },
 ]
 
 /** @param {string | number} profileId */

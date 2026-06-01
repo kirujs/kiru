@@ -101,6 +101,10 @@
     "./template": {
       "types": "./dist/template.d.ts",
       "default": "./dist/template.js"
+    },
+    "./dom": {
+      "types": "./dist/domRuntime/index.d.ts",
+      "default": "./dist/domRuntime/index.js"
     }
   },
   "dependencies": {

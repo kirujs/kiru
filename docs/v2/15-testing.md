@@ -75,7 +75,7 @@ Long-running apps are split into **flat builderman tasks** (separate Vite dev se
 |-----|------------------|-------------------|
 | `e2e/ssr` | `e2e:ssr:build`, `e2e:ssr:verify`, `e2e:ssr:cy-{loaders,streaming,actions,tier3,core}` | core 5192/8022, loaders 5196/8025, streaming 5197/8029, actions 5195/8026, tier3 prod 5193 |
 | `e2e/csr` | `e2e:csr:cy-{core,features,advanced}` | core 5173/8003, features 5180/8027, advanced 5181/8028 |
-| other Cypress apps | `e2e:ssg:build` + `e2e:ssg`, `e2e:file-routes-ssg:build` + `e2e:file-routes-ssg`, `e2e:file-routes`, `e2e:compile-opts`, `e2e:primitive` | see `ports.mjs` |
+| other Cypress apps | `e2e:ssg:build` + `e2e:ssg`, `e2e:file-routes-ssg:build` + `e2e:file-routes-ssg`, `e2e:file-routes`, `e2e:compile-opts`, `e2e:primitive`, `e2e:dom` | see `ports.mjs` |
 
 `e2e:vite-builds` runs `e2e:ssg:build` and `e2e:file-routes-ssg:build` in parallel before Cypress. SSG / file-routes-ssg package `test` scripts are Cypress-only (no nested `pnpm build`).
 

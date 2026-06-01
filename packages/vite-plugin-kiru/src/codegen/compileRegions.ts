@@ -113,6 +113,15 @@ export function classifyChildSlotRegion(
     }
     return { kind: "component" }
   }
+  if (node.type === "CallExpression") {
+    const callee = node.callee as AstNode
+    if (callee?.type === "Identifier" && callee.name) {
+      const binding = ctx.resolve(callee.name)
+      if (binding?.import?.imported === "createComponent") {
+        return { kind: "component" }
+      }
+    }
+  }
   if (isTextBindingExpression(node, ctx)) {
     return { kind: "text" }
   }
@@ -137,6 +146,13 @@ function isTextBindingExpression(
   }
   if (node.type === "CallExpression") {
     if (isReactiveSignalRead(node, ctx)) return true
+    const callee = node.callee as AstNode
+    if (callee?.type === "Identifier" && callee.name) {
+      const binding = ctx.resolve(callee.name)
+      if (isModuleSignalBinding(binding) || binding?.kind === "setupConst") {
+        return true
+      }
+    }
   }
   return false
 }
