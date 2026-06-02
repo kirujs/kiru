@@ -24,7 +24,6 @@ export {
   isFragment,
   isLazy,
   isContextProvider,
-  vNodeContains,
   getCurrentVNode,
   getVNodeApp,
   commitSnapshot,
@@ -120,21 +119,6 @@ function commitSnapshot(vNode: Kiru.VNode): void {
   const { props, key, index } = vNode
   vNode.prev = { props, key, index }
   vNode.flags &= ~(FLAG_UPDATE | FLAG_PLACEMENT | FLAG_DELETION)
-}
-
-function vNodeContains(haystack: Kiru.VNode, needle: Kiru.VNode): boolean {
-  if (needle.depth < haystack.depth) return false
-  if (haystack === needle) return true
-  let checkSiblings = false
-  const stack: Kiru.VNode[] = [haystack]
-  while (stack.length) {
-    const n = stack.pop()!
-    if (n === needle) return true
-    n.child && stack.push(n.child)
-    checkSiblings && n.sibling && stack.push(n.sibling)
-    checkSiblings = true
-  }
-  return false
 }
 
 function traverseApply(

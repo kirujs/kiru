@@ -13,10 +13,6 @@ export interface ErrorBoundaryProps {
  * Catches errors in the children and renders a fallback component.
  * @see https://kirujs.dev/docs/components/error-boundary
  */
-export function ErrorBoundary({
-  children,
-  fallback,
-  onError,
-}: ErrorBoundaryProps) {
-  return createElement($ERROR_BOUNDARY, { children, fallback, onError })
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return createElement($ERROR_BOUNDARY, props)
 }

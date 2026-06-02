@@ -3,7 +3,7 @@ import { normalizeElementKey } from "./utils/index.js"
 
 export function createElement<T extends Kiru.VNode["type"]>(
   type: T,
-  props: null | Record<string, unknown> = null,
+  props: null | Record<string, any> = null,
   ...children: unknown[]
 ): Kiru.Element {
   if ((type as unknown) === Fragment) {
