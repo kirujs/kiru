@@ -36,6 +36,7 @@ import { ActionDispatchError } from "../remote/errors.js"
 import { __DEV__, __KIRU_PURE_CLIENT__ } from "../env.js"
 import { REMOTE_ACTION_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
 import { ensureLoaderClient } from "../router/loaderClient.js"
+import { buildActionRpcUrl } from "../router/rpcUrl.js"
 import { loadClientHydrationChunksManifest } from "../router/hydrationChunks.js"
 import { getRouterRuntime } from "../router/routerRuntime.js"
 
@@ -76,10 +77,7 @@ function ensureServerActionsClient() {
         callEnvelope.query && Object.keys(callEnvelope.query).length > 0
           ? serializeActionCallQuery(callEnvelope.query)
           : ""
-      const actionUrl = queryString
-        ? `/?action=${encodeURIComponent(id)}&${queryString}`
-        : `/?action=${encodeURIComponent(id)}`
-      const r = await fetch(actionUrl, init)
+      const r = await fetch(buildActionRpcUrl(id, undefined, queryString), init)
       applyActionResponseHeaders(r.headers)
 
       if (!r.ok) {

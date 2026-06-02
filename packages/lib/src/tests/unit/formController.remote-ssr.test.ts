@@ -4,6 +4,7 @@ import { action, KIRU_FORM_TOKEN_FIELD } from "../../remote/index.js"
 import { KIRU_TOKEN_RESPONSE_HEADER } from "../../remote/actionResponse.js"
 import { requestToken } from "../../globals.js"
 import { createFormController } from "../../remote/formController.js"
+import { buildActionRpcUrl } from "../../router/rpcUrl.js"
 import { registerKiruRouter } from "../../router/routerGlobal.js"
 import type { Router } from "../../router/routerInstance.js"
 import { withJSDOM } from "./jsdom.js"
@@ -50,10 +51,7 @@ describe("createFormController", () => {
       const ref = action({ type: "form", handler: async () => ({ ok: true }) })
       const ctrl = createFormController(ref)
 
-      assert.equal(
-        ctrl.action,
-        `/?action=${encodeURIComponent(ref.__kiruFormActionId)}`
-      )
+      assert.equal(ctrl.action, buildActionRpcUrl(ref.__kiruFormActionId))
       assert.equal(ctrl.method, "POST")
       assert.equal(ctrl.result.value, null)
       assert.equal(ctrl.error.value, null)
@@ -217,6 +215,34 @@ describe("createFormController", () => {
 
       assert.equal(ctrl.result.value, null)
       assert.equal(ctrl.isPending.value, false)
+      restoreFormData()
+      form.remove()
+    })
+  })
+
+  it("uses base-aware action URL when router is mounted under /app", async () => {
+    await withJSDOM(async () => {
+      const restoreFormData = useJSDOMFormData()
+      registerKiruRouter({ baseUrl: "/app" } as unknown as Router)
+      const ref = action({ type: "form", handler: async () => ({ ok: true }) })
+      const ctrl = createFormController(ref)
+      assert.equal(
+        ctrl.action,
+        buildActionRpcUrl(ref.__kiruFormActionId, "/app")
+      )
+
+      const form = document.createElement("form")
+      document.body.appendChild(form)
+
+      let capturedUrl = ""
+      globalThis.fetch = async (input) => {
+        capturedUrl = String(input)
+        return new Response(JSON.stringify({ ok: true }), { status: 200 })
+      }
+
+      await dispatchSubmit(form, ctrl.onsubmit)
+
+      assert.equal(capturedUrl, buildActionRpcUrl(ref.__kiruFormActionId, "/app"))
       restoreFormData()
       form.remove()
     })

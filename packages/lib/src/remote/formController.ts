@@ -8,6 +8,7 @@ import {
 import { signal, type Signal } from "../signals/index.js"
 import { requestToken } from "../globals.js"
 import { applyActionResponseHeaders } from "../router/routerGlobal.js"
+import { buildActionRpcUrl } from "../router/rpcUrl.js"
 import { __DEV__, __KIRU_PURE_CLIENT__ } from "../env.js"
 import { REMOTE_ACTION_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
 
@@ -28,7 +29,8 @@ export function createFormController<Output>(
   const result = signal<FormActionClientOutput<Output> | null>(null)
   const error = signal<string | null>(null)
   const isPending = signal(false)
-  const action = `/?action=${encodeURIComponent(ref.__kiruFormActionId)}`
+  const actionId = ref.__kiruFormActionId
+  const action = buildActionRpcUrl(actionId)
 
   const submitEnhanced = async (form: HTMLFormElement) => {
     if (__DEV__ && __KIRU_PURE_CLIENT__) {
@@ -42,7 +44,7 @@ export function createFormController<Output>(
       fd.set(KIRU_FORM_TOKEN_FIELD, requestToken.current)
     }
     try {
-      const res = await fetch(action, {
+      const res = await fetch(buildActionRpcUrl(actionId), {
         method: "POST",
         headers: {
           Accept: "application/json",

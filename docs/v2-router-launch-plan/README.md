@@ -69,26 +69,26 @@ Ensure loader/action RPC endpoints work under both root and non-root base URLs.
 - `packages/lib/src/router/loaderClient.ts`
 - `packages/lib/src/ssr/routerHydrate.ts`
 - `packages/lib/src/remote/formController.ts`
-- Any shared helper introduced for RPC URL construction
+- `packages/lib/src/router/rpcUrl.ts`
 
 ### Tasks
 
-- [ ] Create a shared base-aware RPC URL helper.
-- [ ] Replace hardcoded `/?loader=` usage with helper.
-- [ ] Replace hardcoded `/?action=` usage with helper.
-- [ ] Cover both root (`/`) and non-root (`/app`) base URL cases.
+- [x] Create a shared base-aware RPC URL helper.
+- [x] Replace hardcoded `/?loader=` usage with helper.
+- [x] Replace hardcoded `/?action=` usage with helper.
+- [x] Cover both root (`/`) and non-root (`/app`) base URL cases.
 
 ### Tests Required
 
-- [ ] Unit test for loader RPC URL generation with/without base URL.
-- [ ] Unit test for action RPC URL generation with/without base URL.
-- [ ] Unit test for form controller action URL generation with/without base URL.
-- [ ] Integration/e2e assertion that RPC calls succeed with non-root base URL.
+- [x] Unit test for loader RPC URL generation with/without base URL.
+- [x] Unit test for action RPC URL generation with/without base URL.
+- [x] Unit test for form controller action URL generation with/without base URL.
+- [x] Integration/e2e assertion that RPC calls succeed with non-root base URL. *(loader dispatch integration test in `rpcUrl.test.ts`; full Cypress under `/app` deferred to WP-07.)*
 
 ### Done When
 
-- [ ] No hardcoded root-only RPC endpoint remains in client dispatch paths.
-- [ ] Test suite passes for both root and non-root base configuration.
+- [x] No hardcoded root-only RPC endpoint remains in client dispatch paths.
+- [x] Test suite passes for both root and non-root base configuration.
 
 ---
 
@@ -339,7 +339,7 @@ Stabilize CI signal and finalize launch readiness.
 
 ## 5) Recommended PR Plan (One Work Package Per PR)
 
-- [ ] PR-01 -> WP-01
+- [x] PR-01 -> WP-01
 - [ ] PR-02 -> WP-02
 - [ ] PR-03 -> WP-03
 - [ ] PR-04 -> WP-04

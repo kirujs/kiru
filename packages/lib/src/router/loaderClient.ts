@@ -1,5 +1,6 @@
 import { requestToken } from "../globals.js"
 import type { LoaderContext } from "./loaders.js"
+import { buildLoaderRpcUrl } from "./rpcUrl.js"
 
 export type LoaderDispatch = (
   routeId: string,
@@ -18,9 +19,7 @@ export function ensureLoaderClient(): void {
   if (g.__kiru_loaders) return
   g.__kiru_loaders = {
     dispatch: async (routeId, context) => {
-      const r = await fetch(
-        `/?loader=${encodeURIComponent(`${routeId}:load`)}`,
-        {
+      const r = await fetch(buildLoaderRpcUrl(routeId), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
