@@ -11,6 +11,7 @@ import { __DEV__ } from "../env.js"
 import { warnRouterViewWithoutSsrBootstrap } from "./devWarnings.dev.js"
 import { getRouterRuntime } from "./routerRuntime.js"
 import { useRouter } from "./routerContext.js"
+import { announceNavigationIfReady } from "./navigationAnnouncer.js"
 import {
   canEndClientNavigation,
   tryClearClientNavigation,
@@ -74,6 +75,7 @@ export function RouterView() {
         canEndClientNavigation(router)
       ) {
         tryClearClientNavigation(router)
+        queueMicrotask(() => announceNavigationIfReady(router))
       }
     }
     const unsub = children.isPending.subscribe(onPendingChange)

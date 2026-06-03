@@ -32,4 +32,22 @@ describe("interpolateRoutePath", () => {
   it("throws when a required param is missing", () => {
     assert.throws(() => interpolateRoutePath("/users/[id]", {}), /Missing required param/)
   })
+
+  it("encodes slash-containing catch-all param segments", () => {
+    assert.equal(
+      interpolateRoutePath("/docs/[...slug]", { slug: "a/b/c" }),
+      "/docs/a/b/c"
+    )
+    assert.equal(
+      interpolateRoutePath("/docs/[...slug]", { slug: "a%2Fb" }),
+      "/docs/a%252Fb"
+    )
+  })
+
+  it("encodes reserved characters in required dynamic segments", () => {
+    assert.equal(
+      interpolateRoutePath("/blog/[slug]", { slug: "100%" }),
+      "/blog/100%25"
+    )
+  })
 })

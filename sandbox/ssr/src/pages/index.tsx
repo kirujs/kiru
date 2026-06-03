@@ -79,8 +79,8 @@ export default function HomePage() {
         type="button"
         className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:border-cyan-500"
         onclick={async () => {
-          const [err, data] = await getSandboxServerEcho()
-          echo.value = err ? err.message : data
+          const res = await getSandboxServerEcho()
+          echo.value = res
         }}
       >
         Call JSON action (GET echo)

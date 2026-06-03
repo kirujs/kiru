@@ -118,4 +118,54 @@ describe("preview integration", () => {
       handle.dispose()
     }
   })
+
+  it("SSR preview proxy forwards query string on GET", async () => {
+    const handle = await createPreviewSsrProxy(ssrServer)
+    try {
+      const res = await runMiddleware(
+        handle.middleware,
+        "/search-schema?q=proxy-query"
+      )
+      assert.equal(res.status, 200, res.body.slice(0, 200))
+      assert.match(res.body, /search-schema/)
+      assert.match(res.body, /proxy-query/)
+    } finally {
+      handle.dispose()
+    }
+  })
+
+  it("SSR preview proxy forwards POST ?loader= RPC", async () => {
+    const handle = await createPreviewSsrProxy(ssrServer)
+    const http = await import("node:http")
+    const server = http.createServer((req, res) => {
+      handle.middleware(req, res, () => {
+        res.statusCode = 404
+        res.end("next")
+      })
+    })
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const addr = server.address()
+    const listenPort = typeof addr === "object" && addr ? addr.port : 0
+    try {
+      const loaderUrl = `http://127.0.0.1:${listenPort}/?loader=${encodeURIComponent("route:load")}`
+      const res = await fetch(loaderUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-kiru-token": "invalid",
+        },
+        body: JSON.stringify({}),
+      })
+      assert.notEqual(res.status, 404, await res.text())
+      assert.ok(
+        res.status === 400 || res.status === 500,
+        `expected loader RPC to reach SSR server, got ${res.status}`
+      )
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((err) => (err ? reject(err) : resolve()))
+      )
+      handle.dispose()
+    }
+  })
 })

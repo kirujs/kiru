@@ -9,7 +9,8 @@ import {
   resolveRouteConfig,
 } from "kiru/router"
 import * as __cfg_0 from "./pages/about/page.config"
-import * as __cfg_1 from "./pages/scope.config"
+import * as __cfg_1 from "./pages/guarded/page.config"
+import * as __cfg_2 from "./pages/scope.config"
 import { extendRoutes } from "./routes.extend"
 
 const r0 = createRoute("/", () => import("./pages/page"))
@@ -19,17 +20,22 @@ const r2 = createRoute("/about", {
   component: () => import("./pages/about/page"),
 })
 const r3 = createRoute("/blog/[slug]", () => import("./pages/blog/[slug]/page"))
-const r4 = createRoute("/manual", () => import("./pages/manual/page"))
+const r4 = createRoute("/docs/[...slug]", () => import("./pages/docs/[...slug]/page"))
+const r5 = createRoute("/guarded", {
+  ...resolveRouteConfig(__cfg_1),
+  component: () => import("./pages/guarded/page"),
+})
+const r6 = createRoute("/manual", () => import("./pages/manual/page"))
 
 export const routes = createRouteTree({
-  ...resolveRouteConfig(__cfg_1),
+  ...resolveRouteConfig(__cfg_2),
   layout: () => import("./pages/layout"),
   notFound: () => import("./pages/not-found"),
-  children: [r0, r1, r2, r3, r4, ...extendRoutes],
+  children: [r0, r1, r2, r3, r4, r5, r6, ...extendRoutes],
 })
 
 declare module "kiru/router" {
   interface RouteTree {
-    routes: [typeof r0, typeof r1, typeof r2, typeof r3, typeof r4, ...(typeof extendRoutes)]
+    routes: [typeof r0, typeof r1, typeof r2, typeof r3, typeof r4, typeof r5, typeof r6, ...(typeof extendRoutes)]
   }
 }

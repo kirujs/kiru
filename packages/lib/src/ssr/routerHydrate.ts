@@ -23,6 +23,7 @@ import {
   type NavigationScope,
 } from "../router/navigationScope.js"
 import { formatRouterSearch } from "../router/navigation.js"
+import { announceNavigationIfReady } from "../router/navigationAnnouncer.js"
 import { tryClearClientNavigation } from "../router/outletNavigation.js"
 import { requestToken } from "../globals.js"
 import { applyActionResponseHeaders } from "../router/routerGlobal.js"
@@ -149,6 +150,8 @@ export type BootstrapSsrClientOptions = {
     readonly string[],
     unknown
   >
+  /** When false, omit `<kiru-route-announcer>` on `document.body` (default true). */
+  navigationAnnouncer?: boolean
 }
 
 /**
@@ -355,6 +358,7 @@ function subscribeSsrClientOutlet(
         outlet.value = subtree
       }
       tryClearClientNavigation(router)
+      queueMicrotask(() => announceNavigationIfReady(router))
     } catch {
       if (!ctrl.signal.aborted) throw new Error("SSR outlet refresh failed")
     }
@@ -379,10 +383,11 @@ export async function bootstrapSsrClient(
     "routes" in options.routes
       ? options.routes
       : compileRouteTree(options.routes)
-  const { container, hydrateOptions, i18n } = options
+  const { container, hydrateOptions, i18n, navigationAnnouncer } = options
   const router = createRouter({
     routes: manifest,
     i18n,
+    navigationAnnouncer,
   })
   registerKiruRouter(router)
   ensureLoaderClient()

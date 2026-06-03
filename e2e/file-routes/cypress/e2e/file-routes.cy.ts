@@ -12,6 +12,11 @@ describe("file-based routes", () => {
   it("navigates to about", () => {
     cy.get('[data-testid="nav-about"]').click()
     cy.get('[data-testid="fbr-about"]').should("have.text", "About")
+    cy.title().should("eq", "About — file routes")
+    cy.get('[data-testid="kiru-route-announcer"]').should(
+      "have.text",
+      "About — file routes"
+    )
   })
 
   it("applies co-located middleware redirect", () => {

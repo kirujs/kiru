@@ -19,21 +19,22 @@ const r2 = createRoute("/about", {
   component: () => import("./pages/about/page"),
 })
 const r3 = createRoute("/blog/[slug]", () => import("./pages/blog/[slug]/page"))
-const r5 = createRoute("/guarded", () => import("./pages/guarded/page"))
-const r4 = createRouteScope({
+const r4 = createRoute("/docs/[...slug]", () => import("./pages/docs/[...slug]/page"))
+const r6 = createRoute("/guarded", () => import("./pages/guarded/page"))
+const r5 = createRouteScope({
   middleware: collectRouteMiddlewareModule(__mw_0),
-  children: [r5],
+  children: [r6],
 })
-const r6 = createRoute("/manual", () => import("./pages/manual/page"))
+const r7 = createRoute("/manual", () => import("./pages/manual/page"))
 
 export const routes = createRouteTree({
   layout: () => import("./pages/layout"),
   notFound: () => import("./pages/not-found"),
-  children: [r0, r1, r2, r3, r4, r6, ...extendRoutes],
+  children: [r0, r1, r2, r3, r4, r5, r7, ...extendRoutes],
 })
 
 declare module "kiru/router" {
   interface RouteTree {
-    routes: [typeof r0, typeof r1, typeof r2, typeof r3, typeof r5, typeof r6, ...(typeof extendRoutes)]
+    routes: [typeof r0, typeof r1, typeof r2, typeof r3, typeof r4, typeof r6, typeof r7, ...(typeof extendRoutes)]
   }
 }

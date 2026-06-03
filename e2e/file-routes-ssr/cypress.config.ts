@@ -21,6 +21,7 @@ async function startViteDevServer(): Promise<ViteDevServer> {
 
 export default defineConfig({
   e2e: {
+    includeShadowDom: true,
     env: { port },
     setupNodeEvents(on) {
       let server: ViteDevServer | null = null

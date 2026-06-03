@@ -16,10 +16,8 @@ import {
 } from "./prerenderCache.js"
 import { cachePolicyToHeaders } from "./routeResponse.js"
 import { mergeResponseHeaders } from "./routeResponse.js"
-import {
-  resolveLocaleForPrerenderRequest,
-  type I18nLocaleRouting,
-} from "./i18n/index.js"
+import type { I18nLocaleRouting } from "./i18n/index.js"
+import { resolvePrerenderCacheKey } from "./prerenderCacheKey.js"
 
 export type PrerenderRenderContext = {
   context?: CustomRequestContext
@@ -39,7 +37,7 @@ export type TryServePrerenderedOptions = {
   actionsSecret: string
   deployTarget?: import("@kirujs/runtime").KiruDeployTarget
   /** When entry is stale, regenerate HTML in the background (SWR). */
-  onRegenerate?: (pathname: string) => Promise<void>
+  onRegenerate?: (storageKey: string, pathname: string) => Promise<void>
 }
 
 function buildPrerenderResponse(
@@ -95,17 +93,11 @@ export async function tryServePrerenderedFromDisk(
   const staticPaths = await options.getStaticPathSet()
   if (!staticPaths.has(pathname)) return null
 
-  const localeRouting = options.localeRouting
-  let cacheLookupKey = pathname
-  if (localeRouting?.domains.length) {
-    const resolved = resolveLocaleForPrerenderRequest(
-      parsed.host,
-      pathname,
-      localeRouting,
-      pathPolicy
-    )
-    if (resolved) cacheLookupKey = resolved.storageKey
-  }
+  const { cacheKey: cacheLookupKey, pathname: requestPathname } =
+    resolvePrerenderCacheKey(parsed, {
+      pathPolicy,
+      localeRouting: options.localeRouting,
+    })
 
   const store =
     options.prerenderCache ??
@@ -124,8 +116,8 @@ export async function tryServePrerenderedFromDisk(
 
   if (!isPrerenderEntryFresh(entry) && isPrerenderEntryStale(entry)) {
     if (options.onRegenerate) {
-      void runPrerenderRegenSingleFlight(pathname, () =>
-        options.onRegenerate!(pathname)
+      void runPrerenderRegenSingleFlight(cacheLookupKey, () =>
+        options.onRegenerate!(cacheLookupKey, requestPathname)
       )
     }
     if (!entry.html) return null

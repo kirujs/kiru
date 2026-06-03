@@ -1,7 +1,7 @@
 import { useRouter } from "kiru/router"
 
 export async function generateStaticParams() {
-  return [{ slug: "hello" }]
+  return [{ slug: "hello" }, { slug: "hello world" }]
 }
 
 export default function BlogPost() {

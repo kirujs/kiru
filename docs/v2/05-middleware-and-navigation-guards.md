@@ -90,9 +90,9 @@ Declared per-component via router runtime registration (`navigationGuards.ts`, `
 |-------|------|
 | `onBeforeRouteLeave` | Leaving route id |
 | `onBeforeRouteUpdate` | Same route id, params changed |
-| Enter guards | After commit, entering new route |
+| Enter guards (`onAfterRouteEnter`) | After commit, entering new route — **side effects only** |
 
-Return: `void`, `true`, `false`, or redirect object.
+Return: `void`, `true`, or `undefined` are the supported cases. **`false` and redirect returns are ignored** (in development, Kiru logs a one-time console warning). Use leave/update guards or route middleware to cancel or redirect before the URL commits.
 
 **Not run on SSR.** Types explicitly say to prefer route middleware for auth policy.
 

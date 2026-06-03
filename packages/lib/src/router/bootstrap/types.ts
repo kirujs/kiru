@@ -10,4 +10,6 @@ export type CreateRouterAppBaseOptions = {
   routes: CreateRouterOptions["routes"]
   /** DOM element that receives the mounted or hydrated router outlet. */
   container: HTMLElement
+  /** When false, omit `<kiru-route-announcer>` on `document.body` (default true). Forwarded to {@link createRouter}. */
+  navigationAnnouncer?: boolean
 }

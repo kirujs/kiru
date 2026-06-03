@@ -28,7 +28,9 @@ export function onBeforeRouteUpdate(guard: NavigationGuard): void {
 }
 
 /**
- * Runs after a navigation commits into the current route.
+ * Runs after a navigation commits into the current route (side effects only).
+ * Returning `false` or a redirect location is ignored; use leave guards or
+ * route middleware to block or redirect before commit.
  */
 export function onAfterRouteEnter(guard: NavigationGuard): void {
   const router = useRouter()

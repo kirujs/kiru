@@ -1,3 +1,5 @@
+import { __DEV__ } from "../env.js"
+import { warnOnce } from "./devWarnings.dev.js"
 import type {
   NavigationGuard,
   NavigationRedirect,
@@ -28,4 +30,30 @@ export async function runGuards(
     return { type: "redirect", to: out }
   }
   return { type: "continue" }
+}
+
+/**
+ * Post-commit enter hooks ({@link onAfterRouteEnter}). Return values are ignored;
+ * `false` and redirects do not cancel or change navigation.
+ */
+export async function runEnterGuards(
+  guards: NavigationGuard[],
+  to: RouteLocation,
+  from: RouteLocation | null
+): Promise<void> {
+  for (const guard of guards) {
+    const out = await guard(to, from)
+    if (!__DEV__) continue
+    if (out === false) {
+      warnOnce(
+        "enter-guard-cancel-ignored",
+        "`onAfterRouteEnter` runs after the navigation commits; returning `false` has no effect. Use `onBeforeRouteLeave` or route middleware to block navigation."
+      )
+    } else if (out !== true && out !== undefined) {
+      warnOnce(
+        "enter-guard-redirect-ignored",
+        "`onAfterRouteEnter` runs after the navigation commits; returning a redirect has no effect. Use `onBeforeRouteLeave` or route middleware to redirect."
+      )
+    }
+  }
 }

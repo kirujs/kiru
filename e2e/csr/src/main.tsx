@@ -7,4 +7,7 @@ void createRouterApp({
   routes,
   i18n,
   container: document.getElementById("app")!,
+}).then(() => {
+  ;(window as Window & { __kiruHydratedAt?: number }).__kiruHydratedAt =
+    performance.now()
 })

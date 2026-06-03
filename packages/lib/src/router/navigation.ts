@@ -26,7 +26,7 @@ import type {
   RouteTreeMatchSegment,
 } from "./types.js"
 import { RouteMiddlewareHttpError } from "./types.js"
-import { runGuards, toRedirect } from "./runNavigationGuards.js"
+import { runEnterGuards, runGuards, toRedirect } from "./runNavigationGuards.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { collectMiddlewareChain, mergeRouteMeta } from "./routeMeta.js"
 import { runRouteMiddleware, toMiddlewareRedirect } from "./routeMiddleware.js"
@@ -101,8 +101,19 @@ export function parseResolvedLocation(
     pathname,
     hash: url.hash,
     query: parseQuery(url.search),
-    href: `${addBase(pathname, baseUrl)}${url.search}${url.hash}`,
+    href: buildHistoryHref(
+      { pathname, hash: url.hash, query: parseQuery(url.search) },
+      baseUrl
+    ),
   }
+}
+
+/** Browser history URL for a router location (pathname is app-relative). */
+export function buildHistoryHref(
+  parts: RouteLocationParts,
+  baseUrl: string
+): string {
+  return `${addBase(parts.pathname, baseUrl)}${formatRouterSearch(parts.query)}${parts.hash}`
 }
 
 export function formatNavigationSnapshotLabel(
@@ -361,10 +372,10 @@ export function createNavigateInternal(
     }
 
     const handlePopstateCancel = () => {
-      if (fromPopstate && from) {
-        history.pushState(null, "", addBase(from.pathname, normalizedBaseUrl))
-        commitLocation(currentLocationParts())
-      }
+      if (!fromPopstate) return
+      const restoreHref = buildHistoryHref(fromParts, normalizedBaseUrl)
+      history.pushState(null, "", restoreHref)
+      commitLocation(fromParts)
     }
 
     const runRedirect = async (
@@ -454,7 +465,7 @@ export function createNavigateInternal(
               )
             : null
         if (mwFrom && !mwFrom.href) {
-          mwFrom.href = addBase(fromParts.pathname, normalizedBaseUrl)
+          mwFrom.href = buildHistoryHref(fromParts, normalizedBaseUrl)
         }
         const mw = await runRouteMiddleware({
           to: mwTo,
@@ -557,7 +568,7 @@ export function createNavigateInternal(
       )
 
       if (isEnteringNewRoute && componentEnterGuards.length) {
-        await runGuards(componentEnterGuards, to, from)
+        await runEnterGuards(componentEnterGuards, to, from)
       }
       navResult = { status: "committed" }
     } catch (error) {

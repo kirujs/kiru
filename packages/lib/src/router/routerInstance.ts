@@ -49,6 +49,8 @@ export interface RouterCore {
   ) => string
   localeRouting?: import("./i18n/localeRouting.js").I18nLocaleRouting
   navigationMode: RouterNavigationMode
+  /** When true (default), append `<kiru-route-announcer>` to `document.body` and announce `document.title` after successful navigations. */
+  navigationAnnouncer: boolean
   requestContext: Signal<CustomRequestContext>
   afterEach: (hook: AfterEachHook) => () => void
   isNavigating: Signal<boolean>

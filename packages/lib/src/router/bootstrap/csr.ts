@@ -38,7 +38,15 @@ export type CreateRouterAppOptions = CreateRouterAppBaseOptions & {
 export async function createRouterApp(
   options: CreateRouterAppOptions
 ): Promise<AppHandle> {
-  const { routes, container, pathPolicy, transition, i18n, appOptions } = options
+  const {
+    routes,
+    container,
+    pathPolicy,
+    transition,
+    i18n,
+    appOptions,
+    navigationAnnouncer,
+  } = options
   ensureLoaderClient()
   await loadClientHydrationChunksManifest()
   const router = createRouter({
@@ -46,6 +54,7 @@ export async function createRouterApp(
     pathPolicy,
     transition,
     i18n,
+    navigationAnnouncer,
   })
   await ensureClientI18nReady(router)
   let outlet: JSX.Element = createElement(RouterView, {})

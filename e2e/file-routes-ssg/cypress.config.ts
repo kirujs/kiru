@@ -3,6 +3,7 @@ import { preview, type PreviewServer } from "vite"
 
 export default defineConfig({
   e2e: {
+    includeShadowDom: true,
     async setupNodeEvents(on, config) {
       const server: PreviewServer = await preview({
         configFile: "./vite.config.ts",

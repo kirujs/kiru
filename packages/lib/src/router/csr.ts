@@ -81,6 +81,7 @@ import {
   syncDocumentHeadForPage,
 } from "./pageHead.js"
 import { registerKiruRouter } from "./routerGlobal.js"
+import { ensureRouteAnnouncerInDocument } from "./navigationAnnouncer.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { invalidateLoaderCache } from "./loaderCache.js"
 import {
@@ -200,6 +201,8 @@ export type CreateRouterOptions = {
    * See {@link createRenderer} `i18n` and `createI18nConfig`.
    */
   i18n?: InternationalizationConfig<readonly string[], unknown>
+  /** When false, omit `<kiru-route-announcer>` and skip route title announcements (default true). */
+  navigationAnnouncer?: boolean
 }
 
 export function createRouter({
@@ -209,6 +212,7 @@ export function createRouter({
   pathPolicy,
   transition = false,
   i18n,
+  navigationAnnouncer = true,
 }: CreateRouterOptions): Router {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
   const resolvedPathPolicy = resolvePathPolicy(pathPolicy)
@@ -559,6 +563,7 @@ export function createRouter({
     hash,
     query,
     baseUrl: normalizedBaseUrl,
+    navigationAnnouncer,
     path,
     match,
     matches,
@@ -797,6 +802,7 @@ export function createRouter({
   })
 
   registerKiruRouter(routerRef)
+  ensureRouteAnnouncerInDocument(navigationAnnouncer)
   return routerRef
 }
 
@@ -839,6 +845,7 @@ export function createStaticRouter({
     hash: hashSignal,
     query: querySignal,
     baseUrl: resolvedPathPolicy.baseUrl,
+    navigationAnnouncer: true,
     path,
     match,
     matches,

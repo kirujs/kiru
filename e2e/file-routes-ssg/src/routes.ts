@@ -3,6 +3,7 @@ export { routes } from "./routes.gen"
 export const routeLinks = [
   { path: "/", displayName: "home" },
   { path: "/about", displayName: "about" },
+  { path: "/guarded", displayName: "guarded" },
   {
     path: "/blog/[slug]",
     displayName: "blog",

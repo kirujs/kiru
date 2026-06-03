@@ -22,10 +22,10 @@ export type IsrRegenerateDeps = {
 
 export function createIsrRegenerateHandler(
   deps: IsrRegenerateDeps
-): (pathname: string) => Promise<void> {
+): (storageKey: string, pathname: string) => Promise<void> {
   const { manifest, pathPolicy, renderCore, getPrerenderCache, bypassPrerenderServe } =
     deps
-  return async (pathname: string) => {
+  return async (storageKey: string, pathname: string) => {
     const cache = await getPrerenderCache()
     if (!cache) return
     const prerenderMatch = matchRoute(
@@ -49,7 +49,7 @@ export function createIsrRegenerateHandler(
         revalidate: getISRRevalidate(regenIsr) ?? false,
         tags: getISRTags(regenIsr) ?? [],
       }
-      await cache.set(pathname, entry)
+      await cache.set(storageKey, entry)
     } finally {
       bypassPrerenderServe.current = false
     }
