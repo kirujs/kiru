@@ -40,7 +40,7 @@ Uses full `window.history` navigation (`navigation.ts`).
 
 1. `compileRouteTree` if needed
 2. `createRouter({ routes: manifest, i18n })` — **full** navigable router, not `createStaticRouter`
-3. `registerKiruRouter(router)` — global for actions invalidation
+3. `RouterProvider` claims the active router (`claimActiveRouter`) for action invalidation and RPC base URL
 4. `ensureLoaderClient()` + `ensureServerActionsClient()` (remote dispatch)
 5. `ensureClientI18nReady(router)`
 6. **Hash stash** — `stashClientHashForSsrHydration` clears router hash during hydrate (fragments not sent on HTTP)

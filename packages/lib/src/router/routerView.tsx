@@ -9,7 +9,7 @@ import {
 import { renderClientErrorOutlet } from "./routeTree.js"
 import { __DEV__ } from "../env.js"
 import { warnRouterViewWithoutSsrBootstrap } from "./devWarnings.dev.js"
-import { getRouterRuntime } from "./routerRuntime.js"
+import { getRouterInstanceRuntime } from "./routerRuntime.js"
 import { useRouter } from "./routerContext.js"
 import { announceNavigationIfReady } from "./navigationAnnouncer.js"
 import {
@@ -28,7 +28,7 @@ import {
 export function RouterView() {
   const router = useRouter()
   const { match, pathname, loaderEpoch, outletRenderError } = router
-  const { getNavGeneration } = getRouterRuntime(router)
+  const { getNavGeneration } = getRouterInstanceRuntime(router)
   const children = resource({
     source: {
       match,

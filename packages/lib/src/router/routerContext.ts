@@ -1,5 +1,8 @@
 import { createContext, useContext } from "../context.js"
 import { createElement } from "../element.js"
+import { onBeforeMount } from "../hooks/onBeforeMount.js"
+import { sideEffectsEnabled } from "../utils/index.js"
+import { claimActiveRouter, releaseActiveRouter } from "./routerGlobal.js"
 import { RequestContextProvider } from "./requestContext.js"
 import type { Router } from "./routerInstance.js"
 
@@ -21,6 +24,12 @@ const RequestContextBridge: Kiru.Component<{
 }
 
 export function RouterProvider({ router, children }: RouterProviderProps) {
+  if (sideEffectsEnabled()) {
+    onBeforeMount(() => {
+      claimActiveRouter(router)
+      return () => releaseActiveRouter(router)
+    })
+  }
   return createElement(RouterContext, {
     value: router,
     children: createElement(RequestContextBridge, { router, children }),

@@ -15,7 +15,7 @@ import {
 import { compileRouteTree, matchRoute } from "../../router/manifest.js"
 import { createI18nConfig } from "../../router/i18n/index.js"
 import { createI18nRuntime } from "../../router/i18nContext.js"
-import { getRouterRuntime } from "../../router/routerRuntime.js"
+import { getRouterInstanceRuntime } from "../../router/routerRuntime.js"
 import { renderMatchToStaticHtml } from "../../router/renderer.js"
 import { withJSDOM } from "./jsdom.js"
 
@@ -104,7 +104,7 @@ function clientShellWithI18n() {
     {},
     () => buildShellSubtree(),
     undefined,
-    getRouterRuntime(router).i18n!.runtime
+    getRouterInstanceRuntime(router).i18n!.runtime
   )
 }
 

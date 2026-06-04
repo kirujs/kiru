@@ -1,8 +1,8 @@
 import { addBase, normalizeBaseUrl } from "./pathPolicy.js"
-import { getKiruRouter } from "./routerGlobal.js"
+import { getActiveRouter } from "./routerGlobal.js"
 
 function resolveRpcBaseUrl(baseUrl?: string): string {
-  return normalizeBaseUrl(baseUrl ?? getKiruRouter()?.baseUrl ?? "/")
+  return normalizeBaseUrl(baseUrl ?? getActiveRouter()?.baseUrl ?? "/")
 }
 
 /** Client loader RPC URL (`POST`, `?loader=routeId:load`). */

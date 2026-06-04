@@ -1,30 +1,17 @@
 import type { AppHandle, AppHandleOptions } from "../appHandle.js"
 import { Fragment } from "../element.js"
-import { signal } from "../signals/index.js"
+import { createElement } from "../element.js"
 import { hydrate } from "./client.js"
-import { buildClientOutletSubtree } from "../router/clientRoutePrep.js"
 import { createRouter } from "../router/csr.js"
-import { renderClientErrorOutlet } from "../router/routeTree.js"
 import { createSsrRouterShell } from "../router/routerShell.js"
-import { toRenderError } from "../router/types.js"
-import { registerKiruRouter } from "../router/routerGlobal.js"
+import {
+  buildInitialSsrOutletInShell,
+  SsrClientOutlet,
+} from "../router/ssrClientOutlet.js"
 import { compileRouteTree } from "../router/manifest.js"
-import type {
-  RouteManifest,
-  RouteMatch,
-  RouteTreeDefinition,
-} from "../router/types.js"
+import type { RouteManifest, RouteTreeDefinition } from "../router/types.js"
 import { ensureClientI18nReady } from "../router/i18nContext.js"
 import { readHydratedRequestContext } from "../router/requestContext.js"
-import {
-  buildScopeCacheKey,
-  createNavigationScope,
-  isScopeCurrent,
-  type NavigationScope,
-} from "../router/navigationScope.js"
-import { formatRouterSearch } from "../router/navigation.js"
-import { announceNavigationIfReady } from "../router/navigationAnnouncer.js"
-import { tryClearClientNavigation } from "../router/outletNavigation.js"
 import { requestToken } from "../globals.js"
 import { applyActionResponseHeaders } from "../router/routerGlobal.js"
 import {
@@ -39,7 +26,7 @@ import { REMOTE_ACTION_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
 import { ensureLoaderClient } from "../router/loaderClient.js"
 import { buildActionRpcUrl } from "../router/rpcUrl.js"
 import { loadClientHydrationChunksManifest } from "../router/hydrationChunks.js"
-import { getRouterRuntime } from "../router/routerRuntime.js"
+import { getRouterInstanceRuntime } from "../router/routerRuntime.js"
 
 type ServerActionsClient = {
   dispatch: (
@@ -174,204 +161,6 @@ function restoreClientHashAfterHydration(
   if (hash) router.hash.value = hash
 }
 
-type SsrClientRouter = ReturnType<typeof createRouter>
-
-async function buildSsrClientOutlet(
-  committedMatch: RouteMatch | null,
-  router: SsrClientRouter,
-  manifest: RouteManifest,
-  options: { useHydratedPageData: boolean; forceReload: boolean },
-  outlet: { value: JSX.Element | null },
-  scope?: NavigationScope,
-  getNavGeneration?: () => number
-): Promise<JSX.Element | null> {
-  const runtime = getRouterRuntime(router)
-  const gen = getNavGeneration ?? runtime.getNavGeneration
-  const signal = scope?.signal ?? runtime.getNavSignal()
-  if (scope && (!isScopeCurrent(scope, gen) || scope.signal.aborted)) {
-    return null
-  }
-  const outletErr = router.outletRenderError.peek()
-  if (outletErr) {
-    router.isLoaderPending.value = true
-    try {
-      return await renderClientErrorOutlet(manifest, committedMatch, outletErr)
-    } finally {
-      if (!signal.aborted) router.isLoaderPending.value = false
-    }
-  }
-  router.isLoaderPending.value = true
-  try {
-    return buildClientOutletSubtree({
-      router,
-      match: committedMatch,
-      pathname: router.pathname.peek(),
-      signal,
-      getNavGeneration: gen,
-      useHydratedPageData: options.useHydratedPageData,
-      forceReload: options.forceReload,
-      onLeafRenderError: (err) => {
-        const renderErr = toRenderError(err)
-        const matchAtError = committedMatch
-        router.outletRenderError.value = renderErr
-        void recoverSsrOutletFromRenderError(
-          router,
-          manifest,
-          outlet,
-          matchAtError,
-          renderErr
-        )
-      },
-    })
-  } finally {
-    if (!signal.aborted) router.isLoaderPending.value = false
-  }
-}
-
-function isSameCommittedMatch(
-  current: RouteMatch | null,
-  atError: RouteMatch | null
-): boolean {
-  if (current === atError) return true
-  if (!current || !atError) return false
-  return (
-    current.route.id === atError.route.id &&
-    current.pathname === atError.pathname
-  )
-}
-
-/** Guards stale async outlet updates after refresh / error recovery. */
-function canCommitSsrOutletUpdate(
-  router: SsrClientRouter,
-  matchAtRefreshStart: RouteMatch | null,
-  options: {
-    refreshSignal?: AbortSignal
-    expectedOutletError?: Error | null
-  } = {}
-): boolean {
-  if (options.refreshSignal?.aborted) return false
-  if (options.expectedOutletError !== undefined) {
-    if (router.outletRenderError.peek() !== options.expectedOutletError) {
-      return false
-    }
-  }
-  return isSameCommittedMatch(router.match.peek(), matchAtRefreshStart)
-}
-
-async function recoverSsrOutletFromRenderError(
-  router: SsrClientRouter,
-  manifest: RouteManifest,
-  outlet: { value: JSX.Element | null },
-  matchAtError: RouteMatch | null,
-  err: Error
-): Promise<void> {
-  const recovery = await renderClientErrorOutlet(manifest, matchAtError, err)
-  if (
-    recovery &&
-    canCommitSsrOutletUpdate(router, matchAtError, {
-      expectedOutletError: err,
-    })
-  ) {
-    outlet.value = recovery
-  }
-}
-
-function subscribeSsrClientOutlet(
-  router: SsrClientRouter,
-  manifest: RouteManifest,
-  outlet: { value: JSX.Element | null },
-  buildOptions: { useHydratedPageData: boolean }
-): void {
-  let outletAbort: AbortController | null = null
-  const getNavGeneration = getRouterRuntime(router).getNavGeneration
-  async function refreshOutlet(forceReload: boolean) {
-    outletAbort?.abort()
-    const ctrl = new AbortController()
-    outletAbort = ctrl
-    const match = router.match.peek()
-    const outletErr = router.outletRenderError.peek()
-    if (outletErr) {
-      router.isLoaderPending.value = true
-      try {
-        const recovery = await renderClientErrorOutlet(
-          manifest,
-          match,
-          outletErr
-        )
-        if (
-          recovery &&
-          canCommitSsrOutletUpdate(router, match, {
-            refreshSignal: ctrl.signal,
-            expectedOutletError: outletErr,
-          })
-        ) {
-          outlet.value = recovery
-        }
-      } finally {
-        if (!ctrl.signal.aborted) router.isLoaderPending.value = false
-      }
-      tryClearClientNavigation(router)
-      return
-    }
-    const scope =
-      match !== null
-        ? createNavigationScope(
-            getNavGeneration(),
-            ctrl.signal,
-            buildScopeCacheKey(
-              match.route.id,
-              match.pathname,
-              formatRouterSearch(router.query.peek())
-            )
-          )
-        : createNavigationScope(getNavGeneration(), ctrl.signal)
-    try {
-      const subtree = await buildSsrClientOutlet(
-        match,
-        router,
-        manifest,
-        { ...buildOptions, forceReload },
-        outlet,
-        scope,
-        getNavGeneration
-      )
-      if (ctrl.signal.aborted || !isScopeCurrent(scope, getNavGeneration)) {
-        return
-      }
-      const pendingErr = router.outletRenderError.peek()
-      if (pendingErr) {
-        const errOut = await renderClientErrorOutlet(
-          manifest,
-          router.match.peek(),
-          pendingErr
-        )
-        if (
-          errOut &&
-          canCommitSsrOutletUpdate(router, match, {
-            refreshSignal: ctrl.signal,
-            expectedOutletError: pendingErr,
-          })
-        ) {
-          outlet.value = errOut
-        }
-      } else {
-        outlet.value = subtree
-      }
-      tryClearClientNavigation(router)
-      queueMicrotask(() => announceNavigationIfReady(router))
-    } catch {
-      if (!ctrl.signal.aborted) throw new Error("SSR outlet refresh failed")
-    }
-  }
-  const refresh = (forceReload: boolean) => {
-    void refreshOutlet(forceReload)
-  }
-  router.match.subscribe(() => refresh(false))
-  router.isNavigating.subscribe(() => refresh(false))
-  router.currentNavigation.subscribe(() => refresh(false))
-  router.outletRenderError.subscribe(() => refresh(false))
-}
-
 /**
  * Hydrate an SSR document from {@link createRenderer} / {@link fillRouteHtmlTemplate}.
  * Preloads the current route (same subtree as the server) and updates the tree on navigations.
@@ -389,7 +178,6 @@ export async function bootstrapSsrClient(
     i18n,
     navigationAnnouncer,
   })
-  registerKiruRouter(router)
   ensureLoaderClient()
   await loadClientHydrationChunksManifest()
   await ensureClientI18nReady(router)
@@ -402,73 +190,26 @@ export async function bootstrapSsrClient(
 
   const requestContext = readHydratedRequestContext()
   const match = router.match.peek()
-
-  const outlet = signal<JSX.Element | null>(null)
-  if (match) {
-    outlet.value = await buildSsrClientOutlet(
-      match,
-      router,
-      manifest,
-      { useHydratedPageData: true, forceReload: false },
-      outlet
-    )
-  }
+  const initialSubtree = match
+    ? await buildInitialSsrOutletInShell(router, manifest, requestContext)
+    : undefined
 
   const app = hydrate(
     Fragment({
       children: createSsrRouterShell(
         router,
         requestContext,
-        () => outlet.value,
+        createElement(SsrClientOutlet, {
+          manifest,
+          ...(initialSubtree !== undefined ? { initialSubtree } : {}),
+        }),
         undefined,
-        getRouterRuntime(router).i18n?.runtime
+        getRouterInstanceRuntime(router).i18n?.runtime
       ),
     }),
     container,
     staticHydrate
   )
-
-  subscribeSsrClientOutlet(router, manifest, outlet, {
-    useHydratedPageData: false,
-  })
-
-  let invalidateAbort: AbortController | null = null
-  const getNavGeneration = getRouterRuntime(router).getNavGeneration
-  async function refreshOutletOnInvalidate() {
-    invalidateAbort?.abort()
-    const ctrl = new AbortController()
-    invalidateAbort = ctrl
-    const current = router.match.peek()
-    if (!current) return
-    const scope = createNavigationScope(
-      getNavGeneration(),
-      ctrl.signal,
-      buildScopeCacheKey(
-        current.route.id,
-        current.pathname,
-        formatRouterSearch(router.query.peek())
-      )
-    )
-    const subtree = await buildSsrClientOutlet(
-      current,
-      router,
-      manifest,
-      {
-        useHydratedPageData: false,
-        forceReload: router.forceLoaderReload.peek(),
-      },
-      outlet,
-      scope,
-      getNavGeneration
-    )
-    router.forceLoaderReload.value = false
-    if (ctrl.signal.aborted || !isScopeCurrent(scope, getNavGeneration)) return
-    outlet.value = subtree
-    tryClearClientNavigation(router)
-  }
-  router.loaderEpoch.subscribe(() => {
-    void refreshOutletOnInvalidate()
-  })
 
   restoreClientHashAfterHydration(router, pendingClientHash)
 

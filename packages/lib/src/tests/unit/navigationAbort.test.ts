@@ -18,7 +18,7 @@ import {
   createNavigationScope,
 } from "../../router/navigationScope.js"
 import { prepareRouteForNavigation } from "../../router/prepareRoute.js"
-import { getRouterRuntime } from "../../router/routerRuntime.js"
+import { getRouterInstanceRuntime } from "../../router/routerRuntime.js"
 import { buildLoaderContext, resolvePagePropsFromModule } from "../../router/runPageLoad.js"
 import { staticLoaderSignal } from "../../router/navigationScope.js"
 
@@ -66,7 +66,7 @@ describe("navigation abort integration", () => {
 
     const navA = router.navigate("/page-a")
     await new Promise<void>((r) => queueMicrotask(r))
-    const { getNavSignal, getNavGeneration } = getRouterRuntime(router)
+    const { getNavSignal, getNavGeneration } = getRouterInstanceRuntime(router)
     const firstSignal = getNavSignal()
 
     const navB = router.navigate("/page-b")

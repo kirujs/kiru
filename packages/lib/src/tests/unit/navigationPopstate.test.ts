@@ -7,7 +7,7 @@ import {
   createRouter,
 } from "../../router/index.js"
 import { buildHistoryHref } from "../../router/navigation.js"
-import { getRouterRuntime } from "../../router/routerRuntime.js"
+import { getRouterInstanceRuntime } from "../../router/routerRuntime.js"
 import { withJSDOM } from "./jsdom.js"
 
 describe("popstate cancellation URL restore", () => {
@@ -51,7 +51,7 @@ describe("popstate cancellation URL restore", () => {
       await router.navigate("/page-a")
       await router.navigate("/page-b?q=x")
 
-      getRouterRuntime(router).registerComponentGuard("leave", () => false, pageBId)
+      getRouterInstanceRuntime(router).registerComponentGuard("leave", () => false, pageBId)
 
       window.history.back()
       await new Promise<void>((r) => queueMicrotask(r))

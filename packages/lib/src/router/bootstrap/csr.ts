@@ -6,7 +6,7 @@ import type { InternationalizationConfig } from "../i18n/index.js"
 import { ensureClientI18nReady, I18nReactiveRoot } from "../i18nContext.js"
 import { ensureLoaderClient } from "../loaderClient.js"
 import { loadClientHydrationChunksManifest } from "../hydrationChunks.js"
-import { getRouterRuntime } from "../routerRuntime.js"
+import { getRouterInstanceRuntime } from "../routerRuntime.js"
 import type { RouterPathPolicy } from "../pathPolicy.js"
 import type { CreateRouterAppBaseOptions } from "./types.js"
 
@@ -58,7 +58,7 @@ export async function createRouterApp(
   })
   await ensureClientI18nReady(router)
   let outlet: JSX.Element = createElement(RouterView, {})
-  const i18nRuntime = getRouterRuntime(router).i18n?.runtime
+  const i18nRuntime = getRouterInstanceRuntime(router).i18n?.runtime
   if (i18nRuntime) {
     outlet = createElement(I18nReactiveRoot, {
       runtime: i18nRuntime,

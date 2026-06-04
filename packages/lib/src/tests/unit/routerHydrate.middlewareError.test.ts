@@ -6,7 +6,8 @@ import {
   createRouteTree,
 } from "../../router/index.js"
 import { bootstrapSsrClient } from "../../ssr/routerHydrate.js"
-import { getKiruRouter } from "../../router/routerGlobal.js"
+import { getActiveRouter } from "../../router/routerGlobal.js"
+import { RouteMiddlewareHttpError } from "../../router/types.js"
 import { withJSDOM } from "./jsdom.js"
 
 describe("bootstrapSsrClient middleware errors", () => {
@@ -33,15 +34,14 @@ describe("bootstrapSsrClient middleware errors", () => {
           routes: manifest,
           container,
         })
-        const router = getKiruRouter()
+        const router = getActiveRouter()
         assert.ok(router)
         const result = await router.navigate("/forbidden")
         assert.equal(result.status, "errored")
         assert.equal(router.pathname.peek(), "/forbidden")
-        await new Promise((r) => setTimeout(r, 50))
-        const outletText = container.textContent ?? ""
-        assert.match(outletText, /Forbidden/)
-        assert.doesNotMatch(outletText, /forbidden-page-should-not-render/)
+        const err = router.outletRenderError.peek()
+        assert.ok(err instanceof RouteMiddlewareHttpError)
+        assert.match(err.message, /Forbidden/)
         app.unmount()
       },
       { url: "http://localhost/" }

@@ -1,3 +1,4 @@
+import { __DEV__ } from "../env.js"
 import type { InternationalizationConfig } from "./i18n/createI18nConfig.js"
 import type {
   NavigationFailure,
@@ -5,7 +6,8 @@ import type {
   RouteLocation,
 } from "./types.js"
 import type { createI18nRuntime, I18nContextValue } from "./i18nContext.js"
-import type { Router } from "./csr.js"
+import type { Router } from "./routerInstance.js"
+import { getActiveRouter } from "./routerGlobal.js"
 
 export type RouterI18nRuntime = {
   config: InternationalizationConfig<readonly string[], unknown>
@@ -38,20 +40,49 @@ export type RouterRuntime = {
   ) => void
 }
 
-const runtimeByRouter = new WeakMap<Router, RouterRuntime>()
+const ROUTER_RUNTIME = Symbol.for("kiru.router.runtime")
 
-export function attachRouterRuntime(router: Router, runtime: RouterRuntime): void {
-  runtimeByRouter.set(router, runtime)
+type RouterWithRuntime = Router & {
+  [ROUTER_RUNTIME]?: RouterRuntime
 }
 
-export function getRouterRuntime(router: Router): RouterRuntime {
-  const runtime = runtimeByRouter.get(router)
+export function setRouterInstanceRuntime(
+  router: Router,
+  runtime: RouterRuntime
+): void {
+  const target = router as RouterWithRuntime
+  if (target[ROUTER_RUNTIME]) {
+    throw new Error("[kiru] Router runtime is already initialized on this router")
+  }
+  target[ROUTER_RUNTIME] = runtime
+}
+
+export function getRouterInstanceRuntime(router: Router): RouterRuntime {
+  if (__DEV__) {
+    const active = getActiveRouter()
+    if (active && active !== router) {
+      throw new Error(
+        "[kiru] getRouterInstanceRuntime called with a router that is not the active page router"
+      )
+    }
+  }
+  const runtime = (router as RouterWithRuntime)[ROUTER_RUNTIME]
   if (!runtime) {
     throw new Error("[kiru] Router runtime is not initialized")
   }
   return runtime
 }
 
-export function tryGetRouterRuntime(router: Router): RouterRuntime | undefined {
-  return runtimeByRouter.get(router)
+export function tryGetRouterInstanceRuntime(
+  router: Router
+): RouterRuntime | undefined {
+  return (router as RouterWithRuntime)[ROUTER_RUNTIME]
+}
+
+export function getActiveRouterRuntime(): RouterRuntime {
+  const router = getActiveRouter()
+  if (!router) {
+    throw new Error("[kiru] No active router on this page")
+  }
+  return getRouterInstanceRuntime(router)
 }

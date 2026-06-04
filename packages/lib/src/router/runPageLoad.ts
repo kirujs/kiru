@@ -2,7 +2,7 @@ import type { RouterQuery } from "./requestUrl.js"
 import type { KiruLoader, LoaderContext, PageProps } from "./loaders.js"
 import { isKiruLoader, readPageLoadExport } from "./loaders.js"
 import { loaderI18nFields } from "./i18n/createI18nConfig.js"
-import { tryGetRouterRuntime } from "./routerRuntime.js"
+import { tryGetRouterInstanceRuntime } from "./routerRuntime.js"
 import { mergeRouteMeta } from "./routeMeta.js"
 import { formatRouterSearch } from "./navigation.js"
 import type { CustomRequestContext, RouteMatch, RouteMeta } from "./types.js"
@@ -59,7 +59,7 @@ export type LoaderContextRouterSlice = {
 function loaderI18nFromRouter(
   router: LoaderContextRouterSlice
 ): ReturnType<typeof loaderI18nFields> {
-  const runtime = tryGetRouterRuntime(router as import("./csr.js").Router)
+  const runtime = tryGetRouterInstanceRuntime(router as import("./csr.js").Router)
   if (runtime?.i18n && router.locale) {
     return loaderI18nFields(runtime.i18n.config, router.locale.peek())
   }

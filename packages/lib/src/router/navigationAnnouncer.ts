@@ -1,5 +1,5 @@
 import type { Router } from "./routerInstance.js"
-import { getRouterRuntime } from "./routerRuntime.js"
+import { getRouterInstanceRuntime } from "./routerRuntime.js"
 
 export const ROUTE_ANNOUNCER_TAG = "kiru-route-announcer"
 export const ROUTE_ANNOUNCER_LIVE_REGION_ID = "__kiru-route-announcer__"
@@ -44,7 +44,7 @@ function getLiveRegionElement(): HTMLElement | null {
 export function announceNavigationIfReady(router: Router): void {
   if (!router.navigationAnnouncer) return
   if (typeof document === "undefined") return
-  const last = getRouterRuntime(router).getLastNavigation()
+  const last = getRouterInstanceRuntime(router).getLastNavigation()
   if (!last || last.failure) return
   if (!last.from) return
   const region = getLiveRegionElement()

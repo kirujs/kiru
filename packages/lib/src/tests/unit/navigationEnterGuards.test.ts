@@ -6,7 +6,7 @@ import {
   createRouteTree,
   createRouter,
 } from "../../router/index.js"
-import { getRouterRuntime } from "../../router/routerRuntime.js"
+import { getRouterInstanceRuntime } from "../../router/routerRuntime.js"
 
 describe("onAfterRouteEnter (enter guards)", () => {
   it("runs after a successful navigation commits", async () => {
@@ -25,7 +25,7 @@ describe("onAfterRouteEnter (enter guards)", () => {
       location: { pathname: "/a" } as Location,
     })
     let entered = false
-    getRouterRuntime(router).registerComponentGuard(
+    getRouterInstanceRuntime(router).registerComponentGuard(
       "enter",
       () => {
         entered = true
@@ -51,7 +51,7 @@ describe("onAfterRouteEnter (enter guards)", () => {
       history,
       location: { pathname: "/a" } as Location,
     })
-    getRouterRuntime(router).registerComponentGuard("enter", () => false)
+    getRouterInstanceRuntime(router).registerComponentGuard("enter", () => false)
     const result = await router.navigate("/b")
     assert.equal(result.status, "committed")
     assert.equal(router.pathname.value, "/b")
@@ -73,7 +73,7 @@ describe("onAfterRouteEnter (enter guards)", () => {
       history,
       location: { pathname: "/a" } as Location,
     })
-    getRouterRuntime(router).registerComponentGuard("enter", () => "/c")
+    getRouterInstanceRuntime(router).registerComponentGuard("enter", () => "/c")
     await router.navigate("/b")
     assert.equal(router.pathname.value, "/b")
   })

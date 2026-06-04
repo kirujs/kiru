@@ -68,7 +68,7 @@ export {
 export { RouterView } from "./routerView.js"
 import { useRouter } from "./routerContext.js"
 import { buildLoaderContext } from "./runPageLoad.js"
-import { attachRouterRuntime } from "./routerRuntime.js"
+import { setRouterInstanceRuntime } from "./routerRuntime.js"
 import { staticLoaderSignal } from "./navigationScope.js"
 import {
   clearStreamedSsrClientState,
@@ -80,7 +80,7 @@ import {
   readPageHeadExport,
   syncDocumentHeadForPage,
 } from "./pageHead.js"
-import { registerKiruRouter } from "./routerGlobal.js"
+import { releaseActiveRouter } from "./routerGlobal.js"
 import { ensureRouteAnnouncerInDocument } from "./navigationAnnouncer.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { invalidateLoaderCache } from "./loaderCache.js"
@@ -765,10 +765,11 @@ export function createRouter({
     dispose() {
       for (const fn of disposeCleanups) fn()
       disposeCleanups.length = 0
+      releaseActiveRouter(routerRef)
     },
   }
 
-  attachRouterRuntime(routerRef, {
+  setRouterInstanceRuntime(routerRef, {
     getNavGeneration: () => navToken.value,
     getNavSignal: () =>
       navAbortController.current?.signal ?? staticLoaderSignal(),
@@ -801,7 +802,6 @@ export function createRouter({
     },
   })
 
-  registerKiruRouter(routerRef)
   ensureRouteAnnouncerInDocument(navigationAnnouncer)
   return routerRef
 }
@@ -889,7 +889,7 @@ export function createStaticRouter({
     go() {},
     dispose() {},
   }
-  attachRouterRuntime(routerRef, {
+  setRouterInstanceRuntime(routerRef, {
     getNavGeneration: () => 0,
     getNavSignal: () => staticLoaderSignal(),
     registerComponentGuard() {

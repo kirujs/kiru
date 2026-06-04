@@ -13,7 +13,7 @@ import {
   ROUTE_ANNOUNCER_LIVE_REGION_ID,
   ROUTE_ANNOUNCER_TAG,
 } from "../../router/navigationAnnouncer.js"
-import { getRouterRuntime } from "../../router/routerRuntime.js"
+import { getRouterInstanceRuntime } from "../../router/routerRuntime.js"
 import { withJSDOM } from "./jsdom.js"
 
 function getLiveRegion(): HTMLElement | null {
@@ -72,7 +72,7 @@ describe("navigationAnnouncer", () => {
       const router = createRouter({ routes: manifest })
 
       document.title = "Page A"
-      getRouterRuntime(router).setLastNavigation({
+      getRouterInstanceRuntime(router).setLastNavigation({
         to: { pathname: "/a", params: {} },
         from: null,
       })
@@ -81,7 +81,7 @@ describe("navigationAnnouncer", () => {
 
       document.title = "Page B"
       router.pathname.value = "/b"
-      getRouterRuntime(router).setLastNavigation({
+      getRouterInstanceRuntime(router).setLastNavigation({
         to: { pathname: "/b", params: {} },
         from: { pathname: "/a", params: {} },
       })
@@ -103,7 +103,7 @@ describe("navigationAnnouncer", () => {
       })
       assert.equal(document.querySelector(ROUTE_ANNOUNCER_TAG), null)
       document.title = "Silent"
-      getRouterRuntime(router).setLastNavigation({
+      getRouterInstanceRuntime(router).setLastNavigation({
         to: { pathname: "/", params: {} },
         from: { pathname: "/x", params: {} },
       })
@@ -121,7 +121,7 @@ describe("navigationAnnouncer", () => {
       )
       const router = createRouter({ routes: manifest })
       document.title = "Failed"
-      getRouterRuntime(router).setLastNavigation({
+      getRouterInstanceRuntime(router).setLastNavigation({
         to: { pathname: "/", params: {} },
         from: { pathname: "/x", params: {} },
         failure: { type: "cancelled" },

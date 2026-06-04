@@ -11,13 +11,18 @@ import {
   buildActionRpcUrl,
   buildLoaderRpcUrl,
 } from "../../router/rpcUrl.js"
-import { registerKiruRouter } from "../../router/routerGlobal.js"
+import {
+  claimActiveRouter,
+  getActiveRouter,
+  releaseActiveRouter,
+} from "../../router/routerGlobal.js"
 import type { Router } from "../../router/routerInstance.js"
 import { withJSDOM } from "./jsdom.js"
 
 describe("rpcUrl", () => {
   afterEach(() => {
-    delete (globalThis as Record<string, unknown>).__kiru_router
+    const active = getActiveRouter()
+    if (active) releaseActiveRouter(active)
     delete (globalThis as Record<string, unknown>).__kiru_loaders
   })
 
@@ -50,7 +55,7 @@ describe("rpcUrl", () => {
   })
 
   it("resolves baseUrl from registered router when omitted", () => {
-    registerKiruRouter({ baseUrl: "/app" } as Router)
+    claimActiveRouter({ baseUrl: "/app" } as Router)
     assert.equal(
       buildLoaderRpcUrl("home"),
       "/app?loader=home%3Aload"
@@ -94,6 +99,7 @@ describe("loaderClient dispatch baseUrl", () => {
         location,
         pathPolicy: { baseUrl: "/app" },
       })
+      claimActiveRouter(router)
 
       let capturedUrl = ""
       globalThis.fetch = async (input) => {

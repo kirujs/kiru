@@ -67,7 +67,15 @@ export async function withJSDOM(
 
   const { createKiruGlobalContext } = await import("../../globalContext.js")
   window.__kiru = createKiruGlobalContext()
-  
+
+  const { renderMode } = await import("../../globals.js")
+  const prevRenderMode = renderMode.current
+  renderMode.current = "dom"
+
+  const { getActiveRouter, releaseActiveRouter } = await import(
+    "../../router/routerGlobal.js"
+  )
+
   const container = document.createElement("div")
   document.body.appendChild(container)
   const kiru = await import("../../index.js")
@@ -75,6 +83,9 @@ export async function withJSDOM(
   try {
     await testBody(container, kiru)
   } finally {
+    renderMode.current = prevRenderMode
+    const active = getActiveRouter()
+    if (active) releaseActiveRouter(active)
     container.remove()
     dom.window.close()
     for (const [key, state] of previous) {

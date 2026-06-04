@@ -5,7 +5,11 @@ import { KIRU_TOKEN_RESPONSE_HEADER } from "../../remote/actionResponse.js"
 import { requestToken } from "../../globals.js"
 import { createFormController } from "../../remote/formController.js"
 import { buildActionRpcUrl } from "../../router/rpcUrl.js"
-import { registerKiruRouter } from "../../router/routerGlobal.js"
+import {
+  claimActiveRouter,
+  getActiveRouter,
+  releaseActiveRouter,
+} from "../../router/routerGlobal.js"
 import type { Router } from "../../router/routerInstance.js"
 import { withJSDOM } from "./jsdom.js"
 
@@ -43,7 +47,8 @@ describe("createFormController", () => {
 
   afterEach(() => {
     globalThis.fetch = prevFetch
-    delete (globalThis as Record<string, unknown>).__kiru_router
+    const active = getActiveRouter()
+    if (active) releaseActiveRouter(active)
   })
 
   it("initializes action URL, method, and signals", async () => {
@@ -223,7 +228,7 @@ describe("createFormController", () => {
   it("uses base-aware action URL when router is mounted under /app", async () => {
     await withJSDOM(async () => {
       const restoreFormData = useJSDOMFormData()
-      registerKiruRouter({ baseUrl: "/app" } as unknown as Router)
+      claimActiveRouter({ baseUrl: "/app" } as unknown as Router)
       const ref = action({ type: "form", handler: async () => ({ ok: true }) })
       const ctrl = createFormController(ref)
       assert.equal(
@@ -257,7 +262,7 @@ describe("createFormController", () => {
       document.body.appendChild(form)
 
       const invalidated: string[][] = []
-      registerKiruRouter({
+      claimActiveRouter({
         invalidate: async ({ routeIds }: { routeIds: string[] }) => {
           invalidated.push([...routeIds])
         },

@@ -15,7 +15,7 @@ import type {
   AppI18nLocales,
 } from "./i18n/augmentation.js"
 import type { Router } from "./csr.js"
-import { tryGetRouterRuntime } from "./routerRuntime.js"
+import { tryGetRouterInstanceRuntime } from "./routerRuntime.js"
 
 type I18nData = AppI18nData
 type I18nLocale = AppI18nLocale
@@ -97,7 +97,7 @@ export function serializeI18nScript(payload: HydratedI18nPayload): string {
 export async function ensureClientI18nReady(router: {
   locale?: { peek(): string }
 }): Promise<void> {
-  const bag = tryGetRouterRuntime(router as Router)?.i18n
+  const bag = tryGetRouterInstanceRuntime(router as Router)?.i18n
   if (!bag) return
   if (hasLoadedI18nBundle(bag.runtime.data.peek())) return
   const locale = router.locale?.peek() ?? bag.config.defaultLocale
