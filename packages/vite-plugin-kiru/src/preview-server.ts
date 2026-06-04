@@ -2,6 +2,14 @@ import fs from "node:fs"
 import path from "node:path"
 import type { ServerResponse } from "node:http"
 import type { Connect } from "vite"
+import {
+  inferNotFoundStrategy,
+  resolveHtmlAssetCandidates,
+  type InferNotFoundStrategyInput,
+  type NotFoundStrategy,
+} from "kiru/router"
+
+export { inferNotFoundStrategy, type NotFoundStrategy }
 
 export function toPreviewPathname(url: string): string {
   return url.split("?")[0].split("#")[0] || "/"
@@ -14,21 +22,10 @@ export function isPreviewAssetPath(pathname: string): boolean {
 
 /** Candidate on-disk HTML files for a public pathname (SSG / hybrid prerender output). */
 export function htmlCandidates(outDir: string, pathname: string): string[] {
-  const clean = pathname.replace(/^\/+/, "")
-  const joined = path.join(outDir, clean)
-  const ext = path.extname(joined)
-
-  if (ext === ".html") return [joined]
-  if (ext) return []
-
-  const candidates: string[] = []
-  if (pathname.endsWith("/")) {
-    candidates.push(path.join(joined, "index.html"))
-  } else {
-    candidates.push(`${joined}.html`)
-    candidates.push(path.join(joined, "index.html"))
-  }
-  return candidates
+  return resolveHtmlAssetCandidates(pathname).map((candidate) => {
+    const rel = candidate.replace(/^\/+/, "")
+    return path.join(outDir, rel)
+  })
 }
 
 function sendHtml(res: ServerResponse, status: number, filePath: string) {
@@ -49,10 +46,24 @@ export function isFilledPrerenderHtml(filePath: string): boolean {
 
 export type SsgPreviewOptions = {
   /**
-   * When true (hybrid SSR + SSG), skip on-disk HTML that still contains
-   * `{{kiru_*}}` placeholders so `vite preview` can render via the SSR bundle.
+   * Deploy-time behavior when no prerender file matches the pathname.
+   * Inferred from router config when omitted.
+   */
+  notFoundStrategy?: NotFoundStrategy
+  /**
+   * @deprecated Use `notFoundStrategy: "hybrid-ssr"` instead.
+   * When true, skip shell HTML and unknown paths (hybrid SSR + SSG).
    */
   requireFilledHtml?: boolean
+}
+
+function resolvePreviewNotFoundStrategy(
+  options: SsgPreviewOptions
+): NotFoundStrategy {
+  if (options.notFoundStrategy) return options.notFoundStrategy
+  if (options.requireFilledHtml === true) return "hybrid-ssr"
+  if (options.requireFilledHtml === false) return "exact"
+  return "exact"
 }
 
 export type PreviewRequest = {
@@ -80,6 +91,9 @@ export function createSsgPreviewMiddleware(
   outDir: string,
   options: SsgPreviewOptions = {}
 ): Connect.NextHandleFunction {
+  const strategy = resolvePreviewNotFoundStrategy(options)
+  const requireFilledHtml = strategy === "hybrid-ssr"
+
   return (req, res, next) => {
     try {
       const pathname = previewPathname(req)
@@ -87,24 +101,37 @@ export function createSsgPreviewMiddleware(
 
       for (const candidate of htmlCandidates(outDir, pathname)) {
         if (!fs.existsSync(candidate)) continue
-        if (options.requireFilledHtml && !isFilledPrerenderHtml(candidate)) {
+        if (!fs.statSync(candidate).isFile()) continue
+        if (requireFilledHtml && !isFilledPrerenderHtml(candidate)) {
           continue
         }
         sendHtml(res, 200, candidate)
         return
       }
 
-      // Hybrid (SSR + SSG): only serve explicit prerender pages; unknown paths go to SSR.
-      if (!options.requireFilledHtml) {
+      if (strategy === "exact") {
         const notFound = path.join(outDir, "404.html")
         if (fs.existsSync(notFound) && isFilledPrerenderHtml(notFound)) {
           sendHtml(res, 404, notFound)
           return
         }
+      } else if (strategy === "csr-recovery") {
+        const index = path.join(outDir, "index.html")
+        if (fs.existsSync(index) && isFilledPrerenderHtml(index)) {
+          sendHtml(res, 200, index)
+          return
+        }
       }
+
       next()
     } catch (err) {
       next(err)
     }
   }
+}
+
+export function previewNotFoundStrategyFromRouter(
+  router: InferNotFoundStrategyInput
+): NotFoundStrategy {
+  return inferNotFoundStrategy(router)
 }

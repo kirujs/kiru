@@ -1,6 +1,6 @@
 import { createRenderer, type CreateRendererOptions } from "kiru/router"
 import type { CustomRequestContext } from "kiru/router"
-import { matchRoute, generatePublicStaticPaths } from "kiru/router"
+import { matchRoute, generatePublicStaticPaths, fetchHtmlAsset } from "kiru/router"
 import { resolvePathPolicy } from "kiru/router"
 import { toFetchHandler, type KiruHandle } from "@kirujs/adapter-contract"
 import { tryServeImmutablePrerender } from "./serveImmutablePrerender.js"
@@ -105,18 +105,7 @@ export function createKiruWorkerHandle(
       request.url,
       {
         stream: stream === true,
-        getAsset: async (pathname) => {
-          const html =
-            (await getAsset(pathname)) ??
-            (await getAsset(
-              pathname.endsWith(".html") ? pathname : `${pathname}.html`
-            ))
-          if (html) return html
-          const indexPath = pathname.endsWith("/")
-            ? `${pathname}index.html`
-            : `${pathname}/index.html`
-          return getAsset(indexPath)
-        },
+        getAsset: (pathname) => fetchHtmlAsset(getAsset, pathname),
         loadPageModule,
         getStaticPathSet,
         actionsSecret: rendererOpts.actions?.secret,

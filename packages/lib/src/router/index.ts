@@ -48,6 +48,7 @@ export * from "./requestContext.js"
 export * from "./prerenderedHtml.js"
 export * from "./navigationGuards.js"
 export * from "./pathPolicy.js"
+export * from "./htmlAssetCandidates.js"
 export * from "./i18n/index.js"
 export {
   useI18n,

@@ -74,6 +74,7 @@ export interface PluginState {
     serverEntry: string | null
     /** Resolved absolute path to the SSR server entry. */
     serverEntryAbs: string | null
+    notFoundStrategy?: import("kiru/router").NotFoundStrategy
     remote: string | null
     adapter: "node" | "bun" | "cloudflare"
     fileRoutes: ResolvedFileRoutes | null
@@ -182,6 +183,7 @@ export function createPluginState(
         : null,
       serverEntry: opts.router?.serverEntry ?? null,
       serverEntryAbs: null,
+      notFoundStrategy: opts.router?.notFoundStrategy,
       remote: opts.router?.remote ?? null,
       adapter: opts.router?.adapter ?? "node",
       fileRoutes,
@@ -239,6 +241,7 @@ export function updatePluginState(
       ssg: state.router?.ssg ?? null,
       serverEntry: state.router?.serverEntry ?? null,
       serverEntryAbs: state.router?.serverEntryAbs ?? null,
+      notFoundStrategy: state.router?.notFoundStrategy,
       remote: state.router?.remote ?? null,
       adapter: state.router?.adapter ?? "node",
       fileRoutes: state.router?.fileRoutes ?? null,

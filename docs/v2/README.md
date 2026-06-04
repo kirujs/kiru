@@ -74,7 +74,7 @@ flowchart TB
 9. **[09-client-bootstrap-and-hydration.md](./09-client-bootstrap-and-hydration.md)** — `bootstrapSsrClient` / `bootstrapSsgClient`, hash workaround, outlet subscriptions.
 10. **[10-isr-hybrid-and-prerender.md](./10-isr-hybrid-and-prerender.md)** — `defineISR`, disk cache, `revalidatePath` / `revalidateTag`.
 11. **[14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md)** — Node, Bun, Cloudflare; capability matrix.
-12. **[19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)** — SSG `404.html`, SPA fallback, Cloudflare nearest-asset vs portable deploy strategies.
+12. **[19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)** — `notFoundStrategy` (`exact`, `csr-recovery`, `hybrid-ssr`), `404.html`, SPA fallback.
 
 ### Product & DX
 

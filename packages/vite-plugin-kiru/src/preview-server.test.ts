@@ -27,10 +27,12 @@ describe("preview-server", () => {
   it("htmlCandidates maps public paths to prerender output files", () => {
     const out = "/out"
     assert.deepEqual(htmlCandidates(out, "/about"), [
+      path.join(out, "about"),
       path.join(out, "about.html"),
       path.join(out, "about", "index.html"),
     ])
     assert.deepEqual(htmlCandidates(out, "/posts/one"), [
+      path.join(out, "posts", "one"),
       path.join(out, "posts", "one.html"),
       path.join(out, "posts", "one", "index.html"),
     ])
@@ -99,7 +101,7 @@ describe("preview-server", () => {
     ])
   })
 
-  it("requireFilledHtml skips shell index.html for hybrid preview", async () => {
+  it("hybrid-ssr skips shell index.html for hybrid preview", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "kiru-preview-hybrid-"))
     fs.writeFileSync(
       path.join(root, "index.html"),
@@ -110,9 +112,11 @@ describe("preview-server", () => {
       "<html><!-- kiru:head --><title>docs</title><!-- /kiru:head --><body>docs</body></html>"
     )
 
-    const run = (url: string, opts: { requireFilledHtml?: boolean }) =>
+    const run = (url: string, strategy: "hybrid-ssr" | "exact") =>
       new Promise<{ status: number; body: string }>((resolve, reject) => {
-        const middleware = createSsgPreviewMiddleware(root, opts)
+        const middleware = createSsgPreviewMiddleware(root, {
+          notFoundStrategy: strategy,
+        })
         const res = {
           statusCode: 200,
           headers: {} as Record<string, string | number | string[]>,
@@ -129,23 +133,23 @@ describe("preview-server", () => {
       })
 
     await Promise.all([
-      run("/", { requireFilledHtml: true }).then((r) =>
-        assert.equal(r.status, 404)
-      ),
-      run("/docs", { requireFilledHtml: true }).then((r) => {
+      run("/", "hybrid-ssr").then((r) => assert.equal(r.status, 404)),
+      run("/docs", "hybrid-ssr").then((r) => {
         assert.equal(r.status, 200)
         assert.match(r.body, /docs/)
       }),
     ])
   })
 
-  it("requireFilledHtml skips prerendered 404.html for unknown routes", async () => {
+  it("hybrid-ssr skips prerendered 404.html for unknown routes", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "kiru-preview-hybrid-404-"))
     fs.writeFileSync(path.join(root, "404.html"), "<html>prerendered 404</html>")
 
-    const run = (url: string, opts: { requireFilledHtml?: boolean }) =>
+    const run = (url: string, strategy: "hybrid-ssr" | "exact") =>
       new Promise<{ status: number; body: string }>((resolve, reject) => {
-        const middleware = createSsgPreviewMiddleware(root, opts)
+        const middleware = createSsgPreviewMiddleware(root, {
+          notFoundStrategy: strategy,
+        })
         const res = {
           statusCode: 200,
           headers: {} as Record<string, string | number | string[]>,
@@ -162,14 +166,46 @@ describe("preview-server", () => {
       })
 
     await Promise.all([
-      run("/hello", { requireFilledHtml: true }).then((r) => {
+      run("/hello", "hybrid-ssr").then((r) => {
         assert.equal(r.status, 404)
         assert.equal(r.body, "")
       }),
-      run("/hello", { requireFilledHtml: false }).then((r) => {
+      run("/hello", "exact").then((r) => {
         assert.equal(r.status, 404)
         assert.match(r.body, /prerendered 404/)
       }),
     ])
+  })
+
+  it("csr-recovery serves index.html with 200 for unknown routes", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kiru-preview-csr-"))
+    fs.writeFileSync(
+      path.join(root, "index.html"),
+      "<html><!-- kiru:head --><title>app</title><!-- /kiru:head --><body>shell</body></html>"
+    )
+
+    const run = (url: string) =>
+      new Promise<{ status: number; body: string }>((resolve, reject) => {
+        const middleware = createSsgPreviewMiddleware(root, {
+          notFoundStrategy: "csr-recovery",
+        })
+        const res = {
+          statusCode: 200,
+          headers: {} as Record<string, string | number | string[]>,
+          setHeader() {},
+          end(body: Buffer) {
+            resolve({ status: this.statusCode, body: body.toString("utf8") })
+          },
+        }
+        middleware(
+          { url } as any,
+          res as any,
+          (err?: unknown) => (err ? reject(err) : resolve({ status: 404, body: "" }))
+        )
+      })
+
+    const r = await run("/unknown-route")
+    assert.equal(r.status, 200)
+    assert.match(r.body, /shell/)
   })
 })

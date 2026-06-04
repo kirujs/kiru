@@ -48,6 +48,7 @@ import {
   capturePreviewRequestUrl,
   createSsgPreviewMiddleware,
   isPreviewAssetPath,
+  previewNotFoundStrategyFromRouter,
   toPreviewPathname,
 } from "./preview-server.js"
 import { createPreviewSsrProxy } from "./previewSsrProxy.js"
@@ -310,7 +311,12 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         if (state.router.ssg) {
           server.middlewares.use(
             createSsgPreviewMiddleware(clientDir, {
-              requireFilledHtml: Boolean(state.router.serverEntry),
+              notFoundStrategy:
+                state.router.notFoundStrategy ??
+                previewNotFoundStrategyFromRouter({
+                  ssg: true,
+                  serverEntry: state.router.serverEntry,
+                }),
             })
           )
         }

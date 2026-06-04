@@ -104,7 +104,7 @@ When `serverEntry` set:
 - `createPreviewSsrProxy` — proxy to SSR server when hybrid
 - `preview-server.test.ts`, `preview-integration.test.ts`
 
-**Not-found behavior by mode:** SSG-only → `404.html` for unknown paths; hybrid → SSR (skips static `404.html`); CSR → Vite SPA `index.html` fallback. Strategy matrix: [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md).
+**Not-found behavior (`router.notFoundStrategy`):** SSG-only → **`exact`** (default): `404.html` for unknown paths. `ssg` + `serverEntry` → **`hybrid-ssr`** (inferred): SSR proxy, skips static `404.html` for misses. Opt-in **`csr-recovery`**: filled `index.html` with 200. CSR preview still uses Vite SPA fallback. See [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md).
 
 ---
 

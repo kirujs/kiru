@@ -77,7 +77,7 @@ gantt
 | P2-4 | Evaluate default static hoisting | P2 | Post | Code |
 | P2-5 | Content/MDX — defer or partner | P2 | Post | — |
 | P2-6 | `prepareAppForUrl` refactor + deeper tests | P2 | S5 | Code + test (baseline S2) |
-| P2-7 | Configurable static 404 / host fallback strategies | P2 | Post | Doc + code |
+| P2-7 | Configurable static 404 / host fallback strategies | P2 | Post | Doc + code — **PR1 done** (`notFoundStrategy`, shared candidates) |
 | P2-8 | Warn when `allowedOrigins` is `["*"]` in production build | P2 | Post | Code |
 | P2-9 | Optional per-form CSRF nonce (double-submit) for regulated adopters | P2 | Post | Code |
 | P3-1 | OG image generation route helper | P3 | Post | Deferred — see [21-image-pipeline-adr.md](./21-image-pipeline-adr.md) phase 3 |
@@ -507,7 +507,7 @@ Remove sharp-based stack; design Node sharp + edge resvg for v2.1+.
   - [ ] `getAsset` for prerender
   - [ ] `assetFetch` for bundles
   - [ ] ISR limits table from [14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md)
-  - [ ] Static 404 / `nearest-asset` vs `hybrid-ssr` — [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)
+  - [ ] Static 404 strategies — [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md) (`exact` / `csr-recovery` / `hybrid-ssr`)
 - [ ] **Acceptance:** Wrangler deploy documented step-by-step
 
 ### S6-5 — P1-5: Global middleware story
@@ -573,7 +573,7 @@ Work after **v2.0.0** tag unless schedule allows earlier.
 | P2-2 | [ ] Netlify / static + functions guide | SSG export pattern |
 | P2-4 | [ ] Static JSX hoisting — benchmark + default on if safe | `experimental.staticHoisting` |
 | P2-5 | [ ] Content layer decision | Defer or integrate MDX |
-| P2-7 | [ ] Configurable static 404 / host fallback strategies | [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md) (analysis done); spike `notFoundStrategy` on vite `router` + adapters; shared `resolveHtmlAssetCandidates`; optional `_redirects` / `_routes.json` codegen; per-scope static 404 if needed |
+| P2-7 | [~] Configurable static 404 / host fallback strategies | **PR1:** `notFoundStrategy` on vite `router`, preview middleware, `resolveHtmlAssetCandidates` + `fetchHtmlAsset` (lib + CF). **Backlog:** rewrite codegen, Node adapter knob, per-scope static 404 — [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md) |
 | W-2 | [ ] Split `navigation.ts` into smaller modules | No behavior change |
 
 ## P3 — Low (roadmap)
@@ -724,6 +724,14 @@ Copy unchecked items into GitHub Issues / Linear using IDs (`P0-1`, `S1-2`, etc.
 ### Docs — static 404 / host fallback (2026-05-22)
 
 - **P2-7 (analysis)** — [19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md); cross-links in 04, 10, 13, 14, 16; S3-1 static 404 e2e noted done via `e2e/file-routes-ssg`
+
+### P2-7 — `notFoundStrategy` + shared HTML candidates (2026-06-04)
+
+- **`NotFoundStrategy`** — `exact` | `csr-recovery` | `hybrid-ssr` in `packages/lib/src/router/htmlAssetCandidates.ts`
+- **Preview** — `router.notFoundStrategy` on `vite-plugin-kiru`; `inferNotFoundStrategy` from `ssg` + `serverEntry`
+- **Cloudflare** — `fetchHtmlAsset` in `createKiruWorkerHandler`
+- **Tests** — `htmlAssetCandidates.test.ts`, `preview-server.test.ts` (incl. `csr-recovery`)
+- **Docs** — [19](./19-static-404-and-host-fallback-strategies.md), [13](./13-vite-plugin-and-build-pipeline.md), [14](./14-adapters-and-deploy-runtimes.md)
 
 ### Sprint 5 — API & router depth (2026-05-22)
 

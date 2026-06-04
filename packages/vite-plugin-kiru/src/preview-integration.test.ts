@@ -98,7 +98,7 @@ describe("preview integration", () => {
 
   it("SSG middleware serves hybrid prerender docs.html", async () => {
     const res = await runMiddleware(
-      createSsgPreviewMiddleware(ssrClient, { requireFilledHtml: true }),
+      createSsgPreviewMiddleware(ssrClient, { notFoundStrategy: "hybrid-ssr" }),
       "/docs"
     )
     assert.equal(res.status, 200)

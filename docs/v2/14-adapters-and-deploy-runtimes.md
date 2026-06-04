@@ -110,9 +110,9 @@ Adapters should serve Vite client output before hitting Kiru.
 
 Kiru’s **router** uses exact matching plus nearest-scope `notFound`. **Hosts** differ: SSG may serve `404.html`, CSR static deploys often use `index.html` with 200, Cloudflare may probe asset candidates, and **hybrid** apps should send unknown paths to SSR instead of static `404.html`.
 
-Recommended deploy strategies (`exact`, `csr-recovery`, `nearest-asset`, `hybrid-ssr`), defaults per adapter, and footguns: **[19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)**.
+Deploy strategies **`exact`**, **`csr-recovery`**, **`hybrid-ssr`** (`router.notFoundStrategy` on vite preview; inferred from `ssg` + `serverEntry`): **[19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)**.
 
-When writing `DEPLOY-CLOUDFLARE.md`, link there for `getAsset` candidate resolution vs Worker-first hybrid SSR.
+Cloudflare immutable prerender uses shared **`resolveHtmlAssetCandidates`** / **`fetchHtmlAsset`** from `kiru/router` in `createKiruWorkerHandler`. Unknown paths on Worker-first hybrid apps use **`hybrid-ssr`** (SSR, not static `404.html` for misses).
 
 ---
 

@@ -133,6 +133,11 @@ export interface KiruPluginOptions {
           extend?: string
         }
     /**
+     * Static miss behavior for `vite preview` when {@link ssg} is enabled.
+     * @default `"exact"` for SSG-only, `"hybrid-ssr"` when {@link serverEntry} is set
+     */
+    notFoundStrategy?: "exact" | "csr-recovery" | "hybrid-ssr"
+    /**
      * Deploy adapter target — affects SSR bundle platform and ISR build checks.
      * @default "node"
      */
