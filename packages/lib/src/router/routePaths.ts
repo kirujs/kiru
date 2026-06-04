@@ -1,4 +1,5 @@
-import type { RouteDefinition } from "./types.js"
+import type { CustomRequestContext, RouteDefinition } from "./types.js"
+import { toRenderError } from "./types.js"
 
 /** Split a route path into URL segments (no leading slash). */
 type SplitSegments<P extends string> = P extends `/${infer Rest}`
@@ -120,21 +121,81 @@ export type InterceptLoadContext<
   params: Params
   location: import("./types.js").RouteLocation
   signal: AbortSignal
+  context: CustomRequestContext
 }
+
+/** Load outcome passed to `render` (discriminated on `error`, same shape as page `data` / `error` props). */
+export type InterceptLoadResult<Data> =
+  | { data: Data; error: null }
+  | { data: null; error: Error }
+
+export function buildInterceptSuccessResult<Data>(
+  data: Data
+): InterceptLoadResult<Data> {
+  return { data, error: null }
+}
+
+export function buildInterceptErrorResult(
+  err: unknown
+): InterceptLoadResult<never> {
+  return { data: null, error: toRenderError(err) }
+}
+
+/** Normalize stored intercept state into a render/load result union. */
+export function interceptLoadResultFromState(
+  state: Pick<{ data: unknown | null; error: Error | null }, "data" | "error">
+): InterceptLoadResult<unknown> {
+  if (state.error !== null) {
+    return { data: null, error: state.error }
+  }
+  return buildInterceptSuccessResult(state.data)
+}
+
+/** When `RouteTree` is augmented, only registered paths are accepted; otherwise any string. */
+export type RegisteredRoutePath<P extends string> =
+  IsRouteRegistryConfigured extends true
+    ? P extends NavigatePath
+      ? P
+      : never
+    : P
 
 export type InterceptRenderContext<
-  Params extends Record<string, string | undefined>
+  Params extends Record<string, string | undefined>,
+  Data = unknown
 > = InterceptLoadContext<Params> & {
   restore: () => void
-  data: unknown | undefined
-}
+  reload: () => void
+} & InterceptLoadResult<Data>
 
-export type InterceptorOptions<P extends string> = {
+/** Bivariant render callback (accepts narrower implementations under `strictFunctionTypes`). */
+export type InterceptorRenderFn<P extends string, Data = unknown> = {
+  bivariance(
+    ctx: InterceptRenderContext<RouteParams<P>, Data>
+  ): JSX.Element
+}["bivariance"]
+
+export type InterceptorOptions<
+  P extends string,
+  Data = unknown
+> = {
   from?: string
   load?: (
     ctx: InterceptLoadContext<RouteParams<P>>
-  ) => unknown | Promise<unknown>
-  render: (ctx: InterceptRenderContext<RouteParams<P>>) => JSX.Element
+  ) => Data | Promise<Data>
+  render: InterceptorRenderFn<P, Data>
+}
+
+/** Declarative interceptor config for `defineRouteInterceptors`. */
+export type RouteInterceptorDefinition<
+  P extends string = string,
+  Data = unknown
+> = {
+  path: P
+  from?: string
+  load?: (
+    ctx: InterceptLoadContext<RouteParams<P>>
+  ) => Data | Promise<Data>
+  render: InterceptorRenderFn<P, Data>
 }
 
 export type InterceptorHandle = {

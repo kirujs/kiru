@@ -7,7 +7,7 @@ export default function PhotoModal({
   title: string
   onClose: () => void
 }) {
-  return () => (
+  return (
     <div
       role="dialog"
       data-testid="photo-modal"

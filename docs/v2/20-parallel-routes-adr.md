@@ -142,7 +142,7 @@ type SlotMatch = {
 
 ### 6. Intercepting
 
-**Shipped (CSR):** runtime source-side API — `router.createInterceptor` on the page that owns the outlet. See [22-route-interceptors.md](./22-route-interceptors.md). URL = target; background outlet unchanged; page-local `<handle.Outlet />` (no layout `slots` required).
+**Shipped (CSR):** runtime source-side API — `defineRouteInterceptors` on the page that owns the outlet. See [22-route-interceptors.md](./22-route-interceptors.md). URL = target; background outlet unchanged; page-local `<handle.Outlet />` (no layout `slots` required).
 
 **Deferred (v2.1b):** declarative intercept on the **target** route + scope `slots.modal`, not filesystem `(.)`:
 

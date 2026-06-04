@@ -57,7 +57,7 @@ export const routes = createRouteTree({
 export const routeLinks = [
   { path: "/", displayName: "home" },
   { path: "/about", displayName: "about" },
-  { path: "/users/42", displayName: "user-42" },
+  { path: "/users/[id]", params: { id: "42" }, displayName: "user-42" },
   { path: "/guarded", displayName: "guarded-redirect" },
   { path: "/forbidden", displayName: "forbidden" },
   { path: "/hash-section", displayName: "hash-section" },
@@ -73,4 +73,4 @@ export const routeLinks = [
   { path: "/loaders/client", displayName: "loaders-client" },
   { path: "/loaders/universal", displayName: "loaders-universal" },
   { path: "/photos", displayName: "photos" },
-]
+] as const

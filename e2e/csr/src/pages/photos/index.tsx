@@ -1,20 +1,30 @@
-import { Link, useRouter } from "kiru/router"
+import { Show } from "kiru"
+import { defineRouteInterceptors, Link, routeInterceptor } from "kiru/router"
 import PhotoModal from "./photo-modal"
 
-export default function PhotosPage() {
-  const router = useRouter()
-  const photo = router.createInterceptor("/photos/[id]", {
-    load: async ({ params }) => ({ title: `Photo ${params.id}` }),
-    render: ({ params, restore, data }) => (
-      <PhotoModal
-        photoId={params.id}
-        title={(data as { title?: string })?.title ?? ""}
-        onClose={restore}
-      />
-    ),
-  })
+export const interceptors = defineRouteInterceptors({
+  photo: routeInterceptor("/photos/[id]", {
+    load: ({ params }) => ({ title: `Photo ${params.id}` }),
+    render: ({ params, restore, reload, data, error }) =>
+      error ? (
+        <div data-testid="photo-modal-error">
+          <p>{error.message}</p>
+          <button
+            type="button"
+            data-testid="photo-modal-retry"
+            onclick={reload}
+          >
+            Retry
+          </button>
+        </div>
+      ) : (
+        <PhotoModal photoId={params.id} title={data.title} onClose={restore} />
+      ),
+  }),
+})
 
-  return () => (
+export default function PhotosPage() {
+  return (
     <div data-testid="photos-page">
       <h2>Photos</h2>
       <ul data-testid="photos-feed">
@@ -38,7 +48,17 @@ export default function PhotosPage() {
           </Link>
         </li>
       </ul>
-      <photo.Outlet />
+      <interceptors.photo.Outlet />
+      <Show when={interceptors.photo.isPending}>
+        <div>
+          <p>Photo modal is loading</p>
+        </div>
+      </Show>
+      <Show when={interceptors.photo.isActive}>
+        <div>
+          <p>Photo modal is active</p>
+        </div>
+      </Show>
     </div>
   )
 }

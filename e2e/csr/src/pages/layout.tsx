@@ -1,4 +1,4 @@
-import { Link } from "kiru/router"
+import { Link, type LinkProps } from "kiru/router"
 import { routeLinks } from "../routes"
 
 export default function RootLayout({ children }: { children: JSX.Children }) {
@@ -9,11 +9,16 @@ export default function RootLayout({ children }: { children: JSX.Children }) {
       </header>
       <nav>
         <ul>
-          {routeLinks.map(({ path, displayName }) => (
+          {routeLinks.map((link) => (
             <li>
-              <Link to={path} data-testid={`nav-${displayName}`}>
-                {displayName}
-              </Link>
+              <Link
+                {...({
+                  to: link.path,
+                  ...("params" in link ? { params: link.params } : {}),
+                  "data-testid": `nav-${link.displayName}`,
+                  children: link.displayName,
+                } as LinkProps)}
+              />
             </li>
           ))}
         </ul>

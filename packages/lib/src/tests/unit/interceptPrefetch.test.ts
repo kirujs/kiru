@@ -77,7 +77,9 @@ describe("interceptor prefetch", () => {
 
     const result = await router.navigate("/photos/7")
     assert.equal(result.status, "intercepted")
-    assert.deepEqual(router.interceptState.peek()?.data, { cached: "7" })
+    const state = router.interceptState.peek()
+    assert.deepEqual(state?.data, { cached: "7" })
+    assert.equal(state?.error, null)
     router.dispose()
   })
 })

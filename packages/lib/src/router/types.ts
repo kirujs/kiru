@@ -496,5 +496,6 @@ export type RouteInterceptState = {
   registrationId: number
   backgroundMatch: RouteMatch
   targetMatch: RouteMatch
-  data: unknown | undefined
+  data: unknown | null
+  error: Error | null
 }

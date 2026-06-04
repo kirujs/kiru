@@ -81,4 +81,41 @@ describe("navigation intercept", () => {
     assert.equal(router.interceptState.peek(), null)
     router.dispose()
   })
+
+  it("load throw sets error and null data while intercept stays active", async () => {
+    const manifest = compileRouteTree(
+      createRouteTree({
+        children: [
+          createRoute("/photos", async () => ({ default: () => null })),
+          createRoute("/photos/[id]", async () => ({ default: () => null })),
+        ],
+      })
+    )
+    const { history } = mockHistory()
+    const router = createRouter({
+      routes: manifest,
+      history,
+      location: { pathname: "/photos", search: "", hash: "" } as Location,
+    })
+    const fromMatch = router.match.peek()!
+    getRouterInstanceRuntime(router).registerRouteInterceptor!(
+      "/photos/[id]",
+      {
+        load: async () => {
+          throw new Error("intercept load failed")
+        },
+        render: () => null,
+      },
+      fromMatch.route.id
+    )
+
+    const result = await router.navigate("/photos/5")
+    assert.equal(result.status, "intercepted")
+    const state = router.interceptState.peek()
+    assert.ok(state)
+    assert.equal(state!.error?.message, "intercept load failed")
+    assert.equal(state!.data, null)
+    assert.equal(router.match.peek()?.route.path, "/photos")
+    router.dispose()
+  })
 })

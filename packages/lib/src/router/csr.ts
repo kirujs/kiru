@@ -60,10 +60,14 @@ export type {
   CreatedRoute,
   HasRouteParams,
   InterceptLoadContext,
+  InterceptLoadResult,
   InterceptRenderContext,
   InterceptorHandle,
   InterceptorOptions,
+  InterceptorRenderFn,
   NavigatePath,
+  RouteInterceptorDefinition,
+  RegisteredRoutePath,
   ParamsForPath,
   RouteParams,
   RouteTree,
@@ -91,15 +95,19 @@ import {
 } from "./pageHead.js"
 import { releaseActiveRouter } from "./routerGlobal.js"
 import {
-  createRouterInterceptor,
   registerRouteInterceptor,
   buildInterceptorPrefetchKey,
   consumePrefetchedInterceptorData,
+  applyInterceptLoadResult,
   runInterceptorLoad,
   syncAllInterceptorHandlesActive,
   type InterceptorRegistration,
   type KiruHistoryInterceptState,
 } from "./routeInterceptors.js"
+export {
+  defineRouteInterceptors,
+  routeInterceptor,
+} from "./defineRouteInterceptors.js"
 import { ensureRouteAnnouncerInDocument } from "./navigationAnnouncer.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { invalidateLoaderCache } from "./loaderCache.js"
@@ -461,7 +469,8 @@ export function createRouter({
       registrationId: input.registration.id,
       backgroundMatch: input.backgroundMatch,
       targetMatch: input.targetMatch,
-      data: undefined,
+      data: null,
+      error: null,
     }
     interceptState.value = nextState
     syncInterceptorHandles()
@@ -470,10 +479,14 @@ export function createRouter({
       input.targetMatch
     )
     const cached = consumePrefetchedInterceptorData(prefetchKey)
-    const data = await runInterceptorLoad(
+    const loadDeps = {
+      getRequestContext: () => requestContext.peek(),
+      buildTargetLocation,
+    }
+    const result = await runInterceptorLoad(
+      loadDeps,
       input.registration,
       nextState,
-      buildTargetLocation,
       input.signal,
       cached.kind === "hit"
         ? { fromPrefetch: true, prefetchedData: cached.data }
@@ -481,7 +494,7 @@ export function createRouter({
     )
     if (input.signal.aborted) return
     if (interceptState.peek()?.registrationId === input.registration.id) {
-      interceptState.value = { ...nextState, data }
+      interceptState.value = applyInterceptLoadResult(nextState, result)
     }
   }
 
@@ -749,22 +762,6 @@ export function createRouter({
     validatedQuery,
     validatedRouteParams,
     interceptState,
-    createInterceptor(target, options) {
-      return createRouterInterceptor(
-        {
-          manifest,
-          registrations: interceptorRegistrations,
-          interceptState,
-          getBackgroundMatch: () => match.peek(),
-          getNavSignal: () =>
-            navAbortController.current?.signal ?? staticLoaderSignal(),
-          dismissIntercept,
-          buildTargetLocation,
-        },
-        target,
-        options
-      )
-    },
     async invalidate(options) {
       const ids = options?.routeIds
       if (ids?.length) {
@@ -1014,7 +1011,8 @@ export function createRouter({
     },
     getRouteInterceptorRegistrations: () => interceptorRegistrations,
     buildTargetLocation,
-    registerRouteInterceptor(target, options, fromRouteId) {
+    dismissRouteIntercept: dismissIntercept,
+    registerRouteInterceptor(target, options, fromRouteId, signals) {
       const from = fromRouteId ?? match.peek()?.route.id ?? "_"
       return registerRouteInterceptor(
         {
@@ -1024,12 +1022,14 @@ export function createRouter({
           getBackgroundMatch: () => match.peek(),
           getNavSignal: () =>
             navAbortController.current?.signal ?? staticLoaderSignal(),
+          getRequestContext: () => requestContext.peek(),
           dismissIntercept,
           buildTargetLocation,
         },
         target,
         options,
-        from
+        from,
+        signals
       )
     },
   })
@@ -1091,11 +1091,6 @@ export function createStaticRouter({
     validatedQuery: signal(null),
     validatedRouteParams: signal(null),
     interceptState: signal(null),
-    createInterceptor() {
-      throw new Error(
-        "[kiru] router.createInterceptor requires createRouter (client history mode)"
-      )
-    },
     async invalidate() {},
     navigationMode: "static",
     navigate() {

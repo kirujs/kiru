@@ -50,12 +50,14 @@ export type RouterRuntime = {
   registerRouteInterceptor?: <P extends NavigatePath>(
     target: P,
     options: InterceptorOptions<P>,
-    fromRouteId?: string
+    fromRouteId?: string,
+    signals?: import("./routeInterceptors.js").RouteInterceptorSignals
   ) => InterceptorHandle
   getRouteInterceptorRegistrations?: () => readonly InterceptorRegistration[]
   buildTargetLocation?: (
     match: RouteMatch
   ) => import("./types.js").RouteLocation
+  dismissRouteIntercept?: (options?: { skipHistoryBack?: boolean }) => void
 }
 
 const ROUTER_RUNTIME = Symbol.for("kiru.router.runtime")

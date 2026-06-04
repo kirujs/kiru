@@ -84,7 +84,8 @@ async function runPrefetchRoute(
       interceptor,
       toMatch,
       buildTargetLocation,
-      signal
+      signal,
+      () => router.requestContext.peek()
     )
     return
   }

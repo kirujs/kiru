@@ -8,24 +8,37 @@ CSR-only **soft navigation** overlays: the URL updates to a real target route wh
 
 ## API
 
-Register from a page component via `useRouter()`:
+Declare interceptors at module scope and mount each `<name.Outlet />` on the owning page:
 
 ```tsx
-import { Link, useRouter } from "kiru/router"
+import { Link, defineRouteInterceptors, routeInterceptor } from "kiru/router"
+import PhotoModal from "./photo-modal"
+
+export const interceptors = defineRouteInterceptors({
+  photo: routeInterceptor("/photos/[id]", {
+    load: async ({ params, signal, context }) =>
+      fetchPhoto(params.id, { signal, context }),
+    render: ({ params, restore, reload, data, error }) =>
+      error ? (
+        <div>
+          <p>{error.message}</p>
+          <button type="button" onClick={reload}>
+            Retry
+          </button>
+        </div>
+      ) : (
+        <PhotoModal photoId={params.id} photo={data} onClose={restore} />
+      ),
+  }),
+})
 
 export default function PhotosPage() {
-  const router = useRouter()
-  const photo = router.createInterceptor("/photos/[id]", {
-    load: async ({ params, signal }) => fetchPhoto(params.id, { signal }),
-    render: ({ params, restore, data }) => (
-      <PhotoModal photoId={params.id} photo={data} onClose={restore} />
-    ),
-  })
-
-  return () => (
+  return (
     <>
-      <Link to="/photos/[id]" params={{ id: "123" }}>Open</Link>
-      <photo.Outlet />
+      <Link to="/photos/[id]" params={{ id: "123" }}>
+        Open
+      </Link>
+      <interceptors.photo.Outlet />
     </>
   )
 }
@@ -33,20 +46,24 @@ export default function PhotosPage() {
 
 ### `InterceptorHandle`
 
-| Member | Description |
-|--------|-------------|
-| `Outlet` | Renders `null` when inactive; calls `render` when intercept is active |
-| `isActive` | `true` while this registration’s intercept is showing |
-| `isPending` | `true` while interceptor `load` is in flight |
-| `restore()` | Dismiss intercept (usually `history.back()`); same as browser back |
+| Member      | Description                                                                                                                      |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `Outlet`    | Renders `null` when inactive; calls `render` when intercept is active. Registration runs when `Outlet` mounts (component setup). |
+| `isActive`  | `true` while this registration’s intercept is showing                                                                            |
+| `isPending` | `true` while interceptor `load` is in flight                                                                                     |
+| `restore()` | Dismiss intercept (usually `history.back()`); same as browser back                                                               |
 
 ### Context (`load` / `render`)
 
 - `params` — target route params (typed via `RouteTree` augmentation, same as `Link`)
 - `location` — target `pathname` + `params`
 - `signal` — navigation abort signal
-- `data` — result of interceptor `load` (not the target page’s `export const load`)
-- `restore` — render only
+- `context` — per-request `CustomRequestContext` (same as page loaders)
+- `data` / `error` — discriminated union (same shape as page props): `{ data: T; error: null }` or `{ data: null; error: Error }`. Thrown `load` errors are caught; `render` runs in both cases.
+- `restore` — dismiss intercept (render only)
+- `reload()` — re-run interceptor `load` without dismissing (render only); `isPending` is true while reload runs
+
+While `load` is in flight, `error` is `null` and `data` may be `null`; use `isPending` or guard on `data` before rendering success UI.
 
 ### Navigation
 
@@ -55,7 +72,7 @@ export default function PhotosPage() {
 
 ### Prefetch
 
-`<Link prefetch>` prefetches **interceptor `load`** (not the target route loader) when the link would soft-intercept from the current page. Cached data is consumed on intercept commit so the modal can open without a spinner. Cache and in-flight prefetches for that registration are cleared when the owning component unmounts (`createInterceptor` cleanup).
+`<Link prefetch>` prefetches **interceptor `load`** (not the target route loader) when the link would soft-intercept from the current page. Cached data is consumed on intercept commit so the modal can open without a spinner. Cache and in-flight prefetches for that registration are cleared when the `Outlet` unmounts.
 
 - `prefetch={{ interceptLoad: false }}` — skip interceptor load prefetch
 - `prefetch={{ intercept: false }}` — prefetch target route loader instead (same as `intercept={false}` on navigate)
@@ -76,8 +93,8 @@ export default function PhotosPage() {
 
 Registration is scoped to `(fromRouteId, targetPath)`:
 
-- `fromRouteId` — current route when `createInterceptor` runs (override with `from` in options)
-- `targetPath` — logical pattern (e.g. `"/photos/[id]"`)
+- `fromRouteId` — current route when the interceptor `Outlet` mounts (override with `from` on the definition)
+- `targetPath` — logical pattern from `path` (e.g. `"/photos/[id]"`)
 
 ---
 
@@ -99,7 +116,7 @@ declare module "kiru/router" {
 }
 ```
 
-`router.createInterceptor("/photos/[id]", …)` then autocompletes paths and infers `params.id`.
+Use `routeInterceptor("/photos/[id]", { … })` inside `defineRouteInterceptors` so the path is checked against your augmented `RouteTree`, `params` is inferred from the path pattern, and `data` is inferred from `load`'s return type.
 
 ---
 

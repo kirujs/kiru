@@ -11,9 +11,6 @@ import type { RouterI18nFields } from "./i18n/augmentation.js"
 import type { RouteTreeMatchSegment } from "./navigation.js"
 import type { RouterQuery } from "./requestUrl.js"
 import type {
-  InterceptorHandle,
-  InterceptorOptions,
-  NavigatePath,
   RouterNavigateCallOptions,
   RouterNavigateInput,
 } from "./routePaths.js"
@@ -67,10 +64,6 @@ export interface RouterCore {
   validatedQuery: Signal<unknown | null>
   validatedRouteParams: Signal<Record<string, unknown> | null>
   interceptState: Signal<RouteInterceptState | null>
-  createInterceptor: <P extends NavigatePath>(
-    target: P,
-    options: InterceptorOptions<P>
-  ) => InterceptorHandle
   invalidate: (options?: {
     current?: boolean
     routeIds?: string[]

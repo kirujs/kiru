@@ -197,7 +197,7 @@ Tests in `router.test.tsx` cover root error without layout (when that suite runs
 
 ## Parallel and intercepting routes
 
-**Route interceptors (CSR):** `router.createInterceptor` — [22-route-interceptors.md](./22-route-interceptors.md).
+**Route interceptors (CSR):** `defineRouteInterceptors` — [22-route-interceptors.md](./22-route-interceptors.md).
 
 **Parallel scope slots:** not shipped. ADR: [20-parallel-routes-adr.md](./20-parallel-routes-adr.md).
 
