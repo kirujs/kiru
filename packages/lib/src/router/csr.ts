@@ -7,7 +7,12 @@ import {
   stripBase,
   type RouterPathPolicy,
 } from "./pathPolicy.js"
-import { parseQuery, splitRouterTo, type RouterQuery } from "./requestUrl.js"
+import {
+  parseQueryBounded,
+  resolveRequestLimits,
+  type KiruRequestLimits,
+} from "./requestLimits.js"
+import { splitRouterTo, type RouterQuery } from "./requestUrl.js"
 import type {
   AfterEachHook,
   CurrentNavigation,
@@ -215,6 +220,8 @@ export type CreateRouterOptions = {
   i18n?: InternationalizationConfig<readonly string[], unknown>
   /** When false, omit `<kiru-route-announcer>` and skip route title announcements (default true). */
   navigationAnnouncer?: boolean
+  /** Ingress bounds for client navigations and query parsing (merged with defaults). */
+  requestLimits?: Partial<KiruRequestLimits>
 }
 
 export function createRouter({
@@ -225,8 +232,10 @@ export function createRouter({
   transition = false,
   i18n,
   navigationAnnouncer = true,
+  requestLimits: requestLimitsPartial,
 }: CreateRouterOptions): Router {
   const manifest = "routes" in routes ? routes : compileRouteTree(routes)
+  const requestLimits = resolveRequestLimits(requestLimitsPartial)
   const resolvedPathPolicy = resolvePathPolicy(pathPolicy)
   const normalizedBaseUrl = resolvedPathPolicy.baseUrl
   const localeRouting = i18n ? getI18nLocaleRouting(i18n) : undefined
@@ -258,10 +267,21 @@ export function createRouter({
     i18nRuntime.setLocale(hydratedI18n.locale, hydratedI18n.data)
   }
   const hash = signal(location.hash)
-  const query = signal(parseQuery(location.search))
+  let initialQuery: RouterQuery = {}
+  try {
+    initialQuery = parseQueryBounded(location.search, requestLimits)
+  } catch {
+    initialQuery = {}
+  }
+  const query = signal(initialQuery)
   const path = pathname
   const match = signal(
-    matchRoute(manifest, initialSplit.pathname, resolvedPathPolicy)
+    matchRoute(
+      manifest,
+      initialSplit.pathname,
+      resolvedPathPolicy,
+      requestLimits
+    )
   )
   const params = signal(match.value?.params ?? {})
   const matches = signal(buildMatchSegments(match.peek()))
@@ -480,7 +500,12 @@ export function createRouter({
     pathname.value = next.pathname
     hash.value = next.hash
     query.value = next.query
-    const nextMatch = matchRoute(manifest, next.pathname, resolvedPathPolicy)
+    const nextMatch = matchRoute(
+      manifest,
+      next.pathname,
+      resolvedPathPolicy,
+      requestLimits
+    )
     match.value = nextMatch
     params.value = nextMatch?.params ?? {}
     matches.value = buildMatchSegments(nextMatch)
@@ -543,6 +568,7 @@ export function createRouter({
       interceptorRegistrations,
       commitInterceptLocation,
       dismissIntercept,
+      requestLimits,
       localeRouting,
       locale,
       onLocaleChange:
@@ -627,9 +653,10 @@ export function createRouter({
             new URL(href),
             normalizedBaseUrl,
             localeRouting,
-            resolvedPathPolicy
+            resolvedPathPolicy,
+            requestLimits
           )
-        : parseResolvedLocation(new URL(href), normalizedBaseUrl)
+        : parseResolvedLocation(new URL(href), normalizedBaseUrl, requestLimits)
       const targetPath = resolved.pathname
       const activeIntercept = interceptState.peek()
 
@@ -815,7 +842,11 @@ export function createRouter({
         if (result.status !== "committed" && result.status !== "intercepted") {
           return result
         }
-        const nextHash = parseResolvedLocation(url, normalizedBaseUrl).hash
+        const nextHash = parseResolvedLocation(
+          url,
+          normalizedBaseUrl,
+          requestLimits
+        ).hash
         if (prevHash !== nextHash && typeof window !== "undefined") {
           window.dispatchEvent(new HashChangeEvent("hashchange"))
         }
@@ -870,7 +901,8 @@ export function createRouter({
       }).then((result) => {
         const normalizedNextHash = parseResolvedLocation(
           url,
-          normalizedBaseUrl
+          normalizedBaseUrl,
+          requestLimits
         ).hash
         if (prevHash !== normalizedNextHash && typeof window !== "undefined") {
           window.dispatchEvent(new HashChangeEvent("hashchange"))

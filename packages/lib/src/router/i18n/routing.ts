@@ -19,7 +19,12 @@ import {
   stripBase,
   type RouterPathPolicy,
 } from "../pathPolicy.js"
-import { parseQuery, type RouterQuery } from "../requestUrl.js"
+import {
+  DEFAULT_REQUEST_LIMITS,
+  parseQueryBounded,
+  type ResolvedRequestLimits,
+} from "../requestLimits.js"
+import type { RouterQuery } from "../requestUrl.js"
 
 export type AppPathSplit = {
   locale: string
@@ -315,7 +320,8 @@ export function parseAppLocation(
   url: URL,
   baseUrl: string,
   routing?: I18nLocaleRouting,
-  policy?: RouterPathPolicy
+  policy?: RouterPathPolicy,
+  limits: ResolvedRequestLimits = DEFAULT_REQUEST_LIMITS
 ): {
   pathname: string
   locale: string | null
@@ -337,7 +343,7 @@ export function parseAppLocation(
       pathname,
       locale: null,
       hash,
-      query: parseQuery(search),
+      query: parseQueryBounded(search, limits),
       href: `${addBase(pathname, baseUrl)}${search}${hash}`,
     }
   }
@@ -353,7 +359,7 @@ export function parseAppLocation(
       pathname: detailed.pathname,
       locale: detailed.locale,
       hash,
-      query: parseQuery(search),
+      query: parseQueryBounded(search, limits),
       href: detailed.location,
       wrongDomain: detailed,
     }
@@ -369,7 +375,7 @@ export function parseAppLocation(
       pathname: detailed.pathname,
       locale: detailed.locale,
       hash,
-      query: parseQuery(search),
+      query: parseQueryBounded(search, limits),
       href: redirectPath.startsWith("http")
         ? `${redirectPath}${search}${hash}`
         : `${addBase(redirectPath, baseUrl)}${search}${hash}`,
@@ -381,7 +387,7 @@ export function parseAppLocation(
     pathname: detailed.pathname,
     locale: detailed.locale,
     hash,
-    query: parseQuery(search),
+    query: parseQueryBounded(search, limits),
     href: formatPublicHref(
       detailed.pathname,
       detailed.locale,

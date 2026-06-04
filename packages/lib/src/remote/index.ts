@@ -3,16 +3,22 @@ import type {
   RemoteFormActionFunction,
   RemoteFormActionInvokeArgs,
 } from "./action.js"
-import {
-  KIRU_FORM_TOKEN_FIELD,
-  parseActionQueryFromUrl,
-} from "./action.js"
+import { KIRU_FORM_TOKEN_FIELD } from "./action.js"
 import { buildActionHttpResponse, normalizeActionResult } from "./actionResponse.js"
 import type { HandlerWithScopeResult } from "./actionResponseScope.js"
 import {
   createActionExecutionForRequest,
   runInActionExecution,
 } from "./actionInvokeScope.js"
+import {
+  assertFormFieldCountWithinLimits,
+  assertTokenWithinLimits,
+  isRequestLimitError,
+  parseActionQueryFromUrlBounded,
+  readBoundedJson,
+  resolveRequestLimits,
+  type KiruRequestLimits,
+} from "../router/requestLimits.js"
 import { isAbortError } from "../router/navigationScope.js"
 import { isRemoteError } from "./errors.js"
 import { unwrapKiruToken } from "./token.js"
@@ -152,6 +158,7 @@ export type CreateRemoteActionHandlerOptions = {
   allowedOrigins?: string[]
   exposeErrors?: boolean
   deployTarget?: import("@kirujs/runtime").KiruDeployTarget
+  requestLimits?: Partial<KiruRequestLimits>
 }
 
 function isAllowedOrigin(
@@ -281,6 +288,7 @@ export function createRemoteActionHandler(
   secret: string,
   options?: CreateRemoteActionHandlerOptions
 ): (request: Request) => Promise<Response | null> {
+  const limits = resolveRequestLimits(options?.requestLimits)
   return async (request: Request) => {
     try {
       const url = new URL(request.url)
@@ -314,12 +322,30 @@ export function createRemoteActionHandler(
           return new Response(null, { status: 500 })
         }
 
+        try {
+          assertFormFieldCountWithinLimits(formData, limits)
+        } catch (e) {
+          if (isRequestLimitError(e)) {
+            return new Response(null, { status: e.status })
+          }
+          throw e
+        }
+
         const tokenFromForm = formData.get(KIRU_FORM_TOKEN_FIELD)
         if (typeof tokenFromForm !== "string") {
           return new Response(null, { status: 400 })
         }
 
-        const context = unwrapKiruToken(tokenFromForm, secret)
+        try {
+          assertTokenWithinLimits(tokenFromForm, limits)
+        } catch (e) {
+          if (isRequestLimitError(e)) {
+            return new Response(null, { status: e.status })
+          }
+          throw e
+        }
+
+        const context = unwrapKiruToken(tokenFromForm, secret, limits)
         if (!context) return new Response(null, { status: 400 })
 
         const handler = registry[routeId]?.[actionName]
@@ -384,7 +410,16 @@ export function createRemoteActionHandler(
         return new Response(null, { status: 403 })
       }
 
-      const context = unwrapKiruToken(token, secret)
+      try {
+        assertTokenWithinLimits(token, limits)
+      } catch (e) {
+        if (isRequestLimitError(e)) {
+          return new Response(null, { status: e.status })
+        }
+        throw e
+      }
+
+      const context = unwrapKiruToken(token, secret, limits)
       if (!context) return new Response(null, { status: 400 })
 
       const handler = registry[routeId]?.[actionName]
@@ -398,12 +433,23 @@ export function createRemoteActionHandler(
 
       let body: unknown = undefined
       try {
-        body = await request.json()
-      } catch {
+        body = await readBoundedJson(request, limits.maxJsonBodyBytes)
+      } catch (e) {
+        if (isRequestLimitError(e)) {
+          return new Response(null, { status: e.status })
+        }
         body = null
       }
 
-      const query = parseActionQueryFromUrl(url)
+      let query: Record<string, string | string[]>
+      try {
+        query = parseActionQueryFromUrlBounded(url, limits)
+      } catch (e) {
+        if (isRequestLimitError(e)) {
+          return new Response(null, { status: e.status })
+        }
+        throw e
+      }
       return invokeJsonRemoteAction(
         handler,
         request,
@@ -414,7 +460,10 @@ export function createRemoteActionHandler(
         secret,
         options
       )
-    } catch {
+    } catch (e) {
+      if (isRequestLimitError(e)) {
+        return new Response(null, { status: e.status })
+      }
       return new Response(null, { status: 500 })
     }
   }

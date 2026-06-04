@@ -41,9 +41,16 @@ export async function prepareAppForUrl(
   pathPolicy: ReturnType<typeof resolvePathPolicy>,
   i18n?: InternationalizationConfig<readonly string[], unknown>,
   request?: Request,
-  renderOpts: { enableStreamingLoad?: boolean } = {}
+  renderOpts: {
+    enableStreamingLoad?: boolean
+    requestLimits?: import("./requestLimits.js").ResolvedRequestLimits
+  } = {}
 ): Promise<PrepareAppResult> {
-  const requestUrl = parseRequestUrl(url)
+  const requestUrl = parseRequestUrl(
+    url,
+    "http://localhost",
+    renderOpts.requestLimits
+  )
   const rawPath = pathnameForMatch(toPathname(url), pathPolicy)
 
   const localeRedirect =
@@ -66,7 +73,12 @@ export async function prepareAppForUrl(
   let path = requestedPathname
 
   for (let depth = 0; depth < MAX_SSR_MIDDLEWARE_REDIRECTS; depth++) {
-    const routeMatch = matchRouteForPath(manifest, path, pathPolicy)
+    const routeMatch = matchRouteForPath(
+      manifest,
+      path,
+      pathPolicy,
+      renderOpts.requestLimits
+    )
 
     if (!routeMatch) {
       if (path === requestedPathname) {

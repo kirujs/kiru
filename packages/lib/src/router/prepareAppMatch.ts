@@ -264,7 +264,8 @@ export async function buildPreparedAppForMatch(
 export function matchRouteForPath(
   manifest: RouteManifest,
   path: string,
-  pathPolicy: RouterPathPolicy
+  pathPolicy: RouterPathPolicy,
+  limits?: import("./requestLimits.js").ResolvedRequestLimits
 ): RouteMatch | null {
-  return matchRoute(manifest, path, pathPolicy)
+  return matchRoute(manifest, path, pathPolicy, limits)
 }

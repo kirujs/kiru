@@ -1,3 +1,9 @@
+import {
+  DEFAULT_REQUEST_LIMITS,
+  parseQueryBounded,
+  type ResolvedRequestLimits,
+} from "./requestLimits.js"
+
 export type RouterQuery = Record<string, string[]>
 
 export type RequestUrlState = {
@@ -17,13 +23,14 @@ export function parseQuery(search: string): RouterQuery {
 
 export function parseRequestUrl(
   url: string,
-  base = "http://localhost"
+  base = "http://localhost",
+  limits: ResolvedRequestLimits = DEFAULT_REQUEST_LIMITS
 ): RequestUrlState {
   const parsed = new URL(url, base)
   return {
     search: parsed.search,
     hash: parsed.hash,
-    query: parseQuery(parsed.search),
+    query: parseQueryBounded(parsed.search, limits),
   }
 }
 

@@ -64,6 +64,11 @@ import {
   createRemoteActionHandler,
 } from "../remote/index.js"
 import { runWithSsrRequestContext } from "../remote/action.js"
+import {
+  checkUrlWithinLimits,
+  resolveRequestLimits,
+  type KiruRequestLimits,
+} from "./requestLimits.js"
 import { toPathname } from "./requestUrl.js"
 import {
   appendHydrationPreloadsToHeadHtml,
@@ -119,6 +124,8 @@ export type RendererActionsOptions = {
   allowedOrigins?: string[]
   /** When true, internal `RemoteError` throws map to `{ ok: false, error }` JSON. */
   exposeErrors?: boolean
+  /** Ingress bounds for URLs, RPC bodies, and tokens (merged with defaults). */
+  requestLimits?: Partial<KiruRequestLimits>
 }
 
 export interface StreamRenderer {
@@ -196,6 +203,17 @@ function appendRouteModulePreloads(
   })
 }
 
+function requestLimitRenderHit(status: number): {
+  kind: "string"
+  result: { status: number; headers: Record<string, string>; body: string }
+} {
+  const headers = { ...DEFAULT_SSR_HEADERS }
+  return {
+    kind: "string",
+    result: { status, headers, body: "" },
+  }
+}
+
 function engine(options: CreateRendererOptions & { stream: boolean }) {
   const {
     manifest,
@@ -203,6 +221,7 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     actionsSecret,
     handleRemoteAction,
     hydrationChunks,
+    requestLimits,
   } = prepareRenderer(options)
   const pathPolicy = resolvePathPolicy(options.pathPolicy)
   const i18nConfig = options.i18n
@@ -257,6 +276,16 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
   ) => {
     const url =
       typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url
+
+    const parsedIngress = new URL(url, "http://localhost")
+    const urlLimit = checkUrlWithinLimits(
+      parsedIngress.pathname,
+      parsedIngress.search,
+      requestLimits
+    )
+    if (urlLimit) {
+      return requestLimitRenderHit(urlLimit.status)
+    }
 
     if (i18nConfig && typeof requestOrUrl === "object") {
       const rawPath = pathnameForMatch(toPathname(url), pathPolicy)
@@ -358,7 +387,10 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
         pathPolicy,
         i18nConfig,
         typeof requestOrUrl === "object" ? requestOrUrl : undefined,
-        { enableStreamingLoad: options.stream }
+        {
+          enableStreamingLoad: options.stream,
+          requestLimits,
+        }
       )
       if (!prepared) return null
 
@@ -673,17 +705,20 @@ function prepareRenderer(options: CreateRendererOptions) {
   if (options.stream && htmlTemplate !== undefined) {
     warnIfStreamingTemplateLacksAsyncEntry(htmlTemplate)
   }
+  const requestLimits = resolveRequestLimits(actions?.requestLimits)
   const actionsSecret = actions?.secret
   const handleRemoteAction = actions
     ? createRemoteActionHandler(actions.secret, {
         allowedOrigins: actions.allowedOrigins,
         exposeErrors: actions.exposeErrors,
         deployTarget,
+        requestLimits: actions.requestLimits,
       })
     : null
   const handleLoader = actions
     ? createLoaderHandler(actions.secret, {
         allowedOrigins: actions.allowedOrigins,
+        requestLimits: actions.requestLimits,
       })
     : null
   const handlePost =
@@ -705,6 +740,7 @@ function prepareRenderer(options: CreateRendererOptions) {
     actionsSecret,
     handleRemoteAction: handlePost,
     hydrationChunks,
+    requestLimits,
   }
 }
 

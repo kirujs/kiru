@@ -16,6 +16,11 @@ import {
   type RouteBuildMeta,
 } from "./routeBuildMeta.js"
 import type { SiteConfig } from "./site.js"
+import {
+  DEFAULT_REQUEST_LIMITS,
+  validateRouteParams,
+  type ResolvedRequestLimits,
+} from "./requestLimits.js"
 import type {
   CompiledRoute,
   CompiledRouteScope,
@@ -201,11 +206,13 @@ function execRoutePattern(pattern: RegExp, pathname: string): RegExpExecArray | 
 export function matchRoute(
   manifest: RouteManifest,
   pathname: string,
-  pathPolicy?: RouterPathPolicy
+  pathPolicy?: RouterPathPolicy,
+  limits: ResolvedRequestLimits = DEFAULT_REQUEST_LIMITS
 ): RouteMatch | null {
   const normalizedPath = normalizePath(
     pathnameForMatch(pathname.split("?")[0] || "/", pathPolicy)
   )
+  if (normalizedPath.length > limits.maxPathnameLength) return null
 
   for (const route of manifest.routes) {
     const match = execRoutePattern(route.pattern, normalizedPath)
@@ -219,6 +226,7 @@ export function matchRoute(
         params[route.params[i]] = raw
       }
     }
+    if (!validateRouteParams(params, limits)) continue
     return {
       route,
       params,

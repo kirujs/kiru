@@ -142,4 +142,60 @@ describe("createLoaderHandler", () => {
     )
     assert.strictEqual(res?.status, 200)
   })
+
+  it("returns 413 when JSON body exceeds maxJsonBodyBytes", async () => {
+    const routeId = "test/loader-big-body"
+    __INTERNAL_LOADER_REGISTRY.register(routeId, {
+      load: serverLoader(async () => ({ ok: true })),
+    })
+    const handler = createLoaderHandler(SECRET, {
+      requestLimits: { maxJsonBodyBytes: 64 },
+    })
+    const token = makeKiruContextToken({}, SECRET)
+    const big = JSON.stringify({ ...loaderBody, extra: "x".repeat(200) })
+    const req = new Request(
+      `http://localhost/?loader=${encodeURIComponent(`${routeId}:load`)}`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-kiru-token": token,
+        },
+        body: big,
+      }
+    )
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 413)
+  })
+
+  it("returns 400 when loader RPC body has unexpected top-level keys", async () => {
+    const routeId = "test/loader-bad-shape"
+    __INTERNAL_LOADER_REGISTRY.register(routeId, {
+      load: serverLoader(async () => ({ ok: true })),
+    })
+    const handler = createLoaderHandler(SECRET)
+    const token = makeKiruContextToken({}, SECRET)
+    const res = await handler(
+      makeLoaderRequest(`${routeId}:load`, token, {
+        ...loaderBody,
+        giantPayload: "nope",
+      })
+    )
+    assert.strictEqual(res?.status, 400)
+  })
+
+  it("returns 400 when token exceeds maxTokenLength", async () => {
+    const routeId = "test/loader-big-token"
+    __INTERNAL_LOADER_REGISTRY.register(routeId, {
+      load: serverLoader(async () => ({ ok: true })),
+    })
+    const handler = createLoaderHandler(SECRET, {
+      requestLimits: { maxTokenLength: 32 },
+    })
+    const token = "x".repeat(64)
+    const res = await handler(
+      makeLoaderRequest(`${routeId}:load`, token, loaderBody)
+    )
+    assert.strictEqual(res?.status, 400)
+  })
 })

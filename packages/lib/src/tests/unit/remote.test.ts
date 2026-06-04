@@ -309,7 +309,7 @@ describe("remote / handler", () => {
     assert.strictEqual(res?.status, 400)
   })
 
-  it("treats invalid JSON POST body as null and still dispatches", async () => {
+  it("returns 400 when JSON POST body is invalid", async () => {
     const handler = createRemoteActionHandler(SECRET)
     const token = validToken()
     const routeId = "test/body-invalid-json"
@@ -322,7 +322,7 @@ describe("remote / handler", () => {
       body: "not-json",
     })
     const res = await handler(req)
-    await expectJsonBody(res, "ok")
+    assert.strictEqual(res?.status, 400)
   })
 
   it("returns 500 when the action is not registered", async () => {
@@ -756,5 +756,51 @@ describe("remote / handler", () => {
     const req = makeRpcRequest(`${routeId}:fn`, token)
     const res = await handler(req)
     await expectJsonBody(res, "second")
+  })
+
+  it("returns 413 when JSON body exceeds maxJsonBodyBytes", async () => {
+    const routeId = "test/action-big-body"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      fn: action(async () => "ok"),
+    })
+    const handler = createRemoteActionHandler(SECRET, {
+      requestLimits: { maxJsonBodyBytes: 64 },
+    })
+    const token = validToken()
+    const req = new Request(`http://localhost/?action=${routeId}:fn`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-kiru-token": token,
+      },
+      body: JSON.stringify({ data: "x".repeat(200) }),
+    })
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 413)
+  })
+
+  it("returns 400 when action URL query exceeds limits", async () => {
+    const routeId = "test/action-big-query"
+    __INTERNAL_REMOTE_REGISTRY.register(routeId, {
+      fn: action(async () => "ok"),
+    })
+    const handler = createRemoteActionHandler(SECRET, {
+      requestLimits: { maxSearchLength: 32 },
+    })
+    const token = validToken()
+    const qs = "q=" + "a".repeat(64)
+    const req = new Request(
+      `http://localhost/?action=${routeId}:fn&${qs}`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-kiru-token": token,
+        },
+        body: "null",
+      }
+    )
+    const res = await handler(req)
+    assert.strictEqual(res?.status, 400)
   })
 })

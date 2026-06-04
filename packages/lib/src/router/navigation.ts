@@ -9,7 +9,15 @@ import {
 } from "./i18n/routing.js"
 import type { I18nLocaleRouting } from "./i18n/localeRouting.js"
 import { addBase, stripBase, type RouterPathPolicy } from "./pathPolicy.js"
-import { parseQuery, type RouterQuery } from "./requestUrl.js"
+import { __DEV__ } from "../env.js"
+import {
+  checkUrlWithinLimits,
+  DEFAULT_REQUEST_LIMITS,
+  parseQueryBounded,
+  type ResolvedRequestLimits,
+} from "./requestLimits.js"
+import { warnOnce } from "./devWarnings.dev.js"
+import type { RouterQuery } from "./requestUrl.js"
 import type { Signal } from "../signals/base.js"
 import type {
   AfterEachHook,
@@ -100,17 +108,16 @@ export function formatRouterSearch(query: RouterQuery): string {
 
 export function parseResolvedLocation(
   url: URL,
-  baseUrl: string
+  baseUrl: string,
+  limits: ResolvedRequestLimits = DEFAULT_REQUEST_LIMITS
 ): RouteLocationParts & { href: string } {
   const pathname = stripBase(url.pathname, baseUrl)
+  const query = parseQueryBounded(url.search, limits)
   return {
     pathname,
     hash: url.hash,
-    query: parseQuery(url.search),
-    href: buildHistoryHref(
-      { pathname, hash: url.hash, query: parseQuery(url.search) },
-      baseUrl
-    ),
+    query,
+    href: buildHistoryHref({ pathname, hash: url.hash, query }, baseUrl),
   }
 }
 
@@ -239,6 +246,7 @@ export type NavigationPipelineDeps = {
     signal: AbortSignal
   }) => Promise<void>
   dismissIntercept?: (options?: { skipHistoryBack?: boolean }) => void
+  requestLimits?: ResolvedRequestLimits
 }
 
 export type NavigateInternalOptions = {
@@ -286,6 +294,7 @@ export function createNavigateInternal(
     interceptorRegistrations,
     commitInterceptLocation,
     dismissIntercept,
+    requestLimits = DEFAULT_REQUEST_LIMITS,
   } = deps
 
   const navigateInternal = async (
@@ -297,6 +306,21 @@ export function createNavigateInternal(
       intercept: allowIntercept = true,
     }: NavigateInternalOptions
   ): Promise<NavigationResult> => {
+    const urlLimit = checkUrlWithinLimits(
+      targetUrl.pathname,
+      targetUrl.search,
+      requestLimits
+    )
+    if (urlLimit) {
+      if (__DEV__) {
+        warnOnce(
+          "nav-request-limit",
+          `[kiru] navigation rejected: ${urlLimit.reason}`
+        )
+      }
+      return { status: "cancelled" }
+    }
+
     navAbortController.current?.abort()
     const navAbort = new AbortController()
     navAbortController.current = navAbort
@@ -307,9 +331,10 @@ export function createNavigateInternal(
           targetUrl,
           normalizedBaseUrl,
           localeRouting,
-          resolvedPathPolicy
+          resolvedPathPolicy,
+          requestLimits
         )
-      : parseResolvedLocation(targetUrl, normalizedBaseUrl)
+      : parseResolvedLocation(targetUrl, normalizedBaseUrl, requestLimits)
     const invalidLocale = localeRouting
       ? (
           resolved as {

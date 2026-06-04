@@ -1,4 +1,9 @@
 import crypto from "node:crypto"
+import {
+  assertTokenWithinLimits,
+  DEFAULT_REQUEST_LIMITS,
+  type ResolvedRequestLimits,
+} from "../router/requestLimits.js"
 import { CustomRequestContext } from "../router/types.js"
 
 /* ----------------------------- Token Format ---------------------------
@@ -21,7 +26,8 @@ export type TokenPayload = {
 
 export function makeKiruContextToken(
   ctx: CustomRequestContext,
-  secret: string
+  secret: string,
+  limits: ResolvedRequestLimits = DEFAULT_REQUEST_LIMITS
 ): string {
   const iat = Date.now()
   const payload: TokenPayload = {
@@ -29,7 +35,9 @@ export function makeKiruContextToken(
     ctx,
   }
   if (!secret) throw new Error("secret required")
-  return createSignedTokenHmac(payload, secret)
+  const token = createSignedTokenHmac(payload, secret)
+  assertTokenWithinLimits(token, limits)
+  return token
 }
 
 /**
@@ -38,7 +46,8 @@ export function makeKiruContextToken(
  */
 export async function makeKiruContextTokenAsync(
   ctx: Record<string, unknown>,
-  secret: string
+  secret: string,
+  limits: ResolvedRequestLimits = DEFAULT_REQUEST_LIMITS
 ): Promise<string> {
   const iat = Date.now()
   const payload: TokenPayload = { iat, ctx }
@@ -49,14 +58,22 @@ export async function makeKiruContextTokenAsync(
       "[kiru/remote]: crypto.subtle unavailable; use makeKiruContextToken on Node or enable Web Crypto"
     )
   }
-  return createSignedTokenHmacWeb(subtle, payload, secret)
+  const token = await createSignedTokenHmacWeb(subtle, payload, secret)
+  assertTokenWithinLimits(token, limits)
+  return token
 }
 
 // On the RPC endpoint (server-side):
 export function unwrapKiruToken(
   token: string,
-  secret: string
+  secret: string,
+  limits: ResolvedRequestLimits = DEFAULT_REQUEST_LIMITS
 ): CustomRequestContext | null {
+  try {
+    assertTokenWithinLimits(token, limits)
+  } catch {
+    return null
+  }
   const payload = verifySignedTokenHmac(token, secret)
   if (!payload) return null
   return payload.ctx
@@ -65,10 +82,16 @@ export function unwrapKiruToken(
 /** Async verify using Web Crypto (pairs with {@link makeKiruContextTokenAsync}). */
 export async function unwrapKiruTokenAsync(
   token: string,
-  secret: string
+  secret: string,
+  limits: ResolvedRequestLimits = DEFAULT_REQUEST_LIMITS
 ): Promise<CustomRequestContext | null> {
   const subtle = getSubtle()
-  if (!subtle) return unwrapKiruToken(token, secret)
+  if (!subtle) return unwrapKiruToken(token, secret, limits)
+  try {
+    assertTokenWithinLimits(token, limits)
+  } catch {
+    return null
+  }
   const payload = await verifySignedTokenHmacWeb(subtle, token, secret)
   if (!payload) return null
   return payload.ctx
