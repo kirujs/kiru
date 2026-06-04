@@ -17,13 +17,14 @@ import {
   releaseActiveRouter,
 } from "../../router/routerGlobal.js"
 import type { Router } from "../../router/routerInstance.js"
+import { resetKiruRouterRuntimeForTests } from "../../kiruRuntime.js"
 import { withJSDOM } from "./jsdom.js"
 
 describe("rpcUrl", () => {
   afterEach(() => {
     const active = getActiveRouter()
     if (active) releaseActiveRouter(active)
-    delete (globalThis as Record<string, unknown>).__kiru_loaders
+    resetKiruRouterRuntimeForTests()
   })
 
   it("buildLoaderRpcUrl uses root path by default", () => {
@@ -73,7 +74,7 @@ describe("loaderClient dispatch baseUrl", () => {
   afterEach(() => {
     globalThis.fetch = prevFetch
     delete (globalThis as Record<string, unknown>).__kiru_router
-    delete (globalThis as Record<string, unknown>).__kiru_loaders
+    resetKiruRouterRuntimeForTests()
   })
 
   it("POSTs loader RPC to base-aware URL", async () => {

@@ -38,7 +38,7 @@ describe("SSR server", () => {
 
     cy.intercept("POST", /\?loader=/).as("loaderPost")
 
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get('a[href="/loaders/server"]')
       .first()
       .scrollIntoView()
@@ -66,7 +66,7 @@ describe("SSR server", () => {
 
     // Client navigation only — a full cy.visit() history entry restores SSR HTML on
     // back without a ?loader= POST. Wait for hydration so Link uses the router.
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.contains("a", /^Server loader$/).click()
     cy.wait("@serverLoader")
     cy.location("pathname").should("eq", "/loaders/server")
@@ -148,7 +148,7 @@ describe("SSR server", () => {
     })
 
     cy.visit(`http://127.0.0.1:${port}/url-state/7?tag=x&tag=y#section`)
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get('[data-testid="url-state"]').should("contain", "#section")
     cy.get('[data-testid="url-state"]').should("contain", "x,y")
   })
@@ -219,7 +219,7 @@ describe("SSR server", () => {
     // Without the SSR-injected token, the action handler rejects the POST and the UI never updates.
     cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
     // Streaming SSR + async entry: `load` fires before hydrate attaches event handlers.
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     // Wait for the server round-trip explicitly — avoids races under load / parallel CI.
     cy.intercept("POST", /\?action=/).as("remoteAction")
     cy.get('[data-testid="ssr-remote-button"]').click()
@@ -235,7 +235,7 @@ describe("SSR server", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/action-middleware-demo`)
       cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     }
 
     it("returns 403 when middleware header gate is missing", () => {
@@ -318,7 +318,7 @@ describe("SSR server", () => {
     it("recovers via client navigation after SSR error page", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/`, { failOnStatusCode: true })
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.get('a[href="/nav-break"]').click()
       cy.get('[data-testid="ssr-error-page"]').should(
         "contain",
@@ -365,7 +365,6 @@ describe("SSR server", () => {
     }
     type ImmediateShellWin = Cypress.AUTWindow & {
       __immediateShellMarks?: ImmediateShellMarks
-      __kiruHydratedAt?: number
       __kiruFallbackVisibleAtHydration?: boolean
     }
 
@@ -416,23 +415,25 @@ describe("SSR server", () => {
     it("hydrates while the fallback is still visible, then resolves loader data", () => {
       visitImmediateShellPage(Cypress.env("port"))
 
-      cy.window()
-        .should((win) => {
-          expect((win as ImmediateShellWin).__kiruHydratedAt).to.be.a("number")
-        })
-        .then((win) => {
-          const w = win as ImmediateShellWin
-          const marks = w.__immediateShellMarks!
-          const tag = `[timings] layoutAt=${marks.layoutAt}ms fallbackAt=${marks.fallbackAt}ms hydratedAt=${w.__kiruHydratedAt}ms fallbackVisible=${w.__kiruFallbackVisibleAtHydration}`
-          expect(
-            w.__kiruHydratedAt!,
-            `hydration must finish before the ${LOADER_DELAY_MS}ms loader resolves — ${tag}`
-          ).to.be.lessThan(LOADER_DELAY_MS)
-          expect(
-            w.__kiruFallbackVisibleAtHydration,
-            "loader fallback was still visible the moment hydration finished"
-          ).to.eq(true)
-        })
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
+      cy.window().then((win) => {
+        cy.get("#app")
+          .invoke("attr", "data-kiru-hydrated-at")
+          .then((raw) => {
+            const w = win as ImmediateShellWin
+            const marks = w.__immediateShellMarks!
+            const hydratedAt = Number(raw)
+            const tag = `[timings] layoutAt=${marks.layoutAt}ms fallbackAt=${marks.fallbackAt}ms hydratedAt=${hydratedAt}ms fallbackVisible=${w.__kiruFallbackVisibleAtHydration}`
+            expect(
+              hydratedAt,
+              `hydration must finish before the ${LOADER_DELAY_MS}ms loader resolves — ${tag}`
+            ).to.be.lessThan(LOADER_DELAY_MS)
+            expect(
+              w.__kiruFallbackVisibleAtHydration,
+              "loader fallback was still visible the moment hydration finished"
+            ).to.eq(true)
+          })
+      })
 
       cy.get('[data-testid="loader-data"]', {
         timeout: LOADER_DELAY_MS + 2000,
@@ -473,7 +474,6 @@ describe("SSR server", () => {
     }
     type StreamingWin = Cypress.AUTWindow & {
       __streamingMarks?: StreamingMarks
-      __kiruHydratedAt?: number
       __kiruFallbackVisibleAtHydration?: boolean
     }
 
@@ -535,35 +535,26 @@ describe("SSR server", () => {
     it("hydrates before the streamed resource resolves", () => {
       visitStreamingPage(Cypress.env("port"))
 
-      cy.window()
-        .should((win) => {
-          // `bootstrapSsrClient` is async (dynamic route import + hydrate),
-          // so the timestamp may settle a tick after page `load`. Retry until
-          // it appears, with the same budget the bug constraint requires.
-          expect((win as StreamingWin).__kiruHydratedAt).to.be.a("number")
-        })
-        .then((win) => {
-          const w = win as StreamingWin
-          const marks = w.__streamingMarks!
-          // `__kiruHydratedAt` is set inside the AUT via its own
-          // `performance.now()`, so it's already time-since-navigation.
-          // Surface measured timings in the assertion message so a future
-          // regression points straight at the actual delay.
-          const tag = `[timings] shellAt=${marks.shellAt}ms fallbackAt=${marks.fallbackAt}ms hydratedAt=${w.__kiruHydratedAt}ms fallbackVisible=${w.__kiruFallbackVisibleAtHydration}`
-          expect(
-            w.__kiruHydratedAt!,
-            `hydration finished within budget (AUT clock) — ${tag}`
-          ).to.be.lessThan(HYDRATION_BUDGET_MS)
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
+      cy.window().then((win) => {
+        cy.get("#app")
+          .invoke("attr", "data-kiru-hydrated-at")
+          .then((raw) => {
+            const w = win as StreamingWin
+            const marks = w.__streamingMarks!
+            const hydratedAt = Number(raw)
+            const tag = `[timings] shellAt=${marks.shellAt}ms fallbackAt=${marks.fallbackAt}ms hydratedAt=${hydratedAt}ms fallbackVisible=${w.__kiruFallbackVisibleAtHydration}`
+            expect(
+              hydratedAt,
+              `hydration finished within budget (AUT clock) — ${tag}`
+            ).to.be.lessThan(HYDRATION_BUDGET_MS)
 
-          // `cy.visit` waits for the page `load` event, by which point the
-          // resource has long since resolved. The page captures the
-          // fallback's presence at the exact moment hydration finished, so
-          // we can still assert that interactivity preceded the data.
-          expect(
-            w.__kiruFallbackVisibleAtHydration,
-            "fallback was still visible the moment hydration finished"
-          ).to.eq(true)
-        })
+            expect(
+              w.__kiruFallbackVisibleAtHydration,
+              "fallback was still visible the moment hydration finished"
+            ).to.eq(true)
+          })
+      })
     })
 
     it("fills in the todos once the streamed resource resolves", () => {
@@ -627,9 +618,7 @@ describe("SSR server", () => {
 
       cy.visit(`http://127.0.0.1:${port}/nested-streaming-test`)
       cy.get('[data-testid="product-fallback"]').should("be.visible")
-      cy.window()
-        .its("__kiruHydratedAt")
-        .should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.contains("a", "Server loader").click()
 
       cy.wait("@serverLoader", { timeout: 10000 })
@@ -707,7 +696,7 @@ describe("SSR server", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/forms/demo`)
       cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.intercept("POST", /\?action=/).as("formAction")
       cy.get('[data-testid="forms-demo-input"]').type("from-cypress")
       cy.get('[data-testid="forms-demo-submit"]').click()
@@ -724,7 +713,7 @@ describe("SSR server", () => {
     it("redirects after enhanced form submit", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/forms/demo`)
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.get('[data-testid="forms-demo-redirect"]').click()
       cy.location("pathname").should("eq", "/hello")
       cy.get('[data-testid="ssr-loader"]').should("exist")
@@ -733,7 +722,7 @@ describe("SSR server", () => {
     it("surfaces validation errors from action return value", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/forms/demo`)
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.intercept("POST", /\?action=/).as("formValidation")
       cy.get('[data-testid="forms-validation-submit"]').click()
       cy.wait("@formValidation").its("response.statusCode").should("eq", 200)
@@ -746,7 +735,7 @@ describe("SSR server", () => {
     it("clears validation error after successful enhanced submit", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/forms/demo`)
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.intercept("POST", /\?action=/).as("formValidation")
       cy.get('[data-testid="forms-validation-submit"]').click()
       cy.wait("@formValidation").its("response.statusCode").should("eq", 200)
@@ -782,7 +771,7 @@ describe("SSR server", () => {
     cy.intercept("POST", /\?action=/).as("formAction")
     cy.intercept("POST", /\?loader=/).as("serverLoader")
     cy.visit(`http://127.0.0.1:${port}/invalidate-demo`)
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get('[data-testid="invalidate-generation"]').should("have.text", "0")
     cy.get('[data-testid="invalidate-bump"]').click()
     cy.wait("@formAction").its("response.statusCode").should("eq", 200)
@@ -812,7 +801,7 @@ describe("SSR server", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/actions-composition-demo`)
       cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     }
 
     it("invokes a namespaced RPC action with a dotted RPC id", () => {
@@ -870,7 +859,7 @@ describe("SSR server", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/default-export-demo`)
       cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     }
 
     it("invokes literal default export RPC with default.getEcho RPC id", () => {

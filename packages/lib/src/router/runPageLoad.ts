@@ -23,6 +23,7 @@ import {
   type LoaderCacheEntry,
 } from "./loaderCache.js"
 import { readLoaderCacheOptions } from "./loaders.js"
+import { isLoaderRpcAvailable } from "./loaderClient.js"
 import {
   buildScopeCacheKey,
   canCommitLoaderResult,
@@ -137,7 +138,7 @@ export async function runPageLoadFromModule(
       if (__DEV__) warnOnce("server-loader-pure-client", SERVER_LOADER_PURE_CLIENT_DEV_MSG)
       throw new Error(SERVER_LOADER_PURE_CLIENT_DEV_MSG)
     }
-    if (__DEV__ && __KIRU_SSR__ && !(globalThis as Record<string, unknown>).__kiru_loaders) {
+    if (__DEV__ && __KIRU_SSR__ && !isLoaderRpcAvailable()) {
       warnOnce("server-loader-without-rpc", SERVER_LOADER_NO_RPC_DEV_MSG)
     }
   }
@@ -253,7 +254,7 @@ export async function resolvePagePropsFromModule(
         if (__DEV__) warnOnce("server-loader-pure-client", SERVER_LOADER_PURE_CLIENT_DEV_MSG)
         throw new Error(SERVER_LOADER_PURE_CLIENT_DEV_MSG)
       }
-      if (__DEV__ && __KIRU_SSR__ && !(globalThis as Record<string, unknown>).__kiru_loaders) {
+      if (__DEV__ && __KIRU_SSR__ && !isLoaderRpcAvailable()) {
         warnOnce("server-loader-without-rpc", SERVER_LOADER_NO_RPC_DEV_MSG)
       }
     }

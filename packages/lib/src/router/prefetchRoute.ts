@@ -57,13 +57,15 @@ async function runPrefetchRoute(
 
   if (!data || signal.aborted) return
 
-  const searchCheck = await validateSearchForMatch(match, router.query.peek(), {
-    hash: router.hash.peek(),
-  })
+  const [searchCheck, tree] = await Promise.all([
+    validateSearchForMatch(match, router.query.peek(), {
+      hash: router.hash.peek(),
+    }),
+    loadRouteTree(match),
+  ])
   if (!searchCheck.ok || signal.aborted) return
 
   try {
-    const tree = await loadRouteTree(match)
     if (!tree || signal.aborted) return
     const pageMod = tree.routeModule
     const load = readPageLoadExport(pageMod)

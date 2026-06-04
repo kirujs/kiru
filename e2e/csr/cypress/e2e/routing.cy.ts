@@ -41,7 +41,7 @@ describe("router", () => {
     cy.visit(`http://localhost:${Cypress.env("port")}/navigation`)
     cy.get('[data-testid="match-depth"]').should("contain", "2")
     cy.get('[data-testid="nav-programmatic"]').click()
-    cy.window().its("__KIRU_NAV_RESULT__").should("eq", "committed")
+    cy.get('[data-testid="nav-result"]').should("contain", "committed")
     cy.location("pathname").should("eq", "/about")
     cy.get('[data-testid="locale-title"]').should("contain", "About")
   })

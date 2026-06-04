@@ -2,13 +2,14 @@ import assert from "node:assert/strict"
 import { describe, it, afterEach } from "node:test"
 import { ActionDispatchError } from "../../remote/errors.js"
 import { __kiruEnsureRemoteDispatch } from "../../ssr/routerHydrate.js"
+import { resetKiruRouterRuntimeForTests } from "../../kiruRuntime.js"
 import { withJSDOM } from "./jsdom.js"
 
 describe("remote action on ssr bundle", () => {
   const prevFetch = globalThis.fetch
 
   afterEach(() => {
-    delete (globalThis as Record<string, unknown>).__kiru_serverActions
+    resetKiruRouterRuntimeForTests()
     globalThis.fetch = prevFetch
   })
 

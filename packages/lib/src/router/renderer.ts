@@ -289,13 +289,15 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
       )
       let isrConfig: ReturnType<typeof readRouteISRExport>
       if (prerenderMatch) {
-        const pageMod = await prerenderMatch.route.component()
+        const [pageMod, prerenderCache] = await Promise.all([
+          prerenderMatch.route.component(),
+          getPrerenderCache(),
+        ])
         isrConfig = readRouteISRExport(pageMod)
         const dynamicMode = isrConfig?.dynamic
         if (dynamicMode === "force-dynamic") {
           // skip prerender disk serve
         } else {
-          const prerenderCache = await getPrerenderCache()
           const prerendered = await tryServePrerenderedFromDisk(
             requestOrUrl,
             url,

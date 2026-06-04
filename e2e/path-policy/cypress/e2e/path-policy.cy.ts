@@ -9,9 +9,9 @@ describe("path policy (CSR, baseUrl /app)", () => {
 
   it("navigates with Link while staying under /app prefix", () => {
     cy.visit(`${base()}/`)
-    cy.window().its("__kiruHydratedAt").then((t0) => {
+    cy.get("#app").invoke("attr", "data-kiru-hydrated-at").then((t0) => {
       cy.get('[data-testid="nav-about"]').click()
-      cy.window().its("__kiruHydratedAt").should("eq", t0)
+      cy.get("#app").invoke("attr", "data-kiru-hydrated-at").should("eq", t0)
     })
     cy.location("pathname").should("eq", "/app/about")
     cy.get('[data-testid="pp-about"]').should("have.text", "About under /app")

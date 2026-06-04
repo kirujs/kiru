@@ -27,6 +27,7 @@ import { ensureLoaderClient } from "../router/loaderClient.js"
 import { buildActionRpcUrl } from "../router/rpcUrl.js"
 import { loadClientHydrationChunksManifest } from "../router/hydrationChunks.js"
 import { getRouterInstanceRuntime } from "../router/routerRuntime.js"
+import { ensureKiruRouterRuntime } from "../kiruRuntime.js"
 
 type ServerActionsClient = {
   dispatch: (
@@ -37,13 +38,10 @@ type ServerActionsClient = {
 
 function ensureServerActionsClient() {
   if (typeof window === "undefined") return
-  const g = globalThis as typeof globalThis & {
-    __kiru_serverActions?: ServerActionsClient
-  }
+  const router = ensureKiruRouterRuntime()
+  if (router.serverActions) return
 
-  if (g.__kiru_serverActions) return
-
-  g.__kiru_serverActions = {
+  router.serverActions = {
     dispatch: async (id, call) => {
       if (__DEV__ && __KIRU_PURE_CLIENT__) {
         throw new ActionDispatchError(500, REMOTE_ACTION_PURE_CLIENT_DEV_MSG)
@@ -97,11 +95,7 @@ function ensureServerActionsClient() {
 
 export function __kiruEnsureRemoteDispatch(): ServerActionsClient["dispatch"] {
   ensureServerActionsClient()
-  return (
-    globalThis as typeof globalThis & {
-      __kiru_serverActions?: ServerActionsClient
-    }
-  ).__kiru_serverActions!.dispatch
+  return ensureKiruRouterRuntime().serverActions!.dispatch
 }
 
 export {
@@ -216,12 +210,6 @@ export async function bootstrapSsrClient(
   )
 
   restoreClientHashAfterHydration(router, pendingClientHash)
-
-  if (typeof window !== "undefined") {
-    ;(
-      window as typeof window & { __kiruHydratedAt?: number }
-    ).__kiruHydratedAt = performance.now()
-  }
 
   return app
 }

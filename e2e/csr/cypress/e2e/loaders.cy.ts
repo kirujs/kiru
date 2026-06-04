@@ -11,10 +11,10 @@ describe("route loaders (CSR)", () => {
 
   it("runs universal loader on client navigation without full reload", () => {
     cy.visit(`http://localhost:${port()}/`)
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
-    cy.window().its("__kiruHydratedAt").then((t0) => {
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
+    cy.get("#app").invoke("attr", "data-kiru-hydrated-at").then((t0) => {
       cy.get('nav a[href="/loaders/universal"]').click()
-      cy.window().its("__kiruHydratedAt").should("eq", t0)
+      cy.get("#app").invoke("attr", "data-kiru-hydrated-at").should("eq", t0)
     })
     cy.get('[data-testid="loader-data"]').should(
       "contain",
@@ -24,7 +24,7 @@ describe("route loaders (CSR)", () => {
 
   it("runs clientLoader when navigating via Link", () => {
     cy.visit(`http://localhost:${port()}/`)
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get('nav a[href="/loaders/client"]').click()
     cy.get('[data-testid="loader-data"]').should(
       "contain",

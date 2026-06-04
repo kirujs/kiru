@@ -1,5 +1,6 @@
 import { createElement } from "../element.js"
 import { __DEV__, isBrowser } from "../env.js"
+import { ensureKiruLazyRuntime } from "../kiruRuntime.js"
 import { sideEffectsEnabled } from "../utils/runtime.js"
 import { node } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"
@@ -25,8 +26,7 @@ type LazyComponentProps<T extends LazyImportValue> = InferLazyImportProps<T> & {
 }
 
 const lazyCache: Map<string, LazyState> = isBrowser
-  ? // @ts-ignore - we're shamefully polluting the global scope here and hiding it 🥲
-    (window.__KIRU_LAZY_CACHE ??= new Map<string, LazyState>())
+  ? (ensureKiruLazyRuntime().cache as Map<string, LazyState>)
   : new Map<string, LazyState>()
 
 /**

@@ -37,11 +37,6 @@ describe("router bootstrap entries", () => {
           container,
         })
         assert.ok(typeof app.unmount === "function")
-        assert.equal(
-          typeof (window as typeof window & { __kiruHydratedAt?: number })
-            .__kiruHydratedAt,
-          "number"
-        )
       },
       { url: "http://localhost/" }
     )
@@ -61,11 +56,6 @@ describe("router bootstrap entries", () => {
           container,
         })
         assert.ok(typeof app.unmount === "function")
-        assert.equal(
-          typeof (window as typeof window & { __kiruHydratedAt?: number })
-            .__kiruHydratedAt,
-          "number"
-        )
       },
       { url: "http://localhost/" }
     )

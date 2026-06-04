@@ -30,7 +30,7 @@ describe("SSG i18n", () => {
 
   it("switches locale with setLocale without full reload", () => {
     cy.visit("/about")
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get('[data-testid="locale-greeting"]').should(
       "contain",
       "Hello from the English bundle"

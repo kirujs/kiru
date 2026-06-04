@@ -377,7 +377,7 @@ Optional follow-up (lower priority unless regressions seen):
 2. [x] Regenerate or copy `routes.gen.ts` / `routes.ts` `routeLinks` so nav testids exist in all three apps.
 3. [x] Port FR-03–FR-08 tests into `file-routes-ssr.cy.ts` (use `base()` helper consistently).
 4. [x] Port FR-03–FR-08 tests into `file-routes-ssg.cy.ts` (root-relative URLs as today).
-5. [x] Run each app’s Cypress config in isolation; fix flakiness (`__kiruHydratedAt`, `includeShadowDom`, `fbr-*`).
+5. [x] Run each app’s Cypress config in isolation; fix flakiness (`data-kiru-hydrated-at`, `includeShadowDom`, `fbr-*`).
 
 #### Validation commands
 
@@ -406,7 +406,7 @@ Target:
 Tasks:
 
 - [x] Replace reload-like transitions with Link-driven SPA transitions.
-- [x] Add assertion proving no full reload occurred (`__kiruHydratedAt` on CSR).
+- [x] Add assertion proving no full reload occurred (`data-kiru-hydrated-at` on CSR).
 - [x] Assert expected loader data on client nav (universal loader runs in-browser on CSR; no `?loader=` POST).
 
 ### C) Path policy/base URL matrix
@@ -438,8 +438,8 @@ Stabilize CI signal and finalize launch readiness.
 
 ### Tasks
 
-- [x] Replace fragile fixed waits with deterministic synchronization where possible (`__kiruHydratedAt` on client-nav tests).
-- [x] Reduce brittle dependence on internal globals in e2e tests (new suites use `data-testid` / `cy.title()`; existing `__KIRU_NAV__` tests unchanged).
+- [x] Replace fragile fixed waits with deterministic synchronization where possible (`data-kiru-hydrated-at` on client-nav tests).
+- [x] Reduce brittle dependence on internal globals in e2e tests (navigation uses `data-testid` DOM; hydration uses `#app[data-kiru-hydrated-at]`).
 - [x] Tighten broad HTML substring checks to stronger route invariants (file-routes FR-* use `fbr-*` testids).
 - [x] Run launch gate test suites 3 consecutive green runs (file-routes ×3, file-routes-ssr, file-routes-ssg, path-policy).
 

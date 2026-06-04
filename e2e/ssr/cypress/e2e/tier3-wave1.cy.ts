@@ -17,7 +17,7 @@ describe("Tier 3 wave 1", () => {
 
     it("injects modulepreload links for target route on link hover", () => {
       cy.visit(`http://127.0.0.1:${port}/`)
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.get('head link[rel="modulepreload"]').then(($links) => {
         const before = $links.length
         cy.contains("a", "About").trigger("pointerenter", { bubbles: true })
@@ -53,7 +53,7 @@ describe("Tier 3 wave 1", () => {
         expect(res.body).to.match(/revalidate-generation[^>]*>1</)
       })
       cy.visit(`http://127.0.0.1:${port}/revalidate-demo`)
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.get('[data-testid="revalidate-generation"]').should("have.text", "1")
       cy.get('[data-testid="revalidate-bump"]').click()
       cy.wait("@revalidateAction").its("response.statusCode").should("eq", 200)
@@ -74,7 +74,7 @@ describe("Tier 3 wave 1", () => {
 
       cy.intercept("POST", /\?loader=/).as("loaderPost")
       cy.visit(`http://127.0.0.1:${port}/loader-cache-demo`)
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.get('[data-testid="loader-cache-count"]').then(($el) => {
         const cached = $el.text()
         cy.get<LoaderInterception[]>("@loaderPost.all").then((callsAfterVisit) => {
@@ -117,7 +117,7 @@ describe("Tier 3 wave 1", () => {
 
     it("renders locale-specific content after client visit and hydration", () => {
       cy.visit(`http://127.0.0.1:${port}/about`)
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.get('[data-testid="locale-code"]').should("have.text", "en")
       cy.get('[data-testid="locale-title"]').should("contain", "About")
       cy.get('[data-testid="locale-greeting"]').should(
@@ -136,7 +136,7 @@ describe("Tier 3 wave 1", () => {
 
     it("switches locale with setLocale without full reload", () => {
       cy.visit(`http://127.0.0.1:${port}/about`)
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.get('[data-testid="locale-greeting"]').should(
         "contain",
         "Hello from the English bundle"
@@ -152,7 +152,7 @@ describe("Tier 3 wave 1", () => {
 
     it("switches locale via Link locale prop", () => {
       cy.visit(`http://127.0.0.1:${port}/about`)
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.get('[data-testid="locale-link-fr"]')
         .should("have.attr", "href", "/fr/about")
         .click()
@@ -244,7 +244,7 @@ describe("Tier 3 wave 1", () => {
       cy.intercept("POST", /\?action=/).as("formAction")
       cy.intercept("POST", /\?loader=/).as("serverLoader")
       cy.visit(`http://127.0.0.1:${port}/invalidate-demo`)
-      cy.window().its("__kiruHydratedAt").should("be.a", "number")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
       cy.get('[data-testid="invalidate-generation"]').then(($el) => {
         const before = $el.text()
         cy.get('[data-testid="invalidate-bump"]').click()

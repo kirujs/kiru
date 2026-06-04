@@ -9,6 +9,7 @@ type GlobalKey =
   | "Node"
   | "Event"
   | "MouseEvent"
+  | "HashChangeEvent"
   | "requestAnimationFrame"
   | "cancelAnimationFrame"
 
@@ -59,6 +60,10 @@ export async function withJSDOM(
   assignGlobal("Node", window.Node)
   assignGlobal("Event", window.Event)
   assignGlobal("MouseEvent", window.MouseEvent)
+  class HashChangeEvent extends window.Event {}
+  assignGlobal("HashChangeEvent", HashChangeEvent)
+  ;(window as unknown as { HashChangeEvent: typeof Event }).HashChangeEvent =
+    HashChangeEvent
   assignGlobal(
     "requestAnimationFrame",
     window.requestAnimationFrame.bind(window)

@@ -19,8 +19,6 @@ describe("client parity (CSR)", () => {
     cy.visit(`http://localhost:${port()}/navigation`)
     cy.get('[data-testid="nav-programmatic"]').click()
     cy.location("pathname").should("eq", "/about")
-    cy.window().its("__KIRU_NAV__").should("deep.include", {
-      isNavigating: false,
-    })
+    cy.get('[data-testid="nav-in-progress"]').should("contain", "no")
   })
 })

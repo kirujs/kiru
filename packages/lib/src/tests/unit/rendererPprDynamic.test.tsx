@@ -94,4 +94,57 @@ describe("renderer PPR-lite dynamic modes", () => {
       else process.env.NODE_ENV = prevEnv
     }
   })
+
+  it("serves persisted prerender HTML without rendering live component", async () => {
+    const prevEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = "production"
+    try {
+      const clientDir = await mkdtemp(join(tmpdir(), "kiru-ppr-cached-"))
+      const { writeFileSync } = await import("node:fs")
+      const htmlPath = join(clientDir, "cached.html")
+      writeFileSync(
+        htmlPath,
+        "<html><body><p data-testid='cached-only'>from-disk</p></body></html>",
+        "utf8"
+      )
+      const { persistPrerenderBuildOutput } = await import(
+        "../../router/prerenderCache.js"
+      )
+      persistPrerenderBuildOutput({
+        clientDir,
+        pathname: "/cached",
+        htmlAbsolutePath: htmlPath,
+        revalidate: false,
+      })
+
+      let hits = 0
+      const routes = createRouteTree({
+        children: [
+          createRoute("/cached", {
+            static: true,
+            component: async () => ({
+              default: () => {
+                hits += 1
+                return <p data-testid="live-hit">should-not-run</p>
+              },
+            }),
+          }),
+        ],
+      })
+      const renderer = createRenderer({
+        routes,
+        htmlTemplate: MINIMAL_TPL,
+        prerenderedHtmlDir: clientDir,
+      })
+
+      const response = await renderer.render("/cached")
+      assert.equal(response?.status, 200)
+      assert.match(String(response?.body), /from-disk/)
+      assert.doesNotMatch(String(response?.body), /should-not-run/)
+      assert.equal(hits, 0)
+    } finally {
+      if (prevEnv === undefined) delete process.env.NODE_ENV
+      else process.env.NODE_ENV = prevEnv
+    }
+  })
 })

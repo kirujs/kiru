@@ -13,7 +13,7 @@ export const SERVER_LOADER_PURE_CLIENT_DEV_MSG =
   "`serverLoader` is not supported with `kiru/router/csr` or `kiru/router/ssg`. Use `kiru/router/ssr` with `createRenderer` and a server that handles `/?loader=` POSTs, or use `loader`, `clientLoader`, or `staticLoader`."
 
 export const SERVER_LOADER_NO_RPC_DEV_MSG =
-  "`serverLoader` ran on the client without `/?loader=` RPC (`__kiru_loaders`). Wire `router.serverEntry` in vite-plugin-kiru and run a server that registers the loader handler."
+  "`serverLoader` ran on the client without `/?loader=` RPC (`window.__kiru.router.loaders`). Wire `router.serverEntry` in vite-plugin-kiru and run a server that registers the loader handler."
 
 export const REMOTE_ACTION_PURE_CLIENT_DEV_MSG =
   'Remote `action` (including `action({ type: "form", … })`) require SSR with `createRenderer` and `actions.secret`. Pure CSR/SSG apps cannot invoke server actions.'

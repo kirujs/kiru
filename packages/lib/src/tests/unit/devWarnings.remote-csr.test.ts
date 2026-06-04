@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { ActionDispatchError } from "../../remote/errors.js"
+import { resetKiruRouterRuntimeForTests } from "../../kiruRuntime.js"
 import { __kiruEnsureRemoteDispatch } from "../../ssr/routerHydrate.js"
 
 describe("remote action on csr bundle", () => {
@@ -13,7 +14,7 @@ describe("remote action on csr bundle", () => {
           e instanceof ActionDispatchError && /Remote `action`/.test(e.message)
       )
     } finally {
-      delete (globalThis as Record<string, unknown>).__kiru_serverActions
+      resetKiruRouterRuntimeForTests()
       delete (globalThis as Record<string, unknown>).window
     }
   })

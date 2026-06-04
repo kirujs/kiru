@@ -1,4 +1,5 @@
 import { requestToken } from "../globals.js"
+import { ensureKiruRouterRuntime } from "../kiruRuntime.js"
 import type { LoaderContext } from "./loaders.js"
 import { buildLoaderRpcUrl } from "./rpcUrl.js"
 
@@ -8,27 +9,24 @@ export type LoaderDispatch = (
 ) => Promise<unknown>
 
 export function isLoaderRpcAvailable(): boolean {
-  return !!(globalThis as Record<string, unknown>).__kiru_loaders
+  return !!ensureKiruRouterRuntime().loaders
 }
 
 export function ensureLoaderClient(): void {
   if (typeof window === "undefined") return
-  const g = globalThis as typeof globalThis & {
-    __kiru_loaders?: { dispatch: LoaderDispatch }
-  }
-  if (g.__kiru_loaders) return
-  g.__kiru_loaders = {
+  const router = ensureKiruRouterRuntime()
+  if (router.loaders) return
+  router.loaders = {
     dispatch: async (routeId, context) => {
       const r = await fetch(buildLoaderRpcUrl(routeId), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-kiru-token": requestToken.current,
-          },
-          body: JSON.stringify(context),
-          signal: context.signal,
-        }
-      )
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-kiru-token": requestToken.current,
+        },
+        body: JSON.stringify(context),
+        signal: context.signal,
+      })
       if (!r.ok) throw new Error("Loader request failed")
       return r.json()
     },
@@ -37,11 +35,7 @@ export function ensureLoaderClient(): void {
 
 export function getLoaderDispatch(): LoaderDispatch {
   ensureLoaderClient()
-  return (
-    globalThis as typeof globalThis & {
-      __kiru_loaders?: { dispatch: LoaderDispatch }
-    }
-  ).__kiru_loaders!.dispatch
+  return ensureKiruRouterRuntime().loaders!.dispatch
 }
 
 /** @internal Used by vite codegen for `serverLoader` client bundles. */

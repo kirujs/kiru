@@ -7,11 +7,7 @@ import {
   stripBase,
   type RouterPathPolicy,
 } from "./pathPolicy.js"
-import {
-  parseQuery,
-  splitRouterTo,
-  type RouterQuery,
-} from "./requestUrl.js"
+import { parseQuery, splitRouterTo, type RouterQuery } from "./requestUrl.js"
 import type {
   AfterEachHook,
   CurrentNavigation,
@@ -33,7 +29,6 @@ import {
   createNavigateInternal,
   formatRouterSearch,
   ensureHistoryIndex,
-  formatNavigationSnapshotLabel,
   parseResolvedLocation,
   readScrollStack,
   writeScrollStack,
@@ -44,7 +39,11 @@ import {
 import { compileRouteTree } from "./manifest.js"
 import { resolveNavigateTarget } from "./routePaths.js"
 import type { Router } from "./routerInstance.js"
-export type { Router, RouterCore, RouterNavigationMode } from "./routerInstance.js"
+export type {
+  Router,
+  RouterCore,
+  RouterNavigationMode,
+} from "./routerInstance.js"
 export { RouterProvider, useRouter } from "./routerContext.js"
 export type { RouterProviderProps } from "./routerContext.js"
 export { Link } from "./link.js"
@@ -97,10 +96,7 @@ import {
   splitAppPathnameDetailed,
   type InternationalizationConfig,
 } from "./i18n/index.js"
-import {
-  createI18nRuntime,
-  readHydratedI18n,
-} from "./i18nContext.js"
+import { createI18nRuntime, readHydratedI18n } from "./i18nContext.js"
 
 export {
   createI18nConfig,
@@ -138,7 +134,7 @@ function resolveRouterHref(
     return `${addBase(relative, baseUrl)}${search}${hash}`
   }
   const targetLocale =
-    hrefOpts?.locale === false ? undefined : (hrefOpts?.locale ?? activeLocale)
+    hrefOpts?.locale === false ? undefined : hrefOpts?.locale ?? activeLocale
   if (targetLocale && localeRouting) {
     return formatPublicHref(
       relative,
@@ -277,35 +273,33 @@ export function createRouter({
         )
       : logical
 
-  async function validateInitialSearch() {
-    const initialMatch = match.peek()
-    if (!initialMatch) return
-    const check = await validateSearchForMatch(initialMatch, query.peek(), {
-      hash: hash.peek(),
-    })
-    if (check.ok) {
-      validatedQuery.value = check.validatedQuery ?? null
-      validatedRouteParams.value = check.params
-    }
-  }
-  void validateInitialSearch()
-
-  async function syncInitialDocumentHead() {
-    const initial = match.peek()
-    if (!initial) return
-    const pageHead = readPageHeadExport(await initial.route.component())
+  async function runInitialClientSetup(match: RouteMatch) {
+    const pageModPromise = match.route.component()
+    const [, pageMod] = await Promise.all([
+      (async () => {
+        const check = await validateSearchForMatch(match, query.peek(), {
+          hash: hash.peek(),
+        })
+        if (check.ok) {
+          validatedQuery.value = check.validatedQuery ?? null
+          validatedRouteParams.value = check.params
+        }
+      })(),
+      pageModPromise,
+    ])
+    const pageHead = readPageHeadExport(pageMod)
     if (isStaticPageHead(pageHead) || isSyncPageHead(pageHead)) {
       await syncDocumentHeadForPage(
-        initial,
+        match,
         buildLoaderContext({
-          params: initial.params,
-          pathname: initial.pathname,
+          params: match.params,
+          pathname: match.pathname,
           search: formatRouterSearch(query.peek()),
           hash: hash.peek(),
           query: query.peek(),
           context: requestContext.peek(),
-          meta: mergeRouteMeta(initial),
-          routeId: initial.route.id,
+          meta: mergeRouteMeta(match),
+          routeId: match.route.id,
           signal: navAbortController.current?.signal ?? staticLoaderSignal(),
           ...loaderI18nExtras(),
         })
@@ -314,24 +308,11 @@ export function createRouter({
   }
 
   if (typeof document !== "undefined") {
-    void syncInitialDocumentHead()
-  }
-
-  const syncWindowNavigationProbe = () => {
-    if (typeof window === "undefined") return
-    const nav = currentNavigation.peek()
-    const w = window as Window & {
-      __KIRU_NAV__?: { isNavigating: boolean; from: string; to: string }
-    }
-    w.__KIRU_NAV__ = {
-      isNavigating: isNavigating.peek(),
-      from: formatNavigationSnapshotLabel(nav?.from),
-      to: formatNavigationSnapshotLabel(nav?.to),
+    const initialMatch = match.peek()
+    if (initialMatch) {
+      void runInitialClientSetup(initialMatch)
     }
   }
-  isNavigating.subscribe(syncWindowNavigationProbe)
-  currentNavigation.subscribe(syncWindowNavigationProbe)
-  syncWindowNavigationProbe()
 
   const afterEachHooks: AfterEachHook[] = []
   const leaveByRoute = new Map<string, NavigationGuard[]>()
@@ -355,7 +336,10 @@ export function createRouter({
   const transitionsEnabled = !!transition
   const historyIndex = { value: 0 }
   const scrollStack = {
-    value: typeof window !== "undefined" ? readScrollStack() : ([] as ScrollStackState),
+    value:
+      typeof window !== "undefined"
+        ? readScrollStack()
+        : ([] as ScrollStackState),
   }
 
   const saveScrollAt = (index: number) => {
@@ -484,11 +468,15 @@ export function createRouter({
   )
 
   if (typeof window !== "undefined" && localeRouting) {
-    const initialDetailed = splitAppPathnameDetailed(rawInitialPath, localeRouting, {
-      host: requestHost,
-      protocol: (location as Location).protocol,
-      baseUrl: normalizedBaseUrl,
-    })
+    const initialDetailed = splitAppPathnameDetailed(
+      rawInitialPath,
+      localeRouting,
+      {
+        host: requestHost,
+        protocol: (location as Location).protocol,
+        baseUrl: normalizedBaseUrl,
+      }
+    )
     if (initialDetailed.kind === "wrong-domain") {
       void navigateInternal(new URL(initialDetailed.location), {
         replace: true,
@@ -551,7 +539,7 @@ export function createRouter({
     )
   }
 
-  const removeArrayEntry = <T,>(array: T[], entry: T) => {
+  const removeArrayEntry = <T>(array: T[], entry: T) => {
     const i = array.indexOf(entry)
     if (i !== -1) array.splice(i, 1)
   }
@@ -596,16 +584,17 @@ export function createRouter({
       const options: import("./routePaths.js").RouterNavigateCallOptions =
         typeof replaceOrOptions === "boolean"
           ? { replace: replaceOrOptions }
-          : (replaceOrOptions ?? {})
+          : replaceOrOptions ?? {}
       const { params: routeParams, replace, transition, locale } = options
       const resolvedTo = resolveNavigateTarget(to, routeParams)
       const prevHash = hash.peek()
-      const { pathname: pathPart, search, hash: targetHash } =
-        splitRouterTo(resolvedTo)
+      const {
+        pathname: pathPart,
+        search,
+        hash: targetHash,
+      } = splitRouterTo(resolvedTo)
       const logical =
-        pathPart === ""
-          ? pathname.peek()
-          : joinPath(pathname.peek(), pathPart)
+        pathPart === "" ? pathname.peek() : joinPath(pathname.peek(), pathPart)
       let url: URL
       if (locale !== undefined && localeRouting && locale !== false) {
         const fullHref = formatPublicHref(
@@ -619,7 +608,9 @@ export function createRouter({
           { host: requestHost, protocol: (location as Location).protocol }
         )
         url = new URL(
-          fullHref.startsWith("http") ? fullHref : `${origin}${addBase(fullHref, normalizedBaseUrl)}`
+          fullHref.startsWith("http")
+            ? fullHref
+            : `${origin}${addBase(fullHref, normalizedBaseUrl)}`
         )
       } else {
         const href =
@@ -721,7 +712,9 @@ export function createRouter({
       ? {
           setLocale(nextLocale, opts) {
             if (typeof document !== "undefined") {
-              document.cookie = `${i18n.localeCookie}=${encodeURIComponent(nextLocale)}; path=/; max-age=31536000; samesite=lax`
+              document.cookie = `${i18n.localeCookie}=${encodeURIComponent(
+                nextLocale
+              )}; path=/; max-age=31536000; samesite=lax`
             }
             locale.value = nextLocale
             i18nRuntime.setLocale(nextLocale, i18nRuntime.data.peek())
@@ -908,10 +901,9 @@ export function useMatches(): () => RouteTreeMatchSegment[] {
 }
 
 /** Validated query when the route `load` defines `validation.query`. */
-export function useSearchParams<T = Record<string, unknown>>(): Kiru.Signal<
-  T | null
-> {
+export function useSearchParams<
+  T = Record<string, unknown>
+>(): Kiru.Signal<T | null> {
   const router = useRouter()
   return router.validatedQuery as Kiru.Signal<T | null>
 }
-

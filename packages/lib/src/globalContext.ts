@@ -2,6 +2,8 @@ import { __DEV__ } from "./env.js"
 import { createHmrContext } from "./hmr.js"
 import { createProfilingContext } from "./profiling.js"
 import type { AppHandle } from "./appHandle.js"
+import type { LoaderContext } from "./router/loaders.js"
+import type { RemoteActionCallOptions } from "./remote/action.js"
 
 export { createKiruGlobalContext, type GlobalKiruEvent, type KiruGlobalContext }
 
@@ -25,7 +27,7 @@ type Evt =
 
 type GlobalKiruEvent = Evt["name"]
 
-export type DebuggerEntry = {
+export interface DebuggerEntry {
   label: string
   signal: Kiru.Signal<unknown>
 }
@@ -48,6 +50,30 @@ interface KiruGlobalContext {
   }
   HMRContext?: ReturnType<typeof createHmrContext>
   profilingContext?: ReturnType<typeof createProfilingContext>
+  router?: KiruRouterRuntimeBag
+  lazy?: KiruLazyRuntimeBag
+}
+
+export type KiruServerActionsDispatch = (
+  id: string,
+  call?: RemoteActionCallOptions<unknown, Record<string, unknown>>
+) => Promise<unknown>
+
+export interface KiruRouterRuntimeBag {
+  loaders?: {
+    dispatch: (routeId: string, ctx: LoaderContext) => Promise<unknown>
+  }
+  serverActions?: { dispatch: KiruServerActionsDispatch }
+}
+
+export interface KiruLazyEntry {
+  promise: Promise<unknown>
+  result: Kiru.Component | null
+  error?: Error
+}
+
+export interface KiruLazyRuntimeBag {
+  cache: Map<string, KiruLazyEntry>
 }
 
 function createKiruGlobalContext(): KiruGlobalContext {

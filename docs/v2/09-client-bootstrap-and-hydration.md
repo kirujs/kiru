@@ -41,14 +41,14 @@ Uses full `window.history` navigation (`navigation.ts`).
 1. `compileRouteTree` if needed
 2. `createRouter({ routes: manifest, i18n })` — **full** navigable router, not `createStaticRouter`
 3. `RouterProvider` claims the active router (`claimActiveRouter`) for action invalidation and RPC base URL
-4. `ensureLoaderClient()` + `ensureServerActionsClient()` (remote dispatch)
+4. `ensureLoaderClient()` + `ensureServerActionsClient()` — wire `window.__kiru.router.loaders` / `window.__kiru.router.serverActions`
 5. `ensureClientI18nReady(router)`
 6. **Hash stash** — `stashClientHashForSsrHydration` clears router hash during hydrate (fragments not sent on HTTP)
 7. Pre-build outlet: `buildSsrClientOutlet` with `useHydratedPageData: true`
 8. `hydrate(Fragment + createSsrRouterShell(() => outlet.value), container, { hydrationMode: "dynamic" })`
 9. `subscribeSsrClientOutlet` — on `match` / `isNavigating` / `currentNavigation` refresh outlet with `useHydratedPageData: false`
 10. Restore hash after hydrate
-11. Set `window.__kiruHydratedAt` for e2e timing
+11. (Apps only) mark hydration on `#app` with `data-kiru-hydrated-at` after bootstrap resolves — not a framework contract
 
 ### Shell
 
@@ -183,8 +183,9 @@ CSR router sets `history.scrollRestoration = "manual"` and maintains `scrollStac
 
 ## Testing hooks
 
-- `window.__kiruHydratedAt` — Cypress waits for hydration before clicking `Link`
-- `__kiruEnsureRemoteDispatch` / `__kiruEnsureLoaderDispatch` — test and codegen hooks
+- `#app[data-kiru-hydrated-at]` — e2e apps set once when bootstrap resolves; Cypress waits before clicking `Link`
+- `window.__kiru.router.loaders` / `window.__kiru.router.serverActions` — client RPC dispatch (also via `__kiruEnsureLoaderDispatch` / `__kiruEnsureRemoteDispatch`)
+- `window.__kiru.lazy.cache` — lazy import cache
 
 ---
 

@@ -140,7 +140,7 @@ export async function runTransition(
 
 export type ScrollStackState = [number, number][]
 
-export const SCROLL_STACK_KEY = "__kiru_router_scroll_stack__"
+const SCROLL_STACK_KEY = "__kiru_router_scroll_stack__"
 
 export function readScrollStack(): ScrollStackState {
   if (typeof sessionStorage === "undefined") return []

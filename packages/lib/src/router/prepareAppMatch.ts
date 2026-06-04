@@ -137,9 +137,15 @@ export async function buildPreparedAppForMatch(
   renderOpts: { enableStreamingLoad?: boolean }
 ): Promise<PreparedApp | PrepareRedirect | null> {
   const requestContext = (ctx?.context ?? {}) as CustomRequestContext
-  const searchCheck = await validateSearchForMatch(routeMatch, requestUrl.query, {
-    hash: requestUrl.hash,
-  })
+  const i18nMessagesPromise =
+    i18n && locale ? loadI18nMessages(i18n, locale) : Promise.resolve(undefined)
+
+  const [searchCheck, tree] = await Promise.all([
+    validateSearchForMatch(routeMatch, requestUrl.query, {
+      hash: requestUrl.hash,
+    }),
+    loadRouteTree(routeMatch),
+  ])
   if (!searchCheck.ok) {
     if (searchCheck.failure.kind === "redirect") {
       return { kind: "redirect", location: searchCheck.failure.location }
@@ -165,8 +171,7 @@ export async function buildPreparedAppForMatch(
     ...loaderI18nFields(i18n, locale),
   })
 
-  const { layoutModules, routeModule: rawRouteModule } =
-    await loadRouteTree(routeMatch)
+  const { layoutModules, routeModule: rawRouteModule } = tree
   throwIfAborted(renderSignal)
 
   const pageMod = rawRouteModule
@@ -184,9 +189,6 @@ export async function buildPreparedAppForMatch(
   throwIfAborted(renderSignal)
 
   const { routeModule, pageProps, streamPageLoad } = ssrPrepared
-
-  const i18nMessagesPromise =
-    i18n && locale ? loadI18nMessages(i18n, locale) : Promise.resolve(undefined)
 
   const [streamHeadMeta, i18nMessages] = await Promise.all([
     resolveStreamHeadMeta(

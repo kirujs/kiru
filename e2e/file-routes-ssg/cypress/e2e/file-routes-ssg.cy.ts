@@ -6,7 +6,7 @@ describe("file-based routes (SSG)", () => {
 
   it("FR-02 navigates to about with Link after hydrate", () => {
     cy.visit("/")
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get('[data-testid="nav-about"]').click()
     cy.location("pathname").should("eq", "/about")
     cy.get('[data-testid="fbr-about"]').should("have.text", "About")
@@ -16,7 +16,7 @@ describe("file-based routes (SSG)", () => {
 
   it("FR-03 applies co-located middleware redirect on client navigation", () => {
     cy.visit("/")
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get('[data-testid="nav-guarded"]').click()
     cy.location("pathname").should("eq", "/about")
     cy.get('[data-testid="fbr-about"]').should("exist")
@@ -30,7 +30,7 @@ describe("file-based routes (SSG)", () => {
 
   it("FR-04 navigates to dynamic [slug] via Link after hydrate", () => {
     cy.visit("/")
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get('[data-testid="nav-blog"]').click()
     cy.location("pathname").should("eq", "/blog/hello")
     cy.get('[data-testid="fbr-blog"]').should("contain", "hello")
@@ -44,7 +44,7 @@ describe("file-based routes (SSG)", () => {
 
   it("FR-05 navigates to route group via Link after hydrate", () => {
     cy.visit("/")
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get('[data-testid="nav-pricing"]').click()
     cy.location("pathname").should("eq", "/pricing")
     cy.get('[data-testid="fbr-pricing"]').should("have.text", "Pricing")
@@ -52,7 +52,7 @@ describe("file-based routes (SSG)", () => {
 
   it("FR-06 serves hand-written route from routes.extend.ts via Link", () => {
     cy.visit("/")
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get('[data-testid="nav-manual"]').click()
     cy.location("pathname").should("eq", "/manual")
     cy.get('[data-testid="fbr-manual"]').should("have.text", "Manual (extend)")
@@ -83,7 +83,7 @@ describe("file-based routes (SSG)", () => {
 
   it("FR-08 applies page.config head title after client navigation", () => {
     cy.visit("/")
-    cy.window().its("__kiruHydratedAt").should("be.a", "number")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get('[data-testid="nav-about"]').click()
     cy.title().should("eq", "About — file routes")
   })

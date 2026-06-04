@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
+import { createElement } from "../../element.js"
 import {
   compileRouteTree,
   createRoute,
@@ -277,5 +278,108 @@ describe("prepareAppForUrl", () => {
     )
     assert.ok(result && isPrepareRedirect(result))
     assert.equal(result.location, "/new")
+  })
+
+  it("includes i18nPayload for locale-prefixed matched route", async () => {
+    const i18n = createI18nConfig({
+      locales: ["en", "fr"],
+      defaultLocale: "en",
+      localeDetection: false,
+      load: {
+        en: async () => ({ title: "Hello" }),
+        fr: async () => ({ title: "Bonjour" }),
+      },
+    })
+    const manifest = compileRouteTree(
+      createRouteTree({
+        children: [createRoute("/about", { component: nullComponent })],
+      })
+    )
+    const result = await prepareAppForUrl(
+      "http://localhost/fr/about",
+      undefined,
+      manifest,
+      pathPolicy,
+      i18n
+    )
+    assert.ok(result && !isPrepareRedirect(result) && !isPrepareError(result))
+    assert.equal(result.i18nPayload?.locale, "fr")
+    assert.equal(
+      (result.i18nPayload?.data as { title: string }).title,
+      "Bonjour"
+    )
+  })
+
+  it("returns 200 PreparedApp with nested layout and loader data", async () => {
+    const pageLoad = loader({
+      load: async () => ({ items: ["a"] }),
+    })
+    const manifest = compileRouteTree(
+      createRouteTree({
+        layout: async () => ({
+          default: ({ children }: { children: JSX.Children }) =>
+            createElement("main", null, children),
+        }),
+        children: [
+          createRoute("/items", {
+            component: async () => ({
+              default: () => null,
+              load: pageLoad,
+            }),
+          }),
+        ],
+      })
+    )
+    const result = await prepareAppForUrl(
+      "http://localhost/items",
+      undefined,
+      manifest,
+      pathPolicy
+    )
+    assert.ok(result && !isPrepareRedirect(result) && !isPrepareError(result))
+    assert.equal(result.responseStatus, 200)
+    assert.equal(result.routeMatch?.pathname, "/items")
+    assert.deepEqual(result.serializedPageData, { items: ["a"] })
+    assert.ok(result.app)
+  })
+
+  it("returns 200 with serialized loader data when search validates", async () => {
+    const pageLoad = loader({
+      validation: {
+        query: {
+          parse(input: unknown) {
+            if (
+              typeof input !== "object" ||
+              input === null ||
+              !("q" in input)
+            ) {
+              throw new Error("bad")
+            }
+            return input as { q: string }
+          },
+        },
+      },
+      load: async ({ query }) => ({ q: (query as { q: string }).q }),
+    })
+    const manifest = compileRouteTree(
+      createRouteTree({
+        children: [
+          createRoute("/search", {
+            component: async () => ({
+              default: () => null,
+              load: pageLoad,
+            }),
+          }),
+        ],
+      })
+    )
+    const result = await prepareAppForUrl(
+      "http://localhost/search?q=ok",
+      undefined,
+      manifest,
+      pathPolicy
+    )
+    assert.ok(result && !isPrepareRedirect(result) && !isPrepareError(result))
+    assert.deepEqual(result.serializedPageData, { q: "ok" })
   })
 })
