@@ -55,7 +55,7 @@ export default function PhotosPage() {
 
 ### Prefetch
 
-`<Link prefetch>` prefetches **interceptor `load`** (not the target route loader) when the link would soft-intercept from the current page. Cached data is consumed on intercept commit so the modal can open without a spinner.
+`<Link prefetch>` prefetches **interceptor `load`** (not the target route loader) when the link would soft-intercept from the current page. Cached data is consumed on intercept commit so the modal can open without a spinner. Cache and in-flight prefetches for that registration are cleared when the owning component unmounts (`createInterceptor` cleanup).
 
 - `prefetch={{ interceptLoad: false }}` — skip interceptor load prefetch
 - `prefetch={{ intercept: false }}` — prefetch target route loader instead (same as `intercept={false}` on navigate)

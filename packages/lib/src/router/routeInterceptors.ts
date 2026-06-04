@@ -60,6 +60,30 @@ export function setPrefetchedInterceptorData(key: string, data: unknown): void {
   interceptorPrefetchCache.set(key, data)
 }
 
+function prefetchKeyRegistrationId(key: string): number | null {
+  const end = key.indexOf(":")
+  if (end < 1) return null
+  const n = Number(key.slice(0, end))
+  return Number.isInteger(n) ? n : null
+}
+
+/** Drop cached and in-flight interceptor prefetches for a registration (e.g. on unmount). */
+export function clearInterceptorPrefetchForRegistration(
+  registrationId: number
+): void {
+  for (const key of [...interceptorPrefetchCache.keys()]) {
+    if (prefetchKeyRegistrationId(key) === registrationId) {
+      interceptorPrefetchCache.delete(key)
+    }
+  }
+  for (const key of [...interceptorPrefetchInFlight.keys()]) {
+    if (prefetchKeyRegistrationId(key) === registrationId) {
+      interceptorPrefetchInFlight.get(key)?.abort.abort()
+      interceptorPrefetchInFlight.delete(key)
+    }
+  }
+}
+
 const interceptorPrefetchInFlight = new Map<
   string,
   { abort: AbortController; promise: Promise<void> }
@@ -80,19 +104,25 @@ export async function prefetchInterceptorLoad(
 
   interceptorPrefetchInFlight.get(key)?.abort.abort()
   const abort = new AbortController()
+  if (signal.aborted) {
+    abort.abort()
+  } else {
+    signal.addEventListener("abort", () => abort.abort(), { once: true })
+  }
+  const loadSignal = abort.signal
   const promise = (async () => {
     try {
       const ctx: InterceptLoadContext<Record<string, string>> = {
         params: targetMatch.params,
         location: buildTargetLocation(targetMatch),
-        signal,
+        signal: loadSignal,
       }
       const data = await registration.load!(ctx)
-      if (!signal.aborted) {
+      if (!loadSignal.aborted) {
         setPrefetchedInterceptorData(key, data)
       }
     } catch {
-      if (!signal.aborted) return
+      if (!loadSignal.aborted) return
     }
   })()
   interceptorPrefetchInFlight.set(key, { abort, promise })
@@ -223,6 +253,7 @@ export function createRouterInterceptor<P extends NavigatePath>(
       (r) => r.targetPath === target && r.fromRouteId === fromRouteId
     )
     if (reg) {
+      clearInterceptorPrefetchForRegistration(reg.id)
       const i = deps.registrations.indexOf(reg)
       if (i !== -1) deps.registrations.splice(i, 1)
       const state = deps.interceptState.value
