@@ -486,6 +486,15 @@ export interface RenderResult {
 /** Outcome of `router.navigate()` / `setQuery` / `setHash`. */
 export type NavigationResult =
   | { status: "committed" }
+  | { status: "intercepted" }
   | { status: "cancelled" }
   | { status: "redirected"; to: NavigationRedirect }
   | { status: "errored"; error: unknown }
+
+/** Active soft intercept (URL = target, outlet = background). */
+export type RouteInterceptState = {
+  registrationId: number
+  backgroundMatch: RouteMatch
+  targetMatch: RouteMatch
+  data: unknown | undefined
+}

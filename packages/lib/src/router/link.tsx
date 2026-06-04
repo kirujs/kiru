@@ -21,6 +21,8 @@ export type { LinkPrefetch } from "./prefetchRoute.js"
 
 type LinkBase = Omit<JSX.IntrinsicElements["a"], "href"> & {
   replace?: boolean
+  /** When false, skip route interceptors for this navigation. Default true. */
+  intercept?: boolean
   /** @default `{ trigger: "hover", chunks: true, data: true }` when loader RPC exists */
   prefetch?: LinkPrefetch
   /**
@@ -71,7 +73,9 @@ export const Link: Kiru.Component<LinkProps> = () => {
     const prefetch = $.props.prefetch
     const resolved = resolveLinkPrefetch(prefetch)
     if (resolved === false || resolved.trigger !== trigger) return
-    runLinkPrefetch(router, href.peek(), prefetch)
+    runLinkPrefetch(router, href.peek(), prefetch, {
+      intercept: $.props.intercept,
+    })
   }
 
   onMount(() => maybePrefetch("visible"))
@@ -88,11 +92,16 @@ export const Link: Kiru.Component<LinkProps> = () => {
     $.props.onclick?.(event)
     if (event.defaultPrevented) return
     event.preventDefault()
-    const { to, replace, locale: linkLocale, params } = $.props
+    const { to, replace, locale: linkLocale, params, intercept } = $.props
     const target = resolveLinkTo(to, params)
+    const navOpts = {
+      replace,
+      ...(linkLocale !== undefined ? { locale: linkLocale } : {}),
+      ...(intercept !== undefined ? { intercept } : {}),
+    }
     void router.navigate(
       target,
-      linkLocale !== undefined ? { replace, locale: linkLocale } : replace
+      Object.keys(navOpts).length > 0 ? navOpts : replace
     )
   }
 

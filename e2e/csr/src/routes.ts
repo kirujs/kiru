@@ -18,7 +18,10 @@ export const routes = createRouteTree({
       component: () => import("./pages/forbidden.tsx"),
       middleware: [() => ({ error: 403, body: "Forbidden" })],
     }),
-    createRoute("/hash-section", () => import("./pages/hash-section/index.tsx")),
+    createRoute(
+      "/hash-section",
+      () => import("./pages/hash-section/index.tsx")
+    ),
     createRoute("/counter", () => import("./pages/counter/index.tsx")),
     createRoute("/effects", () => import("./pages/effects/index.tsx")),
     createRoute("/keyed-list", () => import("./pages/keyed-list/index.tsx")),
@@ -27,8 +30,14 @@ export const routes = createRouteTree({
     createRoute("/todos", () => import("./pages/todos/index.tsx")),
     createRoute("/navigation", () => import("./pages/navigation/index.tsx")),
     createRoute("/csr-break", () => import("./pages/csr-break.tsx")),
-    createRoute("/csr-break-loader", () => import("./pages/csr-break-loader.tsx")),
-    createRoute("/view-transitions", () => import("./pages/view-transitions/index.tsx")),
+    createRoute(
+      "/csr-break-loader",
+      () => import("./pages/csr-break-loader.tsx")
+    ),
+    createRoute(
+      "/view-transitions",
+      () => import("./pages/view-transitions/index.tsx")
+    ),
     createRoute("/slow-target", {
       component: async () => {
         await new Promise((resolve) => setTimeout(resolve, 400))
@@ -40,6 +49,8 @@ export const routes = createRouteTree({
       "/loaders/universal",
       () => import("./pages/loaders/universal.tsx")
     ),
+    createRoute("/photos", () => import("./pages/photos/index.tsx")),
+    createRoute("/photos/[id]", () => import("./pages/photos/[id]/index.tsx")),
   ],
 })
 
@@ -61,4 +72,5 @@ export const routeLinks = [
   { path: "/csr-break-loader", displayName: "csr-break-loader" },
   { path: "/loaders/client", displayName: "loaders-client" },
   { path: "/loaders/universal", displayName: "loaders-universal" },
+  { path: "/photos", displayName: "photos" },
 ]

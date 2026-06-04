@@ -1,5 +1,12 @@
 import { __DEV__ } from "../env.js"
 import type { InternationalizationConfig } from "./i18n/createI18nConfig.js"
+import type { InterceptorRegistration } from "./routeInterceptors.js"
+import type {
+  InterceptorHandle,
+  InterceptorOptions,
+  NavigatePath,
+} from "./routePaths.js"
+import type { RouteMatch } from "./types.js"
 import type {
   NavigationFailure,
   NavigationGuard,
@@ -24,11 +31,13 @@ export type RouterRuntime = {
     guard: NavigationGuard,
     routeId?: string
   ) => () => void
-  getLastNavigation: () => {
-    to: RouteLocation
-    from: RouteLocation | null
-    failure?: NavigationFailure
-  } | undefined
+  getLastNavigation: () =>
+    | {
+        to: RouteLocation
+        from: RouteLocation | null
+        failure?: NavigationFailure
+      }
+    | undefined
   setLastNavigation: (
     entry:
       | {
@@ -38,6 +47,15 @@ export type RouterRuntime = {
         }
       | undefined
   ) => void
+  registerRouteInterceptor?: <P extends NavigatePath>(
+    target: P,
+    options: InterceptorOptions<P>,
+    fromRouteId?: string
+  ) => InterceptorHandle
+  getRouteInterceptorRegistrations?: () => readonly InterceptorRegistration[]
+  buildTargetLocation?: (
+    match: RouteMatch
+  ) => import("./types.js").RouteLocation
 }
 
 const ROUTER_RUNTIME = Symbol.for("kiru.router.runtime")
@@ -52,7 +70,9 @@ export function setRouterInstanceRuntime(
 ): void {
   const target = router as RouterWithRuntime
   if (target[ROUTER_RUNTIME]) {
-    throw new Error("[kiru] Router runtime is already initialized on this router")
+    throw new Error(
+      "[kiru] Router runtime is already initialized on this router"
+    )
   }
   target[ROUTER_RUNTIME] = runtime
 }

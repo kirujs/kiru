@@ -11,6 +11,11 @@ import { isLoaderRpcAvailable } from "./loaderClient.js"
 import { readPageLoadExport } from "./loaders.js"
 import type { ClientOutletRouter } from "./clientRoutePrep.js"
 import { preloadChunksForMatch } from "./hydrationChunks.js"
+import {
+  findMatchingInterceptor,
+  prefetchInterceptorLoad,
+} from "./routeInterceptors.js"
+import { tryGetRouterInstanceRuntime } from "./routerRuntime.js"
 type PrefetchFlight = {
   abort: AbortController
   promise: Promise<void>
@@ -25,6 +30,10 @@ export type PrefetchRouteOptions = {
   router: ClientOutletRouter
   chunks?: boolean
   data?: boolean
+  /** When false, skip interceptor load prefetch. Default true. */
+  intercept?: boolean
+  /** Prefetch registered interceptor `load` when navigation would soft-intercept. Default follows `data`. */
+  interceptLoad?: boolean
 }
 
 function cancelPrefetch(href: string): void {
@@ -43,25 +52,54 @@ async function runPrefetchRoute(
     router,
     chunks = true,
     data: dataOpt,
+    intercept: allowIntercept = true,
+    interceptLoad: interceptLoadOpt,
   } = options
   const data = dataOpt ?? isLoaderRpcAvailable()
+  const interceptLoad = interceptLoadOpt ?? data
 
   const pathname = stripBase(href, baseUrl)
-  const match = matchRoute(manifest, pathname)
-  if (!match) return
+  const toMatch = matchRoute(manifest, pathname)
+  if (!toMatch) return
 
-  if (chunks) {
-    if (signal.aborted) return
-    preloadChunksForMatch(match)
+  const routerWithMatch = router as ClientOutletRouter & {
+    match: { peek(): import("./types.js").RouteMatch | null }
+  }
+  const fromMatch = routerWithMatch.match.peek()
+  const runtime = tryGetRouterInstanceRuntime(
+    router as import("./routerInstance.js").Router
+  )
+  const registrations = runtime?.getRouteInterceptorRegistrations?.() ?? []
+  const buildTargetLocation = runtime?.buildTargetLocation
+  const interceptor =
+    allowIntercept &&
+    fromMatch &&
+    registrations.length > 0 &&
+    buildTargetLocation
+      ? findMatchingInterceptor(registrations, fromMatch, toMatch)
+      : null
+
+  if (interceptor && interceptLoad && buildTargetLocation && !signal.aborted) {
+    await prefetchInterceptorLoad(
+      interceptor,
+      toMatch,
+      buildTargetLocation,
+      signal
+    )
+    return
   }
 
-  if (!data || signal.aborted) return
+  if (signal.aborted) return
+  if (chunks) {
+    preloadChunksForMatch(toMatch)
+  }
 
+  if (!data) return
   const [searchCheck, tree] = await Promise.all([
-    validateSearchForMatch(match, router.query.peek(), {
+    validateSearchForMatch(toMatch, router.query.peek(), {
       hash: router.hash.peek(),
     }),
-    loadRouteTree(match),
+    loadRouteTree(toMatch),
   ])
   if (!searchCheck.ok || signal.aborted) return
 
@@ -70,20 +108,22 @@ async function runPrefetchRoute(
     const pageMod = tree.routeModule
     const load = readPageLoadExport(pageMod)
     if (!load) return
-    const loaderCtx = buildLoaderContextForMatch(router, match, signal, {
+    const loaderCtx = buildLoaderContextForMatch(router, toMatch, signal, {
       validatedQuery: searchCheck.validatedQuery,
       params: searchCheck.params,
     })
     await resolvePagePropsFromModule(pageMod, loaderCtx, {
       useHydratedPageData: false,
-      routeId: match.route.id,
+      routeId: toMatch.route.id,
     })
   } catch {
     if (!signal.aborted) return
   }
 }
 
-export async function prefetchRoute(options: PrefetchRouteOptions): Promise<void> {
+export async function prefetchRoute(
+  options: PrefetchRouteOptions
+): Promise<void> {
   const { href } = options
   const inFlight = prefetchFlightByHref.get(href)
   if (inFlight && !inFlight.abort.signal.aborted) {
@@ -109,6 +149,10 @@ export type LinkPrefetch =
       trigger?: "hover" | "visible"
       chunks?: boolean
       data?: boolean
+      /** When false, skip route interceptors for prefetch (use target route loader). Default true. */
+      intercept?: boolean
+      /** Prefetch interceptor `load` on soft-intercept links. Default follows `data`. */
+      interceptLoad?: boolean
     }
 
 export function resolveLinkPrefetch(
@@ -119,6 +163,7 @@ export function resolveLinkPrefetch(
     trigger: "hover",
     chunks: true,
     data: isLoaderRpcAvailable(),
+    intercept: true,
     ...prefetch,
   }
   return base
@@ -131,10 +176,12 @@ export function runLinkPrefetch(
     navigationMode: string
   },
   href: string,
-  prefetch: LinkPrefetch | undefined
+  prefetch: LinkPrefetch | undefined,
+  options?: { intercept?: boolean }
 ): void {
   const resolved = resolveLinkPrefetch(prefetch)
   if (resolved === false || router.navigationMode !== "history") return
+  const linkIntercept = options?.intercept ?? resolved.intercept ?? true
   void prefetchRoute({
     manifest: router.manifest,
     href,
@@ -142,5 +189,7 @@ export function runLinkPrefetch(
     router,
     chunks: resolved.chunks,
     data: resolved.data,
+    intercept: linkIntercept,
+    interceptLoad: resolved.interceptLoad,
   })
 }

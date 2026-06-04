@@ -30,6 +30,12 @@ import { runEnterGuards, runGuards, toRedirect } from "./runNavigationGuards.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { collectMiddlewareChain, mergeRouteMeta } from "./routeMeta.js"
 import { runRouteMiddleware, toMiddlewareRedirect } from "./routeMiddleware.js"
+import {
+  findMatchingInterceptor,
+  type InterceptorRegistration,
+  type KiruHistoryInterceptState,
+} from "./routeInterceptors.js"
+import type { RouteInterceptState } from "./types.js"
 export type { RouteTreeMatchSegment }
 
 export function buildMatchSegments(
@@ -113,7 +119,9 @@ export function buildHistoryHref(
   parts: RouteLocationParts,
   baseUrl: string
 ): string {
-  return `${addBase(parts.pathname, baseUrl)}${formatRouterSearch(parts.query)}${parts.hash}`
+  return `${addBase(parts.pathname, baseUrl)}${formatRouterSearch(
+    parts.query
+  )}${parts.hash}`
 }
 
 export function formatNavigationSnapshotLabel(
@@ -122,7 +130,9 @@ export function formatNavigationSnapshotLabel(
   if (!snap) return ""
   const keys = Object.keys(snap.params)
   if (!keys.length) return snap.pathname
-  return `${snap.pathname}?${keys.map((k) => `${k}=${snap.params[k]}`).join("&")}`
+  return `${snap.pathname}?${keys
+    .map((k) => `${k}=${snap.params[k]}`)
+    .join("&")}`
 }
 
 export async function runTransition(
@@ -219,12 +229,24 @@ export type NavigationPipelineDeps = {
   onLocaleChange?: (locale: string) => void
   /** Set after middleware `{ error }` once location is committed (cleared by commitLocation). */
   setOutletRenderError?: (err: Error | null) => void
+  interceptState?: { value: RouteInterceptState | null }
+  interceptorRegistrations?: InterceptorRegistration[]
+  commitInterceptLocation?: (input: {
+    target: RouteLocationParts & { href: string }
+    targetMatch: RouteMatch
+    backgroundMatch: RouteMatch
+    registration: InterceptorRegistration
+    signal: AbortSignal
+  }) => Promise<void>
+  dismissIntercept?: (options?: { skipHistoryBack?: boolean }) => void
 }
 
 export type NavigateInternalOptions = {
   replace: boolean
   fromPopstate: boolean
   enableTransition?: boolean
+  /** When false, skip route interceptors. Default true. */
+  intercept?: boolean
 }
 
 export function createNavigateInternal(
@@ -260,6 +282,10 @@ export function createNavigateInternal(
     locale,
     onLocaleChange,
     setOutletRenderError,
+    interceptState,
+    interceptorRegistrations,
+    commitInterceptLocation,
+    dismissIntercept,
   } = deps
 
   const navigateInternal = async (
@@ -268,6 +294,7 @@ export function createNavigateInternal(
       replace,
       fromPopstate,
       enableTransition = transitionsEnabled,
+      intercept: allowIntercept = true,
     }: NavigateInternalOptions
   ): Promise<NavigationResult> => {
     navAbortController.current?.abort()
@@ -290,20 +317,14 @@ export function createNavigateInternal(
               AppPathSplitResult,
               { kind: "invalid-locale" }
             >
-            wrongDomain?: Extract<
-              AppPathSplitResult,
-              { kind: "wrong-domain" }
-            >
+            wrongDomain?: Extract<AppPathSplitResult, { kind: "wrong-domain" }>
           }
         ).invalidLocale
       : undefined
     const wrongDomain = localeRouting
       ? (
           resolved as {
-            wrongDomain?: Extract<
-              AppPathSplitResult,
-              { kind: "wrong-domain" }
-            >
+            wrongDomain?: Extract<AppPathSplitResult, { kind: "wrong-domain" }>
           }
         ).wrongDomain
       : undefined
@@ -327,7 +348,9 @@ export function createNavigateInternal(
         )
         const target = location.startsWith("http")
           ? location
-          : addBase(location, normalizedBaseUrl) + targetUrl.search + targetUrl.hash
+          : addBase(location, normalizedBaseUrl) +
+            targetUrl.search +
+            targetUrl.hash
         return navigateInternal(new URL(target, origin), {
           replace: true,
           fromPopstate: false,
@@ -351,9 +374,7 @@ export function createNavigateInternal(
       : { pathname: targetPath, params: {} }
 
     currentNavigation.value = {
-      from: fromMatch
-        ? snapshotFromParts(fromParts, fromMatch.params)
-        : null,
+      from: fromMatch ? snapshotFromParts(fromParts, fromMatch.params) : null,
       to: snapshotFromParts(
         {
           pathname: resolved.pathname,
@@ -397,7 +418,7 @@ export function createNavigateInternal(
         !!fromMatch && (!toMatch || fromMatch.route.id !== toMatch.route.id)
       const leaveList =
         isLeavingRoute && fromMatch
-          ? (leaveByRoute.get(fromMatch.route.id) ?? [])
+          ? leaveByRoute.get(fromMatch.route.id) ?? []
           : []
       if (leaveList.length) {
         const g0 = await runGuards(leaveList, to, from)
@@ -417,7 +438,7 @@ export function createNavigateInternal(
         JSON.stringify(fromMatch.params) !== JSON.stringify(toMatch.params)
       const updateList =
         isUpdatingRoute && fromMatch
-          ? (updateByRoute.get(fromMatch.route.id) ?? [])
+          ? updateByRoute.get(fromMatch.route.id) ?? []
           : []
       if (updateList.length) {
         const gu = await runGuards(updateList, to, from)
@@ -519,9 +540,13 @@ export function createNavigateInternal(
       }
 
       if (toMatch) {
-        const searchCheck = await validateSearchForMatch(toMatch, resolved.query, {
-          hash: resolved.hash,
-        })
+        const searchCheck = await validateSearchForMatch(
+          toMatch,
+          resolved.query,
+          {
+            hash: resolved.hash,
+          }
+        )
         if (!searchCheck.ok) {
           if (searchCheck.failure.kind === "redirect") {
             return runRedirect(searchCheck.failure.location)
@@ -543,34 +568,107 @@ export function createNavigateInternal(
         return { status: "cancelled" }
       }
 
-      if (replace) {
-        saveScrollAt(historyIndex.value)
-        history.replaceState(
-          { ...history.state, index: historyIndex.value },
-          "",
-          resolved.href
-        )
-      } else {
-        saveScrollAt(historyIndex.value)
-        const nextIndex = historyIndex.value + 1
-        deps.scrollStack.value = deps.scrollStack.value.slice(0, nextIndex)
-        history.pushState(
-          { ...history.state, index: nextIndex },
-          "",
-          resolved.href
-        )
-        historyIndex.value = nextIndex
-      }
-      await runTransition(
-        () => commitLocation(resolved),
-        enableTransition,
-        navAbort.signal
-      )
+      const interceptor =
+        allowIntercept &&
+        !fromPopstate &&
+        fromMatch &&
+        toMatch &&
+        interceptorRegistrations &&
+        commitInterceptLocation
+          ? findMatchingInterceptor(
+              interceptorRegistrations,
+              fromMatch,
+              toMatch
+            )
+          : null
 
-      if (isEnteringNewRoute && componentEnterGuards.length) {
-        await runEnterGuards(componentEnterGuards, to, from)
+      if (interceptor && fromMatch && toMatch && commitInterceptLocation) {
+        const commitIntercept = commitInterceptLocation
+        const kiruIntercept: KiruHistoryInterceptState = {
+          registrationId: interceptor.id,
+          background: { ...fromParts },
+          backgroundParams: { ...fromMatch.params },
+        }
+        if (replace) {
+          saveScrollAt(historyIndex.value)
+          history.replaceState(
+            {
+              ...history.state,
+              index: historyIndex.value,
+              kiruIntercept,
+            },
+            "",
+            resolved.href
+          )
+        } else {
+          saveScrollAt(historyIndex.value)
+          const nextIndex = historyIndex.value + 1
+          deps.scrollStack.value = deps.scrollStack.value.slice(0, nextIndex)
+          history.pushState(
+            {
+              ...history.state,
+              index: nextIndex,
+              kiruIntercept,
+            },
+            "",
+            resolved.href
+          )
+          historyIndex.value = nextIndex
+        }
+        await runTransition(
+          () =>
+            commitIntercept({
+              target: resolved,
+              targetMatch: toMatch,
+              backgroundMatch: fromMatch,
+              registration: interceptor,
+              signal: navAbort.signal,
+            }),
+          enableTransition,
+          navAbort.signal
+        )
+        if (token !== navToken.value) {
+          abortNavigationWork()
+          return { status: "cancelled" }
+        }
+        navResult = { status: "intercepted" }
+      } else {
+        if (interceptState?.value && dismissIntercept) {
+          dismissIntercept({ skipHistoryBack: true })
+        }
+        if (replace) {
+          saveScrollAt(historyIndex.value)
+          history.replaceState(
+            {
+              ...history.state,
+              index: historyIndex.value,
+              kiruIntercept: undefined,
+            },
+            "",
+            resolved.href
+          )
+        } else {
+          saveScrollAt(historyIndex.value)
+          const nextIndex = historyIndex.value + 1
+          deps.scrollStack.value = deps.scrollStack.value.slice(0, nextIndex)
+          history.pushState(
+            { ...history.state, index: nextIndex, kiruIntercept: undefined },
+            "",
+            resolved.href
+          )
+          historyIndex.value = nextIndex
+        }
+        await runTransition(
+          () => commitLocation(resolved),
+          enableTransition,
+          navAbort.signal
+        )
+
+        if (isEnteringNewRoute && componentEnterGuards.length) {
+          await runEnterGuards(componentEnterGuards, to, from)
+        }
+        navResult = { status: "committed" }
       }
-      navResult = { status: "committed" }
     } catch (error) {
       failure = { type: "error", error }
       navResult = { status: "errored", error }
@@ -578,7 +676,10 @@ export function createNavigateInternal(
       handlePopstateCancel()
     } finally {
       if (token === navToken.value) {
-        if (navResult.status !== "committed") {
+        if (
+          navResult.status !== "committed" &&
+          navResult.status !== "intercepted"
+        ) {
           isNavigating.value = false
           currentNavigation.value = null
         }

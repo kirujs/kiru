@@ -27,18 +27,17 @@ import {
  */
 export function RouterView() {
   const router = useRouter()
-  const { match, pathname, loaderEpoch, outletRenderError } = router
+  const { match, loaderEpoch, outletRenderError } = router
   const { getNavGeneration } = getRouterInstanceRuntime(router)
   const children = resource({
     source: {
       match,
-      pathname,
       loaderEpoch,
       outletRenderError,
       isNavigating: router.isNavigating,
       currentNavigation: router.currentNavigation,
     },
-    load: async ({ match, pathname, outletRenderError: err }, { signal }) => {
+    load: async ({ match, outletRenderError: err }, { signal }) => {
       if (err) {
         router.isLoaderPending.value = true
         try {
@@ -49,10 +48,13 @@ export function RouterView() {
       }
       router.isLoaderPending.value = true
       try {
+        const intercept = router.interceptState.peek()
         return await buildClientOutletSubtree({
           router: asClientOutletRouter(router),
           match,
-          pathname,
+          pathname: intercept
+            ? intercept.backgroundMatch.pathname
+            : router.pathname.peek(),
           signal,
           getNavGeneration,
           useHydratedPageData: true,

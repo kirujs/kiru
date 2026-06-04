@@ -8,18 +8,22 @@ type SplitSegments<P extends string> = P extends `/${infer Rest}`
   : SplitRest<P>
 
 type SplitRest<R extends string> = R extends `${infer Head}/${infer Tail}`
-  ? Head extends "" ? SplitRest<Tail> : [Head, ...SplitRest<Tail>]
-  : R extends "" ? [] : [R]
+  ? Head extends ""
+    ? SplitRest<Tail>
+    : [Head, ...SplitRest<Tail>]
+  : R extends ""
+  ? []
+  : [R]
 
 type SegmentParams<S extends string> = S extends `[[...${infer K}]]`
   ? { [Key in K]: string | undefined }
   : S extends `[...${infer K}]`
-    ? { [Key in K]: string }
-    : S extends `[[${infer K}]]`
-      ? { [Key in K]?: string }
-      : S extends `[${infer K}]`
-        ? { [Key in K]: string }
-        : EmptyRouteParams
+  ? { [Key in K]: string }
+  : S extends `[[${infer K}]]`
+  ? { [Key in K]?: string }
+  : S extends `[${infer K}]`
+  ? { [Key in K]: string }
+  : EmptyRouteParams
 
 type UnionToIntersection<U> = (
   U extends unknown ? (arg: U) => void : never
@@ -40,14 +44,13 @@ export type RouteParams<P extends string> = P extends "/"
         >
       }[number]
     > extends infer R
-    ? keyof R extends never
-      ? EmptyRouteParams
-      : R
-    : EmptyRouteParams
+  ? keyof R extends never
+    ? EmptyRouteParams
+    : R
+  : EmptyRouteParams
 
-export type HasRouteParams<P extends string> = keyof RouteParams<P> extends never
-  ? false
-  : true
+export type HasRouteParams<P extends string> =
+  keyof RouteParams<P> extends never ? false : true
 
 /** Route node with a const path literal for registry typing. */
 export type CreatedRoute<P extends string = string> = RouteDefinition & {
@@ -107,7 +110,39 @@ export type RouterNavigateInput<P extends NavigatePath = NavigatePath> =
 export type RouterNavigateCallOptions =
   import("./i18n/augmentation.js").RouterNavigateOptions & {
     params?: Record<string, string | undefined>
+    /** When false, skip route interceptors for this navigation. Default true. */
+    intercept?: boolean
   }
+
+export type InterceptLoadContext<
+  Params extends Record<string, string | undefined>
+> = {
+  params: Params
+  location: import("./types.js").RouteLocation
+  signal: AbortSignal
+}
+
+export type InterceptRenderContext<
+  Params extends Record<string, string | undefined>
+> = InterceptLoadContext<Params> & {
+  restore: () => void
+  data: unknown | undefined
+}
+
+export type InterceptorOptions<P extends string> = {
+  from?: string
+  load?: (
+    ctx: InterceptLoadContext<RouteParams<P>>
+  ) => unknown | Promise<unknown>
+  render: (ctx: InterceptRenderContext<RouteParams<P>>) => JSX.Element
+}
+
+export type InterceptorHandle = {
+  Outlet: Kiru.Component
+  isActive: Kiru.Signal<boolean>
+  isPending: Kiru.Signal<boolean>
+  restore: () => void
+}
 
 function encodeParamValue(value: string): string {
   return encodeURIComponent(value)
@@ -136,7 +171,8 @@ export function interpolateRoutePath(
       }
       const key = optionalCatchAll[1]!
       const raw = params[key]
-      if (raw === undefined || raw === "") return out.length ? `/${out.join("/")}` : "/"
+      if (raw === undefined || raw === "")
+        return out.length ? `/${out.join("/")}` : "/"
       const parts = raw.split("/").filter(Boolean)
       out.push(...parts.map(encodeParamValue))
       continue
@@ -191,7 +227,11 @@ export function resolveNavigateTarget(
     }
     return to
   }
-  const { pathname, params: nested, ...rest } = to as {
+  const {
+    pathname,
+    params: nested,
+    ...rest
+  } = to as {
     pathname: string
     params?: Record<string, string | undefined>
   }
