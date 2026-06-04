@@ -168,6 +168,7 @@ function restoreClientHashAfterHydration(
 export async function bootstrapSsrClient(
   options: BootstrapSsrClientOptions
 ): Promise<AppHandle> {
+  const chunksReady = loadClientHydrationChunksManifest()
   const manifest =
     "routes" in options.routes
       ? options.routes
@@ -179,8 +180,7 @@ export async function bootstrapSsrClient(
     navigationAnnouncer,
   })
   ensureLoaderClient()
-  await loadClientHydrationChunksManifest()
-  await ensureClientI18nReady(router)
+  const i18nReady = ensureClientI18nReady(router)
   const pendingClientHash = stashClientHashForSsrHydration(router)
 
   const staticHydrate = {
@@ -190,9 +190,13 @@ export async function bootstrapSsrClient(
 
   const requestContext = readHydratedRequestContext()
   const match = router.match.peek()
-  const initialSubtree = match
-    ? await buildInitialSsrOutletInShell(router, manifest, requestContext)
-    : undefined
+  const outletReady = match
+    ? i18nReady.then(() =>
+        buildInitialSsrOutletInShell(router, manifest, requestContext)
+      )
+    : Promise.resolve(undefined)
+  await Promise.all([chunksReady, i18nReady, outletReady])
+  const initialSubtree = match ? await outletReady : undefined
 
   const app = hydrate(
     Fragment({

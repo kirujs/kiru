@@ -47,8 +47,7 @@ export async function createRouterApp(
     appOptions,
     navigationAnnouncer,
   } = options
-  ensureLoaderClient()
-  await loadClientHydrationChunksManifest()
+  const chunksReady = loadClientHydrationChunksManifest()
   const router = createRouter({
     routes,
     pathPolicy,
@@ -56,8 +55,9 @@ export async function createRouterApp(
     i18n,
     navigationAnnouncer,
   })
-  await ensureClientI18nReady(router)
-  let outlet: JSX.Element = createElement(RouterView, {})
+  ensureLoaderClient()
+  await Promise.all([chunksReady, ensureClientI18nReady(router)])
+  let outlet = createElement(RouterView, {})
   const i18nRuntime = getRouterInstanceRuntime(router).i18n?.runtime
   if (i18nRuntime) {
     outlet = createElement(I18nReactiveRoot, {
