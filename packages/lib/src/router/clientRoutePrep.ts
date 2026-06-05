@@ -7,8 +7,9 @@ import {
   type NavigationScope,
 } from "./navigationScope.js"
 import {
+  createDynamicHeadContext,
   isStaticPageHead,
-  isSyncPageHead,
+  pageHeadResolveIsAsync,
   readPageHeadExport,
   syncDocumentHeadForPage,
 } from "./pageHead.js"
@@ -91,8 +92,10 @@ export async function prepareRouteWithDocumentHead(
   const pageHead = readPageHeadExport(pageMod)
   const headCommit = { scope, getNavGeneration }
   const loaderCtx = buildLoaderContextForMatch(router, match, signal)
+  const headCtx = createDynamicHeadContext(loaderCtx, pageMod)
   const headCanRunParallel =
-    isStaticPageHead(pageHead) || isSyncPageHead(pageHead)
+    isStaticPageHead(pageHead) ||
+    (!!pageHead && !pageHeadResolveIsAsync(pageHead, headCtx))
   const preparePromise = prepareRouteForNavigation({
     pageMod,
     routeModule,

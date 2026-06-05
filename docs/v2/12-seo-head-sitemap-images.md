@@ -23,7 +23,7 @@ Page module exports:
 - `export const head = { title: "..." }` or
 - `defineHeadContent(async (ctx) => ({ title: ctx.data... }))`
 
-`pageHead.ts` distinguishes sync vs async vs static head for streaming (`isAsyncPageHead`, `isSyncPageHead`, `isStaticPageHead`).
+`pageHead.ts` distinguishes **static** vs **dynamic** head (`isStaticPageHead`, `isDynamicPageHead`). Function heads are always tagged `dynamic` at define time; whether resolution is async is decided at runtime when `resolve(ctx)` runs — sync when the return value is not a `Promise`, async when it is (`pageHeadResolveIsAsync`, `invokePageHeadResolve`). This supports sync functions that return `ctx.loader().then(...)` without the `async` keyword.
 
 Merged with route head: `mergeRouteAndPageHead`, `resolveMergedRoutePageHead`.
 

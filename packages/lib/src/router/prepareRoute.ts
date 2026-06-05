@@ -4,7 +4,11 @@ import {
   readLoaderFallback,
   readPageLoadExport,
 } from "./loaders.js"
-import { isAsyncPageHead, readPageHeadExport } from "./pageHead.js"
+import {
+  createDynamicHeadContext,
+  pageHeadResolveIsAsync,
+  readPageHeadExport,
+} from "./pageHead.js"
 import { wrapRouteModuleWithLoadGate } from "./pageLoadGate.js"
 import {
   resolvePagePropsFromModule,
@@ -61,12 +65,13 @@ export async function prepareRouteForNavigation(input: {
   }
 
   const pageHead = readPageHeadExport(pageMod)
+  const headCtx = createDynamicHeadContext(loaderCtx, pageMod)
   // Invalidation must refetch via `resolvePagePropsFromModule` (RPC), not reuse a
   // gated resource that may still resolve from streamed SSR cache.
   if (
     options?.forceReload !== true &&
     canStreamPageLoad(load) &&
-    !isAsyncPageHead(pageHead)
+    (!pageHead || !pageHeadResolveIsAsync(pageHead, headCtx))
   ) {
     const fallback = readLoaderFallback(load)
     if (fallback) {
@@ -135,11 +140,12 @@ export async function resolveSsrRouteModule(input: {
 }): Promise<ResolveSsrRouteModuleResult> {
   const { pageMod, routeModule, loaderCtx, enableStreamingLoad, routeId } = input
   const pageHead = readPageHeadExport(pageMod)
+  const headCtx = createDynamicHeadContext(loaderCtx, pageMod)
   const load = readPageLoadExport(pageMod)
   const streamPageLoad =
     !!enableStreamingLoad &&
     canStreamPageLoad(load) &&
-    !isAsyncPageHead(pageHead)
+    (!pageHead || !pageHeadResolveIsAsync(pageHead, headCtx))
 
   if (streamPageLoad && load) {
     const fallback = readLoaderFallback(load)

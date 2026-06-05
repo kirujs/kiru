@@ -88,8 +88,9 @@ import {
   resetHydratedPageData,
 } from "./pageData.js"
 import {
+  createDynamicHeadContext,
   isStaticPageHead,
-  isSyncPageHead,
+  pageHeadResolveIsAsync,
   readPageHeadExport,
   syncDocumentHeadForPage,
 } from "./pageHead.js"
@@ -335,22 +336,24 @@ export function createRouter({
       pageModPromise,
     ])
     const pageHead = readPageHeadExport(pageMod)
-    if (isStaticPageHead(pageHead) || isSyncPageHead(pageHead)) {
-      await syncDocumentHeadForPage(
-        match,
-        buildLoaderContext({
-          params: match.params,
-          pathname: match.pathname,
-          search: formatRouterSearch(query.peek()),
-          hash: hash.peek(),
-          query: query.peek(),
-          context: requestContext.peek(),
-          meta: mergeRouteMeta(match),
-          routeId: match.route.id,
-          signal: navAbortController.current?.signal ?? staticLoaderSignal(),
-          ...loaderI18nExtras(),
-        })
-      )
+    const loaderCtx = buildLoaderContext({
+      params: match.params,
+      pathname: match.pathname,
+      search: formatRouterSearch(query.peek()),
+      hash: hash.peek(),
+      query: query.peek(),
+      context: requestContext.peek(),
+      meta: mergeRouteMeta(match),
+      routeId: match.route.id,
+      signal: navAbortController.current?.signal ?? staticLoaderSignal(),
+      ...loaderI18nExtras(),
+    })
+    const headCtx = createDynamicHeadContext(loaderCtx, pageMod)
+    if (
+      isStaticPageHead(pageHead) ||
+      (!!pageHead && !pageHeadResolveIsAsync(pageHead, headCtx))
+    ) {
+      await syncDocumentHeadForPage(match, loaderCtx, undefined, pageMod)
     }
   }
 
@@ -405,23 +408,26 @@ export function createRouter({
     routeMatch: NonNullable<RouteMatch>,
     loc: RouteLocationParts
   ) {
-    const pageHead = readPageHeadExport(await routeMatch.route.component())
-    if (isStaticPageHead(pageHead) || isSyncPageHead(pageHead)) {
-      await syncDocumentHeadForPage(
-        routeMatch,
-        buildLoaderContext({
-          params: routeMatch.params,
-          pathname: routeMatch.pathname,
-          search: formatRouterSearch(loc.query),
-          hash: loc.hash,
-          query: loc.query,
-          context: requestContext.peek(),
-          meta: mergeRouteMeta(routeMatch),
-          routeId: routeMatch.route.id,
-          signal: navAbortController.current?.signal ?? staticLoaderSignal(),
-          ...loaderI18nExtras(),
-        })
-      )
+    const pageMod = await routeMatch.route.component()
+    const pageHead = readPageHeadExport(pageMod)
+    const loaderCtx = buildLoaderContext({
+      params: routeMatch.params,
+      pathname: routeMatch.pathname,
+      search: formatRouterSearch(loc.query),
+      hash: loc.hash,
+      query: loc.query,
+      context: requestContext.peek(),
+      meta: mergeRouteMeta(routeMatch),
+      routeId: routeMatch.route.id,
+      signal: navAbortController.current?.signal ?? staticLoaderSignal(),
+      ...loaderI18nExtras(),
+    })
+    const headCtx = createDynamicHeadContext(loaderCtx, pageMod)
+    if (
+      isStaticPageHead(pageHead) ||
+      (!!pageHead && !pageHeadResolveIsAsync(pageHead, headCtx))
+    ) {
+      await syncDocumentHeadForPage(routeMatch, loaderCtx, undefined, pageMod)
     }
   }
 

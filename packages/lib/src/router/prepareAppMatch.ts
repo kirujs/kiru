@@ -20,7 +20,8 @@ import { buildLoaderContext } from "./runPageLoad.js"
 import { loaderSignalFromRequest, throwIfAborted } from "./navigationScope.js"
 import type { KiruLoader, PageProps } from "./loaders.js"
 import {
-  isAsyncPageHead,
+  createDynamicHeadContext,
+  pageHeadResolveIsAsync,
   readPageHeadExport,
 } from "./pageHead.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
@@ -176,7 +177,10 @@ export async function buildPreparedAppForMatch(
 
   const pageMod = rawRouteModule
   const pageHead = readPageHeadExport(pageMod)
-  const asyncHead = isAsyncPageHead(pageHead)
+  const headCtx = createDynamicHeadContext(loaderCtx, pageMod)
+  const headNeedsLoader = pageHead
+    ? pageHeadResolveIsAsync(pageHead, headCtx)
+    : false
 
   const ssrPrepared = await resolveSsrRouteModule({
     pageMod,
@@ -225,7 +229,7 @@ export async function buildPreparedAppForMatch(
   )
 
   const pagePropsForMeta =
-    asyncHead || !streamPageLoad
+    headNeedsLoader || !streamPageLoad
       ? (pageProps as PageProps<KiruLoader<unknown>>)
       : undefined
   const resolvedStatus = resolveRouteStatus(

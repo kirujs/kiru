@@ -1,9 +1,7 @@
 import {
-  isAsyncPageHead,
   readPageHeadExport,
   createDynamicHeadContext,
   resolveMergedRoutePageHead,
-  resolveMergedRoutePageHeadSync,
 } from "./pageHead.js"
 import { buildLoaderContext } from "./runPageLoad.js"
 import type { KiruLoader, PageProps } from "./loaders.js"
@@ -18,9 +16,7 @@ export async function resolveStreamHeadMeta(
 ): Promise<RouteHeadMeta> {
   const pageHead = readPageHeadExport(pageMod)
   const headCtx = createDynamicHeadContext(loaderCtx, pageMod, pageProps)
-  return isAsyncPageHead(pageHead)
-    ? resolveMergedRoutePageHead(match.route.head, pageHead, headCtx)
-    : resolveMergedRoutePageHeadSync(match.route.head, pageHead, headCtx)
+  return resolveMergedRoutePageHead(match.route.head, pageHead, headCtx)
 }
 
 export function localeDetectionRedirectRenderHit(
