@@ -40,6 +40,8 @@ export default {
     assert.match(out, /default\.get/)
     assert.doesNotMatch(out, /__kiru_default/)
     assert.doesNotMatch(out, /async \(\) => "ok"/)
+    assert.doesNotMatch(out, /import \{ mutation \} from "kiru\/remote"/)
+    assert.match(out, /import \{ __\$mutation, __\$defineQuery \} from "kiru\/remote"/)
   })
 
   it("SSR rewrites anonymous default namespace and registers default.*", () => {
@@ -128,6 +130,21 @@ export default users
     assert.match(out, /export default users/)
     assert.match(out, /default\.get/)
     assert.doesNotMatch(out, /async \(\) => "u"/)
+    assert.doesNotMatch(out, /import \{ query \} from "kiru\/remote"/)
+  })
+
+  it("client strips mixed kiru/remote imports and keeps codegen runtime import", () => {
+    const out = transformRemote(
+      `
+import { form, getRequestEvent, query, requested } from "kiru/remote"
+export const get = query(async () => "ok")
+`,
+      false
+    )
+    assert.doesNotMatch(out, /getRequestEvent/)
+    assert.doesNotMatch(out, /requested/)
+    assert.doesNotMatch(out, /import \{ form/)
+    assert.match(out, /import \{ __\$mutation, __\$defineQuery \} from "kiru\/remote"/)
   })
 
   it("preserves users binding for same-file composition", () => {

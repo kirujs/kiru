@@ -1,6 +1,6 @@
 import { resource } from "../resource.js"
 import { createElement } from "../element.js"
-import { signal } from "../signals/index.js"
+import { signal } from "../signals/base.js"
 import { onMount } from "../hooks/onMount.js"
 import { mount } from "../appHandle.js"
 import { ErrorBoundary } from "../components/errorBoundary.js"

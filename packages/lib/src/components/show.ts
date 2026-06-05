@@ -1,4 +1,4 @@
-import { unwrap } from "../signals/index.js"
+import { unwrap } from "../signals/utils.js"
 import type { Truthy } from "../types.utils.js"
 import type { Signalable } from "../types.js"
 

@@ -8,7 +8,7 @@ import {
   $CONTEXT,
   $INLINE_FN,
 } from "../constants.js"
-import { createElement } from "../index.js"
+import { createElement } from "../element.js"
 import { KiruError } from "../error.js"
 import { node } from "../globals.js"
 import type { AppHandle } from "../appHandle.js"

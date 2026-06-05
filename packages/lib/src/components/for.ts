@@ -1,4 +1,5 @@
-import { unwrap, type Signal } from "../signals/index.js"
+import type { Signal } from "../signals/base.js"
+import { unwrap } from "../signals/utils.js"
 
 type InferArraySignalItemType<T extends Signal<any[]> | readonly unknown[]> =
   T extends Signal<infer V>

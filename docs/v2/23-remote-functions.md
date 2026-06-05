@@ -62,7 +62,9 @@ sequenceDiagram
 ### Modules
 
 - Place remotes in `**/*.remote.ts` (Vite `router.remote` glob).
-- Import from `kiru/remote`: `query`, `mutation`, `form`, `getRequestEvent`, `redirect`, `RemoteError`, `createFormController`, `requested` (server).
+- Import from `kiru/remote` in `.remote.ts` (server authoring): `query`, `mutation`, `form`, `getRequestEvent`, `redirect`, `RemoteError`, `requested`.
+- Import from `kiru/remote` in UI modules: `createFormController`, types (`MutationResult`, …), and remote handles exported from `.remote.ts` files.
+- **Browser boundary:** `query` / `mutation` / `form` / `getRequestEvent` / `requested` throw in browser bundles if invoked; client builds use codegen stubs (`__$defineQuery`, `__$mutation`) instead of running handlers.
 
 ### Validation (input only)
 

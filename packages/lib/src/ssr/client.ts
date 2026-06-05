@@ -1,7 +1,7 @@
 import type { AppHandle, AppHandleOptions } from "../appHandle.js"
 import { hydrationStack } from "../hydration.js"
 import { hydrationMode, renderMode } from "../globals.js"
-import { mount } from "../index.js"
+import { mount } from "../appHandle.js"
 
 interface AppHandleHydrationOptions extends AppHandleOptions {
   /**

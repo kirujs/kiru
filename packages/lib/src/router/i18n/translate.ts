@@ -1,4 +1,4 @@
-import type { Signal } from "../../signals/index.js"
+import type { Signal } from "../../signals/base.js"
 
 /** Leaf keys for nested message objects, e.g. `"home.greeting"`. */
 export type DotPath<T> = T extends object

@@ -103,7 +103,8 @@
   },
   "browser": {
     "./dist/remote/remoteInvokeScope.js": "./dist/remote/remoteInvokeScope.client.js",
-    "./dist/remote/remoteRequestEvent.js": "./dist/remote/remoteRequestEvent.client.js"
+    "./dist/remote/remoteRequestEvent.js": "./dist/remote/remoteRequestEvent.client.js",
+    "./dist/remote/requested.js": "./dist/remote/requested.client.js"
   },
   "peerDependenciesMeta": {
     "@standard-schema/spec": {

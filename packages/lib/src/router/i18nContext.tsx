@@ -1,7 +1,6 @@
 import { createContext, useContext } from "../context.js"
 import { createElement } from "../element.js"
-import type { Signal } from "../signals/index.js"
-import { signal } from "../signals/index.js"
+import { signal, type Signal } from "../signals/base.js"
 import { loadI18nMessages } from "./i18n/index.js"
 import {
   createI18nTranslator,

@@ -103,7 +103,7 @@ export const login = form({
 })
 ```
 
-Browser field may point to `remote/browser.js` for client stubs.
+On Node and SSR builds, `kiru/remote` resolves to the full server entry. In browser bundles, the package `browser` field resolves to `remote/browser.js`: definition factories (`query`, `mutation`, `form`), handler helpers (`getRequestEvent`, `requested`), tokens, and `createRemoteHandler` are **stubs** that warn and throw if called. The client RPC runtime (`__$defineQuery`, `__$mutation`, `createFormController`, query instances) stays real. `vite-plugin-kiru` strips authoring imports from `.remote.ts` client output and injects the codegen runtime.
 
 ### `kiru/jsx-runtime` / `kiru/jsx-dev-runtime`
 

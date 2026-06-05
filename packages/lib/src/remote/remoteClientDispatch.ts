@@ -7,6 +7,7 @@ import { REMOTE_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
 import { buildRemoteRpcHeaders } from "./remoteRequestHeaders.js"
 import { resolveRemoteFetchSignal } from "./abortScope.js"
 import type { RemoteCallOptions } from "./remoteCallOptions.js"
+import { applyQueryPatches } from "./queryCache.js"
 import {
   readKiruRedirect,
   readQueryPatches,
@@ -70,7 +71,6 @@ async function parseJsonRpcResponse(res: Response): Promise<unknown> {
 
   const patches = readQueryPatches(data)
   if (patches) {
-    const { applyQueryPatches } = await import("./queryCache.js")
     applyQueryPatches(patches)
     return unwrapPatchedRpcBody(data)
   }

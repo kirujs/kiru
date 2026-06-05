@@ -4,7 +4,7 @@ import {
   type RemoteFormClientOutput,
 } from "./action.js"
 import type { RemoteFormMutation } from "./form.js"
-import { signal, type Signal } from "../signals/index.js"
+import { signal, type Signal } from "../signals/base.js"
 import { requestToken } from "../globals.js"
 import { applyRemoteResponseHeaders } from "../router/routerGlobal.js"
 import { applyRemoteResponsePayload } from "./remoteResponse.js"

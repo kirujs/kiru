@@ -309,6 +309,36 @@ function clientFormatRemoteFunctions(
     if (node.type === "ImportDeclaration") return
     code.overwrite(node.start, node.end, "")
   })
+
+  stripAuthorKiruRemoteImports(bodyNodes, code)
+}
+
+function isKiruRemoteImportSource(node: AstNode): boolean {
+  if (node.type !== "ImportDeclaration") return false
+  const source = node.source
+  return (
+    source?.type === "Literal" &&
+    typeof source.value === "string" &&
+    source.value === "kiru/remote"
+  )
+}
+
+/** Drop authoring imports; codegen prepends the client RPC runtime it needs. */
+function stripAuthorKiruRemoteImports(
+  bodyNodes: AstNode[],
+  code: MagicString
+): void {
+  for (const node of bodyNodes) {
+    if (!isKiruRemoteImportSource(node)) continue
+    let removeEnd = node.end
+    const nextChar = code.original[removeEnd]
+    if (nextChar === "\r" && code.original[removeEnd + 1] === "\n") {
+      removeEnd += 2
+    } else if (nextChar === "\n") {
+      removeEnd += 1
+    }
+    code.remove(node.start, removeEnd)
+  }
 }
 
 function serverRegisterRemoteFunctions(

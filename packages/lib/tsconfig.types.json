@@ -3,6 +3,9 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["./src/tests/unit/query.types.test.ts"],
+  "include": [
+    "./src/tests/unit/query.types.test.ts",
+    "./src/types.ts"
+  ],
   "exclude": []
 }

@@ -1,5 +1,6 @@
 import type { RemoteHandlerArgs } from "./action.js"
 import { RemoteCookies } from "./remoteCookies.js"
+import { assertServerOnly } from "./serverOnly.js"
 import { headersToValidationInput } from "./remoteExecution.js"
 import type {
   RemoteExecution,
@@ -40,7 +41,10 @@ export function toRemoteHandlerArgs<Body, Query = void>(
 export function createRemoteExecutionForRequest(
   _options: CreateRemoteExecutionOptions
 ): RemoteExecution {
-  throw new Error("RemoteExecution is not available in the browser bundle")
+  assertServerOnly(
+    "createRemoteExecutionForRequest",
+    "RemoteExecution is not available in the browser bundle."
+  )
 }
 
 export function runInRemoteExecution<T>(

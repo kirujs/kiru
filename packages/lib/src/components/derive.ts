@@ -2,7 +2,7 @@ import {
   sideEffectsEnabled,
   type StreamDataThrowValue,
 } from "../utils/index.js"
-import { Signal } from "../signals/index.js"
+import { Signal } from "../signals/base.js"
 import { $STREAM_DATA } from "../constants.js"
 import { node } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"

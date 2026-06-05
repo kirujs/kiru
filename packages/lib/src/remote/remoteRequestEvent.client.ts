@@ -1,6 +1,7 @@
 import type { CustomRequestContext } from "../router/types.js"
 import type { RemoteCookies } from "./remoteCookies.js"
 import type { RemoteRequestEvent } from "./remoteRequestEvent.js"
+import { assertServerOnly } from "./serverOnly.js"
 
 export {
   formDataToInput,
@@ -21,13 +22,15 @@ export function buildRemoteRequestEvent(_params: {
   cookies: RemoteCookies
   signal: AbortSignal
 }): RemoteRequestEvent {
-  throw new Error(
+  assertServerOnly(
+    "buildRemoteRequestEvent",
     "buildRemoteRequestEvent() can only be called on the server."
   )
 }
 
 export function getRequestEvent(): RemoteRequestEvent {
-  throw new Error(
+  assertServerOnly(
+    "getRequestEvent",
     "getRequestEvent() can only be called inside a remote handler on the server."
   )
 }

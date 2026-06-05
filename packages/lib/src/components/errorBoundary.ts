@@ -1,5 +1,5 @@
 import { $ERROR_BOUNDARY } from "../constants.js"
-import { createElement } from "../index.js"
+import { createElement } from "../element.js"
 
 export interface ErrorBoundaryProps {
   children?: JSX.Children

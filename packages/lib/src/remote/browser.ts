@@ -1,6 +1,6 @@
 /**
- * Browser bundler entry for {@link ./index.js}: remote helpers only.
- * Token signing and RPC handlers live in the server entry (Node crypto).
+ * Browser bundler entry for {@link ./index.js}: client RPC runtime and server-only stubs.
+ * Token signing, handler registration, and remote definitions run on the server entry.
  */
 export {
   redirect,
@@ -31,8 +31,9 @@ export {
 
 export { getRequestEvent, type RemoteRequestEvent } from "./remoteRequestEvent.js"
 
+export { query, mutation, form } from "./definitionFactories.client.js"
+
 export {
-  query,
   __$defineQuery,
   isRemoteQuery,
   type RemoteQuery,
@@ -41,18 +42,22 @@ export {
 } from "./query.js"
 
 export {
-  mutation,
   __$mutation,
   type RemoteMutation,
   type RemoteMutationHandler,
 } from "./mutation.js"
 
-export {
-  form,
-  type RemoteFormMutation,
-  type RemoteFormHandler,
-  type RemoteFormHandlerWithBody,
+export type {
+  RemoteFormMutation,
+  RemoteFormHandler,
+  RemoteFormHandlerWithBody,
 } from "./form.js"
+
+export { requested } from "./requested.client.js"
+export type {
+  RequestedQueryEntry,
+  RequestedQueryRefreshable,
+} from "./requested.js"
 
 export {
   RemoteDispatchError,
@@ -66,3 +71,53 @@ export {
   type CreateFormControllerOptions,
   type CreateFormControllerResult,
 } from "./formController.js"
+
+export type { MutationResult, QueryUpdateTarget } from "./mutationResult.js"
+
+export {
+  makeKiruContextToken,
+  makeKiruContextTokenAsync,
+  unwrapKiruToken,
+  unwrapKiruTokenAsync,
+} from "./serverOnlyBrowser.js"
+export type { TokenHeader, TokenPayload } from "./token.js"
+
+export {
+  runWithSsrRequestContext,
+  __getSsrRemoteContext,
+  __getSsrRequestContext,
+} from "./serverOnlyBrowser.js"
+
+export {
+  KIRU_TOKEN_RESPONSE_HEADER,
+  normalizeRemoteResult,
+  buildRemoteHttpResponse,
+  serializeSetCookie,
+} from "./serverOnlyBrowser.js"
+
+export {
+  createRemoteHandler,
+  __INTERNAL_REMOTE_REGISTRY,
+} from "./serverOnlyBrowser.js"
+export type { CreateRemoteHandlerOptions } from "./remoteHttpHandler.js"
+
+export {
+  createRemoteExecution,
+  createRemoteFrame,
+  createCacheScope,
+  createTraceContext,
+  listRemoteFrames,
+} from "./serverOnlyBrowser.js"
+export type {
+  RemoteExecution,
+  RemoteExecutionFrame,
+  RequestEnvelope,
+  RuntimeContext,
+  ExecutionState,
+  MiddlewareState,
+  CacheScope,
+  TraceContext,
+  TraceSpan,
+  Transaction,
+  CreateRemoteExecutionOptions,
+} from "./remoteExecution.js"
