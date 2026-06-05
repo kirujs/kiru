@@ -14,7 +14,7 @@ import {
   resolvePagePropsFromModule,
   type ResolvePagePropsOptions,
 } from "./runPageLoad.js"
-import type { RouteModule } from "./types.js"
+import type { PageModule } from "./types.js"
 import type { LeafRouteProps } from "./routeTree.js"
 
 export type PrepareRouteForNavigationOptions = {
@@ -29,7 +29,7 @@ export type PrepareRouteForNavigationOptions = {
 } & Pick<ResolvePagePropsOptions, "scope" | "getNavGeneration">
 
 export type PreparedRouteNavigation = {
-  routeModule: RouteModule
+  routeModule: PageModule
   leafProps: LeafRouteProps
   pageMod: unknown
   loaderCtx: LoaderContext
@@ -43,7 +43,7 @@ export type PreparedRouteNavigation = {
  */
 export async function prepareRouteForNavigation(input: {
   pageMod: unknown
-  routeModule: RouteModule
+  routeModule: PageModule
   loaderCtx: LoaderContext
   options?: PrepareRouteForNavigationOptions
 }): Promise<PreparedRouteNavigation> {
@@ -122,7 +122,7 @@ export async function prepareRouteForNavigation(input: {
 }
 
 export type ResolveSsrRouteModuleResult = {
-  routeModule: RouteModule
+  routeModule: PageModule
   pageProps: Record<string, unknown>
   streamPageLoad: boolean
   discarded?: boolean
@@ -133,7 +133,7 @@ export type ResolveSsrRouteModuleResult = {
  */
 export async function resolveSsrRouteModule(input: {
   pageMod: unknown
-  routeModule: RouteModule
+  routeModule: PageModule
   loaderCtx: LoaderContext
   enableStreamingLoad?: boolean
   routeId?: string

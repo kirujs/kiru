@@ -7,7 +7,6 @@ import {
 const ISR_REVALIDATE_RE =
   /defineISR\s*\(\s*\{[^}]*revalidate\s*:\s*(\d+|false)/
 const ISR_TAGS_RE = /tags\s*:\s*\[/
-const LEGACY_REVALIDATE_RE = /export\s+const\s+revalidate\s*=\s*(\d+)/
 
 export async function scanFileForISRWarnings(
   filePath: string,
@@ -25,7 +24,7 @@ export async function scanFileForISRWarnings(
   const warnings: string[] = []
   const id = routeId ?? filePath
 
-  if (ISR_REVALIDATE_RE.test(source) || LEGACY_REVALIDATE_RE.test(source)) {
+  if (ISR_REVALIDATE_RE.test(source)) {
     const numMatch = source.match(/revalidate\s*:\s*(\d+)/)
     if (numMatch && Number(numMatch[1]) > 0) {
       warnings.push(

@@ -30,14 +30,6 @@ export function applyDocumentTitle(
   lastSyncedTitle = title
 }
 
-/** @deprecated Use {@link applyDocumentTitle}. Kept for tests and gradual migration. */
-export function syncClientDocumentHead(
-  head: RouteHeadMeta,
-  context?: HeadSyncContext
-): void {
-  applyDocumentTitle(head, context)
-}
-
 export function mergeAndSyncClientDocumentHead(
   routeHead: RouteHeadMeta,
   pageHead: RouteHeadMeta | undefined,

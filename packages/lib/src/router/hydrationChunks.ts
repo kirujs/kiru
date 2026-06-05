@@ -146,11 +146,6 @@ export function formatRouteModulePreloadLinks(urls: Iterable<string>): string {
   return parts.length ? `\n    ${parts.join("\n    ")}` : ""
 }
 
-/** @deprecated Use formatRouteModulePreloadLinks */
-export function formatModulePreloadLinks(urls: Iterable<string>): string {
-  return formatRouteModulePreloadLinks(urls)
-}
-
 export function renderModulePreloadLinks(
   urls: Iterable<string>,
   options?: { skipHrefs?: ReadonlySet<string>; trackInjected?: boolean }

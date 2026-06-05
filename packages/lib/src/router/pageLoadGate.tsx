@@ -3,10 +3,10 @@ import { createElement } from "../element.js"
 import { resource } from "../resource.js"
 import type { KiruLoader, LoaderContext, PageProps } from "./loaders.js"
 import { buildPageErrorProps, buildPageProps } from "./runPageLoad.js"
-import type { RouteModule } from "./types.js"
+import type { PageModule } from "./types.js"
 
 function asComponent(
-  module: RouteModule
+  module: PageModule
 ): Kiru.Component<PageProps<KiruLoader<unknown>>> {
   const c = typeof module === "function" ? module : module.default
   return c as Kiru.Component<PageProps<KiruLoader<unknown>>>
@@ -17,11 +17,11 @@ function asComponent(
  * until {@link PageProps} are ready.
  */
 export function wrapRouteModuleWithLoadGate(
-  routeModule: RouteModule,
+  routeModule: PageModule,
   load: KiruLoader,
   loaderCtx: LoaderContext,
   fallback: () => JSX.Element
-): RouteModule {
+): PageModule {
   const Page = asComponent(routeModule)
   const Gated: Kiru.Component<Record<string, never>> = () => {
     const pending = resource(async ({ signal }) => {

@@ -18,9 +18,10 @@ import {
 import type {
   CustomRequestContext,
   DocumentHead,
+  LayoutModule,
+  PageModule,
   RouteManifest,
   RouteMatch,
-  RouteModule,
 } from "./types.js"
 import type { RequestUrlState } from "./requestUrl.js"
 import type { I18nLocaleRouting } from "./i18n/localeRouting.js"
@@ -79,8 +80,8 @@ export async function renderStringWithDocument(
 export function buildAppElement(
   pathname: string,
   params: Record<string, string>,
-  layoutModules: Array<RouteModule | null>,
-  routeModule: RouteModule,
+  layoutModules: Array<LayoutModule | null>,
+  routeModule: PageModule,
   manifest: RouteManifest,
   requestContext: CustomRequestContext,
   leafProps?: LeafRouteProps,

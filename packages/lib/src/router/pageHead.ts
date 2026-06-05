@@ -40,11 +40,6 @@ export type KiruPageHead = {
 export type StaticPageHead = KiruPageHead & { __kiruPageHead: "static" }
 export type DynamicPageHead = KiruPageHead & { __kiruPageHead: "dynamic" }
 
-/** @deprecated Use {@link DynamicPageHead}. Compile-time only — runtime tag is always `dynamic`. */
-export type SyncPageHead = DynamicPageHead
-/** @deprecated Use {@link DynamicPageHead}. Compile-time only — runtime tag is always `dynamic`. */
-export type AsyncPageHead = DynamicPageHead
-
 export type PageHeadInvokeResult =
   | { kind: "sync"; value: RouteHeadMeta }
   | { kind: "async"; promise: Promise<RouteHeadMeta> }
@@ -52,10 +47,10 @@ export type PageHeadInvokeResult =
 export function defineHeadContent(meta: RouteHeadMeta): StaticPageHead
 export function defineHeadContent<TLoader extends KiruLoader<unknown>>(
   fn: (ctx: DynamicHeadContext<TLoader>) => RouteHeadMeta
-): SyncPageHead
+): DynamicPageHead
 export function defineHeadContent<TLoader extends KiruLoader<unknown>>(
   fn: (ctx: DynamicHeadContext<TLoader>) => Promise<RouteHeadMeta>
-): AsyncPageHead
+): DynamicPageHead
 export function defineHeadContent<TLoader extends KiruLoader<unknown>>(
   metaOrFn:
     | RouteHeadMeta
@@ -197,22 +192,6 @@ export function pageHeadResolveIsAsync(
   ctx: DynamicHeadContext
 ): boolean {
   return invokePageHeadResolve(head, ctx).kind === "async"
-}
-
-/** @deprecated Use {@link pageHeadResolveIsAsync} with a {@link DynamicHeadContext}. */
-export function isAsyncPageHead(
-  head: KiruPageHead | undefined,
-  ctx: DynamicHeadContext
-): boolean {
-  return !!head && isDynamicPageHead(head) && pageHeadResolveIsAsync(head, ctx)
-}
-
-/** @deprecated Use {@link pageHeadResolveIsAsync} with a {@link DynamicHeadContext}. */
-export function isSyncPageHead(
-  head: KiruPageHead | undefined,
-  ctx: DynamicHeadContext
-): boolean {
-  return !!head && (isStaticPageHead(head) || !pageHeadResolveIsAsync(head, ctx))
 }
 
 export type SyncDocumentHeadCommit = {

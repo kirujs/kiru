@@ -18,7 +18,7 @@ Authoring helpers: `createRouteScope`, `createRouteTree({ layout, children })`.
 ### Route (`kind: "route"`)
 
 - `path` — pattern with `[param]` or `[...rest]` segments
-- `component: RouteLoader` — dynamic `import()` or function returning module
+- `component: PageLoader` — dynamic `import()` returning a {@link PageModule}
 - Optional `static`, `head`, `meta`, `middleware`, `error`
 
 Shorthand: `createRoute("/path", () => import("./page"))`.
@@ -65,9 +65,9 @@ export async function generateStaticParams() { ... }
 export async function generateSitemapParams() { ... }
 ```
 
-`RouteModule` = `{ default: Component }` or bare `Component`.
+`PageModule` = `{ default: Component, …co-exports }` or bare `Component`. Layout modules use {@link LayoutModule} (`default` + optional `interceptors` only).
 
-`resolveSsrRouteModule` / page codegen unwrap default exports and linked `.actions.ts` modules.
+`resolveSsrRouteModule` / page codegen unwrap default exports and linked `.remote.ts` modules.
 
 ---
 

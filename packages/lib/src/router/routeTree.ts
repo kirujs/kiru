@@ -6,11 +6,15 @@ import {
 import { resolveNotFoundScopes } from "./manifest.js"
 import type { KiruLoader, PageProps } from "./loaders.js"
 import type {
+  ErrorModule,
   ErrorPageProps,
   InterceptorOwner,
+  LayoutModule,
+  NotFoundModule,
+  PageModule,
+  RoutableModule,
   RouteManifest,
   RouteMatch,
-  RouteModule,
 } from "./types.js"
 import { toRenderError } from "./types.js"
 import type { InterceptorHandle } from "./routePaths.js"
@@ -20,9 +24,11 @@ export type LeafRouteProps =
   | PageProps<KiruLoader<unknown>>
   | Record<string, never>
 
+export type LeafRouteModule = PageModule | ErrorModule | NotFoundModule
+
 interface RouteTreeLoadResult {
-  layoutModules: Array<RouteModule | null>
-  routeModule: RouteModule
+  layoutModules: Array<LayoutModule | null>
+  routeModule: LeafRouteModule
 }
 
 export async function loadRouteTree(
@@ -89,7 +95,7 @@ export async function loadRootErrorRouteTree(
     rootError(),
     manifest.rootLayout?.() ?? Promise.resolve(null),
   ])
-  const layoutModules: Array<RouteModule | null> = rootLayout
+  const layoutModules: Array<LayoutModule | null> = rootLayout
     ? [rootLayout]
     : []
   return { layoutModules, routeModule }
@@ -127,14 +133,14 @@ export type BuildRoutedSubtreeOptions = {
 }
 
 function readInterceptorsFromModule(
-  module: RouteModule
+  module: RoutableModule<Kiru.Component<any>>
 ): Record<string, InterceptorHandle> | null {
   if (typeof module === "function") return null
   return module.interceptors ?? null
 }
 
 function wrapWithInterceptorOwner(
-  module: RouteModule,
+  module: RoutableModule<Kiru.Component<any>>,
   owner: InterceptorOwner,
   inner: Kiru.Element
 ): Kiru.Element {
@@ -153,8 +159,8 @@ function wrapWithInterceptorOwner(
 
 /** Layout stack + page only (no RouterProvider). Matches SSR/SSG body HTML. */
 export function buildRoutedSubtree(
-  layoutModules: Array<RouteModule | null>,
-  routeModule: RouteModule,
+  layoutModules: Array<LayoutModule | null>,
+  routeModule: LeafRouteModule,
   leafProps?: LeafRouteProps,
   options?: BuildRoutedSubtreeOptions
 ) {
@@ -189,6 +195,8 @@ export function buildRoutedSubtree(
   return app
 }
 
-function asComponent(module: RouteModule): Kiru.Component<any> {
+function asComponent(
+  module: RoutableModule<Kiru.Component<any>>
+): Kiru.Component<any> {
   return typeof module === "function" ? module : module.default
 }

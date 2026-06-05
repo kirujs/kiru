@@ -69,6 +69,25 @@ See [04-route-tree-and-matching.md](./04-route-tree-and-matching.md).
 
 ---
 
+## Route modules & ISR
+
+| Before | After |
+|--------|--------|
+| `RouteModule` type | **`PageModule`** (layouts: **`LayoutModule`**, errors: **`ErrorModule`**, not-found: **`NotFoundModule`**) |
+| `RouteLoader` type | **`PageLoader`** (or **`LayoutLoader`** / **`ErrorLoader`** / **`NotFoundLoader`** per manifest field) |
+| Top-level `export const revalidate` / `tags` / `dynamic` on page modules | **`export const isr = defineISR({ … })`** only |
+| `syncClientDocumentHead` | **`applyDocumentTitle`** |
+| `formatModulePreloadLinks` | **`formatRouteModulePreloadLinks`** |
+| `SyncPageHead` / `AsyncPageHead` | **`DynamicPageHead`** |
+| `isAsyncPageHead` / `isSyncPageHead` | **`pageHeadResolveIsAsync`** (with a defined `head` and `DynamicHeadContext`) |
+| `export const cache` on page modules | **Removed** — `defineISR` `revalidate` drives `Cache-Control` for now |
+| `export const status` on page modules | **Removed** — SSR leaf responses use **200** until a replacement API |
+| `export const headers` / `defineRouteHeaders` | **Removed** |
+
+See [04-route-tree-and-matching.md](./04-route-tree-and-matching.md), [10-isr-hybrid-and-prerender.md](./10-isr-hybrid-and-prerender.md).
+
+---
+
 ## Build & deploy
 
 | Before | After |

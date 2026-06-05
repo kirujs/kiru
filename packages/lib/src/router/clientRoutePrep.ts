@@ -26,7 +26,7 @@ import {
   type LeafRouteProps,
 } from "./routeTree.js"
 import type { CurrentNavigation } from "./types.js"
-import type { RouteManifest, RouteMatch, RouteModule } from "./types.js"
+import type { RouteManifest, RouteMatch, PageModule } from "./types.js"
 import type { Router } from "./routerInstance.js"
 
 export type ClientOutletRouter = LoaderContextRouterSlice & {
@@ -59,7 +59,7 @@ export type PrepareRouteWithDocumentHeadInput = {
   router: ClientOutletRouter
   match: RouteMatch
   pageMod: unknown
-  routeModule: RouteModule
+  routeModule: PageModule
   signal: AbortSignal
   scope: NavigationScope
   getNavGeneration: () => number
@@ -68,7 +68,7 @@ export type PrepareRouteWithDocumentHeadInput = {
 }
 
 export type PreparedClientRoute = {
-  routeModule: RouteModule
+  routeModule: PageModule
   leafProps: LeafRouteProps
   usesLoadGate: boolean
   isLoaderStale?: boolean

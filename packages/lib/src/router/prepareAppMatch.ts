@@ -20,20 +20,11 @@ import type { LeafRouteProps } from "./routeTree.js"
 import { buildLoaderContext } from "./runPageLoad.js"
 import { loaderSignalFromRequest, throwIfAborted } from "./navigationScope.js"
 import type { KiruLoader, PageProps } from "./loaders.js"
-import {
-  createDynamicHeadContext,
-  pageHeadResolveIsAsync,
-  readPageHeadExport,
-} from "./pageHead.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { resolveSsrRouteModule } from "./prepareRoute.js"
 import {
   cachePolicyToHeaders,
   mergeResponseHeaders,
-  readRouteCacheExport,
-  readRouteHeadersExport,
-  readRouteStatusExport,
-  resolveRouteStatus,
 } from "./routeResponse.js"
 import { getISRRevalidate, readRouteISRExport } from "./routeRevalidate.js"
 import { serializedDataFromPageProps } from "./rendererStream.js"
@@ -180,11 +171,6 @@ export async function buildPreparedAppForMatch(
   throwIfAborted(renderSignal)
 
   const pageMod = rawRouteModule
-  const pageHead = readPageHeadExport(pageMod)
-  const headCtx = createDynamicHeadContext(loaderCtx, pageMod)
-  const headNeedsLoader = pageHead
-    ? pageHeadResolveIsAsync(pageHead, headCtx)
-    : false
 
   const ssrPrepared = await resolveSsrRouteModule({
     pageMod,
@@ -232,25 +218,14 @@ export async function buildPreparedAppForMatch(
     { url: requestUrl, pathPolicy, i18n: i18nPayload, localeRouting }
   )
 
-  const pagePropsForMeta =
-    headNeedsLoader || !streamPageLoad
-      ? (pageProps as PageProps<KiruLoader<unknown>>)
-      : undefined
-  const resolvedStatus = resolveRouteStatus(
-    readRouteStatusExport(pageMod),
-    loaderCtx,
-    pagePropsForMeta
-  )
-  const responseStatus = resolvedStatus ?? 200
-  const routeHeadersExport = readRouteHeadersExport(pageMod)
+  const responseStatus = 200
   const responseHeaders = mergeResponseHeaders(
     ctx?.headers,
     cachePolicyToHeaders(
-      readRouteCacheExport(pageMod),
+      undefined,
       routeMatch.route.static === true,
       getISRRevalidate(readRouteISRExport(pageMod))
-    ),
-    routeHeadersExport?.resolve(loaderCtx, pagePropsForMeta)
+    )
   )
 
   return {

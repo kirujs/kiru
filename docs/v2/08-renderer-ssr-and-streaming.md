@@ -58,7 +58,7 @@ High-level steps:
 6. Load page module (`resolveSsrRouteModule`)
 7. `runPageLoad` — may set `pagePropsPromise` for streaming
 8. Build `app` JSX (`buildAppElement`)
-9. Attach response status/headers from route exports (`routeResponse.ts`, `routeRevalidate.ts`)
+9. Attach response headers: adapter `ctx.headers` + ISR `Cache-Control` from `defineISR` (`cachePolicyToHeaders`); status **200** for matched leaves
 
 Outputs `PreparedApp`:
 

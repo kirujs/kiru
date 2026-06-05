@@ -3,7 +3,8 @@ import { warnOnce } from "./devWarnings.dev.js"
 import type { InterceptorHandle } from "./routePaths.js"
 import type {
   CompiledRouteScope,
-  RouteLoader,
+  LayoutLoader,
+  PageLoader,
   RouteManifest,
 } from "./types.js"
 
@@ -80,7 +81,7 @@ export type DiscoverRouteInterceptorsOptions = {
  */
 export async function discoverRouteInterceptors(
   manifest: RouteManifest,
-  loadModule: (loader: RouteLoader) => Promise<unknown>,
+  loadModule: (loader: LayoutLoader | PageLoader) => Promise<unknown>,
   opts?: DiscoverRouteInterceptorsOptions
 ): Promise<InterceptorManifest> {
   const moduleKey =

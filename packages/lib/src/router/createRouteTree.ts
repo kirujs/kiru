@@ -1,6 +1,6 @@
 import type {
   RouteDefinitionConfig,
-  RouteLoader,
+  PageLoader,
   RouteMiddleware,
   RouteMiddlewareInput,
   RouteMiddlewareLayer,
@@ -23,7 +23,7 @@ type RouteDefinitionConfigWithMiddleware = Omit<
 >
 
 type RouteDefinitionConfigByLoader = {
-  component: RouteLoader
+  component: PageLoader
   config: RouteConfigLoader<RoutePageConfig>
   static?: never
   head?: never
@@ -34,7 +34,7 @@ type RouteDefinitionConfigByLoader = {
 
 function buildRoute<P extends string>(
   path: P,
-  value: RouteLoader | RouteDefinitionConfig
+  value: PageLoader | RouteDefinitionConfig
 ): CreatedRoute<P> {
   if (!path.startsWith("/")) {
     throw new Error(`Route paths must start with '/': ${path}`)
@@ -80,11 +80,11 @@ export function createRoute<const P extends string>(
 ): CreatedRoute<P>
 export function createRoute<const P extends string>(
   path: P,
-  value: RouteLoader | RouteDefinitionConfig | RouteDefinitionConfigByLoader
+  value: PageLoader | RouteDefinitionConfig | RouteDefinitionConfigByLoader
 ): CreatedRoute<P>
 export function createRoute<const P extends string>(
   path: P,
-  value: RouteLoader | RouteDefinitionConfig | RouteDefinitionConfigByLoader
+  value: PageLoader | RouteDefinitionConfig | RouteDefinitionConfigByLoader
 ): CreatedRoute<P> {
   if (typeof value === "object" && value != null && "config" in value) {
     if (!path.startsWith("/")) {

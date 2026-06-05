@@ -143,7 +143,7 @@ See [14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md).
 ## Operational checklist
 
 - [ ] `prerenderedHtmlDir` points at Vite `outDir` client assets in prod
-- [ ] ISR seconds align with CDN cache headers (`routeResponse` cache export)
+- [ ] ISR `revalidate` seconds align with CDN `Cache-Control` on hybrid routes
 - [ ] Regeneration is single-flight under load (`e2e/ssr/scripts/prerender-regen-single-flight.mjs`)
 - [ ] `revalidatePath` called after mutations that affect static pages
 - [ ] Do not enable timed ISR on Workers deploy

@@ -1,20 +1,12 @@
-import type { InterceptorHandle } from "./routePaths.js"
+import type { defineInterceptors } from "./defineInterceptors.js"
+import type { KiruLoader } from "./loaders.js"
+import type { KiruPageHead } from "./pageHead.js"
+import type { KiruISRConfig } from "./isr.js"
 
 /** Who owns a co-exported `interceptors` module (layout scope or leaf route). */
 export type InterceptorOwner =
   | { kind: "scope"; scopeId: string }
   | { kind: "route"; routeId: string }
-
-/** Default export or bare component from a route page module. */
-export type RouteModule =
-  | Kiru.Component<any>
-  | {
-      default: Kiru.Component<any>
-      interceptors?: Record<string, InterceptorHandle>
-    }
-
-/** Dynamic `import()` of a page, layout, error, or `notFound` module. */
-export type RouteLoader = () => Promise<RouteModule>
 
 /** Props passed to SSR `error` route modules after a thrown render failure. */
 export interface ErrorPageProps {
@@ -22,6 +14,35 @@ export interface ErrorPageProps {
 }
 
 export type ErrorPage = Kiru.Component<ErrorPageProps>
+
+/**
+ * Bare component or `{ default, interceptors? }` shared by layout, page, error,
+ * and not-found modules.
+ */
+export type RoutableModule<T extends Kiru.Component<any>> =
+  | T
+  | {
+      default: T
+      interceptors?: ReturnType<typeof defineInterceptors>
+    }
+
+/**
+ * Layout module (`layout.tsx`). Runtime reads `default` and optional `interceptors` only.
+ * Page-only co-exports (`load`, `isr`, …) belong on {@link PageModuleObject}, not layouts.
+ */
+export type LayoutModule = RoutableModule<Kiru.Component<any>>
+
+/**
+ * Not-found module (`not-found.tsx`). Same surface as {@link LayoutModule}.
+ * @see LayoutModule
+ */
+export type NotFoundModule = LayoutModule
+
+/**
+ * Error boundary module (`error.tsx`). Receives {@link ErrorPageProps} on the leaf.
+ * Supports `default` and optional `interceptors` only.
+ */
+export type ErrorModule = RoutableModule<ErrorPage>
 
 /** Coerce any thrown value into `Error` for {@link ErrorPageProps}. */
 export function toRenderError(thrown: unknown): Error {
@@ -211,6 +232,75 @@ export type GenerateSitemapParams = (
 export type GenerateSitemapParamsContext = GenerateStaticParamsContext
 
 /**
+ * Object form of a leaf page module (`pages/*.tsx` / `page.tsx`).
+ *
+ * Bare `export default` is equivalent to `{ default }` only. Page-only co-exports
+ * are ignored on layout, error, and not-found modules — use {@link LayoutModule}.
+ *
+ * @see docs/v2/06-loaders-and-data.md
+ * @see docs/v2/10-isr-hybrid-and-prerender.md
+ * @see docs/v2/12-seo-head-sitemap-images.md
+ */
+export type PageModuleObject = {
+  /** Route component (required when not using a bare default export). */
+  default: Kiru.Component<any>
+
+  /**
+   * Parallel route slots for this page. Use `defineInterceptors({ … })`.
+   * @see defineInterceptors
+   */
+  interceptors?: ReturnType<typeof defineInterceptors>
+
+  /**
+   * Page data loader (`loader`, `serverLoader`, `clientLoader`, or `staticLoader`).
+   * Read by `readPageLoadExport` on navigations and SSR.
+   */
+  load?: KiruLoader
+
+  /**
+   * Per-page document head (`defineHeadContent`). Merged over route-tree `head`.
+   * Read by `readPageHeadExport`.
+   */
+  head?: KiruPageHead
+
+  /**
+   * Hybrid prerender / ISR (`defineISR`). Build + SSR only; not supported on Cloudflare Workers.
+   * Read by `readRouteISRExport`.
+   */
+  isr?: KiruISRConfig
+
+  /**
+   * Build-time path expansion for dynamic **static** segments.
+   * Read at SSG prerender only.
+   */
+  generateStaticParams?: GenerateStaticParams
+
+  /**
+   * Build-time path expansion for routes in `site.config` `sitemap.include`.
+   * Read at sitemap generation only.
+   */
+  generateSitemapParams?: GenerateSitemapParams
+}
+
+/**
+ * Leaf page module — bare default export or {@link PageModuleObject}.
+ * Used as the resolved value of {@link PageLoader}.
+ */
+export type PageModule = Kiru.Component<any> | PageModuleObject
+
+/** Dynamic `import()` of a leaf page module (`component` in the route tree). */
+export type PageLoader = () => Promise<PageModule>
+
+/** Dynamic `import()` of a layout module (`layout.tsx`). */
+export type LayoutLoader = () => Promise<LayoutModule>
+
+/** Dynamic `import()` of an error boundary module (`error.tsx`). */
+export type ErrorLoader = () => Promise<ErrorModule>
+
+/** Dynamic `import()` of a not-found module (`not-found.tsx`). */
+export type NotFoundLoader = () => Promise<NotFoundModule>
+
+/**
  * Resolved SEO / document metadata (after route-tree layers are applied).
  *
  * Author with {@link RouteHeadMetaInput} on scopes/routes. Page `export const head` /
@@ -309,10 +399,10 @@ export type AfterEachHook = (
 /**
  * Full leaf route config for {@link createRoute}.
  *
- * Shorthand: pass a {@link RouteLoader} alone for `component` only.
+ * Shorthand: pass a {@link PageLoader} alone for `component` only.
  */
 export interface RouteDefinitionConfig {
-  component: RouteLoader
+  component: PageLoader
   /**
    * When true, route is eligible for SSG prerender and static path discovery.
    * Scope `static: true` applies to all descendant leaves unless overridden.
@@ -322,7 +412,7 @@ export interface RouteDefinitionConfig {
   meta?: RouteMetaInput
   middleware?: RouteMiddlewareInput
   /** Error boundary module for render failures on this leaf (and below in the outlet). */
-  error?: RouteLoader
+  error?: ErrorLoader
 }
 
 export type RouteConfigModule<T extends Record<string, unknown>> = {
@@ -330,9 +420,8 @@ export type RouteConfigModule<T extends Record<string, unknown>> = {
   config?: T
 } & Record<string, unknown>
 
-export type RouteConfigLoader<T extends Record<string, unknown>> = () => Promise<
-  RouteConfigModule<T>
->
+export type RouteConfigLoader<T extends Record<string, unknown>> =
+  () => Promise<RouteConfigModule<T>>
 
 /**
  * Metadata for file-based `{page}.config.ts` / `index.config.ts`.
@@ -354,7 +443,7 @@ export interface RouteDefinition {
   kind: "route"
   method: "GET"
   path: string
-  component: RouteLoader
+  component: PageLoader
   /**
    * Lazy config module loader for this leaf.
    *
@@ -366,7 +455,7 @@ export interface RouteDefinition {
   head?: RouteHeadMetaInput
   meta?: RouteMetaInput
   middleware?: RouteMiddlewareInput
-  error?: RouteLoader
+  error?: ErrorLoader
 }
 
 /**
@@ -377,8 +466,8 @@ export interface RouteDefinition {
 export interface RouteScopeDefinition {
   kind: "scope"
   static?: boolean
-  layout?: RouteLoader
-  notFound?: RouteLoader
+  layout?: LayoutLoader
+  notFound?: NotFoundLoader
   /**
    * Lazy config module loader for this scope.
    *
@@ -389,7 +478,7 @@ export interface RouteScopeDefinition {
   head?: RouteHeadMetaInput
   meta?: RouteMetaInput
   middleware?: RouteMiddlewareInput
-  error?: RouteLoader
+  error?: ErrorLoader
   children: RouteNodeDefinition[]
 }
 
@@ -415,8 +504,8 @@ export type RouteScopeConfig = Omit<
   RouteScopeDefinition,
   "kind" | "children" | "layout" | "notFound"
 > & {
-  layout?: RouteLoader
-  notFound?: RouteLoader
+  layout?: LayoutLoader
+  notFound?: NotFoundLoader
 }
 
 export type RouteNodeDefinition = RouteDefinition | RouteScopeDefinition
@@ -435,8 +524,8 @@ export interface RouteTreeDefinition {
 export interface CompiledRouteScope {
   id: string
   static: boolean
-  layout?: RouteLoader
-  notFound?: RouteLoader
+  layout?: LayoutLoader
+  notFound?: NotFoundLoader
   /** Optional lazy config module for this scope. */
   config?: RouteConfigLoader<RouteScopeConfig>
   /** Resolved head for this scope (ancestor chain + this layer). */
@@ -445,7 +534,7 @@ export interface CompiledRouteScope {
   meta: RouteMeta
   /** Resolved middleware chain for this scope (ancestor chain + this layer). */
   middleware: RouteMiddleware[]
-  error?: RouteLoader
+  error?: ErrorLoader
 }
 
 /**
@@ -462,7 +551,7 @@ export interface CompiledRoute {
   score: number
   params: string[]
   static: boolean
-  component: RouteLoader
+  component: PageLoader
   /** Optional lazy config module for this leaf. */
   config?: RouteConfigLoader<RoutePageConfig>
   /** Ancestor scopes from root to parent (inclusive). */
@@ -473,7 +562,7 @@ export interface CompiledRoute {
   meta: RouteMeta
   /** Resolved middleware chain (ancestor scopes + leaf). */
   middleware: RouteMiddleware[]
-  error?: RouteLoader
+  error?: ErrorLoader
 }
 
 /**
@@ -484,9 +573,9 @@ export interface RouteManifest {
   /** True when the root scope defines `notFound` (used for SSG `404.html`). */
   rootHasNotFound?: boolean
   /** Root layout loader (SSR error UI when {@link rootError} runs without a matched route). */
-  rootLayout?: RouteLoader
+  rootLayout?: LayoutLoader
   /** Root scope `error` module for failures with no usable {@link CompiledRoute}. */
-  rootError?: RouteLoader
+  rootError?: ErrorLoader
 }
 
 /** Result of matching a URL against a {@link RouteManifest}. */

@@ -26,13 +26,12 @@ describe("routeRevalidate", () => {
     assert.deepEqual(isr, { dynamic: "force-dynamic" })
   })
 
-  it("readRouteISRExport ignores revalidate/tags with force-dynamic (legacy)", () => {
-    const isr = readRouteISRExport({
-      revalidate: 30,
-      tags: ["legacy"],
-      dynamic: "force-dynamic",
-    })
-    assert.deepEqual(isr, { dynamic: "force-dynamic" })
+  it("readRouteISRExport ignores top-level revalidate/tags/dynamic (isr export only)", () => {
+    assert.equal(readRouteISRExport({ revalidate: 30 }), undefined)
+    assert.equal(
+      readRouteISRExport({ tags: ["legacy"], dynamic: "force-dynamic" }),
+      undefined
+    )
   })
 
   it("cachePolicyToHeaders with revalidate seconds", () => {

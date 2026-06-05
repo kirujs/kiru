@@ -102,46 +102,12 @@ function normalizeISRConfig(raw: unknown): ResolvedISRConfig | undefined {
   }
 }
 
-/**
- * Read `export const isr` from a page module (supports legacy `revalidate` / `tags` / `dynamic` exports).
- */
+/** Read `export const isr = defineISR(…)` from a page module. */
 export function readRouteISRExport(mod: unknown): ResolvedISRConfig | undefined {
   if (!mod || typeof mod !== "object") return undefined
   const record = mod as Record<string, unknown>
-
-  if (record.isr !== undefined) {
-    const fromIsr = normalizeISRConfig(record.isr)
-    if (fromIsr) return fromIsr
-  }
-
-  const revalidate = normalizeRevalidate(record.revalidate)
-  const dynamic =
-    record.dynamic === "force-static" || record.dynamic === "force-dynamic"
-      ? record.dynamic
-      : undefined
-  const tags = normalizeTags(record.tags)
-
-  if (dynamic === "force-dynamic") {
-    warnIgnoredISRFields("force-dynamic", {
-      revalidate: record.revalidate,
-      tags: record.tags,
-    })
-    return { dynamic: "force-dynamic" }
-  }
-
-  if (
-    revalidate === undefined &&
-    dynamic === undefined &&
-    tags === undefined
-  ) {
-    return undefined
-  }
-
-  return {
-    ...(dynamic !== undefined ? { dynamic } : {}),
-    ...(revalidate !== undefined ? { revalidate } : {}),
-    ...(tags !== undefined ? { tags } : {}),
-  }
+  if (record.isr === undefined) return undefined
+  return normalizeISRConfig(record.isr)
 }
 
 export function getRouteBuildMetaFromModule(

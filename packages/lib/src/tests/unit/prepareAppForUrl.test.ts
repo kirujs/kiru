@@ -235,29 +235,6 @@ describe("prepareAppForUrl", () => {
     assert.ok(result.app)
   })
 
-  it("applies custom page status export", async () => {
-    const manifest = compileRouteTree(
-      createRouteTree({
-        children: [
-          createRoute("/created", {
-            component: async () => ({
-              default: () => null,
-              status: 201,
-            }),
-          }),
-        ],
-      })
-    )
-    const result = await prepareAppForUrl(
-      "http://localhost/created",
-      undefined,
-      manifest,
-      pathPolicy
-    )
-    assert.ok(result && !isPrepareRedirect(result) && !isPrepareError(result))
-    assert.equal(result.responseStatus, 201)
-  })
-
   it("returns external redirect when middleware lands on a different pathname", async () => {
     const manifest = compileRouteTree(
       createRouteTree({
