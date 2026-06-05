@@ -13,27 +13,27 @@ import type { RouteManifest, RouteTreeDefinition } from "../router/types.js"
 import { ensureClientI18nReady } from "../router/i18nContext.js"
 import { readHydratedRequestContext } from "../router/requestContext.js"
 import { requestToken } from "../globals.js"
-import { applyActionResponseHeaders } from "../router/routerGlobal.js"
-import {
-  isKiruRedirect,
-  serializeActionCallQuery,
-  type RemoteActionCallOptions,
-} from "../remote/action.js"
-import { buildActionRpcHeaders } from "../remote/actionRequestHeaders.js"
-import { ActionDispatchError } from "../remote/errors.js"
+import { isKiruRedirect } from "../remote/action.js"
+import { buildRemoteRpcHeaders } from "../remote/remoteRequestHeaders.js"
+import { RemoteDispatchError } from "../remote/errors.js"
 import { __DEV__, __KIRU_PURE_CLIENT__ } from "../env.js"
-import { REMOTE_ACTION_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
+import { REMOTE_PURE_CLIENT_DEV_MSG } from "../router/devWarnings.dev.js"
 import { ensureLoaderClient } from "../router/loaderClient.js"
-import { buildActionRpcUrl } from "../router/rpcUrl.js"
+import { buildMutationRpcUrl } from "../router/rpcUrl.js"
+import {
+  isRemoteCallOptions,
+  peelRemoteCallArgs,
+  type RemoteCallOptions,
+} from "../remote/remoteCallOptions.js"
+import { resolveRemoteFetchSignal } from "../remote/abortScope.js"
+import { applyRemoteResponsePayload } from "../remote/remoteResponse.js"
+import { dispatchMutationRpc } from "../remote/remoteClientDispatch.js"
 import { loadClientHydrationChunksManifest } from "../router/hydrationChunks.js"
 import { getRouterInstanceRuntime } from "../router/routerRuntime.js"
 import { ensureKiruRouterRuntime } from "../kiruRuntime.js"
 
 type ServerActionsClient = {
-  dispatch: (
-    id: string,
-    call?: RemoteActionCallOptions<unknown, Record<string, unknown>>
-  ) => Promise<unknown>
+  dispatch: (id: string, args?: unknown[] | RemoteCallOptions) => Promise<unknown>
 }
 
 function ensureServerActionsClient() {
@@ -41,45 +41,41 @@ function ensureServerActionsClient() {
   const router = ensureKiruRouterRuntime()
   if (router.serverActions) return
 
-  router.serverActions = {
-    dispatch: async (id, call) => {
-      if (__DEV__ && __KIRU_PURE_CLIENT__) {
-        throw new ActionDispatchError(500, REMOTE_ACTION_PURE_CLIENT_DEV_MSG)
-      }
-      const callEnvelope = call ?? {}
-      const headers = buildActionRpcHeaders(
-        requestToken.current,
-        callEnvelope.headers
-      )
-      const init: RequestInit = {
+  const dispatch = async (id: string, args?: unknown[] | RemoteCallOptions) => {
+    if (__DEV__ && __KIRU_PURE_CLIENT__) {
+      throw new RemoteDispatchError(500, REMOTE_PURE_CLIENT_DEV_MSG)
+    }
+    if (Array.isArray(args)) {
+      const { callArgs, options } = peelRemoteCallArgs(args)
+      const body =
+        callArgs.length === 0
+          ? null
+          : callArgs.length === 1
+            ? callArgs[0]
+            : callArgs
+      return dispatchMutationRpc(id, body, options)
+    }
+    if (args && isRemoteCallOptions(args)) {
+      return dispatchMutationRpc(id, null, args)
+    }
+    const legacy = args as
+      | { body?: unknown; query?: Record<string, unknown>; signal?: AbortSignal }
+      | undefined
+    if (legacy && ("body" in legacy || "query" in legacy)) {
+      const headers = buildRemoteRpcHeaders(requestToken.current)
+      const r = await fetch(buildMutationRpcUrl(id), {
         method: "POST",
-        signal: callEnvelope.signal,
+        signal: resolveRemoteFetchSignal(legacy.signal),
         headers,
         body: JSON.stringify(
-          callEnvelope.body === undefined ? null : callEnvelope.body
+          legacy.body === undefined ? null : legacy.body
         ),
-      }
-      const queryString =
-        callEnvelope.query && Object.keys(callEnvelope.query).length > 0
-          ? serializeActionCallQuery(callEnvelope.query)
-          : ""
-      const r = await fetch(buildActionRpcUrl(id, undefined, queryString), init)
-      applyActionResponseHeaders(r.headers)
-
-      if (!r.ok) {
-        throw new ActionDispatchError(r.status || 500, "Action failed")
-      }
-
+      })
+      applyRemoteResponsePayload(r.headers, undefined)
+      if (!r.ok) throw new RemoteDispatchError(r.status || 500, "Action failed")
       const text = await r.text()
       if (!text) return undefined
-
-      let data: unknown
-      try {
-        data = JSON.parse(text) as unknown
-      } catch {
-        throw new ActionDispatchError(500, "Invalid action response")
-      }
-
+      const data = JSON.parse(text) as unknown
       if (isKiruRedirect(data)) {
         window.location.assign(
           new URL((data as { location: string }).location, window.location.href)
@@ -87,10 +83,14 @@ function ensureServerActionsClient() {
         )
         return undefined
       }
-
+      applyRemoteResponsePayload(r.headers, data)
       return data
-    },
+    }
+    return dispatchMutationRpc(id, null, undefined)
   }
+
+  router.serverActions = { dispatch }
+  router.mutations = { dispatch }
 }
 
 export function __kiruEnsureRemoteDispatch(): ServerActionsClient["dispatch"] {

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict"
 import { describe, it, afterEach } from "node:test"
-import { action, KIRU_FORM_TOKEN_FIELD } from "../../remote/index.js"
-import { KIRU_TOKEN_RESPONSE_HEADER } from "../../remote/actionResponse.js"
+import { form as defineForm, KIRU_FORM_TOKEN_FIELD } from "../../remote/index.js"
+import { KIRU_TOKEN_RESPONSE_HEADER } from "../../remote/remoteHttpSerialize.js"
 import { requestToken } from "../../globals.js"
 import { createFormController } from "../../remote/formController.js"
-import { buildActionRpcUrl } from "../../router/rpcUrl.js"
+import { buildMutationRpcUrl } from "../../router/rpcUrl.js"
 import {
   claimActiveRouter,
   getActiveRouter,
@@ -53,10 +53,10 @@ describe("createFormController", () => {
 
   it("initializes action URL, method, and signals", async () => {
     await withJSDOM(async () => {
-      const ref = action({ type: "form", handler: async () => ({ ok: true }) })
+      const ref = defineForm(async () => ({ ok: true }))
       const ctrl = createFormController(ref)
 
-      assert.equal(ctrl.action, buildActionRpcUrl(ref.__kiruFormActionId))
+      assert.equal(ctrl.action, buildMutationRpcUrl(ref.__kiruFormMutationId))
       assert.equal(ctrl.method, "POST")
       assert.equal(ctrl.result.value, null)
       assert.equal(ctrl.error.value, null)
@@ -67,7 +67,7 @@ describe("createFormController", () => {
   it("submits with enhanced headers and updates result on success", async () => {
     await withJSDOM(async () => {
       const restoreFormData = useJSDOMFormData()
-      const ref = action({ type: "form", handler: async () => ({ message: "hi" }) })
+      const ref = defineForm(async () => ({ message: "hi" }))
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
       form.innerHTML = '<input name="message" value="hi" />'
@@ -98,7 +98,7 @@ describe("createFormController", () => {
   it("sets isPending while fetch is in flight", async () => {
     await withJSDOM(async () => {
       const restoreFormData = useJSDOMFormData()
-      const ref = action({ type: "form", handler: async () => ({}) })
+      const ref = defineForm(async () => ({}))
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
       document.body.appendChild(form)
@@ -124,7 +124,7 @@ describe("createFormController", () => {
   it("clears result and error when a new submit starts", async () => {
     await withJSDOM(async () => {
       const restoreFormData = useJSDOMFormData()
-      const ref = action({ type: "form", handler: async () => ({}) })
+      const ref = defineForm(async () => ({}))
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
       document.body.appendChild(form)
@@ -154,7 +154,7 @@ describe("createFormController", () => {
   it("assigns validation result from handler JSON without throwing", async () => {
     await withJSDOM(async () => {
       const restoreFormData = useJSDOMFormData()
-      const ref = action({ type: "form", handler: async () => ({}) })
+      const ref = defineForm(async () => ({}))
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
       document.body.appendChild(form)
@@ -181,7 +181,7 @@ describe("createFormController", () => {
   it("sets error signal on non-2xx without throwing", async () => {
     await withJSDOM(async () => {
       const restoreFormData = useJSDOMFormData()
-      const ref = action({ type: "form", handler: async () => ({}) })
+      const ref = defineForm(async () => ({}))
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
       document.body.appendChild(form)
@@ -201,7 +201,7 @@ describe("createFormController", () => {
   it("leaves result null when response is a redirect payload", async () => {
     await withJSDOM(async () => {
       const restoreFormData = useJSDOMFormData()
-      const ref = action({ type: "form", handler: async () => ({}) })
+      const ref = defineForm(async () => ({}))
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
       document.body.appendChild(form)
@@ -229,11 +229,11 @@ describe("createFormController", () => {
     await withJSDOM(async () => {
       const restoreFormData = useJSDOMFormData()
       claimActiveRouter({ baseUrl: "/app" } as unknown as Router)
-      const ref = action({ type: "form", handler: async () => ({ ok: true }) })
+      const ref = defineForm(async () => ({ ok: true }))
       const ctrl = createFormController(ref)
       assert.equal(
         ctrl.action,
-        buildActionRpcUrl(ref.__kiruFormActionId, "/app")
+        buildMutationRpcUrl(ref.__kiruFormMutationId, "/app")
       )
 
       const form = document.createElement("form")
@@ -247,7 +247,7 @@ describe("createFormController", () => {
 
       await dispatchSubmit(form, ctrl.onsubmit)
 
-      assert.equal(capturedUrl, buildActionRpcUrl(ref.__kiruFormActionId, "/app"))
+      assert.equal(capturedUrl, buildMutationRpcUrl(ref.__kiruFormMutationId, "/app"))
       restoreFormData()
       form.remove()
     })
@@ -256,7 +256,7 @@ describe("createFormController", () => {
   it("applies x-kiru-invalidate via registered router", async () => {
     await withJSDOM(async () => {
       const restoreFormData = useJSDOMFormData()
-      const ref = action({ type: "form", handler: async () => ({}) })
+      const ref = defineForm(async () => ({}))
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
       document.body.appendChild(form)
@@ -286,7 +286,7 @@ describe("createFormController", () => {
     await withJSDOM(async () => {
       const restoreFormData = useJSDOMFormData()
       requestToken.setCurrent("old-token")
-      const ref = action({ type: "form", handler: async () => ({}) })
+      const ref = defineForm(async () => ({}))
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
       document.body.appendChild(form)
@@ -315,7 +315,7 @@ describe("createFormController", () => {
       script.textContent = "signed-token"
       document.head.appendChild(script)
 
-      const ref = action({ type: "form", handler: async () => ({}) })
+      const ref = defineForm(async () => ({}))
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
       form.innerHTML = '<input name="message" value="x" />'
@@ -344,7 +344,7 @@ describe("createFormController", () => {
       script.textContent = "from-head"
       document.head.appendChild(script)
 
-      const ref = action({ type: "form", handler: async () => ({}) })
+      const ref = defineForm(async () => ({}))
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
       form.innerHTML = `<input type="hidden" name="${KIRU_FORM_TOKEN_FIELD}" value="from-form" />`
@@ -367,7 +367,7 @@ describe("createFormController", () => {
 
   it("skips enhanced submit when defaultPrevented", async () => {
     await withJSDOM(async () => {
-      const ref = action({ type: "form", handler: async () => ({}) })
+      const ref = defineForm(async () => ({}))
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
 

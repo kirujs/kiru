@@ -1,16 +1,17 @@
 import { describe, it } from "node:test"
 import assert from "node:assert"
 import {
-  action,
+  form,
   formDataToInput,
   KIRU_FORM_TOKEN_FIELD,
   __INTERNAL_REMOTE_REGISTRY,
-  createActionExecutionForRequest,
-  createRemoteActionHandler,
-  runInActionExecution,
+  createRemoteExecutionForRequest,
+  createRemoteHandler,
+  runInRemoteExecution,
   redirect,
+  getRequestEvent,
   KIRU_TOKEN_RESPONSE_HEADER,
-  type RemoteFormActionInvokeArgs,
+  type RemoteFormInvokeArgs,
   type Schema,
 } from "../../remote/index.js"
 import { staticLoaderSignal } from "../../router/navigationScope.js"
@@ -23,13 +24,13 @@ const SECRET = "test-secret-form-actions"
 async function invokeFormDirect<Output>(
   formRef: {
     __kiruInvoke: (
-      args: RemoteFormActionInvokeArgs
+      args: RemoteFormInvokeArgs
     ) => Promise<{ handlerResult: Output }>
   },
   formData: FormData,
   context: CustomRequestContext = {}
 ): Promise<Output> {
-  const execution = createActionExecutionForRequest({
+  const execution = createRemoteExecutionForRequest({
     context,
     signal: staticLoaderSignal(),
     request: new Request("http://localhost/"),
@@ -37,7 +38,7 @@ async function invokeFormDirect<Output>(
     body: formData,
     entryActionId: "test:form",
   })
-  const { handlerResult } = await runInActionExecution(execution, () =>
+  const { handlerResult } = await runInRemoteExecution(execution, () =>
     formRef.__kiruInvoke({
       formData,
       signal: execution.request.signal,
@@ -108,7 +109,7 @@ function makeFormRequest(
     headers["origin"] = options.origin
   }
 
-  return new Request(`http://localhost/?action=${actionId}`, {
+  return new Request(`http://localhost/?mutation=${actionId}`, {
     method: "POST",
     headers,
     body,
@@ -137,7 +138,7 @@ function makeFormRequestFromFormData(
     headers["x-kiru-form"] = "1"
     headers["accept"] = "application/json"
   }
-  return new Request(`http://localhost/?action=${actionId}`, {
+  return new Request(`http://localhost/?mutation=${actionId}`, {
     method: "POST",
     headers,
     body: fd,
@@ -184,29 +185,26 @@ const contactSchema: Schema<ContactInput> = {
 // ---------------------------------------------------------------------------
 
 describe("action.post (form) / wrapper", () => {
-  it("should return object with __kiruFormAction set to true", () => {
-    const formRef = action({ type: "form", handler: async () => {
+  it("should return object with __kiruFormMutation set to true", () => {
+    const formRef = form(async () => {
       return { success: true }
-    },
     })
 
-    assert.strictEqual(formRef.__kiruFormAction, true)
+    assert.strictEqual(formRef.__kiruFormMutation, true)
   })
 
-  it("should return object with __kiruFormActionId property", () => {
-    const formRef = action({ type: "form", handler: async () => {
+  it("should return object with __kiruFormMutationId property", () => {
+    const formRef = form(async () => {
       return { success: true }
-    },
     })
 
-    assert.ok("__kiruFormActionId" in formRef)
-    assert.strictEqual(typeof formRef.__kiruFormActionId, "string")
+    assert.ok("__kiruFormMutationId" in formRef)
+    assert.strictEqual(typeof formRef.__kiruFormMutationId, "string")
   })
 
   it("should return object with __kiruInvoke method", () => {
-    const formRef = action({ type: "form", handler: async () => {
+    const formRef = form(async () => {
       return { success: true }
-    },
     })
 
     assert.ok("__kiruInvoke" in formRef)
@@ -217,11 +215,11 @@ describe("action.post (form) / wrapper", () => {
     let receivedCtx: unknown = null
     let receivedFormData: unknown = null
 
-    const formRef = action({ type: "form", handler: async ({ context, request, signal }) => {
+    const formRef = form(async () => {
+        const { context, request, signal } = getRequestEvent()
       receivedCtx = { context, signal }
       receivedFormData = request.formData
       return { success: true }
-    },
     })
 
     const testCtx = { userId: "123", role: "admin" }
@@ -241,9 +239,8 @@ describe("action.post (form) / wrapper", () => {
   it("should return Promise resolving to callback result", async () => {
     const expectedResult = { success: true, data: "test-data" }
 
-    const formRef = action({ type: "form", handler: async () => {
+    const formRef = form(async () => {
       return expectedResult
-    },
     })
 
     const result = await invokeFormDirect(formRef, new FormData())
@@ -252,12 +249,12 @@ describe("action.post (form) / wrapper", () => {
   })
 
   it("should handle async callbacks correctly", async () => {
-    const formRef = action({ type: "form", handler: async ({ request }) => {
+    const formRef = form(async () => {
+        const { request } = getRequestEvent()
       // Simulate async operation
       await new Promise((resolve) => setTimeout(resolve, 10))
-      const name = request.formData.get("name")
+      const name = request.formData!.get("name")
       return { message: `Hello, ${name}` }
-    },
     })
 
     const formData = new FormData()
@@ -269,10 +266,10 @@ describe("action.post (form) / wrapper", () => {
   })
 
   it("should handle synchronous callbacks by wrapping in Promise", async () => {
-    const formRef = action({ type: "form", handler: ({ request }) => {
-      const name = request.formData.get("name")
+    const formRef = form(() => {
+        const { request } = getRequestEvent()
+      const name = request.formData!.get("name")
       return { message: `Hello, ${name}` }
-    },
     })
 
     const formData = new FormData()
@@ -312,13 +309,9 @@ describe("formDataToInput", () => {
 describe("action.post (form + schema)", () => {
   it("parses FormData and passes typed input to the handler via __kiruInvoke", async () => {
     let received: { message: string } | null = null
-    const formRef = action({
-      type: "form",
-      validation: { body: messageSchema },
-      handler: async ({ request }) => {
-        received = request.body
-        return { ok: true }
-      },
+    const formRef = form(messageSchema, async (input) => {
+      received = input
+      return { ok: true }
     })
 
     const fd = new FormData()
@@ -329,15 +322,11 @@ describe("action.post (form + schema)", () => {
   })
 
   it("passes optional File fields after schema validation", async () => {
-    const formRef = action({
-      type: "form",
-      validation: { body: contactSchema },
-      handler: async ({ request }) => ({
-        email: request.body.email,
-        hasAvatar: request.body.avatar instanceof File,
-        avatarName: request.body.avatar?.name,
-      }),
-    })
+    const formRef = form(contactSchema, async (input) => ({
+      email: input.email,
+      hasAvatar: input.avatar instanceof File,
+      avatarName: input.avatar?.name,
+    }))
 
     const file = new File(["bytes"], "pic.png", { type: "image/png" })
     const fd = new FormData()
@@ -354,14 +343,10 @@ describe("action.post (form + schema)", () => {
   })
 
   it("rejects invalid form body through the HTTP handler", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/form-schema-invalid"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      submit: action({
-        type: "form",
-        validation: { body: messageSchema },
-        handler: async ({ request }) => ({ message: request.body.message }),
-      }),
+      submit: form(messageSchema, async (input) => ({ message: input.message })),
     })
 
     const token = validToken()
@@ -378,14 +363,10 @@ describe("action.post (form + schema)", () => {
   })
 
   it("accepts valid form fields through the HTTP handler (enhanced JSON)", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/form-schema-valid"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      submit: action({
-        type: "form",
-        validation: { body: messageSchema },
-        handler: async ({ request }) => ({ message: request.body.message }),
-      }),
+      submit: form(messageSchema, async (input) => ({ message: input.message })),
     })
 
     const token = validToken()
@@ -399,18 +380,14 @@ describe("action.post (form + schema)", () => {
   })
 
   it("accepts multipart File upload through the HTTP handler", async () => {
-    const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
+    const handler = createRemoteHandler(SECRET, { exposeErrors: true })
     const routeId = "test/form-schema-file"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      submit: action({
-        type: "form",
-        validation: { body: contactSchema },
-        handler: async ({ request }) => ({
-          email: request.body.email,
-          hasAvatar: request.body.avatar instanceof File,
-          avatarName: request.body.avatar?.name,
-        }),
-      }),
+      submit: form(contactSchema, async (input) => ({
+        email: input.email,
+        hasAvatar: input.avatar instanceof File,
+        avatarName: input.avatar?.name,
+      })),
     })
 
     const token = validToken()
@@ -441,10 +418,9 @@ describe("action.post (form) / registration", () => {
     const actionName = "testAction"
     let callbackInvoked = false
 
-    const formRef = action({ type: "form", handler: async () => {
+    const formRef = form(async () => {
       callbackInvoked = true
       return { success: true }
-    },
     })
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
@@ -452,7 +428,7 @@ describe("action.post (form) / registration", () => {
     })
 
     // Act: Create handler and invoke with matching route ID and action name
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const token = validToken({ userId: 123 })
     const req = makeFormRequest(`${routeId}:${actionName}`, token, {
       field: "value",
@@ -470,16 +446,14 @@ describe("action.post (form) / registration", () => {
     let action1Invoked = false
     let action2Invoked = false
 
-    const action1 = action({ type: "form", handler: async () => {
+    const action1 = form(async () => {
       action1Invoked = true
       return { action: "action1" }
-    },
     })
 
-    const action2 = action({ type: "form", handler: async () => {
+    const action2 = form(async () => {
       action2Invoked = true
       return { action: "action2" }
-    },
     })
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
@@ -488,7 +462,7 @@ describe("action.post (form) / registration", () => {
     })
 
     // Act: Invoke action1
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const token = validToken()
     const req1 = makeFormRequest(`${routeId}:action1`, token, {
       field: "value",
@@ -523,20 +497,18 @@ describe("action.post (form) / registration", () => {
     let firstCallbackInvoked = false
     let secondCallbackInvoked = false
 
-    const firstAction = action({ type: "form", handler: async () => {
+    const firstAction = form(async () => {
       firstCallbackInvoked = true
       return { version: "first" }
-    },
     })
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
       [actionName]: firstAction,
     })
 
-    const secondAction = action({ type: "form", handler: async () => {
+    const secondAction = form(async () => {
       secondCallbackInvoked = true
       return { version: "second" }
-    },
     })
 
     // Overwrite the registration
@@ -545,7 +517,7 @@ describe("action.post (form) / registration", () => {
     })
 
     // Act: Invoke the action
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const token = validToken()
     const req = makeFormRequest(`${routeId}:${actionName}`, token, {
       field: "value",
@@ -561,15 +533,14 @@ describe("action.post (form) / registration", () => {
 
 describe("action.post (form) / native submission", () => {
   it("should process application/x-www-form-urlencoded content-type", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/urlencoded"
 
     let invoked = false
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: action({ type: "form", handler: async () => {
+      testAction: form(async () => {
         invoked = true
         return { success: true }
-      },
       }),
     })
 
@@ -589,15 +560,14 @@ describe("action.post (form) / native submission", () => {
   })
 
   it("should process multipart/form-data content-type", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/multipart"
 
     let invoked = false
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: action({ type: "form", handler: async () => {
+      testAction: form(async () => {
         invoked = true
         return { success: true }
-      },
       }),
     })
 
@@ -617,13 +587,12 @@ describe("action.post (form) / native submission", () => {
   })
 
   it("should return status 400 when __kiru_token is missing", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/missing-token"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: action({ type: "form", handler: async () => {
+      testAction: form(async () => {
         return { success: true }
-      },
       }),
     })
 
@@ -631,7 +600,7 @@ describe("action.post (form) / native submission", () => {
     const fd = new FormData()
     fd.set("field1", "value1")
 
-    const req = new Request(`http://localhost/?action=${routeId}:testAction`, {
+    const req = new Request(`http://localhost/?mutation=${routeId}:testAction`, {
       method: "POST",
       headers: {
         "content-type": "application/x-www-form-urlencoded",
@@ -646,13 +615,12 @@ describe("action.post (form) / native submission", () => {
   })
 
   it("should return status 400 when __kiru_token is invalid", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/invalid-token"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: action({ type: "form", handler: async () => {
+      testAction: form(async () => {
         return { success: true }
-      },
       }),
     })
 
@@ -668,15 +636,15 @@ describe("action.post (form) / native submission", () => {
   })
 
   it("should unwrap context correctly with valid __kiru_token", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/valid-token"
 
     let receivedContext: unknown = null
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: action({ type: "form", handler: async ({ context, signal, request }) => {
+      testAction: form(async () => {
+        const { context, signal, request } = getRequestEvent()
         receivedContext = { context, signal, requestHeaders: request.headers }
         return { success: true }
-      },
       }),
     })
 
@@ -709,13 +677,12 @@ describe("action.post (form) / native submission", () => {
   })
 
   it("should return null when action query parameter is missing", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/no-action"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: action({ type: "form", handler: async () => {
+      testAction: form(async () => {
         return { success: true }
-      },
       }),
     })
 
@@ -739,13 +706,12 @@ describe("action.post (form) / native submission", () => {
   })
 
   it("should return status 500 when action ID has no colon separator", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/malformed"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      testAction: action({ type: "form", handler: async () => {
+      testAction: form(async () => {
         return { success: true }
-      },
       }),
     })
 
@@ -755,7 +721,7 @@ describe("action.post (form) / native submission", () => {
     fd.set("field1", "value1")
 
     // Create request with malformed action ID (no colon)
-    const req = new Request(`http://localhost/?action=malformedActionId`, {
+    const req = new Request(`http://localhost/?mutation=malformedActionId`, {
       method: "POST",
       headers: {
         "content-type": "application/x-www-form-urlencoded",
@@ -770,14 +736,13 @@ describe("action.post (form) / native submission", () => {
   })
 
   it("should return status 500 when action is not registered", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/unregistered"
 
     // Register a different action
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      otherAction: action({ type: "form", handler: async () => {
+      otherAction: form(async () => {
         return { success: true }
-      },
       }),
     })
 
@@ -799,11 +764,11 @@ describe("action.post (form) / enhanced submission", () => {
 
 describe("action.post (form) / redirect handling", () => {
   it("returns JSON redirect for enhanced POST", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/redirect-enhanced"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      go: action({ type: "form", handler: async () => redirect(303, "/hello") }),
+      go: form(async () => redirect(303, "/hello")),
     })
 
     const req = makeFormRequest(`${routeId}:go`, validToken(), {}, {
@@ -819,11 +784,11 @@ describe("action.post (form) / redirect handling", () => {
   })
 
   it("returns 303 Location for native POST redirect", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/redirect-native"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      go: action({ type: "form", handler: async () => redirect(303, "/hello") }),
+      go: form(async () => redirect(303, "/hello")),
     })
 
     const req = makeFormRequest(`${routeId}:go`, validToken(), {}, {
@@ -837,19 +802,17 @@ describe("action.post (form) / redirect handling", () => {
   })
 
   it("native POST redirect includes Set-Cookie from redirect options", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/redirect-cookie-native"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      go: action({
-        type: "form",
-        handler: async () =>
-          redirect(303, "/hello", {
-            cookies: [
-              { name: "session", value: "abc", path: "/", maxAge: 3600, sameSite: "Lax" },
-            ],
-          }),
-      }),
+      go: form(async () =>
+        redirect(303, "/hello", {
+          cookies: [
+            { name: "session", value: "abc", path: "/", maxAge: 3600, sameSite: "Lax" },
+          ],
+        })
+      ),
     })
 
     const req = makeFormRequest(`${routeId}:go`, validToken(), {}, {
@@ -864,17 +827,15 @@ describe("action.post (form) / redirect handling", () => {
   })
 
   it("enhanced POST redirect puts Set-Cookie on response, not JSON body", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/redirect-cookie-enhanced"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      go: action({
-        type: "form",
-        handler: async () =>
-          redirect(303, "/hello", {
-            cookies: [{ name: "session", value: "xyz", path: "/" }],
-          }),
-      }),
+      go: form(async () =>
+        redirect(303, "/hello", {
+          cookies: [{ name: "session", value: "xyz", path: "/" }],
+        })
+      ),
     })
 
     const req = makeFormRequest(`${routeId}:go`, validToken(), {}, {
@@ -892,16 +853,14 @@ describe("action.post (form) / redirect handling", () => {
   })
 
   it("enhanced POST sets cookies via handler scope and returns JSON body", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/action-result-enhanced"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      go: action({
-        type: "form",
-        handler: async ({ response }) => {
-          response.cookies.set("sid", "1", { path: "/" })
-          return { saved: true }
-        },
+      go: form(async () => {
+        const { response } = getRequestEvent()
+        response.cookies.set("sid", "1", { path: "/" })
+        return { saved: true }
       }),
     })
 
@@ -917,15 +876,12 @@ describe("action.post (form) / redirect handling", () => {
   })
 
   it("redirect with context emits x-kiru-token on enhanced response", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/redirect-token-enhanced"
     const fresh = { user: { id: "u1" } }
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      go: action({
-        type: "form",
-        handler: async () => redirect(303, "/app", { context: fresh }),
-      }),
+      go: form(async () => redirect(303, "/app", { context: fresh })),
     })
 
     const req = makeFormRequest(`${routeId}:go`, validToken(), {}, {
@@ -942,17 +898,14 @@ describe("action.post (form) / redirect handling", () => {
 
 describe("action.post (form) / error handling", () => {
   it("returns handler validation JSON for enhanced POST", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/form-validation-enhanced"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      submit: action({
-        type: "form",
-        handler: async () => ({
-          ok: false as const,
-          errors: { message: "Required" },
-        }),
-      }),
+      submit: form(async () => ({
+        ok: false as const,
+        errors: { message: "Required" },
+      })),
     })
 
     const req = makeFormRequest(`${routeId}:submit`, validToken(), {}, {
@@ -968,16 +921,15 @@ describe("action.post (form) / error handling", () => {
   })
 
   it("maps thrown RemoteError to HTTP status for enhanced POST", async () => {
-    const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
+    const handler = createRemoteHandler(SECRET, { exposeErrors: true })
     const routeId = "test/form-remote-err-migrate"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      submit: action({ type: "form", handler: async () => {
+      submit: form(async () => {
         throw new RemoteError("Message required", "VALIDATION_ERROR", {
           status: 422,
           details: { fieldErrors: { message: "Required" } },
         })
-      },
       }),
     })
 
@@ -991,16 +943,15 @@ describe("action.post (form) / error handling", () => {
   })
 
   it("returns RemoteError HTTP status for enhanced POST when exposeErrors is false", async () => {
-    const handler = createRemoteActionHandler(SECRET)
+    const handler = createRemoteHandler(SECRET)
     const routeId = "test/form-validation-hidden"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      submit: action({ type: "form", handler: async () => {
+      submit: form(async () => {
         throw new RemoteError("nope", "VALIDATION_ERROR", {
           status: 422,
           details: { fieldErrors: { message: "Required" } },
         })
-      },
       }),
     })
 
@@ -1014,13 +965,12 @@ describe("action.post (form) / error handling", () => {
   })
 
   it("returns 500 for enhanced POST on generic Error", async () => {
-    const handler = createRemoteActionHandler(SECRET, { exposeErrors: true })
+    const handler = createRemoteHandler(SECRET, { exposeErrors: true })
     const routeId = "test/form-generic-error"
 
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      submit: action({ type: "form", handler: async () => {
+      submit: form(async () => {
         throw new Error("boom")
-      },
       }),
     })
 
@@ -1035,12 +985,12 @@ describe("action.post (form) / error handling", () => {
 
 describe("action.post (form) / origin validation", () => {
   it("403 when allowedOrigins is set and Origin header mismatches", async () => {
-    const handler = createRemoteActionHandler(SECRET, {
+    const handler = createRemoteHandler(SECRET, {
       allowedOrigins: ["https://trusted.example"],
     })
     const routeId = "test/form-origin-block"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      submit: action({ type: "form", handler: async () => ({ ok: true }) }),
+      submit: form(async () => ({ ok: true })),
     })
     const token = validToken()
     const req = makeFormRequest(`${routeId}:submit`, token, {}, {
@@ -1051,12 +1001,12 @@ describe("action.post (form) / origin validation", () => {
   })
 
   it("allows form POST when Origin matches allowedOrigins", async () => {
-    const handler = createRemoteActionHandler(SECRET, {
+    const handler = createRemoteHandler(SECRET, {
       allowedOrigins: ["http://localhost"],
     })
     const routeId = "test/form-origin-ok"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      submit: action({ type: "form", handler: async () => ({ ok: true }) }),
+      submit: form(async () => ({ ok: true })),
     })
     const token = validToken()
     const req = makeFormRequest(`${routeId}:submit`, token, {}, {
@@ -1069,12 +1019,12 @@ describe("action.post (form) / origin validation", () => {
   })
 
   it("allows form POST when Referer matches allowedOrigins (no Origin)", async () => {
-    const handler = createRemoteActionHandler(SECRET, {
+    const handler = createRemoteHandler(SECRET, {
       allowedOrigins: ["https://app.example.com"],
     })
     const routeId = "test/form-referer-ok"
     __INTERNAL_REMOTE_REGISTRY.register(routeId, {
-      submit: action({ type: "form", handler: async () => ({ via: "referer" }) }),
+      submit: form(async () => ({ via: "referer" })),
     })
     const token = validToken()
     const req = makeFormRequest(`${routeId}:submit`, token, {}, {

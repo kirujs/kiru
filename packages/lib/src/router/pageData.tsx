@@ -2,6 +2,7 @@ import {
   STREAMED_DATA_DESCENDANTS,
   STREAMED_DATA_EVENT,
 } from "../constants.js"
+import { seedQueriesFromPayload } from "../remote/pageDataQueries.js"
 
 function escapeScriptJson(json: string): string {
   return json
@@ -26,7 +27,8 @@ export function readHydratedPageData(): unknown {
   const el = document.querySelector("script[k-page-data]")
   if (!el) return undefined
   try {
-    hydratedPageData = JSON.parse(el.textContent || "null")
+    const parsed = JSON.parse(el.textContent || "null")
+    hydratedPageData = seedQueriesFromPayload(parsed)
     el.remove()
     return hydratedPageData
   } catch {
@@ -46,12 +48,8 @@ let initialSsrStreamPending: boolean | null = null
 
 function isStreamedSsrClient(): boolean {
   if (typeof window === "undefined") return false
-  const map = (window as unknown as Record<string, unknown>)[STREAMED_DATA_EVENT]
-  return (
-    map != null &&
-    typeof map === "object" &&
-    typeof (map as Map<string, unknown>).get === "function"
-  )
+  const map = Reflect.get(window, STREAMED_DATA_EVENT)
+  return map instanceof Map
 }
 
 /** True while the first SSR response may still deliver tail `__$k_data` scripts. */
@@ -66,9 +64,8 @@ export function isInitialSsrStreamPending(): boolean {
 export function clearStreamedSsrClientState(): void {
   if (typeof window === "undefined") return
   initialSsrStreamPending = false
-  const w = window as unknown as Record<string, unknown>
-  const cache = w[STREAMED_DATA_EVENT]
+  const cache = Reflect.get(window, STREAMED_DATA_EVENT)
   if (cache instanceof Map) cache.clear()
-  const announced = w[STREAMED_DATA_DESCENDANTS]
+  const announced = Reflect.get(window, STREAMED_DATA_DESCENDANTS)
   if (announced instanceof Set) announced.clear()
 }

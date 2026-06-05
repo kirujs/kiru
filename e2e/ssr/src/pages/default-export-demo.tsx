@@ -1,6 +1,6 @@
 import { signal } from "kiru"
-import literal from "./default-export-literal.actions.js"
-import linked, { runPipeline } from "./default-export-linked.actions.js"
+import literal from "./default-export-literal.remote.js"
+import linked, { runPipeline } from "./default-export-linked.remote.js"
 
 export default function DefaultExportDemoPage() {
   const literalResult = signal("")

@@ -1,4 +1,9 @@
 import { unwrapKiruToken } from "../remote/token.js"
+import { attachQueriesToPayload } from "../remote/pageDataQueries.js"
+import {
+  beginQuerySnapshotCollector,
+  endQuerySnapshotCollector,
+} from "../remote/querySnapshot.js"
 import type { LoaderContext } from "./loaders.js"
 import { isKiruLoader, type KiruLoader } from "./loaders.js"
 import {
@@ -154,8 +159,11 @@ export function createLoaderHandler(
       loaderCtx.signal = request.signal
 
       try {
+        beginQuerySnapshotCollector()
         const data = await handler.__kiruInvoke(loaderCtx)
-        return new Response(JSON.stringify(data), {
+        const queries = endQuerySnapshotCollector()
+        const payload = attachQueriesToPayload(data, queries)
+        return new Response(JSON.stringify(payload), {
           status: 200,
           headers: jsonHeaders,
         })

@@ -1,6 +1,6 @@
 import { createFormController } from "kiru/remote"
 import { defineISR, loader } from "kiru/router"
-import { bump } from "./revalidate-demo.actions.js"
+import { bump } from "./revalidate-demo.remote.js"
 import { getRevalidateGeneration } from "./revalidate-demo.state.js"
 
 export const isr = defineISR({

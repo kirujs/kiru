@@ -3,7 +3,7 @@ import {
   submitMessage,
   submitRedirect,
   submitValidation,
-} from "./forms-demo.actions"
+} from "./forms-demo.remote"
 
 export default function FormsDemo() {
   const messageForm = createFormController(submitMessage)
@@ -59,9 +59,22 @@ export default function FormsDemo() {
         </button>
       </form>
       <p data-testid="forms-validation-error">
-        {validationForm.result.value?.ok === false
-          ? (validationForm.result.value.errors?.message ?? "")
-          : ""}
+        {(() => {
+          const value = validationForm.result.value
+          if (
+            value &&
+            typeof value === "object" &&
+            "ok" in value &&
+            value.ok === false &&
+            "errors" in value &&
+            value.errors &&
+            typeof value.errors === "object"
+          ) {
+            const errors = value.errors as Record<string, string | undefined>
+            return errors.message ?? errors._form ?? ""
+          }
+          return ""
+        })()}
       </p>
       <form
         data-testid="forms-demo-redirect-form"

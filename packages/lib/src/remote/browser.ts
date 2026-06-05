@@ -1,17 +1,15 @@
 /**
- * Browser bundler entry for {@link ./index.js}: action helpers only.
+ * Browser bundler entry for {@link ./index.js}: remote helpers only.
  * Token signing and RPC handlers live in the server entry (Node crypto).
  */
 export {
-  action,
   redirect,
   isKiruRedirect,
   KIRU_FORM_TOKEN_FIELD,
-  isStandardJSONSchemaV1,
-  isStandardSchemaV1,
-  parseInput,
-  toInputJsonSchema,
-  toOutputJsonSchema,
+  formDataToInput,
+  type KiruRedirect,
+  type KiruSetCookie,
+  type KiruActionResponseOptions,
   type ActionSchema,
   type Schema,
   type StandardJSONSchema,
@@ -19,43 +17,52 @@ export {
   type StandardSchema,
   type StandardSchemaV1,
   type StandardSchemaWithJson,
-  type RemoteActionFunction,
-  type RemoteAction,
-  type RemoteJsonActionConfig,
-  type RemoteActionValidationConfig,
-  type InferActionConfigBody,
-  type InferActionConfigQuery,
-  type InferActionConfigOutput,
+  isStandardJSONSchemaV1,
+  isStandardSchemaV1,
+  parseInput,
+  toInputJsonSchema,
+  toOutputJsonSchema,
   type InferSchemaOutput,
-  type RemoteFormActionConfig,
-  type RemoteFormActionConfigWithBody,
-  type RemoteFormActionHandlerWithBody,
-  type RemoteActionHandler,
-  type RemoteActionHandlerArgs,
-  type ActionRequest,
-  type ActionResponse,
-  type RemoteActionCallOptions,
-  type ActionMiddleware,
-  type ActionMiddlewareContext,
-  type RemoteFormActionFunction,
-  type RemoteFormActionHandler,
-  type RemoteFormActionHandlerArgs,
-  type KiruRedirect,
-  type KiruSetCookie,
-  type KiruActionResponseOptions,
-  type FormActionClientOutput,
-  type ActionCookies,
-  type ActionCookieDefaults,
-  type ActionCookieSetOptions,
-  formDataToInput,
+  type RemoteFormClientOutput,
+  type RemoteCookies,
+  type RemoteCookieDefaults,
+  type RemoteCookieSetOptions,
 } from "./action.js"
+
+export { getRequestEvent, type RemoteRequestEvent } from "./remoteRequestEvent.js"
+
 export {
-  ActionDispatchError,
-  isActionDispatchError,
+  query,
+  __$defineQuery,
+  isRemoteQuery,
+  type RemoteQuery,
+  type RemoteQueryInstance,
+  type RemoteQueryHandler,
+} from "./query.js"
+
+export {
+  mutation,
+  __$mutation,
+  type RemoteMutation,
+  type RemoteMutationHandler,
+} from "./mutation.js"
+
+export {
+  form,
+  type RemoteFormMutation,
+  type RemoteFormHandler,
+  type RemoteFormHandlerWithBody,
+} from "./form.js"
+
+export {
+  RemoteDispatchError,
+  isRemoteDispatchError,
   RemoteError,
   isRemoteError,
 } from "./errors.js"
+
 export {
   createFormController,
+  type CreateFormControllerOptions,
   type CreateFormControllerResult,
 } from "./formController.js"

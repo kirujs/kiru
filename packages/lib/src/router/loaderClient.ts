@@ -2,6 +2,7 @@ import { requestToken } from "../globals.js"
 import { ensureKiruRouterRuntime } from "../kiruRuntime.js"
 import type { LoaderContext } from "./loaders.js"
 import { buildLoaderRpcUrl } from "./rpcUrl.js"
+import { seedQueriesFromPayload } from "../remote/pageDataQueries.js"
 
 export type LoaderDispatch = (
   routeId: string,
@@ -28,7 +29,8 @@ export function ensureLoaderClient(): void {
         signal: context.signal,
       })
       if (!r.ok) throw new Error("Loader request failed")
-      return r.json()
+      const payload = await r.json()
+      return seedQueriesFromPayload(payload)
     },
   }
 }

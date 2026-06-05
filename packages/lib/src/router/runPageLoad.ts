@@ -31,6 +31,12 @@ import {
   type NavigationScope,
   throwIfAborted,
 } from "./navigationScope.js"
+import { runWithRemoteAbortSignalAsync } from "../remote/abortScope.js"
+import { attachQueriesToPayload } from "../remote/pageDataQueries.js"
+import {
+  beginQuerySnapshotCollector,
+  endQuerySnapshotCollector,
+} from "../remote/querySnapshot.js"
 export type LoaderFetchContext = {
   params: Record<string, unknown>
   pathname: string
@@ -142,8 +148,16 @@ export async function runPageLoadFromModule(
       warnOnce("server-loader-without-rpc", SERVER_LOADER_NO_RPC_DEV_MSG)
     }
   }
-  const data = await load.__kiruInvoke(ctx)
+  const collectQueries = typeof window === "undefined"
+  if (collectQueries) beginQuerySnapshotCollector()
+  const data = await runWithRemoteAbortSignalAsync(ctx.signal, () =>
+    load.__kiruInvoke(ctx)
+  )
   throwIfAborted(ctx.signal)
+  if (collectQueries) {
+    const queries = endQuerySnapshotCollector()
+    return attachQueriesToPayload(data, queries)
+  }
   return data
 }
 

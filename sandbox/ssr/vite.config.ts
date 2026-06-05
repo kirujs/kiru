@@ -15,7 +15,7 @@ export default defineConfig({
           routes: "./src/routes.ts",
           siteModule: "./src/site.config.{ts,js}",
         },
-        remote: "**/*.actions.ts",
+        remote: "**/*.remote.ts",
       },
     }),
   ],

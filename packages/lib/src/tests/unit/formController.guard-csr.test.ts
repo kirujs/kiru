@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import { describe, it, afterEach } from "node:test"
-import { action } from "../../remote/index.js"
+import { form as defineForm } from "../../remote/index.js"
 import { createFormController } from "../../remote/formController.js"
-import { REMOTE_ACTION_PURE_CLIENT_DEV_MSG } from "../../router/devWarnings.dev.js"
+import { REMOTE_PURE_CLIENT_DEV_MSG } from "../../router/devWarnings.dev.js"
 import { withJSDOM } from "./jsdom.js"
 
 async function dispatchSubmit(
@@ -32,7 +32,7 @@ describe("createFormController on csr bundle", () => {
       const prevFormData = globalThis.FormData
       globalThis.FormData = window.FormData as typeof FormData
 
-      const ref = action({ type: "form", handler: async () => ({}) })
+      const ref = defineForm(async () => ({}))
       const ctrl = createFormController(ref)
       const form = document.createElement("form")
       document.body.appendChild(form)
@@ -40,7 +40,7 @@ describe("createFormController on csr bundle", () => {
       try {
         await assert.rejects(
           () => dispatchSubmit(form, ctrl.onsubmit),
-          new RegExp(REMOTE_ACTION_PURE_CLIENT_DEV_MSG.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+          new RegExp(REMOTE_PURE_CLIENT_DEV_MSG.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
         )
       } finally {
         globalThis.FormData = prevFormData

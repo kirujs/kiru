@@ -2,9 +2,10 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
   __getSsrRequestContext,
-  action,
   runWithSsrRequestContext,
 } from "../../remote/action.js"
+import { getRequestEvent } from "../../remote/remoteRequestEvent.js"
+import { query } from "../../remote/query.js"
 import { staticLoaderSignal } from "../../router/navigationScope.js"
 import {
   compileRouteTree,
@@ -46,9 +47,10 @@ describe("SSR request context scope", () => {
     assert.deepEqual(__getSsrRequestContext(), {})
   })
 
-  it("action sees request context during synchronous SSR render", async () => {
+  it("query sees request context during synchronous SSR render", async () => {
     const seen: Array<Record<string, unknown>> = []
-    const probe = action(async ({ context }) => {
+    const probe = query(async () => {
+      const { context } = getRequestEvent()
       seen.push(context as Record<string, unknown>)
       return "ok"
     })
@@ -76,17 +78,20 @@ describe("SSR request context scope", () => {
     assert.deepEqual(__getSsrRequestContext(), {})
   })
 
-  it("concurrent sync renders keep separate action contexts", async () => {
+  it("concurrent sync renders keep separate query contexts", async () => {
     const seen = new Map<string, string>()
 
     const makeProbe = (label: string) =>
-      action(({ context }) => {
+      query(() => {
+        const { context } = getRequestEvent()
         seen.set(label, String((context as { id?: string }).id ?? ""))
         return label
       })
 
     const probeA = makeProbe("a")
     const probeB = makeProbe("b")
+    probeA.__kiruQueryId = "test/concurrent:probeA"
+    probeB.__kiruQueryId = "test/concurrent:probeB"
     __INTERNAL_REMOTE_REGISTRY.register("test/concurrent", {
       probeA,
       probeB,

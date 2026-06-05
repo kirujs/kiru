@@ -65,31 +65,33 @@ flowchart TB
 ### Data & auth patterns
 
 5. **[06-loaders-and-data.md](./06-loaders-and-data.md)** — `server` / `static` / `universal` / `client`, RPC, cache, validation.
-6. **[07-remote-actions.md](./07-remote-actions.md)** — Unified `action()`, RPC (POST + JSON), forms, cookies, tokens.
-7. **[05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md)** — Route middleware vs component guards; **CSR/SSR parity caveats**.
+6. **[07-remote-actions.md](./07-remote-actions.md)** — **Superseded** (see [23-remote-functions.md](./23-remote-functions.md)).
+7. **[23-remote-functions.md](./23-remote-functions.md)** — **Spec + agent checklist:** `query` / `mutation` / `form`, cache, `updates()`, loader sharing.
+8. **[05-middleware-and-navigation-guards.md](./05-middleware-and-navigation-guards.md)** — Route middleware vs component guards; **CSR/SSR parity caveats**.
 
 ### Rendering & deploy
 
-8. **[08-renderer-ssr-and-streaming.md](./08-renderer-ssr-and-streaming.md)** — `createRenderer`, streaming, early head flush, error recovery.
-9. **[09-client-bootstrap-and-hydration.md](./09-client-bootstrap-and-hydration.md)** — `bootstrapSsrClient` / `bootstrapSsgClient`, hash workaround, outlet subscriptions.
-10. **[10-isr-hybrid-and-prerender.md](./10-isr-hybrid-and-prerender.md)** — `defineISR`, disk cache, `revalidatePath` / `revalidateTag`.
-11. **[14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md)** — Node, Bun, Cloudflare; capability matrix.
-12. **[19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)** — `notFoundStrategy` (`exact`, `csr-recovery`, `hybrid-ssr`), `404.html`, SPA fallback.
+9. **[08-renderer-ssr-and-streaming.md](./08-renderer-ssr-and-streaming.md)** — `createRenderer`, streaming, early head flush, error recovery.
+10. **[09-client-bootstrap-and-hydration.md](./09-client-bootstrap-and-hydration.md)** — `bootstrapSsrClient` / `bootstrapSsgClient`, hash workaround, outlet subscriptions.
+11. **[10-isr-hybrid-and-prerender.md](./10-isr-hybrid-and-prerender.md)** — `defineISR`, disk cache, `revalidatePath` / `revalidateTag`.
+12. **[14-adapters-and-deploy-runtimes.md](./14-adapters-and-deploy-runtimes.md)** — Node, Bun, Cloudflare; capability matrix.
+13. **[19-static-404-and-host-fallback-strategies.md](./19-static-404-and-host-fallback-strategies.md)** — `notFoundStrategy` (`exact`, `csr-recovery`, `hybrid-ssr`), `404.html`, SPA fallback.
 
 ### Product & DX
 
-13. **[11-i18n.md](./11-i18n.md)** — Locales, domains, detection, prerender expansion.
-14. **[12-seo-head-sitemap-images.md](./12-seo-head-sitemap-images.md)** — Head layers, sitemap (images: [21-image-pipeline-adr.md](./21-image-pipeline-adr.md)).
-15. **[13-vite-plugin-and-build-pipeline.md](./13-vite-plugin-and-build-pipeline.md)** — Plugin options, SSG build, dev SSR, codegen.
+14. **[11-i18n.md](./11-i18n.md)** — Locales, domains, detection, prerender expansion.
+15. **[12-seo-head-sitemap-images.md](./12-seo-head-sitemap-images.md)** — Head layers, sitemap (images: [21-image-pipeline-adr.md](./21-image-pipeline-adr.md)).
+16. **[13-vite-plugin-and-build-pipeline.md](./13-vite-plugin-and-build-pipeline.md)** — Plugin options, SSG build, dev SSR, codegen.
 
 ### Strategy & quality
 
-16. **[02-competitive-positioning.md](./02-competitive-positioning.md)** — vs Next / SvelteKit / SolidStart / Nuxt.
-17. **[15-testing.md](./15-testing.md)** — Unit, e2e, recommended cases.
-18. **[16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md)** — Ship blockers and prioritized fixes.
-19. **[BREAKING-CHANGES.md](./BREAKING-CHANGES.md)** — v2 API inventory vs `main` (feeds migration).
-20. **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** — Sprint backlog S0–S6; [CHANGELOG.md](../../CHANGELOG.md) at repo root.
-21. **[22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md)** — SSR/SSG + Link-hover `modulepreload` (v2.0).
+17. **[02-competitive-positioning.md](./02-competitive-positioning.md)** — vs Next / SvelteKit / SolidStart / Nuxt.
+18. **[15-testing.md](./15-testing.md)** — Unit, e2e, recommended cases.
+19. **[16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md)** — Ship blockers and prioritized fixes.
+20. **[BREAKING-CHANGES.md](./BREAKING-CHANGES.md)** — v2 API inventory vs `main` (feeds migration).
+21. **[18-release-sprint-todos.md](./18-release-sprint-todos.md)** — Sprint backlog S0–S6; [CHANGELOG.md](../../CHANGELOG.md) at repo root.
+22. **[22-hydration-module-prewarm-adr.md](./22-hydration-module-prewarm-adr.md)** — SSR/SSG + Link-hover `modulepreload` (v2.0).
+23. **[22-route-interceptors.md](./22-route-interceptors.md)** — CSR soft navigation intercept API.
 
 ---
 

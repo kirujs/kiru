@@ -1,8 +1,8 @@
 import { Derive, effect, resource } from "kiru"
 import { createFormController } from "kiru/remote"
 import { Link, useRequestContext } from "kiru/router"
-import { getProfile, updateProfile } from "./account.actions.js"
-import { logoutForm } from "./login.actions.js"
+import { getProfile, updateProfile } from "./account.remote.js"
+import { logoutForm } from "./login.remote.js"
 
 export default function AccountPage() {
   const ctx = useRequestContext()

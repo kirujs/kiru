@@ -1,10 +1,8 @@
 import { Derive, ErrorBoundary, resource, signal } from "kiru"
-import { getStreamingTodos } from "./index.actions"
+import { getStreamingTodos } from "./index.remote"
 
 export default function StreamingTestPage() {
-  const todosData = resource(async ({ signal }) => {
-    return await getStreamingTodos({ signal })
-  })
+  const todosData = resource(() => getStreamingTodos())
   const count = signal(0)
 
   return () => (

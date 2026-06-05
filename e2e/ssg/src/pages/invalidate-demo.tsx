@@ -15,7 +15,7 @@ export default function SsgInvalidateDemoPage() {
       <button
         type="button"
         data-testid="ssg-invalidate-trigger"
-        onClick={() => {
+        onclick={() => {
           void router.invalidate()
         }}
       >

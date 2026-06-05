@@ -11,6 +11,18 @@ import { generateRandomID } from "./utils/generateId.js"
 import { __DEV__, isBrowser } from "./env.js"
 import { GenericHMRAcceptor, performHmrAccept } from "./hmr.js"
 import { isInitialSsrStreamPending } from "./router/pageData.js"
+import { runWithRemoteAbortSignalAsync } from "./remote/abortScope.js"
+import { isRemoteQuery, type RemoteQuery } from "./remote/query.js"
+import {
+  buildQueryCacheKeyForQuery,
+  invokeQueryLoad,
+  invokeQueryLoadWithObservation,
+} from "./remote/queryResourceLoad.js"
+import {
+  captureSyncQueryObservations,
+  createQueryCacheSubscriptionBinder,
+} from "./remote/queryCacheTrack.js"
+import { getSsrRenderAbortSignal } from "./remote/ssrRemoteScope.js"
 
 export type ResourceSource = Record<string, Signal<unknown>> | Signal<unknown>
 
@@ -53,6 +65,24 @@ export type ResourceOptions<
       defaultState?: T
     }
 
+/** `source` for a parametric query bound via `resource({ source, load: query })`. */
+export type QueryResourceSource<Input> = Input extends void
+  ? never
+  : Input extends Record<string, unknown>
+    ? { [K in keyof Input]: Signal<Input[K]> }
+    : Signal<Input>
+
+export type QueryResourceOptions<Input, Output> = Input extends void
+  ? {
+      load: RemoteQuery<void, Output>
+      defaultState?: Output
+    }
+  : {
+      source: QueryResourceSource<Input>
+      load: RemoteQuery<Input, Output>
+      defaultState?: Output
+    }
+
 export interface ResourceLoaderContext {
   signal: AbortSignal
 }
@@ -77,21 +107,24 @@ export function withSpeculativeStreamPromiseCollector<T>(
   }
 }
 
+function isStringKeyedMap(
+  value: unknown
+): value is Map<string, { data?: unknown; error?: string }> {
+  return (
+    value instanceof Map ||
+    (typeof value === "object" &&
+      value !== null &&
+      "get" in value &&
+      typeof (value as { get: unknown }).get === "function")
+  )
+}
+
 function getStreamedDataCache():
   | Map<string, { data?: unknown; error?: string }>
   | undefined {
   if (typeof window === "undefined") return undefined
-  const map = (window as unknown as Record<string, unknown>)[
-    STREAMED_DATA_EVENT
-  ]
-  if (
-    map == null ||
-    typeof map !== "object" ||
-    typeof (map as Map<string, unknown>).get !== "function"
-  ) {
-    return undefined
-  }
-  return map as Map<string, { data?: unknown; error?: string }>
+  const map = Reflect.get(window, STREAMED_DATA_EVENT)
+  return isStringKeyedMap(map) ? map : undefined
 }
 
 /** True when the SSR stream setup script has primed the deferred-data map. */
@@ -99,19 +132,20 @@ function isStreamedSsrClient(): boolean {
   return getStreamedDataCache() !== undefined
 }
 
+function isStringSet(value: unknown): value is Set<string> {
+  return (
+    value instanceof Set ||
+    (typeof value === "object" &&
+      value !== null &&
+      "has" in value &&
+      typeof (value as { has: unknown }).has === "function")
+  )
+}
+
 function getAnnouncedStreamDescendants(): Set<string> | undefined {
   if (typeof window === "undefined") return undefined
-  const pending = (window as unknown as Record<string, unknown>)[
-    STREAMED_DATA_DESCENDANTS
-  ]
-  if (
-    pending == null ||
-    typeof pending !== "object" ||
-    typeof (pending as Set<string>).has !== "function"
-  ) {
-    return undefined
-  }
-  return pending as Set<string>
+  const pending = Reflect.get(window, STREAMED_DATA_DESCENDANTS)
+  return isStringSet(pending) ? pending : undefined
 }
 
 function shouldResolveDeferredPromise(promiseId: string): boolean {
@@ -137,27 +171,60 @@ function isRelevantStreamId(localId: string, streamId: string): boolean {
   )
 }
 
-export function resource<T>(
-  callback: (ctx: ResourceLoaderContext) => Promise<T>
-): NullableResource<T>
+type ResourceCallback<T> =
+  | ((ctx: ResourceLoaderContext) => Promise<T>)
+  | (() => Promise<T>)
+
+function normalizeResourceCallback<T>(
+  fn: ResourceCallback<T>
+): (ctx: ResourceLoaderContext) => Promise<T> {
+  if (fn.length === 0) {
+    return () => (fn as () => Promise<T>)()
+  }
+  return fn as (ctx: ResourceLoaderContext) => Promise<T>
+}
+
+export function resource<T>(callback: ResourceCallback<T>): NullableResource<T>
+export function resource<Output>(
+  options: QueryResourceOptions<void, Output> & { defaultState: Output }
+): NonNullableResource<Output>
+export function resource<Output>(
+  options: QueryResourceOptions<void, Output>
+): NullableResource<Output>
+export function resource<Input, Output>(
+  options: QueryResourceOptions<Input, Output> & { defaultState: Output }
+): NonNullableResource<Output>
+export function resource<Input, Output>(
+  options: QueryResourceOptions<Input, Output>
+): NullableResource<Output>
+export function resource<T, Source extends ResourceSource>(
+  options: ResourceOptions<T, Source> & { defaultState: T }
+): NonNullableResource<T>
 export function resource<T>(
   options: ResourceOptions<T, undefined>
 ): NullableResource<T>
 export function resource<T, Source extends ResourceSource>(
-  options: ResourceOptions<T, Source> & { defaultState: T }
-): Resource<T>
-export function resource<T, Source extends ResourceSource>(
   options: ResourceOptions<T, Source>
 ): NullableResource<T>
-export function resource<T, Source extends ResourceSource>(
+export function resource(
+  callbackOrOptions: unknown
+): Resource<unknown> | NullableResource<unknown> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return resourceImpl(callbackOrOptions as any)
+}
+
+function resourceImpl<T, Source extends ResourceSource>(
   callbackOrOptions:
     | ResourceOptions<T, Source>
-    | ((ctx: ResourceLoaderContext) => Promise<T>)
+    | QueryResourceOptions<unknown, T>
+    | ResourceCallback<T>
 ): Resource<T> | NullableResource<T> {
-  const options: ResourceOptions<T, Source> =
+  const options =
     typeof callbackOrOptions === "function"
-      ? ({ load: callbackOrOptions } as ResourceOptions<T, Source>)
-      : callbackOrOptions
+      ? ({
+          load: normalizeResourceCallback(callbackOrOptions),
+        } as ResourceOptions<T, Source>)
+      : (callbackOrOptions as ResourceOptions<T, Source>)
   const defaultState =
     "defaultState" in options ? options.defaultState : undefined
   const hasDefaultState = defaultState !== undefined
@@ -166,10 +233,20 @@ export function resource<T, Source extends ResourceSource>(
     : signal<T | null>(null)
   const { load } = options
   const source = "source" in options ? options.source : undefined
+  const queryAsLoad = isRemoteQuery(load)
+    ? (load as RemoteQuery<unknown, T>)
+    : undefined
+  if (__DEV__ && queryAsLoad && !queryAsLoad.__kiruQueryVoid && source == null) {
+    throw new Error(
+      "resource({ load: query }) requires `source` for queries with input"
+    )
+  }
   const error = signal<Error | null>(null)
   const isPending = signal(true)
 
-  let controller = new AbortController()
+  /** Client-only; not allocated during SSR render (borrow {@link getSsrRenderAbortSignal}). */
+  let controller: AbortController | undefined
+  let loadGeneration = 0
 
   let promiseId = ""
   const vNode = node.current
@@ -216,11 +293,26 @@ export function resource<T, Source extends ResourceSource>(
   }
 
   const observedSignalUnsubs = new Map<string, () => void>()
+  const queryCacheBinder = isBrowser
+    ? createQueryCacheSubscriptionBinder(() => {
+        resource.refetch()
+      })
+    : undefined
+
+  const reconcileQueryCacheKeys = (keys: Set<string>, input?: unknown) => {
+    if (!isBrowser || !queryCacheBinder) return
+    if (queryAsLoad) {
+      keys.add(buildQueryCacheKeyForQuery(queryAsLoad, input))
+    }
+    queryCacheBinder.reconcile(keys)
+  }
+
   const dispose = () => {
-    if (!controller.signal.aborted) controller.abort()
+    if (controller && !controller.signal.aborted) controller.abort()
     Signal.dispose(data)
     Signal.dispose(isPending)
     observedSignalUnsubs.forEach((unsub) => unsub())
+    queryCacheBinder?.dispose()
     unsubFromSource?.()
   }
 
@@ -254,7 +346,7 @@ export function resource<T, Source extends ResourceSource>(
       },
       destroy: () => {
         baseDestroy()
-        controller.abort()
+        controller?.abort()
       },
       inject: (prev) => {
         baseInject(prev)
@@ -267,8 +359,19 @@ export function resource<T, Source extends ResourceSource>(
   }
 
   function createPromise(forceFetch = false): Kiru.StatefulPromise<T> {
-    controller.abort()
-    const ctrl = (controller = new AbortController())
+    const ssrSignal = getSsrRenderAbortSignal()
+    let signal: AbortSignal
+    let loadGen: number
+    if (ssrSignal) {
+      signal = ssrSignal
+      loadGen = ++loadGeneration
+    } else {
+      controller?.abort()
+      const ctrl = (controller = new AbortController())
+      signal = ctrl.signal
+      loadGen = ++loadGeneration
+    }
+    const isCurrentLoad = () => loadGen === loadGeneration
     isPending.value = true
     const newPromise = executeWithTracking({
       fn: () => {
@@ -277,19 +380,54 @@ export function resource<T, Source extends ResourceSource>(
           // if we're rendering to a string, there's no need to fire the callback
           promise = Promise.resolve() as Promise<T>
         } else if (!forceFetch && shouldResolveDeferredPromise(promiseId)) {
-          promise = resolveDeferredPromise<T>(promiseId, ctrl.signal)
+          promise = resolveDeferredPromise<T>(promiseId, signal)
         } else {
           // stream / dom / (hydrate + static)
-          const ctx: ResourceLoaderContext = { signal: ctrl.signal }
-          if (source == null) {
-            promise = (load as (ctx: ResourceLoaderContext) => Promise<T>)(ctx)
-          } else {
-            promise = (
+          const ctx: ResourceLoaderContext = { signal }
+          const runLoad = async () => {
+            if (queryAsLoad) {
+              const input =
+                source == null
+                  ? undefined
+                  : unwrapResourceSource(source as ResourceSource)
+              return invokeQueryLoad(queryAsLoad, input, ctx.signal)
+            }
+            if (source == null) {
+              return (load as (ctx: ResourceLoaderContext) => Promise<T>)(ctx)
+            }
+            return (
               load as (
                 source: UnwrapResourceSource<ResourceSource>,
                 ctx: ResourceLoaderContext
               ) => Promise<T>
             )(unwrapResourceSource(source), ctx)
+          }
+          const executeLoad = () => runWithRemoteAbortSignalAsync(signal, runLoad)
+
+          if (isBrowser) {
+            const input =
+              source == null
+                ? undefined
+                : unwrapResourceSource(source as ResourceSource)
+            if (queryAsLoad) {
+              const { observed, promise: loadPromise } =
+                invokeQueryLoadWithObservation(queryAsLoad, input, signal)
+              promise = loadPromise.then((value) => {
+                reconcileQueryCacheKeys(observed, input)
+                return value
+              })
+            } else {
+              let loadPromise!: Promise<T>
+              const { observed } = captureSyncQueryObservations(() => {
+                loadPromise = executeLoad()
+              })
+              promise = loadPromise.then((value) => {
+                reconcileQueryCacheKeys(observed, input)
+                return value
+              })
+            }
+          } else {
+            promise = executeLoad()
           }
         }
         return promise
@@ -319,7 +457,7 @@ export function resource<T, Source extends ResourceSource>(
         statefulPromise.state = "fulfilled"
         statefulPromise.value = value
 
-        if (ctrl !== controller) return
+        if (!isCurrentLoad()) return
         data.value = value
         isPending.value = false
         error.value = null
@@ -328,7 +466,7 @@ export function resource<T, Source extends ResourceSource>(
         statefulPromise.state = "rejected"
         statefulPromise.error = e instanceof Error ? e : new Error(e)
 
-        if (ctrl !== controller) return
+        if (!isCurrentLoad()) return
         error.value = statefulPromise.error
         isPending.value = false
       })

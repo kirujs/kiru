@@ -52,7 +52,7 @@ kiru({
       routes: "./src/routes.{ts,tsx}",
       siteModule: "./src/site.config.{ts,js}",
     },
-    remote: "**/*.actions.ts",
+    remote: "**/*.remote.ts",
     // HTML file in outDir to use as the shell after the client build (default: index.html).
     // Must include `{{kiru_head}}` and `{{kiru_body}}` template tokens.
     htmlTemplate: "index.html",
@@ -99,7 +99,7 @@ Add **`src/site.config.ts`** (or use a glob like **`router.ssg.siteModule: "./sr
 router: {
   ssg: { routes: "./src/routes.ts", siteModule: "./src/site.config.{ts,js}" },
   serverEntry: "./src/server.{ts,js}",
-  remote: "**/*.actions.ts",
+  remote: "**/*.remote.ts",
 }
 ```
 

@@ -1,6 +1,6 @@
 import { signal } from "kiru"
 import { Link, useRequestContext } from "kiru/router"
-import { getSandboxServerEcho } from "../index.actions.js"
+import { getSandboxServerEcho } from "../index.remote.js"
 
 export default function HomePage() {
   const ctx = useRequestContext()

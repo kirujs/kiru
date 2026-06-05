@@ -3,8 +3,6 @@ import { createHmrContext } from "./hmr.js"
 import { createProfilingContext } from "./profiling.js"
 import type { AppHandle } from "./appHandle.js"
 import type { LoaderContext } from "./router/loaders.js"
-import type { RemoteActionCallOptions } from "./remote/action.js"
-
 export { createKiruGlobalContext, type GlobalKiruEvent, type KiruGlobalContext }
 
 type Evt =
@@ -54,9 +52,11 @@ interface KiruGlobalContext {
   lazy?: KiruLazyRuntimeBag
 }
 
+import type { RemoteCallOptions } from "./remote/remoteCallOptions.js"
+
 export type KiruServerActionsDispatch = (
   id: string,
-  call?: RemoteActionCallOptions<unknown, Record<string, unknown>>
+  args?: unknown[] | RemoteCallOptions
 ) => Promise<unknown>
 
 export interface KiruRouterRuntimeBag {
@@ -64,6 +64,7 @@ export interface KiruRouterRuntimeBag {
     dispatch: (routeId: string, ctx: LoaderContext) => Promise<unknown>
   }
   serverActions?: { dispatch: KiruServerActionsDispatch }
+  mutations?: { dispatch: KiruServerActionsDispatch }
 }
 
 export interface KiruLazyEntry {

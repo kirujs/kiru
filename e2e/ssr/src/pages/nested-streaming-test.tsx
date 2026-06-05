@@ -1,15 +1,12 @@
-import { Derive, resource } from "kiru"
+import { Derive, resource, signal } from "kiru"
 import {
   getStreamingProduct,
   getStreamingReviews,
   type StreamingProduct,
-} from "./index.actions"
+} from "./index.remote"
 
 export default function NestedStreamingTestPage() {
-  const product = resource(async ({ signal }) => {
-    console.log("get product")
-    return await getStreamingProduct({ signal })
-  })
+  const product = resource(() => getStreamingProduct())
 
   return () => (
     <section className="space-y-3" data-testid="nested-streaming-page">
@@ -25,13 +22,8 @@ export default function NestedStreamingTestPage() {
 }
 
 function ProductCard({ product }: { product: StreamingProduct }) {
-  const reviews = resource(async ({ signal }) => {
-    console.log("get reviews")
-    return await getStreamingReviews({
-      body: { productId: product.id },
-      signal,
-    })
-  })
+  const reviewsInput = signal({ productId: product.id })
+  const reviews = resource({ source: reviewsInput, load: getStreamingReviews })
 
   return () => (
     <div>

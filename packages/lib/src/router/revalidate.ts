@@ -4,8 +4,12 @@
  * @see docs/router/tier-3-wave-1.md#on-demand-revalidation
  */
 
-import type { RemoteRevalidateMeta } from "../remote/action.js"
 import { getGlobalPrerenderCache } from "./prerenderCache.js"
+
+export type RemoteRevalidateMeta = {
+  paths?: string[]
+  tags?: string[]
+}
 
 function assertServerOnly(fn: string): void {
   if (typeof window !== "undefined") {

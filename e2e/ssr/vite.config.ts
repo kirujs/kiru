@@ -17,7 +17,7 @@ export default defineConfig({
       router: {
         serverEntry: "./src/server.ts",
         ssg: true,
-        remote: "**/*.actions.ts",
+        remote: "**/*.remote.ts",
       },
     }),
   ],

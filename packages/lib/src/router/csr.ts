@@ -111,6 +111,7 @@ export {
 import { ensureRouteAnnouncerInDocument } from "./navigationAnnouncer.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { invalidateLoaderCache } from "./loaderCache.js"
+import { clearAllQueryCache } from "../remote/queryCache.js"
 import {
   formatPublicHref,
   formatPublicPathname,
@@ -248,7 +249,7 @@ export function createRouter({
   const normalizedBaseUrl = resolvedPathPolicy.baseUrl
   const localeRouting = i18n ? getI18nLocaleRouting(i18n) : undefined
   const rawInitialPath = pathFromLocation(location, normalizedBaseUrl)
-  const requestHost = (location as Location).host
+  const requestHost = location.host
   const initialSplit = localeRouting
     ? splitAppPathname(rawInitialPath, localeRouting, { host: requestHost })
     : { locale: null as string | null, pathname: rawInitialPath }
@@ -258,7 +259,7 @@ export function createRouter({
     hydratedI18n?.locale ??
     (i18n ? i18n.defaultLocale : "en")
   const origin =
-    (location as Location & { origin?: string }).origin || "http://localhost"
+    location.origin || "http://localhost"
   const pathname = signal(initialSplit.pathname)
   const locale = i18n ? signal(initialLocale) : undefined
   const i18nRuntime = i18n
@@ -605,7 +606,7 @@ export function createRouter({
       localeRouting,
       {
         host: requestHost,
-        protocol: (location as Location).protocol,
+        protocol: location.protocol,
         baseUrl: normalizedBaseUrl,
       }
     )
@@ -624,7 +625,7 @@ export function createRouter({
         resolvedPathPolicy,
         {
           host: requestHost,
-          protocol: (location as Location).protocol,
+          protocol: location.protocol,
           baseUrl: normalizedBaseUrl,
         }
       )
@@ -770,6 +771,7 @@ export function createRouter({
         invalidateLoaderCache({ routeIds: ids })
       } else {
         invalidateLoaderCache()
+        clearAllQueryCache()
       }
       resetHydratedPageData()
       clearStreamedSsrClientState()
@@ -809,7 +811,7 @@ export function createRouter({
           normalizedBaseUrl,
           search,
           targetHash,
-          { host: requestHost, protocol: (location as Location).protocol }
+          { host: requestHost, protocol: location.protocol }
         )
         url = new URL(
           fullHref.startsWith("http")
@@ -921,7 +923,7 @@ export function createRouter({
         resolvedPathPolicy,
         normalizedBaseUrl,
         requestHost,
-        (location as Location).protocol
+        location.protocol
       )
     },
     ...(i18n && localeRouting && locale && i18nRuntime
@@ -948,7 +950,7 @@ export function createRouter({
               normalizedBaseUrl,
               search,
               hash.peek(),
-              { host: requestHost, protocol: (location as Location).protocol }
+              { host: requestHost, protocol: location.protocol }
             )
             const url = new URL(href, origin)
             return navigateInternal(url, {

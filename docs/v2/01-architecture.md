@@ -27,7 +27,7 @@ Kiru is **not** aiming for React Server Components or a second server rendering 
 | Preparation | `src/router/prepareAppForUrl.ts` | Match URL → middleware → loaders → JSX app |
 | Client prep | `src/router/clientRoutePrep.ts`, `prepareRoute.ts` | Shared loader/head prep for CSR & SSR client |
 | Hydration | `src/ssr/routerHydrate.ts` | `bootstrapSsrClient`, `bootstrapSsgClient` |
-| Remote | `src/remote/` | Unified `action()`, RPC dispatch (POST + JSON), forms, cookies |
+| Remote | `src/remote/` | `query()` / `mutation()` / `form()`, RPC dispatch, cookies |
 | Env guards | `src/env.ts` | `__KIRU_PURE_CLIENT__`, `__KIRU_SSR__` |
 
 **Exports** (see [17-package-exports-and-import-guide.md](./17-package-exports-and-import-guide.md)):

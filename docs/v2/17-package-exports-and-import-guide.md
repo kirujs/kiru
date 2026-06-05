@@ -75,24 +75,31 @@ Streaming primitives (`renderToReadableStream`, `hydrate`) — advanced.
 
 ```typescript
 import {
-  action,
-  redirect, // JSON RPC handlers only
+  query,
+  mutation,
+  form,
+  getRequestEvent,
   createFormController,
-  type RemoteAction,
-  type RemoteFormActionHandlerArgs,
 } from "kiru/remote"
 
-// JSON RPC
-export const ping = action(async ({ context }) => ({ ok: true }))
-export const save = action({
-  validation: { body: saveSchema },
-  handler: async ({ body }) => persist(body),
+// Read
+export const ping = query(async () => {
+  const { context } = getRequestEvent()
+  return { ok: true, user: context.user }
 })
 
-// Form action — redirect on handler args, not imported
-export const login = action({
-  type: "form",
-  handler: async ({ formData, redirect }) => redirect(303, "/app"),
+// Write
+export const save = mutation({
+  schema: saveSchema,
+  handler: async (input) => persist(input),
+})
+
+// Form — redirect via getRequestEvent()
+export const login = form({
+  handler: async () => {
+    const { redirect } = getRequestEvent()
+    return redirect(303, "/app")
+  },
 })
 ```
 

@@ -1,7 +1,6 @@
-import { Derive, onMount, resource, signal } from "kiru"
+import { Derive, resource, signal } from "kiru"
 import { createFormController } from "kiru/remote"
 import { Link, useRequestContext } from "kiru/router"
-import { ActionDispatchError } from "kiru/remote"
 import {
   addTodo,
   deleteTodo,
@@ -9,36 +8,20 @@ import {
   toggleTodo,
   updateTodo,
   type TodoItem,
-} from "./todos.actions.js"
-import { logoutForm } from "./login.actions.js"
+} from "./todos.remote.js"
+import { logoutForm } from "./login.remote.js"
 
 export default function TodosPage() {
   const ctx = useRequestContext()
-  const todos = resource(async () => {
-    try {
-      return await listTodos()
-    } catch (e) {
-      if (e instanceof ActionDispatchError) throw new Error(e.message)
-      throw e
-    }
-  })
+  const todos = resource({ load: listTodos, defaultState: [] as TodoItem[] })
   const addForm = createFormController(addTodo)
   const logout = createFormController(logoutForm)
   const editingId = signal<string | null>(null)
   const editText = signal("")
 
-  onMount(() => {
-    return addForm.result.subscribe((result) => {
-      if (!result || !("todo" in result) || !result.todo) return
-      todos.refetch()
-      addForm.result.value = null
-    })
-  })
-
   async function onToggle(id: string) {
     try {
-      await toggleTodo({ body: { id } })
-      todos.refetch()
+      await toggleTodo({ id })
     } catch {
       /* ignore */
     }
@@ -46,8 +29,7 @@ export default function TodosPage() {
 
   async function onDelete(id: string) {
     try {
-      await deleteTodo({ body: { id } })
-      todos.refetch()
+      await deleteTodo({ id })
     } catch {
       /* ignore */
     }
@@ -67,13 +49,12 @@ export default function TodosPage() {
     const text = editText.value.trim()
     if (!text) return
     try {
-      await updateTodo({ body: { id, text } })
+      await updateTodo({ id, text })
     } catch {
       return
     }
     editingId.value = null
     editText.value = ""
-    todos.refetch()
   }
 
   return () => (
@@ -113,8 +94,11 @@ export default function TodosPage() {
         </div>
       </div>
 
-      <Derive from={todos} fallback={<p className="text-slate-400">Loading todos…</p>}>
-        {(items: TodoItem[]) => (
+      <Derive
+        from={todos}
+        fallback={<p className="text-slate-400">Loading todos…</p>}
+      >
+        {(items) => (
           <ul className="space-y-2">
             {items.length === 0 ? (
               <li className="text-sm text-slate-500">No todos yet.</li>
@@ -209,7 +193,7 @@ export default function TodosPage() {
       </form>
       <p className="text-xs text-rose-300">
         {addForm.result.value?.ok === false
-          ? (addForm.result.value.errors?.text ?? addForm.result.value.error?.message ?? "")
+          ? addForm.result.value.error?.message ?? ""
           : ""}
       </p>
 

@@ -17,7 +17,7 @@ Both share `prepareRenderer` setup:
 
 - Compiled manifest
 - HTML template validation
-- Optional `createRemoteActionHandler` + `createLoaderHandler`
+- Optional `createRemoteHandler` + `createLoaderHandler`
 - Prerender path set + cache (non-edge)
 
 ---

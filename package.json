@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node builderman.js test",
     "build": "node builderman.js build",
-    "dev": "node builderman.js dev"
+    "dev": "node builderman.js dev",
+    "typecheck": "node scripts/typecheck.mjs"
   },
   "engines": {
     "node": ">=22.20.0",

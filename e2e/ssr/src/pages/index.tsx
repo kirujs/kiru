@@ -1,6 +1,6 @@
 import { onBeforeRouteLeave, useRequestContext } from "kiru/router"
 import { signal } from "kiru"
-import { getServerMessage } from "./index.actions"
+import { getServerMessage } from "./index.remote"
 
 export default function Home() {
   const ctx = useRequestContext()

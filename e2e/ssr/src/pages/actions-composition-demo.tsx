@@ -1,8 +1,9 @@
 import { signal } from "kiru"
-import { api, runPipeline } from "./actions-composition-demo.actions.js"
+import { api, runPipeline } from "./actions-composition-demo.remote.js"
 
 export default function ActionsCompositionDemoPage() {
   const namespaceGetResult = signal("")
+  const schemaQueryResult = signal("")
   const composeResult = signal("")
   const deleteResult = signal("")
 
@@ -25,6 +26,21 @@ export default function ActionsCompositionDemoPage() {
       <p data-testid="namespace-get-result">{namespaceGetResult}</p>
 
       <button
+        data-testid="schema-query"
+        type="button"
+        onclick={async () => {
+          try {
+            schemaQueryResult.value = JSON.stringify(await api.getLabel("demo"))
+          } catch (e) {
+            schemaQueryResult.value = e instanceof Error ? e.message : "failed"
+          }
+        }}
+      >
+        Schema query GET
+      </button>
+      <p data-testid="schema-query-result">{schemaQueryResult}</p>
+
+      <button
         data-testid="compose-run"
         type="button"
         onclick={async () => {
@@ -44,9 +60,7 @@ export default function ActionsCompositionDemoPage() {
         type="button"
         onclick={async () => {
           try {
-            deleteResult.value = JSON.stringify(
-              await api.removeLabel({ body: "demo" })
-            )
+            deleteResult.value = JSON.stringify(await api.removeLabel("demo"))
           } catch (e) {
             deleteResult.value = e instanceof Error ? e.message : "failed"
           }

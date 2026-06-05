@@ -79,6 +79,7 @@ import {
   readRoutesSource,
   ROUTE_CHUNKS_MANIFEST,
 } from "./hydrationChunks.js"
+import type { RenderResult } from "kiru/router"
 import type { KiruPluginOptions } from "./types.js"
 import type {
   ConfigEnv,
@@ -542,14 +543,12 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
 
           const { createRenderer } = await server.ssrLoadModule("kiru/router")
           const renderer = createRenderer({ routes, htmlTemplate })
-          const result = await renderer.render(rawUrl)
+          const result = (await renderer.render(rawUrl)) as RenderResult | null
           if (!result) return next()
 
           const body = await injectDevCssLinks(server, result.body)
           res.statusCode = result.status
-          for (const [key, value] of Object.entries(
-            result.headers as Record<string, string>
-          )) {
+          for (const [key, value] of Object.entries(result.headers)) {
             res.setHeader(key, value)
           }
           res.setHeader("content-length", Buffer.byteLength(body, "utf8"))

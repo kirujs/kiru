@@ -68,6 +68,10 @@ export const routes = createRouteTree({
         component: () => import("./pages/invalidate-demo"),
         head: { title: "E2E SSR invalidate" },
       }),
+      createRoute("/requested-queries-demo", {
+        component: () => import("./pages/requested-queries-demo"),
+        head: { title: "E2E SSR requested queries" },
+      }),
       createRoute("/loader-cache-demo", {
         component: () => import("./pages/loader-cache-demo"),
         head: { title: "E2E SSR loader cache" },

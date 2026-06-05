@@ -1,8 +1,5 @@
 import { signal } from "kiru"
-import { authedOnly, gatedEcho } from "./action-middleware-demo.actions.js"
-
-const middlewareHeader = "x-e2e-action-secret"
-const middlewareHeaderValue = "open-sesame"
+import { authedOnly, gatedEcho } from "./action-middleware-demo.remote.js"
 
 export default function ActionMiddlewareDemoPage() {
   const gatedResult = signal("")
@@ -29,9 +26,7 @@ export default function ActionMiddlewareDemoPage() {
         data-testid="mw-gated-allowed"
         type="button"
         onclick={async () => {
-          gatedResult.value = await gatedEcho({
-            headers: { [middlewareHeader]: middlewareHeaderValue },
-          })
+          gatedResult.value = await gatedEcho()
             .then((res) => JSON.stringify(res))
             .catch((e) => (e instanceof Error ? e.message : "failed"))
         }}

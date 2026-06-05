@@ -9,6 +9,7 @@
     "test": "cross-env NODE_ENV=development tsx --test src/**/*.test.ts",
     "pretest": "pnpm --filter @kirujs/file-routes run build",
     "build": "tsx ./src/build.ts",
+    "typecheck": "tsc --noEmit",
     "dev": "tsx ./src/build.dev.ts"
   },
   "keywords": [],

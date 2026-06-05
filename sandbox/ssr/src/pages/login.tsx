@@ -1,7 +1,7 @@
 import { createFormController } from "kiru/remote"
 import { Link } from "kiru/router"
 import { DUMMY_ACCOUNTS } from "../server/auth.js"
-import { login } from "./login.actions.js"
+import { login } from "./login.remote.js"
 
 export default function LoginPage() {
   const form = createFormController(login)

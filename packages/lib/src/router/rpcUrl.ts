@@ -11,16 +11,18 @@ export function buildLoaderRpcUrl(routeId: string, baseUrl?: string): string {
   return `${path}?loader=${encodeURIComponent(`${routeId}:load`)}`
 }
 
-/**
- * Client action RPC URL (`POST`, `?action=…`).
- * @param queryString Serialized query (no leading `?`), appended after `action=`.
- */
-export function buildActionRpcUrl(
-  actionId: string,
-  baseUrl?: string,
-  queryString?: string
+/** Client query RPC URL (`POST`, `?query=…`). Body carries input JSON. */
+export function buildQueryRpcUrl(remoteId: string, baseUrl?: string): string {
+  const path = addBase("/", resolveRpcBaseUrl(baseUrl))
+  return `${path}?query=${encodeURIComponent(remoteId)}`
+}
+
+/** Client mutation / form RPC URL (`POST`, `?mutation=…`). */
+export function buildMutationRpcUrl(
+  remoteId: string,
+  baseUrl?: string
 ): string {
   const path = addBase("/", resolveRpcBaseUrl(baseUrl))
-  const core = `${path}?action=${encodeURIComponent(actionId)}`
-  return queryString ? `${core}&${queryString}` : core
+  return `${path}?mutation=${encodeURIComponent(remoteId)}`
 }
+

@@ -102,7 +102,8 @@
     "@standard-schema/spec": "^1.1.0"
   },
   "browser": {
-    "./dist/remote/actionInvokeScope.js": "./dist/remote/actionInvokeScope.client.js"
+    "./dist/remote/remoteInvokeScope.js": "./dist/remote/remoteInvokeScope.client.js",
+    "./dist/remote/remoteRequestEvent.js": "./dist/remote/remoteRequestEvent.client.js"
   },
   "peerDependenciesMeta": {
     "@standard-schema/spec": {

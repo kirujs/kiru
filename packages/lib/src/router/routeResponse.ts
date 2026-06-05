@@ -35,34 +35,41 @@ export function defineRouteHeaders(
   }
 }
 
+function isModuleRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
+}
+
+function isRouteStatusFn(value: unknown): value is RouteStatusFn {
+  return typeof value === "function"
+}
+
 export function isKiruRouteHeaders(value: unknown): value is KiruRouteHeaders {
   return (
-    !!value &&
-    typeof value === "object" &&
+    isModuleRecord(value) &&
     "__kiruRouteHeaders" in value &&
-    typeof (value as KiruRouteHeaders).resolve === "function"
+    typeof value.resolve === "function"
   )
 }
 
 export function readRouteHeadersExport(mod: unknown): KiruRouteHeaders | undefined {
-  if (!mod || typeof mod !== "object") return undefined
-  const h = (mod as Record<string, unknown>).headers
+  if (!isModuleRecord(mod)) return undefined
+  const h = mod.headers
   return isKiruRouteHeaders(h) ? h : undefined
 }
 
 export function readRouteStatusExport(
   mod: unknown
 ): number | RouteStatusFn | undefined {
-  if (!mod || typeof mod !== "object") return undefined
-  const s = (mod as Record<string, unknown>).status
+  if (!isModuleRecord(mod)) return undefined
+  const s = mod.status
   if (typeof s === "number") return s
-  if (typeof s === "function") return s as RouteStatusFn
+  if (isRouteStatusFn(s)) return s
   return undefined
 }
 
 export function readRouteCacheExport(mod: unknown): RouteCachePolicy | undefined {
-  if (!mod || typeof mod !== "object") return undefined
-  const c = (mod as Record<string, unknown>).cache
+  if (!isModuleRecord(mod)) return undefined
+  const c = mod.cache
   if (c === "no-store" || c === "immutable") return c
   return undefined
 }
@@ -116,10 +123,12 @@ export function mergeResponseHeaders(
   const out: Record<string, string> = {}
   for (const part of parts) {
     if (!part) continue
-    const entries =
+    const entries: [string, string][] =
       part instanceof Headers
         ? Array.from(part.entries())
-        : Object.entries(part as Record<string, string>)
+        : Array.isArray(part)
+          ? part
+          : Object.entries(part)
     for (const [key, value] of entries) {
       out[key.toLowerCase()] = value
     }

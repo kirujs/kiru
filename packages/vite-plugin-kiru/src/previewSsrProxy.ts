@@ -3,11 +3,7 @@ import { spawn, type ChildProcess } from "node:child_process"
 import path from "node:path"
 import { createServer } from "node:net"
 import type { Connect } from "vite"
-import {
-  isPreviewAssetPath,
-  previewPathname,
-  type PreviewRequest,
-} from "./preview-server.js"
+import { isPreviewAssetPath, previewPathname } from "./preview-server.js"
 
 function getFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -81,16 +77,13 @@ export async function createPreviewSsrProxy(
   } catch (err) {
     const detail = Buffer.concat(stderrChunks).toString("utf8").trim()
     const exitHint = child.exitCode != null ? ` (exit ${child.exitCode})` : ""
-    throw new Error(
-      detail
-        ? `${(err as Error).message}${exitHint}: ${detail}`
-        : `${(err as Error).message}${exitHint}`
-    )
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(detail ? `${message}${exitHint}: ${detail}` : `${message}${exitHint}`)
   }
 
   const middleware: Connect.NextHandleFunction = async (req, res, next) => {
     try {
-      const pathname = previewPathname(req as PreviewRequest)
+      const pathname = previewPathname(req)
       if (isPreviewAssetPath(pathname)) return next()
       const method = (req.method ?? "GET").toUpperCase()
       const incoming = new URL(req.url ?? "/", "http://127.0.0.1")
@@ -112,7 +105,7 @@ export async function createPreviewSsrProxy(
       const { writeNodeResponse } = await import("@kirujs/adapter-node")
       await writeNodeResponse(res, response)
     } catch (err) {
-      next(err as Error)
+      next(err instanceof Error ? err : new Error(String(err)))
     }
   }
 

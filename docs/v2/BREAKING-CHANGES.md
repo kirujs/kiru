@@ -20,28 +20,30 @@ See [17-package-exports-and-import-guide.md](./17-package-exports-and-import-gui
 
 ---
 
-## Remote actions
+## Remote functions
 
 | Before | After |
 |--------|--------|
-| `RemoteResult`, `fail()`, `RemoteTuple`, framework envelopes | **Passthrough JSON** — handler return value is the wire body (except `redirect(...)`) |
-| `dispatch` / callables never throw | **`dispatch` throws `ActionDispatchError` on non-2xx**; callables return `Promise<Output>` |
-| `actionResult()`, `setContext` / `setCookie` helpers | Handler args are split into `request` / `response`; mutate **`context`**, **`response.cookies`**, **`response.headers`** |
-| `exposeErrors` JSON error bodies | Thrown / framework errors → **HTTP status only**, empty body |
-| `createFormController` `fieldErrors` / `message` | **`result`** + **`error`** (transport only); read validation from your return shape |
-| `action.get` / `action.post` / `action.put` / … | Single **`action()`** — RPC model, not HTTP verbs |
-| JSON RPC via GET / verb-matched methods | **Always `POST`** + JSON body (`null` when empty); query via URL search params |
-| `action.post({ type: "form" }, handler)` | **`action({ type: "form", handler })`** — one config object |
-| Form `schema:` option | **`validation: { body: schema }`** |
-| Import `redirect` in form handlers | **`redirect` on form handler args** only; JSON handlers still `import { redirect }` |
+| `action()` factory (JSON + form in one API) | **`query()`**, **`mutation()`**, **`form()`** — see [23-remote-functions.md](./23-remote-functions.md) |
+| `*.actions.ts` modules | **`*.remote.ts`** (`router.remote` glob) |
+| `action({ validation: { body: schema } })` | **`mutation(schema, handler)`** or **`form(schema, handler)`** |
+| `action({ type: "form", handler })` | **`form(handler)`** or **`form(schema, handler)`** |
+| `query({ middleware, handler })` / `mutation({ schema, handler })` config objects | **`query(handler)`** / **`query(schema, handler)`** — auth via **`getRequestEvent()`** in handler |
+| `form({ refreshable, revalidate, handler })` | **`form(handler)`** / **`form(schema, handler)`** — use **`requested()`**, **`revalidatePath`**, **`revalidateTag`** in handler |
+| Read-like `action(async ({ context }) => …)` | **`query(async () => { const { context } = getRequestEvent(); … })`** |
+| JSON writes `action(async ({ request }) => …)` | **`mutation(schema, handler)`** or void **`mutation(async () => …)`** with **`getRequestEvent()`** |
+| Handler args `{ context, response, signal, redirect }` | **`getRequestEvent()`** — handlers receive validated input only (when `schema` exists) |
+| `buildActionRpcUrl`, `createRemoteActionHandler` | **Removed** — use `buildMutationRpcUrl`, `createRemoteHandler` |
+| `RemoteFormActionHandlerArgs`, `RemoteFormActionFunction` | **Removed** — use `getRequestEvent()` + `RemoteFormHandler` types |
+| `ActionExecution`, `ActionCookies`, `ActionMiddleware`, `ActionDispatchError` | **`RemoteExecution`**, **`RemoteCookies`**, **`RemoteDispatchError`** — **`RemoteMiddleware`** removed; use **`getRequestEvent()`** guards |
+| `FormActionClientOutput` | **`RemoteFormClientOutput`** |
+| `toggleTodo({ body: { id } })` call style | **`toggleTodo({ id })`** — input is positional, not wrapped in `{ body }` |
+| Legacy `action()` HTTP dispatch in `remoteHttpHandler` | **Removed** — registry entries must be `RemoteQuery`, `RemoteMutation`, or `RemoteFormMutation` |
+| `action.get` / `action.post` / verb helpers | **Removed** — queries use `?query=`, mutations use `?mutation=` (POST + JSON) |
 
-Patterns now supported and covered in e2e:
+`RemoteDispatchError` is the client error type for failed query/mutation RPC. `action.ts` remains as a thin internal module for invoke types and SSR scope helpers — prefer `getRequestEvent()` and `kiru/remote` exports for app code.
 
-- Named exports in `*.actions.ts`
-- **Default export** action object (`default-export-demo`)
-- **Linked** page + `.actions.ts` module
-
-See [07-remote-actions.md](./07-remote-actions.md).
+See [23-remote-functions.md](./23-remote-functions.md). [07-remote-actions.md](./07-remote-actions.md) is archived.
 
 ---
 

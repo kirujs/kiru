@@ -1,7 +1,12 @@
-import { defineHeadContent, serverLoader, type PageProps } from "kiru/router"
+import {
+  defineHeadContent,
+  serverLoader,
+  type LoaderContext,
+  type PageProps,
+} from "kiru/router"
 
 export const load = serverLoader({
-  load: async (ctx) => {
+  load: async (ctx: LoaderContext) => {
     await new Promise((resolve) => setTimeout(resolve, 2000))
     return {
       source: "server",

@@ -155,7 +155,7 @@ export interface KiruPluginOptions {
      * Glob pattern for remote function files (may match many files).
      * Matching modules will be transformed to client fetch stubs and made
      * available on the server via `virtual:kiru:remote-registry`.
-     * @example "*.actions.ts"
+     * @example "*.remote.ts"
      */
     remote?: string
     /**

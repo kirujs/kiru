@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 
-const ACTIONS_FILE = "src/pages/context-concurrency.actions.ts"
+const ACTIONS_FILE = "src/pages/context-concurrency.remote.ts"
 const PATH_PREFIX = "/context-concurrency"
 
 export function routeIdForActionsFile(relativeFromE2eRoot = ACTIONS_FILE) {
@@ -9,7 +9,7 @@ export function routeIdForActionsFile(relativeFromE2eRoot = ACTIONS_FILE) {
   return `r_${digest}`
 }
 
-export const echoContextActionId = `${routeIdForActionsFile()}:echoContextUser`
+export const echoContextQueryId = `${routeIdForActionsFile()}:echoContextUser`
 
 function extractJsonScript(body, attr) {
   const re = new RegExp(
@@ -46,8 +46,8 @@ function assertIsolation(name, body, allNames) {
   }
 }
 
-async function invokeEchoAction(origin, token, name) {
-  const url = `${origin}/?action=${encodeURIComponent(echoContextActionId)}`
+async function invokeEchoQuery(origin, token, name) {
+  const url = `${origin}/?query=${encodeURIComponent(echoContextQueryId)}`
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -58,11 +58,11 @@ async function invokeEchoAction(origin, token, name) {
     body: JSON.stringify(null),
   })
   if (!res.ok) {
-    throw new Error(`action RPC failed for ${name}: ${res.status}`)
+    throw new Error(`query RPC failed for ${name}: ${res.status}`)
   }
   const json = await res.json()
   if (json !== name) {
-    throw new Error(`action RPC wrong body for ${name}: ${JSON.stringify(json)}`)
+    throw new Error(`query RPC wrong body for ${name}: ${JSON.stringify(json)}`)
   }
 }
 
@@ -96,9 +96,9 @@ export async function runConcurrentContextCheck(options) {
     const tokenMatch = body.match(tokenRe)
     const token = tokenMatch?.[1]?.trim()
     if (!token) {
-      throw new Error(`missing action token for ${name}`)
+      throw new Error(`missing request token for ${name}`)
     }
-    await invokeEchoAction(origin, token, name)
+    await invokeEchoQuery(origin, token, name)
   }
 
   return { ok: true, concurrency, origin }

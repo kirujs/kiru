@@ -1,7 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert"
 import * as kiru from "../../index.js"
-import { action, RemoteActionHandlerArgs } from "../../remote/action.js"
+import { getRequestEvent, query } from "../../remote/index.js"
 import { renderToReadableStream } from "../../ssr/server.js"
 import { Derive } from "../../components/derive.js"
 import { resource } from "../../resource.js"
@@ -124,28 +124,33 @@ describe("renderToReadableStream speculative Derive traversal", () => {
   })
 
   it("streams nested remote actions with SSR request context during speculation", async () => {
-    const getStreamingProduct = action(async () => {
+    const getStreamingProduct = query(async () => {
       await new Promise((r) => setTimeout(r, 50))
       return { id: "p1", name: "Streaming Product" }
     })
 
-    const getStreamingReviews = action(
-      async ({
-        request,
-        context,
-      }: RemoteActionHandlerArgs<{ productId: string }>) => {
-        assert.equal((context as { user?: { name: string } }).user?.name, "Ada")
-        await new Promise((r) => setTimeout(r, 50))
-        return [{ id: "r1", text: `Review for ${request.body.productId}` }]
-      }
-    )
+    const reviewsSchema = {
+      parse: (input: unknown) => {
+        if (
+          typeof input !== "object" ||
+          input === null ||
+          typeof (input as { productId?: unknown }).productId !== "string"
+        ) {
+          throw new Error("invalid")
+        }
+        return input as { productId: string }
+      },
+    }
+    const getStreamingReviews = query(reviewsSchema, async ({ productId }) => {
+      const { context } = getRequestEvent()
+      assert.equal((context as { user?: { name: string } }).user?.name, "Ada")
+      await new Promise((r) => setTimeout(r, 50))
+      return [{ id: "r1", text: `Review for ${productId}` }]
+    })
 
     function ProductCard({ product }: { product: Product }) {
       const reviews = resource(({ signal }) =>
-        getStreamingReviews({
-          body: { productId: product.id },
-          signal,
-        })
+        getStreamingReviews({ productId: product.id }, { signal })
       )
 
       return () => (

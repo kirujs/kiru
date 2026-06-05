@@ -30,6 +30,19 @@ function bootstrapForTestFile(file) {
   return "csr"
 }
 
+const typesCheck = spawnSync(
+  "pnpm",
+  ["exec", "tsc", "--noEmit", "-p", "tsconfig.types.json"],
+  {
+    cwd: root,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  }
+)
+if (typesCheck.status !== 0) {
+  process.exit(typesCheck.status ?? 1)
+}
+
 rmSync(outDir, { recursive: true, force: true })
 mkdirSync(outDir, { recursive: true })
 

@@ -10,6 +10,7 @@ import {
   createRouteTree,
   generatePublicStaticPaths,
   serverLoader,
+  type LoaderContext,
   type PageProps,
 } from "../../router/index.js"
 import {
@@ -329,7 +330,7 @@ describe("i18n", () => {
 
   it("createRenderer passes locale into serverLoader context", async () => {
     const load = serverLoader({
-      load: async (ctx) => ({ locale: ctx.locale ?? "" }),
+      load: async (ctx: LoaderContext) => ({ locale: ctx.locale ?? "" }),
       fallback: () => createElement("p", null, "loading"),
     })
     const routes = createRouteTree({

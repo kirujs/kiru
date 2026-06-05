@@ -221,9 +221,9 @@ describe("SSR server", () => {
     // Streaming SSR + async entry: `load` fires before hydrate attaches event handlers.
     cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     // Wait for the server round-trip explicitly — avoids races under load / parallel CI.
-    cy.intercept("POST", /\?action=/).as("remoteAction")
+    cy.intercept("POST", /\?query=/).as("remoteQuery")
     cy.get('[data-testid="ssr-remote-button"]').click()
-    cy.wait("@remoteAction").its("response.statusCode").should("eq", 200)
+    cy.wait("@remoteQuery").its("response.statusCode").should("eq", 200)
     cy.get('[data-testid="ssr-remote-result"]').should(
       "have.text",
       "hello from server (E2E User)"
@@ -240,18 +240,21 @@ describe("SSR server", () => {
 
     it("returns 403 when middleware header gate is missing", () => {
       visitMiddlewareDemo()
-      cy.intercept("POST", /\?action=/).as("middlewareDenied")
+      cy.intercept("POST", /\?query=/).as("middlewareDenied")
       cy.get('[data-testid="mw-gated-denied"]').click()
       cy.wait("@middlewareDenied").its("response.statusCode").should("eq", 403)
       cy.get('[data-testid="mw-gated-denied-result"]').should(
         "contain",
-        "Action failed"
+        "Remote call failed"
       )
     })
 
-    it("passes custom request headers through client dispatch", () => {
+    it("allows middleware when the request includes the gate header", () => {
       visitMiddlewareDemo()
-      cy.intercept("POST", /\?action=/).as("middlewareAllowed")
+      cy.intercept("POST", /\?query=/, (req) => {
+        req.headers["x-e2e-action-secret"] = "open-sesame"
+        req.continue()
+      }).as("middlewareAllowed")
       cy.get('[data-testid="mw-gated-allowed"]').click()
       cy.wait("@middlewareAllowed").then(({ request, response }) => {
         expect(request.headers["x-e2e-action-secret"]).to.eq("open-sesame")
@@ -265,7 +268,7 @@ describe("SSR server", () => {
 
     it("allows context-based middleware guard with SSR token context", () => {
       visitMiddlewareDemo()
-      cy.intercept("POST", /\?action=/).as("middlewareAuth")
+      cy.intercept("POST", /\?query=/).as("middlewareAuth")
       cy.get('[data-testid="mw-auth"]').click()
       cy.wait("@middlewareAuth").its("response.statusCode").should("eq", 200)
       cy.get('[data-testid="mw-auth-result"]').should(
@@ -697,7 +700,7 @@ describe("SSR server", () => {
       cy.visit(`http://127.0.0.1:${port}/forms/demo`)
       cy.get("script[k-request-token]", { timeout: 10_000 }).should("exist")
       cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
-      cy.intercept("POST", /\?action=/).as("formAction")
+      cy.intercept("POST", /\?mutation=/).as("formAction")
       cy.get('[data-testid="forms-demo-input"]').type("from-cypress")
       cy.get('[data-testid="forms-demo-submit"]').click()
       cy.wait("@formAction").then((interception) => {
@@ -723,7 +726,7 @@ describe("SSR server", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/forms/demo`)
       cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
-      cy.intercept("POST", /\?action=/).as("formValidation")
+      cy.intercept("POST", /\?mutation=/).as("formValidation")
       cy.get('[data-testid="forms-validation-submit"]').click()
       cy.wait("@formValidation").its("response.statusCode").should("eq", 200)
       cy.get('[data-testid="forms-validation-error"]').should(
@@ -736,7 +739,7 @@ describe("SSR server", () => {
       const port = Cypress.env("port")
       cy.visit(`http://127.0.0.1:${port}/forms/demo`)
       cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
-      cy.intercept("POST", /\?action=/).as("formValidation")
+      cy.intercept("POST", /\?mutation=/).as("formValidation")
       cy.get('[data-testid="forms-validation-submit"]').click()
       cy.wait("@formValidation").its("response.statusCode").should("eq", 200)
       cy.get('[data-testid="forms-validation-error"]').should(
@@ -766,17 +769,34 @@ describe("SSR server", () => {
     cy.get('[data-testid="search-schema"]').should("contain", "q=default")
   })
 
-  it("refetches serverLoader after invalidate on the current route", () => {
+  it("refreshes parameterized queries via submit().updates and requested()", () => {
     const port = Cypress.env("port")
-    cy.intercept("POST", /\?action=/).as("formAction")
-    cy.intercept("POST", /\?loader=/).as("serverLoader")
+    cy.intercept("POST", /\?mutation=/).as("requestedForm")
+    cy.visit(`http://127.0.0.1:${port}/requested-queries-demo`)
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
+    cy.get('[data-testid="requested-list"]').should("contain", "Alpha")
+    cy.get('[data-testid="requested-list"]').should("contain", "Gamma")
+    cy.get('[data-testid="requested-list"]').should("not.contain", "Beta")
+    cy.get('[data-testid="requested-form"] input[name="label"]').type("Delta")
+    cy.get('[data-testid="requested-add"]').click()
+    cy.wait("@requestedForm").its("response.statusCode").should("eq", 200)
+    cy.get('[data-testid="requested-list"]').should("contain", "Delta")
+    cy.get('[data-testid="requested-filter-play"]').click()
+    cy.get('[data-testid="requested-list"]').should("contain", "Beta")
+    cy.get('[data-testid="requested-list"]').should("not.contain", "Delta")
+  })
+
+  it("patches counter query from form without refetching serverLoader", () => {
+    const port = Cypress.env("port")
+    cy.intercept("POST", /\?mutation=/).as("formMutation")
     cy.visit(`http://127.0.0.1:${port}/invalidate-demo`)
     cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get('[data-testid="invalidate-generation"]').should("have.text", "0")
+    cy.get('[data-testid="invalidate-counter"]').should("have.text", "0")
     cy.get('[data-testid="invalidate-bump"]').click()
-    cy.wait("@formAction").its("response.statusCode").should("eq", 200)
-    cy.wait("@serverLoader")
-    cy.get('[data-testid="invalidate-generation"]').should("have.text", "1")
+    cy.wait("@formMutation").its("response.statusCode").should("eq", 200)
+    cy.get('[data-testid="invalidate-counter"]').should("have.text", "1")
+    cy.get('[data-testid="invalidate-generation"]').should("have.text", "0")
   })
 
   it("serves prerendered disk HTML for hybrid /docs without SSR-only home marker", () => {
@@ -804,15 +824,29 @@ describe("SSR server", () => {
       cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     }
 
+    it("invokes a schema-config query with a JSON body", () => {
+      visitActionsDemo()
+      cy.intercept("POST", /\?query=[^&]*api\.getLabel/).as("schemaQuery")
+      cy.get('[data-testid="schema-query"]').click()
+      cy.wait("@schemaQuery").then(({ request, response }) => {
+        expect(request.body).to.eq('"demo"')
+        expect(response?.statusCode).to.eq(200)
+      })
+      cy.get('[data-testid="schema-query-result"]').should(
+        "have.text",
+        '"keep-me"'
+      )
+    })
+
     it("invokes a namespaced RPC action with a dotted RPC id", () => {
       visitActionsDemo()
-      cy.intercept("POST", /\?action=[^&]*api\.getEcho/).as("namespaceGet")
+      cy.intercept("POST", /\?query=[^&]*api\.getEcho/).as("namespaceGet")
       cy.get('[data-testid="namespace-get"]').click()
       cy.wait("@namespaceGet").then(({ request, response }) => {
         expect(request.method).to.eq("POST")
         expect(response?.statusCode).to.eq(200)
-        const actionId = new URL(request.url).searchParams.get("action")
-        expect(actionId).to.include("api.getEcho")
+        const queryId = new URL(request.url).searchParams.get("query")
+        expect(queryId).to.include("api.getEcho")
       })
       cy.get('[data-testid="namespace-get-result"]').should(
         "have.text",
@@ -822,7 +856,7 @@ describe("SSR server", () => {
 
     it("composed POST runs nested namespaced actions in one HTTP round-trip", () => {
       visitActionsDemo()
-      cy.intercept("POST", /\?action=[^&]*runPipeline/).as("composeAction")
+      cy.intercept("POST", /\?mutation=[^&]*runPipeline/).as("composeAction")
       cy.get('[data-testid="compose-run"]').click()
       cy.wait("@composeAction")
         .its("response.statusCode")
@@ -839,7 +873,7 @@ describe("SSR server", () => {
 
     it("invokes a namespaced RPC action with a JSON body", () => {
       visitActionsDemo()
-      cy.intercept("POST", /\?action=[^&]*api\.removeLabel/).as(
+      cy.intercept("POST", /\?mutation=[^&]*api\.removeLabel/).as(
         "namespaceDelete"
       )
       cy.get('[data-testid="namespace-delete"]').click()
@@ -864,13 +898,13 @@ describe("SSR server", () => {
 
     it("invokes literal default export RPC with default.getEcho RPC id", () => {
       visitDefaultExportDemo()
-      cy.intercept("POST", /\?action=[^&]*default\.getEcho/).as("literalDefaultGet")
+      cy.intercept("POST", /\?query=[^&]*default\.getEcho/).as("literalDefaultGet")
       cy.get('[data-testid="literal-default-get"]').click()
       cy.wait("@literalDefaultGet").then(({ request, response }) => {
         expect(request.method).to.eq("POST")
         expect(response?.statusCode).to.eq(200)
-        const actionId = new URL(request.url).searchParams.get("action")
-        expect(actionId).to.include("default.getEcho")
+        const queryId = new URL(request.url).searchParams.get("query")
+        expect(queryId).to.include("default.getEcho")
       })
       cy.get('[data-testid="literal-default-result"]').should(
         "have.text",
@@ -880,13 +914,13 @@ describe("SSR server", () => {
 
     it("invokes linked default export RPC with default.getEcho RPC id", () => {
       visitDefaultExportDemo()
-      cy.intercept("POST", /\?action=[^&]*default\.getEcho/).as("linkedDefaultGet")
+      cy.intercept("POST", /\?query=[^&]*default\.getEcho/).as("linkedDefaultGet")
       cy.get('[data-testid="linked-default-get"]').click()
       cy.wait("@linkedDefaultGet").then(({ request, response }) => {
         expect(request.method).to.eq("POST")
         expect(response?.statusCode).to.eq(200)
-        const actionId = new URL(request.url).searchParams.get("action")
-        expect(actionId).to.include("default.getEcho")
+        const queryId = new URL(request.url).searchParams.get("query")
+        expect(queryId).to.include("default.getEcho")
       })
       cy.get('[data-testid="linked-default-result"]').should(
         "have.text",
@@ -896,7 +930,7 @@ describe("SSR server", () => {
 
     it("composed POST runs in-process catalog.getEcho via linked binding", () => {
       visitDefaultExportDemo()
-      cy.intercept("POST", /\?action=[^&]*runPipeline/).as("linkedCompose")
+      cy.intercept("POST", /\?mutation=[^&]*runPipeline/).as("linkedCompose")
       cy.get('[data-testid="linked-compose-run"]').click()
       cy.wait("@linkedCompose").its("response.statusCode").should("eq", 200)
       cy.get('[data-testid="linked-compose-result"]').should(

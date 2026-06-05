@@ -15,8 +15,8 @@ export const SERVER_LOADER_PURE_CLIENT_DEV_MSG =
 export const SERVER_LOADER_NO_RPC_DEV_MSG =
   "`serverLoader` ran on the client without `/?loader=` RPC (`window.__kiru.router.loaders`). Wire `router.serverEntry` in vite-plugin-kiru and run a server that registers the loader handler."
 
-export const REMOTE_ACTION_PURE_CLIENT_DEV_MSG =
-  'Remote `action` (including `action({ type: "form", … })`) require SSR with `createRenderer` and `actions.secret`. Pure CSR/SSG apps cannot invoke server actions.'
+export const REMOTE_PURE_CLIENT_DEV_MSG =
+  'Remote functions (`query`, `mutation`, `form`) require SSR with `createRenderer` and `actions.secret`. Pure CSR/SSG apps cannot invoke server remotes.'
 
 export function warnRouterViewWithoutSsrBootstrap(): void {
   if (!isBrowser || !__KIRU_PURE_CLIENT__) return

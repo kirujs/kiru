@@ -8,8 +8,8 @@ import {
 } from "../../router/index.js"
 import { getLoaderDispatch } from "../../router/loaderClient.js"
 import {
-  buildActionRpcUrl,
   buildLoaderRpcUrl,
+  buildMutationRpcUrl,
 } from "../../router/rpcUrl.js"
 import {
   claimActiveRouter,
@@ -41,17 +41,17 @@ describe("rpcUrl", () => {
     )
   })
 
-  it("buildActionRpcUrl uses root path by default", () => {
+  it("buildMutationRpcUrl uses mutation param by default", () => {
     assert.equal(
-      buildActionRpcUrl("route:fn"),
-      "/?action=route%3Afn"
+      buildMutationRpcUrl("route:fn"),
+      "/?mutation=route%3Afn"
     )
   })
 
-  it("buildActionRpcUrl prefixes non-root baseUrl and appends query", () => {
+  it("buildMutationRpcUrl prefixes non-root baseUrl", () => {
     assert.equal(
-      buildActionRpcUrl("route:fn", "/app", "foo=bar"),
-      "/app?action=route%3Afn&foo=bar"
+      buildMutationRpcUrl("route:fn", "/app"),
+      "/app?mutation=route%3Afn"
     )
   })
 
@@ -62,8 +62,8 @@ describe("rpcUrl", () => {
       "/app?loader=home%3Aload"
     )
     assert.equal(
-      buildActionRpcUrl("home:act"),
-      "/app?action=home%3Aact"
+      buildMutationRpcUrl("home:act"),
+      "/app?mutation=home%3Aact"
     )
   })
 })

@@ -21,6 +21,6 @@
     "sourceMap": false,
     "jsx": "preserve"
   },
-  "include": ["./src/*"],
-  "exclude": ["dist"]
+  "include": ["./src/**/*"],
+  "exclude": ["dist", "src/**/*.test.ts"]
 }

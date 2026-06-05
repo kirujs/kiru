@@ -1,7 +1,7 @@
-import { onMount } from "kiru"
+import { resource } from "kiru"
 import { createFormController } from "kiru/remote"
-import { serverLoader, useRouter, type PageProps } from "kiru/router"
-import { bumpCounter } from "./invalidate-demo.actions.js"
+import { serverLoader, type PageProps } from "kiru/router"
+import { bumpCounter, counterQuery } from "./invalidate-demo.remote.js"
 
 const LOAD_INVOCATION_KEY = "__kiru_e2e_invalidate_load_invocation__"
 
@@ -18,18 +18,13 @@ export const load = serverLoader({
 })
 
 export default function InvalidateDemoPage() {
-  const router = useRouter()
   const form = createFormController(bumpCounter)
-
-  onMount(() =>
-    form.result.subscribe((value) => {
-      if (value?.ok) void router.invalidate()
-    })
-  )
+  const counter = resource({ load: counterQuery, defaultState: { count: 0 } })
 
   return ({ data }: PageProps<typeof load>) => (
     <section data-testid="invalidate-demo">
       <p data-testid="invalidate-generation">{data?.generation ?? ""}</p>
+      <p data-testid="invalidate-counter">{counter.value.count}</p>
       <form
         data-testid="invalidate-form"
         action={form.action}

@@ -48,7 +48,7 @@ describe("Tier 3 wave 1", () => {
     })
 
     it("revalidates after form action and serves updated generation", () => {
-      cy.intercept("POST", /\?action=/).as("revalidateAction")
+      cy.intercept("POST", /\?mutation=/).as("revalidateAction")
       cy.request(`http://127.0.0.1:${port}/revalidate-demo`).then((res) => {
         expect(res.body).to.match(/revalidate-generation[^>]*>1</)
       })
@@ -240,20 +240,16 @@ describe("Tier 3 wave 1", () => {
   })
 
   describe("Invalidation", () => {
-    it("refetches serverLoader after invalidate on the current route", () => {
-      cy.intercept("POST", /\?action=/).as("formAction")
-      cy.intercept("POST", /\?loader=/).as("serverLoader")
+    it("patches counter query from form without refetching serverLoader", () => {
+      cy.intercept("POST", /\?mutation=/).as("formMutation")
       cy.visit(`http://127.0.0.1:${port}/invalidate-demo`)
       cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
-      cy.get('[data-testid="invalidate-generation"]').then(($el) => {
-        const before = $el.text()
-        cy.get('[data-testid="invalidate-bump"]').click()
-        cy.wait("@formAction").its("response.statusCode").should("eq", 200)
-        cy.wait("@serverLoader")
-        cy.get('[data-testid="invalidate-generation"]').should(($after) => {
-          expect(Number($after.text())).to.be.greaterThan(Number(before))
-        })
-      })
+      cy.get('[data-testid="invalidate-generation"]').should("have.text", "0")
+      cy.get('[data-testid="invalidate-counter"]').should("have.text", "0")
+      cy.get('[data-testid="invalidate-bump"]').click()
+      cy.wait("@formMutation").its("response.statusCode").should("eq", 200)
+      cy.get('[data-testid="invalidate-counter"]').should("have.text", "1")
+      cy.get('[data-testid="invalidate-generation"]').should("have.text", "0")
     })
   })
 })

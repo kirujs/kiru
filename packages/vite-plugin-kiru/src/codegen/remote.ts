@@ -18,7 +18,9 @@ interface ActionMatch {
   name: string
   /** Server registry value expression (`users.get`, `__kiru_default.get`). */
   ref: string
-  kind: "action" | "form"
+  kind: "query" | "mutation" | "form"
+  /** Void-input query (`query(handler)`). */
+  isVoid?: boolean
   /** Approach B: top-level `const` linked by `export default id`. */
   linkedDeclaration?: AstNode
   /** Approach B: binding name of the linked const (`users`). */
@@ -54,25 +56,35 @@ export function prepareRemoteFunctions(
 function clientStubForMatch(match: ActionMatch): string {
   const id = `\`\${__$r__}:${match.name}\``
   if (match.kind === "form") {
-    const formObj = `{ __kiruFormAction: true, __kiruFormActionId: ${id} }`
+    const formObj = `{ __kiruFormMutation: true, __kiruFormMutationId: ${id} }`
     if (match.replaceNode.type === "Property") {
       return `${propertyKeyName(match.replaceNode)}: ${formObj}`
     }
     return `export const ${match.name} = ${formObj};`
   }
+  if (match.kind === "query") {
+    const expr = `__$defineQuery(${id}, ${match.isVoid ? "true" : "false"})`
+    if (match.replaceNode.type === "Property") {
+      return `${propertyKeyName(match.replaceNode)}: ${expr}`
+    }
+    return `export const ${match.name} = ${expr};`
+  }
   if (match.replaceNode.type === "Property") {
     const key = propertyKeyName(match.replaceNode)
-    return `${key}: async (options) => __$dispatch()(${id}, options ?? {})`
+    return `${key}: async (...args) => __$mutation(${id}, args)`
   }
-  return `export async function ${match.name}(options) { return __$dispatch()(${id}, options ?? {}); }`
+  return `export async function ${match.name}(...args) { return __$mutation(${id}, args); }`
 }
 
 function clientDefaultFlatStub(match: ActionMatch): string {
   const id = `\`\${__$r__}:${match.name}\``
   if (match.kind === "form") {
-    return `export default { __kiruFormAction: true, __kiruFormActionId: ${id} };`
+    return `export default { __kiruFormMutation: true, __kiruFormMutationId: ${id} };`
   }
-  return `export default async (options) => __$dispatch()(${id}, options ?? {});`
+  if (match.kind === "query") {
+    return `export default __$defineQuery(${id}, ${match.isVoid ? "true" : "false"});`
+  }
+  return `export default async (...args) => __$mutation(${id}, args);`
 }
 
 function propertyKeyName(prop: AstNode): string {
@@ -170,9 +182,12 @@ function buildLinkedConstStub(matchesForExport: ActionMatch[]): string {
 function clientStubExpression(match: ActionMatch): string {
   const id = `\`\${__$r__}:${match.name}\``
   if (match.kind === "form") {
-    return `{ __kiruFormAction: true, __kiruFormActionId: ${id} }`
+    return `{ __kiruFormMutation: true, __kiruFormMutationId: ${id} }`
   }
-  return `async (options) => __$dispatch()(${id}, options ?? {})`
+  if (match.kind === "query") {
+    return `__$defineQuery(${id}, ${match.isVoid ? "true" : "false"})`
+  }
+  return `async (...args) => __$mutation(${id}, args)`
 }
 
 function rewriteDefaultExportForSsr(code: MagicString, matches: ActionMatch[]): void {
@@ -201,7 +216,9 @@ function clientFormatRemoteFunctions(
   code: MagicString,
   route: string
 ) {
-  const hasJsonActions = matches.some((m) => m.kind === "action")
+  const hasRpc = matches.some(
+    (m) => m.kind === "mutation" || m.kind === "query"
+  )
   const matchedExports = new Set(matches.map((m) => m.exportNode))
   const protectedNodes = new Set<AstNode>()
   for (const match of matches) {
@@ -224,12 +241,11 @@ function clientFormatRemoteFunctions(
     }
   }
 
-  if (hasJsonActions) {
-    code.prepend(
-      `import { __kiruEnsureRemoteDispatch } from "kiru/ssr/router";\nconst __$r__ = ${JSON.stringify(
-        route
-      )};\nconst __$dispatch = () => __kiruEnsureRemoteDispatch();\n`
-    )
+  if (hasRpc) {
+    const imports = [
+      `import { __$mutation, __$defineQuery } from "kiru/remote";`,
+    ].join("\n")
+    code.prepend(`${imports}\nconst __$r__ = ${JSON.stringify(route)};\n`)
   } else {
     code.prepend(`const __$r__ = ${JSON.stringify(route)};\n`)
   }
@@ -304,10 +320,19 @@ function serverRegisterRemoteFunctions(
     .map((m) => `${JSON.stringify(m.name)}: ${m.ref}`)
     .join(", ")
   const idAssignments = matches
-    .map(
-      (m) =>
-        `${m.ref}.__kiruActionId = ${JSON.stringify(`${route}:${m.name}`)};`
-    )
+    .map((m) => {
+      const rpcId = JSON.stringify(`${route}:${m.name}`)
+      if (m.kind === "query") {
+        return `${m.ref}.__kiruQueryId = ${rpcId};`
+      }
+      if (m.kind === "form") {
+        return `${m.ref}.__kiruFormMutationId = ${rpcId};`
+      }
+      if (m.kind === "mutation") {
+        return `${m.ref}.__kiruMutationId = ${rpcId};`
+      }
+      return `${m.ref}.__kiruMutationId = ${rpcId};`
+    })
     .join("\n")
   code.append(
     `\nimport { __INTERNAL_REMOTE_REGISTRY as __$r__ } from "kiru/remote";\n__$r__.register(${JSON.stringify(
@@ -320,11 +345,44 @@ function makeActionPath(namePrefix: string, keyName: string): string {
   return namePrefix ? `${namePrefix}.${keyName}` : keyName
 }
 
+type RemoteAliasSets = {
+  query: Set<string>
+  mutation: Set<string>
+  form: Set<string>
+}
+
+function remoteKindForCall(
+  node: AstNode,
+  aliases: RemoteAliasSets
+): ActionMatch["kind"] | null {
+  if (node.type !== "CallExpression") return null
+  const callee = node.callee
+  if (callee?.type !== "Identifier" || typeof callee.name !== "string") {
+    return null
+  }
+  const name = callee.name
+  if (aliases.query.has(name)) return "query"
+  if (aliases.mutation.has(name)) return "mutation"
+  if (aliases.form.has(name)) return "form"
+  return null
+}
+
+function isVoidRemoteCall(node: AstNode): boolean {
+  if (node.type !== "CallExpression") return false
+  const args = node.arguments ?? []
+  if (args.length !== 1) return false
+  const first = args[0]
+  return (
+    first?.type === "FunctionExpression" ||
+    first?.type === "ArrowFunctionExpression"
+  )
+}
+
 function collectActionsFromObject(
   objectNode: AstNode,
   exportNode: AstNode,
   namePrefix: string,
-  actionAliases: Set<string>,
+  aliases: RemoteAliasSets,
   matches: ActionMatch[],
   refPrefix?: string,
   options?: {
@@ -349,7 +407,7 @@ function collectActionsFromObject(
         value,
         exportNode,
         namePath,
-        actionAliases,
+        aliases,
         matches,
         refPath,
         options
@@ -357,13 +415,15 @@ function collectActionsFromObject(
       continue
     }
 
-    if (isActionCall(value, actionAliases)) {
+    const kind = remoteKindForCall(value, aliases)
+    if (kind) {
       matches.push({
         replaceNode: prop,
         exportNode,
         name: namePath,
         ref: refPath,
-        kind: isFormActionConfig(value) ? "form" : "action",
+        kind,
+        isVoid: kind === "query" ? isVoidRemoteCall(value) : undefined,
         linkedDeclaration: options?.linkedDeclaration,
         linkedBinding: options?.linkedBinding,
       })
@@ -393,7 +453,7 @@ function resolveLinkedBinding(
 
 function collectNamedExportMatches(
   node: AstNode,
-  actionAliases: Set<string>,
+  aliases: RemoteAliasSets,
   matches: ActionMatch[]
 ): void {
   if (
@@ -412,17 +472,19 @@ function collectNamedExportMatches(
   if (!init) return
 
   if (init.type === "ObjectExpression") {
-    collectActionsFromObject(init, node, binding, actionAliases, matches)
+    collectActionsFromObject(init, node, binding, aliases, matches)
     return
   }
 
-  if (isActionCall(init, actionAliases)) {
+  const kind = remoteKindForCall(init, aliases)
+  if (kind) {
     matches.push({
       replaceNode: node,
       exportNode: node,
       name: binding,
       ref: binding,
-      kind: isFormActionConfig(init) ? "form" : "action",
+      kind,
+      isVoid: kind === "query" ? isVoidRemoteCall(init) : undefined,
     })
   }
 }
@@ -431,7 +493,7 @@ function collectDefaultExportMatches(
   node: AstNode,
   nodeIndex: number,
   bodyNodes: AstNode[],
-  actionAliases: Set<string>,
+  aliases: RemoteAliasSets,
   matches: ActionMatch[],
   namedBindings: Set<string>
 ): void {
@@ -440,14 +502,14 @@ function collectDefaultExportMatches(
   if (!decl || !isAstExpression(decl)) return
 
   if (decl.type === "ObjectExpression") {
-    collectActionsFromObject(
-      decl,
-      node,
-      DEFAULT_RPC_PREFIX,
-      actionAliases,
-      matches,
-      DEFAULT_EXPORT_BINDING
-    )
+      collectActionsFromObject(
+        decl,
+        node,
+        DEFAULT_RPC_PREFIX,
+        aliases,
+        matches,
+        DEFAULT_EXPORT_BINDING
+      )
     return
   }
 
@@ -462,7 +524,7 @@ function collectDefaultExportMatches(
         linked.init,
         node,
         DEFAULT_RPC_PREFIX,
-        actionAliases,
+        aliases,
         matches,
         linked.binding,
         {
@@ -473,7 +535,8 @@ function collectDefaultExportMatches(
       return
     }
 
-    if (!isActionCall(linked.init, actionAliases)) return
+    const linkedKind = remoteKindForCall(linked.init, aliases)
+    if (!linkedKind) return
     matches.push({
       replaceNode: linked.declarationNode,
       exportNode: node,
@@ -481,18 +544,21 @@ function collectDefaultExportMatches(
       ref: linked.binding,
       linkedDeclaration: linked.declarationNode,
       linkedBinding: linked.binding,
-      kind: isFormActionConfig(linked.init) ? "form" : "action",
+      kind: linkedKind,
+      isVoid: linkedKind === "query" ? isVoidRemoteCall(linked.init) : undefined,
     })
     return
   }
 
-  if (!isActionCall(decl, actionAliases)) return
+  const declKind = remoteKindForCall(decl, aliases)
+  if (!declKind) return
   matches.push({
     replaceNode: node,
     exportNode: node,
     name: DEFAULT_RPC_PREFIX,
     ref: DEFAULT_EXPORT_BINDING,
-    kind: isFormActionConfig(decl) ? "form" : "action",
+    kind: declKind,
+    isVoid: declKind === "query" ? isVoidRemoteCall(decl) : undefined,
   })
 }
 
@@ -509,14 +575,24 @@ function assertNoDefaultNameCollisions(matches: ActionMatch[]): void {
 }
 
 function findExportedActionCalls(bodyNodes: AstNode[]): ActionMatch[] {
-  const actionAliasHandler = createAliasHandler("action", "kiru/remote")
+  const queryAliasHandler = createAliasHandler("query", "kiru/remote")
+  const mutationAliasHandler = createAliasHandler("mutation", "kiru/remote")
+  const formAliasHandler = createAliasHandler("form", "kiru/remote")
   const matches: ActionMatch[] = []
   const namedBindings = new Set<string>()
 
   for (const node of bodyNodes) {
     if (node.type === "ImportDeclaration") {
-      actionAliasHandler.addAliases(node)
+      queryAliasHandler.addAliases(node)
+      mutationAliasHandler.addAliases(node)
+      formAliasHandler.addAliases(node)
     }
+  }
+
+  const aliases: RemoteAliasSets = {
+    query: queryAliasHandler.aliases,
+    mutation: mutationAliasHandler.aliases,
+    form: formAliasHandler.aliases,
   }
 
   for (const node of bodyNodes) {
@@ -527,64 +603,18 @@ function findExportedActionCalls(bodyNodes: AstNode[]): ActionMatch[] {
     ) {
       const binding = node.declaration.declarations?.[0]?.id?.name
       if (binding) namedBindings.add(binding)
-      collectNamedExportMatches(node, actionAliasHandler.aliases, matches)
+      collectNamedExportMatches(node, aliases, matches)
     }
   }
 
   for (let i = 0; i < bodyNodes.length; i++) {
     const node = bodyNodes[i]!
     if (node.type === "ImportDeclaration") continue
-    collectDefaultExportMatches(
-      node,
-      i,
-      bodyNodes,
-      actionAliasHandler.aliases,
-      matches,
-      namedBindings
-    )
+    collectDefaultExportMatches(node, i, bodyNodes, aliases, matches, namedBindings)
   }
 
   assertNoDefaultNameCollisions(matches)
   return matches
-}
-
-function isActionCall(node: AstNode, actionAliases: Set<string>): boolean {
-  if (node.type !== "CallExpression") return false
-  const callee = node.callee
-  return (
-    callee?.type === "Identifier" &&
-    typeof callee.name === "string" &&
-    actionAliases.has(callee.name)
-  )
-}
-
-function isFormActionConfig(node: AstNode): boolean {
-  if (node.type !== "CallExpression") return false
-  const args = node.arguments ?? []
-  const first = args[0]
-  if (!first || first.type !== "ObjectExpression") return false
-  const properties = first.properties ?? []
-  for (const prop of properties) {
-    if (prop.type !== "Property") continue
-    const key = prop.key
-    const keyName =
-      key?.type === "Identifier"
-        ? key.name
-        : key?.type === "Literal" && typeof key.value === "string"
-          ? key.value
-          : undefined
-    if (keyName !== "type") continue
-    const value = prop.value
-    if (
-      isAstExpression(value) &&
-      value.type === "Literal" &&
-      typeof value.value === "string" &&
-      value.value === "form"
-    ) {
-      return true
-    }
-  }
-  return false
 }
 
 function generateRouteId(filePath: string, projectRoot: string): string {

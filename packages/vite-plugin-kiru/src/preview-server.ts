@@ -66,12 +66,14 @@ function resolvePreviewNotFoundStrategy(
   return "exact"
 }
 
-export type PreviewRequest = {
+export type PreviewPathSource = {
   url?: string
   originalUrl?: string
   /** Set by {@link capturePreviewRequestUrl} before Vite SPA fallback rewrites `url`. */
   __kiruOriginalUrl?: string
 }
+
+export type PreviewRequest = PreviewPathSource
 
 export function capturePreviewRequestUrl(): Connect.NextHandleFunction {
   return (req, _res, next) => {
@@ -83,7 +85,7 @@ export function capturePreviewRequestUrl(): Connect.NextHandleFunction {
   }
 }
 
-export function previewPathname(req: PreviewRequest): string {
+export function previewPathname(req: PreviewPathSource): string {
   return toPreviewPathname(req.__kiruOriginalUrl ?? req.originalUrl ?? req.url ?? "/")
 }
 

@@ -61,7 +61,7 @@ import { isEdgeDeployTarget } from "@kirujs/runtime"
 import {
   makeKiruContextToken,
   makeKiruContextTokenAsync,
-  createRemoteActionHandler,
+  createRemoteHandler,
 } from "../remote/index.js"
 import { runWithSsrRequestContext } from "../remote/action.js"
 import {
@@ -708,7 +708,7 @@ function prepareRenderer(options: CreateRendererOptions) {
   const requestLimits = resolveRequestLimits(actions?.requestLimits)
   const actionsSecret = actions?.secret
   const handleRemoteAction = actions
-    ? createRemoteActionHandler(actions.secret, {
+    ? createRemoteHandler(actions.secret, {
         allowedOrigins: actions.allowedOrigins,
         exposeErrors: actions.exposeErrors,
         deployTarget,

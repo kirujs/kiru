@@ -36,7 +36,7 @@ export type Schema<TInput> =
         | { success: false; error: unknown }
     }
 
-/** Alias for {@link Schema} on `action({ validation: { body } }, …)`. */
+/** Alias for {@link Schema} on `mutation(schema, handler)` / `form(schema, handler)`. */
 export type ActionSchema<TInput> = Schema<TInput>
 
 /** Output type inferred from a {@link Schema} (Standard Schema, `parse`, or `safeParse`). */

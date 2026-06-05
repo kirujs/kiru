@@ -5,7 +5,7 @@ import { MagicString } from "./shared.js"
 import { prepareRemoteFunctions } from "./remote.js"
 
 const PROJECT_ROOT = "/project"
-const ACTIONS_FILE = `${PROJECT_ROOT}/src/pages/demo.actions.ts`
+const ACTIONS_FILE = `${PROJECT_ROOT}/src/pages/demo.remote.ts`
 
 function transformRemote(source: string, ssr: boolean): string {
   const ast = parseAst(source, { allowReturnOutsideFunction: true })
@@ -29,14 +29,14 @@ describe("prepareRemoteFunctions — default export (approach A)", () => {
   it("client stubs anonymous default namespace", () => {
     const out = transformRemote(
       `
-import { action } from "kiru/remote"
+import { mutation } from "kiru/remote"
 export default {
-  get: action(async () => "ok"),
+  get: mutation(async () => "ok"),
 }
 `,
       false
     )
-    assert.match(out, /export default \{ get: async \(options\)/)
+    assert.match(out, /export default \{ get: async \(\.\.\.args\)/)
     assert.match(out, /default\.get/)
     assert.doesNotMatch(out, /__kiru_default/)
     assert.doesNotMatch(out, /async \(\) => "ok"/)
@@ -45,9 +45,9 @@ export default {
   it("SSR rewrites anonymous default namespace and registers default.*", () => {
     const out = transformRemote(
       `
-import { action } from "kiru/remote"
+import { mutation } from "kiru/remote"
 export default {
-  get: action(async () => "ok"),
+  get: mutation(async () => "ok"),
 }
 `,
       true
@@ -55,37 +55,37 @@ export default {
     assert.match(out, /const __kiru_default = \{/)
     assert.match(out, /export default __kiru_default/)
     assert.match(out, /"default\.get": __kiru_default\.get/)
-    assert.match(out, /__kiru_default\.get\.__kiruActionId/)
+    assert.match(out, /__kiru_default\.get\.__kiruMutationId/)
   })
 
   it("client and SSR handle flat default export", () => {
     const client = transformRemote(
       `
-import { action } from "kiru/remote"
-export default action(async () => "flat")
+import { mutation } from "kiru/remote"
+export default mutation(async () => "flat")
 `,
       false
     )
-    assert.match(client, /export default async \(options\)/)
+    assert.match(client, /export default async \(\.\.\.args\)/)
     assert.match(client, /default/)
 
     const server = transformRemote(
       `
-import { action } from "kiru/remote"
-export default action(async () => "flat")
+import { mutation } from "kiru/remote"
+export default mutation(async () => "flat")
 `,
       true
     )
-    assert.match(server, /const __kiru_default = action\(/)
+    assert.match(server, /const __kiru_default = mutation\(/)
     assert.match(server, /"default": __kiru_default/)
   })
 
   it("coexists with named exports", () => {
     const out = transformRemote(
       `
-import { action } from "kiru/remote"
-export const foo = action(async () => "foo")
-export default { get: action(async () => "d") }
+import { mutation } from "kiru/remote"
+export const foo = mutation(async () => "foo")
+export default { get: mutation(async () => "d") }
 `,
       true
     )
@@ -99,16 +99,16 @@ describe("prepareRemoteFunctions — default export (approach B)", () => {
   it("SSR registers default.* with linked binding refs, no __kiru_default", () => {
     const out = transformRemote(
       `
-import { action } from "kiru/remote"
+import { query } from "kiru/remote"
 const users = {
-  get: action(async () => "u"),
+  get: query(async () => "u"),
 }
 export default users
 `,
       true
     )
     assert.match(out, /"default\.get": users\.get/)
-    assert.match(out, /users\.get\.__kiruActionId.*default\.get/)
+    assert.match(out, /users\.get\.__kiruQueryId.*default\.get/)
     assert.doesNotMatch(out, /__kiru_default/)
     assert.match(out, /export default users/)
   })
@@ -116,15 +116,15 @@ export default users
   it("client stubs linked const and keeps export default users", () => {
     const out = transformRemote(
       `
-import { action } from "kiru/remote"
+import { query } from "kiru/remote"
 const users = {
-  get: action(async () => "u"),
+  get: query(async () => "u"),
 }
 export default users
 `,
       false
     )
-    assert.match(out, /const users = \{ get: async \(options\)/)
+    assert.match(out, /const users = \{ get: __\$defineQuery/)
     assert.match(out, /export default users/)
     assert.match(out, /default\.get/)
     assert.doesNotMatch(out, /async \(\) => "u"/)
@@ -133,12 +133,12 @@ export default users
   it("preserves users binding for same-file composition", () => {
     const out = transformRemote(
       `
-import { action } from "kiru/remote"
+import { mutation, query } from "kiru/remote"
 const users = {
-  get: action(async () => "u"),
+  get: query(async () => "u"),
 }
 export default users
-export const run = action(async () => users.get())
+export const run = mutation(async () => users.get())
 `,
       true
     )
@@ -149,9 +149,9 @@ export const run = action(async () => users.get())
   it("skips default.* when binding is also a named export", () => {
     const out = transformRemote(
       `
-import { action } from "kiru/remote"
+import { query } from "kiru/remote"
 export const users = {
-  get: action(async () => "u"),
+  get: query(async () => "u"),
 }
 export default users
 `,

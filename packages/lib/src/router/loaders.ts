@@ -1,3 +1,6 @@
+import { __DEV__ } from "../env.js"
+import { isRemoteQuery, type RemoteQuery } from "../remote/query.js"
+import { invokeQueryLoad } from "../remote/queryResourceLoad.js"
 import type { CustomRequestContext, RouteMeta } from "./types.js"
 import type { RouterQuery } from "./requestUrl.js"
 import type {
@@ -93,8 +96,23 @@ export type LoaderCacheOptions = {
 }
 
 export type ServerLoaderConfig<T> = LoaderCacheOptions & {
-  load: LoaderFn<T>
+  load: LoaderFn<T> | RemoteQuery<void, T>
   fallback: (() => JSX.Element)
+}
+
+function resolveServerLoaderFn<T>(
+  load: LoaderFn<T> | RemoteQuery<void, T>
+): LoaderFn<T> {
+  if (!isRemoteQuery(load)) {
+    return load
+  }
+  if (__DEV__ && !load.__kiruQueryVoid) {
+    throw new Error(
+      "serverLoader({ load: query }) only supports void queries; use load: (ctx) => query(...)"
+    )
+  }
+  const queryFn = load as RemoteQuery<void, T>
+  return (ctx) => invokeQueryLoad(queryFn, undefined, ctx.signal)
 }
 
 export type ServerLoaderConfigWithValidation<
@@ -176,7 +194,7 @@ export function serverLoader<T, V extends LoaderValidationConfig>(
     ) as ServerLoader<T>
   }
   const config = fnOrConfig as ServerLoaderConfig<T>
-  return wrapLoader("server", config.load, {
+  return wrapLoader("server", resolveServerLoaderFn(config.load), {
     fallback: config.fallback,
     staleTime: config.staleTime,
     gcTime: config.gcTime,
@@ -284,17 +302,20 @@ export function readLoaderCacheOptions(load: KiruLoader | undefined): {
   }
 }
 
+function isModuleRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
+}
+
 export function isKiruLoader(value: unknown): value is KiruLoader {
   return (
-    !!value &&
-    typeof value === "object" &&
+    isModuleRecord(value) &&
     "__kiruLoader" in value &&
-    typeof (value as KiruLoader).__kiruInvoke === "function"
+    typeof value.__kiruInvoke === "function"
   )
 }
 
 export function readPageLoadExport(mod: unknown): KiruLoader | undefined {
-  if (!mod || typeof mod !== "object") return undefined
-  const load = (mod as Record<string, unknown>).load
+  if (!isModuleRecord(mod)) return undefined
+  const load = mod.load
   return isKiruLoader(load) ? load : undefined
 }
