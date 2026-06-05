@@ -2,18 +2,39 @@ import {
   STREAMED_DATA_DESCENDANTS,
   STREAMED_DATA_EVENT,
 } from "../constants.js"
+import {
+  buildPageDataPayloadFromRegistry,
+  collectInjectedQueryScriptTags,
+} from "../ssr/queryInjection.js"
+import {
+  escapeScriptJson,
+  parseKDataScriptsFromDocument,
+  resolveRefsInValue,
+  seedQueryCacheFromKDataStore,
+} from "./dataRefs.js"
 import { seedQueriesFromPayload } from "../remote/pageDataQueries.js"
-
-function escapeScriptJson(json: string): string {
-  return json
-    .replace(/</g, "\\u003c")
-    .replace(/\u2028/g, "\\u2028")
-    .replace(/\u2029/g, "\\u2029")
-}
 
 export function serializePageDataScript(data: unknown): string {
   const json = escapeScriptJson(JSON.stringify(data))
   return `<script type="application/json" k-page-data>${json}</script>`
+}
+
+/** Serialize canonical k-data scripts plus k-page-data for document head. */
+export function serializePageDataHeadScripts(pageData: unknown): string {
+  const resolvedPageData =
+    typeof window === "undefined" && pageData !== undefined
+      ? buildPageDataPayloadFromRegistry(pageData)
+      : pageData
+  const kDataScripts =
+    typeof window === "undefined" ? collectInjectedQueryScriptTags() : ""
+  const pageDataScript =
+    resolvedPageData !== undefined
+      ? serializePageDataScript(resolvedPageData)
+      : ""
+  if (kDataScripts && pageDataScript) {
+    return `${kDataScripts}\n    ${pageDataScript}`
+  }
+  return kDataScripts || pageDataScript
 }
 
 let hydratedPageData: unknown | undefined
@@ -24,11 +45,17 @@ export function readHydratedPageData(): unknown {
   if (typeof document === "undefined") return undefined
   if (hydratedPageDataRead) return hydratedPageData
   hydratedPageDataRead = true
+
+  const kDataStore = parseKDataScriptsFromDocument()
+  seedQueryCacheFromKDataStore(kDataStore)
+
   const el = document.querySelector("script[k-page-data]")
   if (!el) return undefined
   try {
-    const parsed = JSON.parse(el.textContent || "null")
-    hydratedPageData = seedQueriesFromPayload(parsed)
+    const parsed: unknown = JSON.parse(el.textContent || "null")
+    hydratedPageData = seedQueriesFromPayload(
+      resolveRefsInValue(parsed, kDataStore)
+    )
     el.remove()
     return hydratedPageData
   } catch {

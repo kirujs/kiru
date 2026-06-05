@@ -1,5 +1,11 @@
 import { Derive, resource, signal } from "kiru"
-import { defineHeadContent, Link, serverLoader, useRequestContext, type PageProps } from "kiru/router"
+import {
+  defineHeadContent,
+  Link,
+  serverLoader,
+  useRequestContext,
+  type PageProps,
+} from "kiru/router"
 import { FeedList } from "../../feed/feed-list.js"
 import { getCommunity } from "../../feed.remote.js"
 export const load = serverLoader(async (ctx) => {
@@ -36,7 +42,10 @@ export default function CommunityPage({ data, error }: PageProps<typeof load>) {
 
   return () => (
     <div className="space-y-4">
-      <Derive from={community} fallback={<p className="text-slate-400">Loading…</p>}>
+      <Derive
+        from={community}
+        fallback={<p className="text-slate-400">Loading…</p>}
+      >
         {(c) => (
           <header className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
             <h1 className="text-2xl font-bold text-orange-400">c/{c.slug}</h1>
@@ -54,7 +63,7 @@ export default function CommunityPage({ data, error }: PageProps<typeof load>) {
           </header>
         )}
       </Derive>
-      <FeedList communitySlug={slug} interceptPostLinks />
+      <FeedList communitySlug={slug} />
     </div>
   )
 }

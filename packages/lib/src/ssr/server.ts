@@ -10,13 +10,19 @@ import {
   HeadlessRenderContext,
   SpeculativeTraverseContext,
 } from "../headlessRender.js"
+import {
+  buildStreamPayloadForInjection,
+  setQueryInjectionStreamEmitter,
+} from "./queryInjection.js"
 
 const STREAMED_DATA_SETUP = `
 <script type="text/javascript">
 const e="${STREAMED_DATA_EVENT}",d=document,w=window,m=(w[e]??=new Map);
 w.__$k_data=(id,p,...a)=>{
   m.set(id,p);
-  if(a.length){const s=(w["${STREAMED_DATA_DESCENDANTS}"]??=new Set);for(const x of a)s.add(x);}
+  const s=(w["${STREAMED_DATA_DESCENDANTS}"]??=new Set);
+  s.add(id);
+  if(a.length){for(const x of a)s.add(x);}
   w.dispatchEvent(new CustomEvent(e,{detail:{id,...p}}));
   d.currentScript.remove();
 };
@@ -98,6 +104,12 @@ export function renderToReadableStream(
     resolveShellFlushed = r
   })
 
+  setQueryInjectionStreamEmitter((script) => {
+    void shellFlushed.then(() => {
+      controller.enqueue(script)
+    })
+  })
+
   const speculativeByRoot = new Map<
     Kiru.StatefulPromise<unknown>,
     Promise<string[]>
@@ -117,7 +129,11 @@ export function renderToReadableStream(
 
       const writePromise = Promise.all([
         promise
-          .then(() => ({ data: promise.value }))
+          .then(() =>
+            buildStreamPayloadForInjection(
+              promise as Kiru.StatefulPromise<unknown>
+            )
+          )
           .catch(() => ({ error: promise.error?.message })),
         speculativeByRoot.get(promise) ?? Promise.resolve([] as string[]),
       ]).then(async ([payload, descendants]) => {
@@ -238,8 +254,12 @@ export function renderToReadableStream(
     }
     await speculativeChain
     await Promise.all(pendingWritePromises)
+    setQueryInjectionStreamEmitter(null)
     controller.close()
-  }).catch((error) => controller.error(error))
+  }).catch((error) => {
+    setQueryInjectionStreamEmitter(null)
+    controller.error(error)
+  })
 
   return stream
 }

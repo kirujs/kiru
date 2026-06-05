@@ -197,8 +197,8 @@ describe("renderToReadableStream speculative Derive traversal", () => {
       `stream should not contain action errors: ${html}`
     )
     assert.ok(
-      html.includes("Review for p1"),
-      "nested remote action should resolve during speculative SSR"
+      html.includes('"$$ref":'),
+      "nested query should stream deduped $$ref payload after speculative SSR"
     )
   })
 })

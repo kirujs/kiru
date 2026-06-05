@@ -32,6 +32,6 @@ const kiru = createKiruHandler({
 export default { fetch: kiru.fetch }
 
 if (isProd) {
-  const port = Number(process.env.PORT) || 5179
+  const port = Number(process.env.PORT) || 6969
   createServer(toNodeListener(kiru)).listen(port)
 }

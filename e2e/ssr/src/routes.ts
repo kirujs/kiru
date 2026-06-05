@@ -1,4 +1,4 @@
-import { createRoute, createRouteTree } from "kiru/router"
+import { createRoute, createRouteScope, createRouteTree } from "kiru/router"
 
 export const routes = createRouteTree({
     head: { description: "E2E SSR app." },
@@ -75,6 +75,24 @@ export const routes = createRouteTree({
       createRoute("/loader-cache-demo", {
         component: () => import("./pages/loader-cache-demo"),
         head: { title: "E2E SSR loader cache" },
+      }),
+      createRoute("/query-dedup-demo", {
+        component: () => import("./pages/query-dedup-demo"),
+        head: { title: "E2E SSR query dedup" },
+      }),
+      createRoute("/feed-hydration-demo", {
+        component: () => import("./pages/feed-hydration-demo"),
+        head: { title: "E2E SSR feed hydration" },
+      }),
+      createRouteScope({
+        config: () => import("./pages/threadboard/scope.config"),
+        layout: () => import("./pages/threadboard/layout"),
+        children: [
+          createRoute("/threadboard", {
+            component: () => import("./pages/threadboard/page"),
+            head: { title: "Threadboard E2E Home" },
+          }),
+        ],
       }),
       createRoute("/revalidate-demo", {
         static: true,

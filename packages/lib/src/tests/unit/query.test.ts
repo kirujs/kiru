@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { buildQueryCacheKey } from "../../remote/queryCache.js"
+import { buildQueryCacheKey, buildQueryWireRefId } from "../../remote/queryCache.js"
 import { stableSerialize } from "../../remote/stableSerialize.js"
 import { query } from "../../remote/query.js"
 
@@ -15,6 +15,31 @@ describe("query cache key", () => {
   it("buildQueryCacheKey includes query id", () => {
     const key = buildQueryCacheKey("r:foo:get", "santa")
     assert.ok(key.startsWith("r:foo:get:"))
+  })
+
+  it("treats missing, null, and undefined optional fields as equivalent", () => {
+    const queryId = "r:feed:get"
+    const loaderKey = buildQueryCacheKey(queryId, { sort: "hot" })
+    const resourceKey = buildQueryCacheKey(queryId, {
+      sort: "hot",
+      communitySlug: undefined,
+    })
+    const nullKey = buildQueryCacheKey(queryId, {
+      sort: "hot",
+      communitySlug: null,
+    })
+    assert.equal(loaderKey, resourceKey)
+    assert.equal(loaderKey, nullKey)
+    assert.equal(buildQueryWireRefId(loaderKey), buildQueryWireRefId(resourceKey))
+  })
+
+  it("buildQueryWireRefId hashes cache keys without embedding input", () => {
+    const key = buildQueryCacheKey("r:foo:get", { items: "x".repeat(10_000) })
+    const wireRef = buildQueryWireRefId(key)
+    assert.match(wireRef, /^k:q:[A-Za-z0-9_-]+$/)
+    assert.ok(wireRef.length < 32)
+    assert.ok(!wireRef.includes("items"))
+    assert.equal(buildQueryWireRefId(key), wireRef)
   })
 })
 

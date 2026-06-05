@@ -40,3 +40,4 @@ export function seedQueriesFromPayload(payload: unknown): unknown {
   if (queries?.length) seedQueryCache(queries)
   return data
 }
+

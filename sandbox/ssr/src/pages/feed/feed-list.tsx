@@ -11,7 +11,6 @@ import {
 
 export type FeedListProps = {
   communitySlug?: string
-  interceptPostLinks?: boolean
 }
 
 function formatRelative(ms: number) {
@@ -29,7 +28,7 @@ export function FeedList(props: FeedListProps) {
   const feed = resource({
     source: { sort, communitySlug },
     load: getFeed,
-    defaultState: [] as FeedPost[],
+    defaultState: [],
   })
 
   async function onVote(postId: string, value: 1 | -1) {
@@ -104,7 +103,10 @@ export function FeedList(props: FeedListProps) {
         </p>
       ) : null}
 
-      <Derive from={feed} fallback={<p className="text-slate-400">Loading feed…</p>}>
+      <Derive
+        from={feed}
+        fallback={<p className="text-slate-400">Loading feed…</p>}
+      >
         {(posts) => {
           const list = posts as FeedPost[]
           return list.length === 0 ? (
@@ -161,7 +163,6 @@ export function FeedList(props: FeedListProps) {
                         <Link
                           to="/p/[id]"
                           params={{ id: post.id }}
-                          intercept={props.interceptPostLinks !== false}
                           className="hover:text-orange-200"
                         >
                           {post.title}

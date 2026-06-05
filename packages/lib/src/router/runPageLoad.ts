@@ -32,7 +32,9 @@ import {
   throwIfAborted,
 } from "./navigationScope.js"
 import { runWithRemoteAbortSignalAsync } from "../remote/abortScope.js"
-import { attachQueriesToPayload } from "../remote/pageDataQueries.js"
+import { runWithSsrRequestContext } from "../remote/action.js"
+import { traceQueryDispatch } from "../remote/queryTrace.dev.js"
+import { getSsrRemoteScopeEntry } from "../remote/ssrRemoteScope.js"
 import {
   beginQuerySnapshotCollector,
   endQuerySnapshotCollector,
@@ -150,13 +152,25 @@ export async function runPageLoadFromModule(
   }
   const collectQueries = typeof window === "undefined"
   if (collectQueries) beginQuerySnapshotCollector()
-  const data = await runWithRemoteAbortSignalAsync(ctx.signal, () =>
-    load.__kiruInvoke(ctx)
-  )
+  if (typeof window === "undefined") {
+    traceQueryDispatch("loader:invoke-start", {
+      routeId: ctx.route.id,
+      kind: load.__kiruLoader,
+      ssrScope: getSsrRemoteScopeEntry() != null,
+    })
+  }
+  const invokeLoad = () => {
+    if (typeof window === "undefined") {
+      return runWithSsrRequestContext(ctx.context, ctx.signal, () =>
+        load.__kiruInvoke(ctx)
+      )
+    }
+    return load.__kiruInvoke(ctx)
+  }
+  const data = await runWithRemoteAbortSignalAsync(ctx.signal, invokeLoad)
   throwIfAborted(ctx.signal)
   if (collectQueries) {
-    const queries = endQuerySnapshotCollector()
-    return attachQueriesToPayload(data, queries)
+    endQuerySnapshotCollector()
   }
   return data
 }

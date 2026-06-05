@@ -18,6 +18,12 @@ export default function Layout({ children }: { children: JSX.Children }) {
         {" | "}
         <Link to="/loader-cache-demo">Loader cache</Link>
         {" | "}
+        <Link to="/query-dedup-demo">Query dedup</Link>
+        {" | "}
+        <Link to="/feed-hydration-demo">Feed hydration</Link>
+        {" | "}
+        <Link to="/threadboard">Threadboard</Link>
+        {" | "}
         <Link to="/seo">SEO</Link>
         {" | "}
         <Link to="/head-override">Head override</Link>

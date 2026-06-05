@@ -26,7 +26,7 @@ import {
   type NavigationScope,
 } from "./navigationScope.js"
 import { formatRouterSearch } from "./navigation.js"
-
+import { devBootstrapTrace } from "../dev/bootstrapTrace.js"
 export type SsrClientOutletProps = {
   manifest: RouteManifest
   /**
@@ -242,6 +242,12 @@ export function SsrClientOutlet({ manifest, initialSubtree }: SsrClientOutletPro
   }
 
   onMount(() => {
+    if (initialSubtree !== undefined) {
+      queueMicrotask(() => {
+        useHydratedPageDataRef.current = false
+        children.refetch()
+      })
+    }
     const unsubOutletErr = router.outletRenderError.subscribe((err) => {
       if (err) {
         if (bootstrapOutlet) bootstrapOutlet.current = null
@@ -268,8 +274,17 @@ export function SsrClientOutlet({ manifest, initialSubtree }: SsrClientOutletPro
 
   return () => {
     const content = children.value ?? bootstrapOutlet?.current ?? null
+    if (content === null) {
+      devBootstrapTrace("ssrClientOutlet:content-null", {
+        hasBootstrapOutlet: !!bootstrapOutlet?.current,
+        outletRenderError: outletRenderError.peek()?.message,
+      })
+    }
     return createElement(ErrorBoundary, {
       fallback: (error: Error) => {
+        devBootstrapTrace("ssrClientOutlet:error-boundary", {
+          message: error.message,
+        })
         outletRenderError.value = error
         return null
       },
@@ -335,5 +350,8 @@ export async function buildInitialSsrOutletInShell(
   await buildPromise
   app.unmount()
 
+  devBootstrapTrace("ssrClientOutlet:buildInitial-complete", {
+    hasOutlet: outlet.value != null,
+  })
   return outlet.value
 }

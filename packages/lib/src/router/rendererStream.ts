@@ -1,7 +1,7 @@
 import { renderToReadableStream } from "../ssr/server.js"
 import { serializeDocumentHead } from "./meta.js"
 import { serializeRequestContextScript } from "./requestContext.js"
-import { serializePageDataScript } from "./pageData.js"
+import { serializePageDataHeadScripts } from "./pageData.js"
 import { serializeI18nScript, type HydratedI18nPayload } from "./i18nContext.js"
 import { mergeRouteAndPageHead } from "./pageHead.js"
 import type {
@@ -26,7 +26,9 @@ export function buildStreamDocumentHead(
 ): DocumentHead {
   const ctxScript = serializeRequestContextScript(requestContext)
   const pageDataScript =
-    opts.pageData !== undefined ? serializePageDataScript(opts.pageData) : ""
+    opts.pageData !== undefined
+      ? serializePageDataHeadScripts(opts.pageData)
+      : ""
   const i18nScript =
     opts.i18nPayload !== undefined ? serializeI18nScript(opts.i18nPayload) : ""
   const document: DocumentHead = {

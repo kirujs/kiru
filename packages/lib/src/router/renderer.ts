@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { __DEV__ } from "../env.js"
+import { clearAllQueryCache } from "../remote/queryCache.js"
+import { resetQueryInjectionRegistry } from "../ssr/queryInjection.js"
 import { renderToString } from "../renderToString.js"
 import {
   compileRouteTree,
@@ -274,6 +276,11 @@ function engine(options: CreateRendererOptions & { stream: boolean }) {
     requestOrUrl: Request | string,
     ctx?: RenderRequestContext
   ) => {
+    if (typeof window === "undefined") {
+      resetQueryInjectionRegistry()
+      clearAllQueryCache()
+    }
+
     const url =
       typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url
 

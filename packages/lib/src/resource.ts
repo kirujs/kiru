@@ -14,15 +14,22 @@ import { isInitialSsrStreamPending } from "./router/pageData.js"
 import { runWithRemoteAbortSignalAsync } from "./remote/abortScope.js"
 import { isRemoteQuery, type RemoteQuery } from "./remote/query.js"
 import {
+  buildQueryWireRefId,
+  getQueryCacheEntry,
+  getQueryCacheEntryForKey,
+} from "./remote/queryCache.js"
+import {
   buildQueryCacheKeyForQuery,
   invokeQueryLoad,
   invokeQueryLoadWithObservation,
 } from "./remote/queryResourceLoad.js"
+import { resolveStreamRefPayload } from "./router/dataRefs.js"
 import {
   captureSyncQueryObservations,
   createQueryCacheSubscriptionBinder,
 } from "./remote/queryCacheTrack.js"
 import { getSsrRenderAbortSignal } from "./remote/ssrRemoteScope.js"
+import { devBootstrapTrace } from "./dev/bootstrapTrace.js"
 
 export type ResourceSource = Record<string, Signal<unknown>> | Signal<unknown>
 
@@ -373,6 +380,59 @@ function resourceImpl<T, Source extends ResourceSource>(
     }
     const isCurrentLoad = () => loadGen === loadGeneration
     isPending.value = true
+
+    const preferSeededQueryCache =
+      typeof window === "undefined" ||
+      renderMode.current === "hydrate" ||
+      (isInitialSsrStreamPending() && promiseId.startsWith("k:"))
+
+    const canShortCircuitQueryCache =
+      queryAsLoad && !forceFetch && preferSeededQueryCache
+
+    if (canShortCircuitQueryCache) {
+      const input =
+        source == null
+          ? undefined
+          : unwrapResourceSource(source as ResourceSource)
+      const cacheKey = buildQueryCacheKeyForQuery(queryAsLoad, input)
+      const cached =
+        typeof window === "undefined"
+          ? getQueryCacheEntry(cacheKey)
+          : getQueryCacheEntryForKey(cacheKey)
+      if (
+        cached?.data !== undefined &&
+        (!cached.pending || preferSeededQueryCache)
+      ) {
+        const value = cached.data as T
+        data.value = value
+        isPending.value = false
+        error.value = null
+        const statefulPromise = Object.assign(Promise.resolve(value), {
+          id: promiseId,
+          state: "fulfilled" as const,
+          value,
+          __kiruQueryCacheKey: buildQueryWireRefId(cacheKey),
+        }) as Kiru.StatefulPromise<T> & { __kiruQueryCacheKey?: string }
+
+        if (
+          typeof window === "undefined" &&
+          renderMode.current === "stream" &&
+          promiseId.startsWith("k:") &&
+          speculativeStreamPromiseCollector
+        ) {
+          speculativeStreamPromiseCollector(
+            statefulPromise as Kiru.StatefulPromise<unknown>
+          )
+        }
+        devBootstrapTrace("resource:createPromise", {
+          path: "cache-short-circuit",
+          promiseId,
+          cacheKey,
+        })
+        return statefulPromise
+      }
+    }
+
     const newPromise = executeWithTracking({
       fn: () => {
         let promise: Promise<T>
@@ -380,8 +440,17 @@ function resourceImpl<T, Source extends ResourceSource>(
           // if we're rendering to a string, there's no need to fire the callback
           promise = Promise.resolve() as Promise<T>
         } else if (!forceFetch && shouldResolveDeferredPromise(promiseId)) {
+          devBootstrapTrace("resource:createPromise", {
+            path: "deferred-stream",
+            promiseId,
+          })
           promise = resolveDeferredPromise<T>(promiseId, signal)
         } else {
+          devBootstrapTrace("resource:createPromise", {
+            path: "query-fetch",
+            promiseId,
+            queryAsLoad: !!queryAsLoad,
+          })
           // stream / dom / (hydrate + static)
           const ctx: ResourceLoaderContext = { signal }
           const runLoad = async () => {
@@ -457,6 +526,20 @@ function resourceImpl<T, Source extends ResourceSource>(
         statefulPromise.state = "fulfilled"
         statefulPromise.value = value
 
+        if (typeof window === "undefined" && queryAsLoad) {
+          const input =
+            source == null
+              ? undefined
+              : unwrapResourceSource(source as ResourceSource)
+          ;(
+            statefulPromise as Kiru.StatefulPromise<T> & {
+              __kiruQueryCacheKey?: string
+            }
+          ).__kiruQueryCacheKey = buildQueryWireRefId(
+            buildQueryCacheKeyForQuery(queryAsLoad, input)
+          )
+        }
+
         if (!isCurrentLoad()) return
         data.value = value
         isPending.value = false
@@ -488,9 +571,14 @@ interface DeferredPromiseEventDetail<T> {
   error?: string
 }
 
+type StreamedPayload = {
+  data?: unknown
+  error?: string
+}
+
 function consumeStreamedPayload<T>(
   streamId: string,
-  deferralCache: Map<string, { data?: unknown; error?: string }>,
+  deferralCache: Map<string, StreamedPayload>,
   announced: Set<string> | undefined,
   resolve: (value: T) => void,
   reject: (reason: Error) => void
@@ -498,10 +586,13 @@ function consumeStreamedPayload<T>(
   const existing = deferralCache.get(streamId)
   if (!existing) return false
 
+  const resolved = resolveStreamRefPayload(existing)
+  if (!resolved) return false
+
   deferralCache.delete(streamId)
   announced?.delete(streamId)
 
-  const { data, error } = existing
+  const { data, error } = resolved
   if (error) {
     reject(new Error(error))
     return true
@@ -529,6 +620,12 @@ function resolveDeferredPromise<T>(
     if (announced) {
       for (const streamId of announced) {
         if (
+          !isRelevantStreamId(id, streamId) &&
+          !(isInitialSsrStreamPending() && deferralCache.has(streamId))
+        ) {
+          continue
+        }
+        if (
           consumeStreamedPayload(
             streamId,
             deferralCache,
@@ -544,12 +641,15 @@ function resolveDeferredPromise<T>(
 
     const onDataEvent = (event: Event) => {
       const { detail } = event as CustomEvent<DeferredPromiseEventDetail<T>>
-      if (!isRelevantStreamId(id, detail.id)) return
+      const streamId = detail.id
+      const cacheHasStream =
+        isInitialSsrStreamPending() && deferralCache.has(streamId)
+      if (!isRelevantStreamId(id, streamId) && !cacheHasStream) return
       window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
 
       if (
         consumeStreamedPayload(
-          detail.id,
+          streamId,
           deferralCache,
           announced,
           resolve,
@@ -559,9 +659,11 @@ function resolveDeferredPromise<T>(
         return
       }
 
-      announced?.delete(detail.id)
-      if (detail.error) return reject(new Error(detail.error))
-      resolve(detail.data!)
+      announced?.delete(streamId)
+      const resolved = resolveStreamRefPayload(detail)
+      if (!resolved) return reject(new Error("Unresolved streamed data ref"))
+      if (resolved.error) return reject(new Error(resolved.error))
+      resolve(resolved.data as T)
     }
 
     window.addEventListener(STREAMED_DATA_EVENT, onDataEvent)

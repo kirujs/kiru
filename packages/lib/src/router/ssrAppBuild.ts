@@ -3,7 +3,7 @@ import { renderMode } from "../globals.js"
 import { headlessRender } from "../headlessRender.js"
 import { createI18nRuntime, serializeI18nScript, type HydratedI18nPayload } from "./i18nContext.js"
 import { serializeDocumentHead } from "./meta.js"
-import { serializePageDataScript } from "./pageData.js"
+import { serializePageDataHeadScripts } from "./pageData.js"
 import { serializeRequestContextScript } from "./requestContext.js"
 import type { RouterPathPolicy } from "./pathPolicy.js"
 import { mergeRouteAndPageHead } from "./pageHead.js"
@@ -58,7 +58,7 @@ export async function renderStringWithDocument(
     streamHeadMeta ?? mergeRouteAndPageHead(match.route.head, undefined)
   const ctxScript = serializeRequestContextScript(requestContext)
   const pageDataScript =
-    pageData !== undefined ? serializePageDataScript(pageData) : ""
+    pageData !== undefined ? serializePageDataHeadScripts(pageData) : ""
   const i18nScript =
     i18nPayload !== undefined ? serializeI18nScript(i18nPayload) : ""
   return {

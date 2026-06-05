@@ -154,6 +154,13 @@ export default defineConfig({
     setupNodeEvents(on) {
       let prod: { close: () => Promise<void> } | null = null
 
+      on("task", {
+        async fetchHtml(url: string) {
+          const res = await fetch(url)
+          return res.text()
+        },
+      })
+
       on("before:run", async () => {
         if (!fs.existsSync(prodServerEntry)) {
           throw new Error(

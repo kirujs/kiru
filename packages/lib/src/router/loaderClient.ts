@@ -1,6 +1,7 @@
 import { requestToken } from "../globals.js"
 import { ensureKiruRouterRuntime } from "../kiruRuntime.js"
 import type { LoaderContext } from "./loaders.js"
+import { serializeLoaderRpcContext } from "./loaderRpc.js"
 import { buildLoaderRpcUrl } from "./rpcUrl.js"
 import { seedQueriesFromPayload } from "../remote/pageDataQueries.js"
 
@@ -25,7 +26,7 @@ export function ensureLoaderClient(): void {
           "Content-Type": "application/json",
           "x-kiru-token": requestToken.current,
         },
-        body: JSON.stringify(context),
+        body: JSON.stringify(serializeLoaderRpcContext(context)),
         signal: context.signal,
       })
       if (!r.ok) throw new Error("Loader request failed")

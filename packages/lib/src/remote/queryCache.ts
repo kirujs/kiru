@@ -1,4 +1,4 @@
-import { buildQueryCacheKey } from "./stableSerialize.js"
+import { buildQueryCacheKey, buildQueryWireRefId } from "./stableSerialize.js"
 import type { KiruQueryPatch } from "./queryPatch.js"
 
 export type QueryCacheEntry = {
@@ -20,6 +20,15 @@ export function getQueryCacheEntry(key: string): QueryCacheEntry | undefined {
   return cache.get(key)
 }
 
+/** Resolve SSR-seeded entries keyed by wire ref id as well as canonical cache keys. */
+export function getQueryCacheEntryForKey(
+  cacheKey: string
+): QueryCacheEntry | undefined {
+  const direct = cache.get(cacheKey)
+  if (direct) return direct
+  return cache.get(buildQueryWireRefId(cacheKey))
+}
+
 export function setQueryCacheEntry(key: string, data: unknown): void {
   cache.set(key, { data })
   notifySubscribers(key)
@@ -31,6 +40,20 @@ export function setQueryCachePending(
 ): void {
   const prev = cache.get(key)
   cache.set(key, { ...prev, data: prev?.data, pending })
+}
+
+/** Drop a stored in-flight promise without clearing resolved data. */
+export function clearQueryCachePendingIfMatches(
+  key: string,
+  pending: Promise<unknown>
+): void {
+  const entry = cache.get(key)
+  if (entry?.pending !== pending) return
+  if (entry.data !== undefined) {
+    setQueryCacheEntry(key, entry.data)
+  } else {
+    clearQueryCacheEntry(key)
+  }
 }
 
 export function clearQueryCacheEntry(key: string): void {
@@ -96,4 +119,7 @@ export function applyQueryPatches(patches: readonly KiruQueryPatch[]): void {
   }
 }
 
-export { buildQueryCacheKey }
+export {
+  buildQueryCacheKey,
+  buildQueryWireRefId,
+} from "./stableSerialize.js"

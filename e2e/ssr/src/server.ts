@@ -1,4 +1,5 @@
 import "virtual:kiru:remote-registry"
+import "./pages/threadboard/server/seed.js"
 import { createServer } from "node:http"
 import { createKiruHandler, toNodeListener } from "@kirujs/adapter-node"
 import i18n from "./i18n.js"
@@ -8,7 +9,7 @@ const isProd = process.env.NODE_ENV === "production"
 
 declare module "kiru/router" {
   interface CustomRequestContext {
-    user: { name: string } | null
+    user: { name: string; username: string } | null
   }
 }
 
@@ -25,8 +26,15 @@ const kiru = createKiruHandler({
   },
   getRequestContext: async (request) => {
     const name = request.headers.get("x-e2e-user-name")?.trim()
+    const username = request.headers.get("x-e2e-user-username")?.trim()
+    const anonymous = request.headers.get("x-e2e-anonymous") === "1"
+    if (anonymous) {
+      return { user: null }
+    }
+    const resolvedName = name || "E2E User"
+    const resolvedUsername = username || name || "e2e-user"
     return {
-      user: { name: name || "E2E User" },
+      user: { name: resolvedName, username: resolvedUsername },
     }
   },
 })

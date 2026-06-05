@@ -1,3 +1,6 @@
+import { runWithSsrRequestContext } from "../remote/action.js"
+import { traceQueryDispatch } from "../remote/queryTrace.dev.js"
+import { getSsrRemoteScopeEntry } from "../remote/ssrRemoteScope.js"
 import { unwrapKiruToken } from "../remote/token.js"
 import { attachQueriesToPayload } from "../remote/pageDataQueries.js"
 import {
@@ -159,8 +162,16 @@ export function createLoaderHandler(
       loaderCtx.signal = request.signal
 
       try {
+        traceQueryDispatch("loader:rpc-invoke-start", {
+          routeId,
+          ssrScope: getSsrRemoteScopeEntry() != null,
+        })
         beginQuerySnapshotCollector()
-        const data = await handler.__kiruInvoke(loaderCtx)
+        const data = await runWithSsrRequestContext(
+          context,
+          request.signal,
+          () => handler.__kiruInvoke(loaderCtx)
+        )
         const queries = endQuerySnapshotCollector()
         const payload = attachQueriesToPayload(data, queries)
         return new Response(JSON.stringify(payload), {

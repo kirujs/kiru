@@ -4,7 +4,22 @@ import {
   STREAMED_DATA_DESCENDANTS,
   STREAMED_DATA_EVENT,
 } from "../../constants.js"
-import { clearStreamedSsrClientState } from "../../router/pageData.js"
+import {
+  parseKDataScriptsFromDocument,
+  serializeKDataScript,
+} from "../../router/dataRefs.js"
+import {
+  buildQueryCacheKey,
+  buildQueryWireRefId,
+  clearAllQueryCache,
+  getQueryCacheEntryForKey,
+} from "../../remote/queryCache.js"
+import {
+  clearStreamedSsrClientState,
+  readHydratedPageData,
+  resetHydratedPageData,
+} from "../../router/pageData.js"
+import { resetClientKDataStore } from "../../router/dataRefs.js"
 import { renderMode } from "../../globals.js"
 import { withJSDOM } from "./jsdom.js"
 
@@ -100,6 +115,93 @@ describe("resource streamed SSR client hydration", () => {
       )
 
       renderMode.current = prev
+    })
+  })
+
+  it("resolves streamed nested $$ref payloads against k-data store", async () => {
+    await withJSDOM(async (container, kiru) => {
+      const cache = new window.Map<
+        string,
+        { data?: unknown; error?: string }
+      >()
+      ;(window as unknown as Record<string, unknown>)[STREAMED_DATA_EVENT] =
+        cache
+
+      const queryId = "r:test:reviews"
+      const wireRefId = buildQueryWireRefId(buildQueryCacheKey(queryId, null))
+      const payload = ["from k-data"]
+      document.head.innerHTML = serializeKDataScript(wireRefId, { data: payload })
+      parseKDataScriptsFromDocument()
+
+      let loaderCalls = 0
+      let reviews!: ReturnType<typeof kiru.resource<string[]>>
+
+      function ReviewsCard() {
+        reviews = kiru.resource(() => {
+          loaderCalls++
+          return Promise.resolve(["client fetch"])
+        })
+        return () => (
+          <span data-testid="reviews">{reviews.value?.[0] ?? ""}</span>
+        )
+      }
+
+      const prev = renderMode.current
+      renderMode.current = "dom"
+      kiru.mount(<ReviewsCard />, container)
+      await waitForMicrotask()
+
+      cache.set(reviews.promise.id, {
+        data: { $$ref: wireRefId },
+      })
+      window.dispatchEvent(
+        new window.CustomEvent(STREAMED_DATA_EVENT, {
+          detail: { id: reviews.promise.id, data: { $$ref: wireRefId } },
+        })
+      )
+
+      await reviews.promise
+      for (let i = 0; i < 5; i++) await waitForMicrotask()
+
+      assert.strictEqual(loaderCalls, 0)
+      assert.strictEqual(reviews.value?.[0], "from k-data")
+      renderMode.current = prev
+    })
+  })
+
+  it("seeds hydrate cache for resource input with optional undefined field", async () => {
+    await withJSDOM(async () => {
+      clearStreamedSsrClientState()
+      resetHydratedPageData()
+      clearAllQueryCache()
+      resetClientKDataStore()
+
+      const queryId = "r:test:feed"
+      const payload = [{ id: "p1", sort: "hot" }]
+      const wireRefId = buildQueryWireRefId(
+        buildQueryCacheKey(queryId, { sort: "hot" })
+      )
+      document.head.innerHTML =
+        serializeKDataScript(wireRefId, { data: payload }) +
+        `<script type="application/json" k-page-data>${JSON.stringify({
+          posts: { $$ref: wireRefId },
+        })}</script>`
+
+      readHydratedPageData()
+
+      const resourceCacheKey = buildQueryCacheKey(queryId, {
+        sort: "hot",
+        communitySlug: undefined,
+      })
+      assert.deepEqual(
+        getQueryCacheEntryForKey(resourceCacheKey)?.data,
+        payload,
+        "hydrate cache should resolve resource-shaped keys via wire ref"
+      )
+
+      clearAllQueryCache()
+      resetClientKDataStore()
+      resetHydratedPageData()
     })
   })
 

@@ -99,6 +99,84 @@ describe("SSR server", () => {
     )
   })
 
+  describe("Feed hydration demo (dev)", () => {
+    it("hydrates feed and late-streamed communities without clearing #app", () => {
+      const port = Cypress.env("port")
+      cy.visit(`http://127.0.0.1:${port}/feed-hydration-demo`)
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
+      cy.get("#app").invoke("text").should("have.length.gt", 20)
+      cy.get('[data-testid="feed-hydration-demo"]').should("exist")
+      cy.get('[data-testid="feed-post-hot-post-1"]').should(
+        "contain",
+        "hot post one"
+      )
+      cy.get('[data-testid="community-kiru"]').should("contain", "c/kiru")
+      cy.get('[data-testid="feed-fallback"]').should("not.exist")
+      cy.get('[data-testid="communities-fallback"]').should("not.exist")
+    })
+  })
+
+  describe("Threadboard replica (dev)", () => {
+    it("hydrates scoped layout + feed without wiping #app", () => {
+      const port = Cypress.env("port")
+      cy.visit(`http://127.0.0.1:${port}/threadboard`)
+      cy.window().its("__kiruAppWiped").should("eq", false)
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
+      cy.get("#app").children().should("have.length.at.least", 1)
+      cy.get('[data-testid="threadboard-layout"]').should("exist")
+      cy.get('[data-testid="threadboard-home"]').should("exist")
+      cy.get('[data-testid="feed-post-p-1"]').should(
+        "contain",
+        "How does query cache seeding work"
+      )
+      cy.get('[data-testid="community-kiru"]').should("contain", "c/kiru")
+      cy.get('[data-testid="feed-fallback"]').should("not.exist")
+      cy.get('[data-testid="communities-fallback"]').should("not.exist")
+      cy.window().then((w) => {
+        const trace = w.__kiruBootstrapTrace ?? []
+        const errors = trace.filter(
+          (e: { event: string }) =>
+            e.event.includes("error") || e.event === "mutation:empty"
+        )
+        expect(errors, JSON.stringify(trace, null, 2)).to.have.length(0)
+      })
+    })
+  })
+
+  describe("Query dedup demo (dev)", () => {
+    it("returns query-dedup-demo HTML smoke", () => {
+      const port = Cypress.env("port")
+      cy.request(`http://127.0.0.1:${port}/query-dedup-demo`).then((res) => {
+        expect(res.status).to.eq(200)
+        expect(res.body).to.include("query-dedup-demo")
+        expect(res.body).to.include("hot-1")
+        expect(res.body).to.include("new-1")
+      })
+    })
+
+    it("hydrates dual query lists and survives client navigation", () => {
+      const port = Cypress.env("port")
+      cy.request(`http://127.0.0.1:${port}/query-dedup-demo`).then((res) => {
+        expect(res.body).to.include("hot-resource-hot")
+        expect((res.body.match(/k-data="/g) ?? []).length).to.eq(2)
+      })
+      cy.visit(`http://127.0.0.1:${port}/query-dedup-demo`)
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
+      cy.get('[data-testid="hot-loader-hot-1"]').should("contain", "hot-1")
+      cy.get('[data-testid="new-loader-new-1"]').should("contain", "new-1")
+
+      cy.contains("a", "Home").click()
+      cy.location("pathname").should("eq", "/")
+      cy.get('[data-testid="ssr-home"]').should("exist")
+
+      cy.contains("a", "Query dedup").click()
+      cy.location("pathname").should("eq", "/query-dedup-demo")
+      cy.get('[data-testid="hot-loader-hot-1"]').should("contain", "hot-1")
+      cy.get('[data-testid="new-loader-new-1"]').should("contain", "new-1")
+      cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
+    })
+  })
+
   it("renders serverLoader data on first paint and after client navigation", () => {
     const port = Cypress.env("port")
     cy.request(`http://127.0.0.1:${port}/loaders/server`).then((res) => {

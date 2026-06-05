@@ -27,13 +27,16 @@ import {
 } from "./abortScope.js"
 import {
   buildQueryCacheKey,
-  getQueryCacheEntry,
+  clearQueryCachePendingIfMatches,
+  getQueryCacheEntryForKey,
   setQueryCacheEntry,
   setQueryCachePending,
 } from "./queryCache.js"
+import { traceQueryDispatch } from "./queryTrace.dev.js"
 import { noteQueryCacheKey } from "./queryCacheTrack.js"
 import { dispatchQueryRpc } from "./remoteClientDispatch.js"
 import { queueQueryPatch } from "./queryPatch.js"
+import { registerQueryInjection } from "../ssr/queryInjection.js"
 import { recordQuerySnapshot } from "./querySnapshot.js"
 import {
   buildRemoteRequestEvent,
@@ -189,17 +192,50 @@ function createQueryInstance<Input, Output>(
 
   const runFetch = (): Promise<Output> => {
     noteQueryCacheKey(cacheKey)
-    const cached = getQueryCacheEntry(cacheKey)
+    const cached = getQueryCacheEntryForKey(cacheKey)
     if (cached?.data !== undefined && !cached.pending) {
+      traceQueryDispatch("runFetch", {
+        queryId,
+        cacheKey,
+        path: "cache-data",
+        capturedInProcess: !!capturedInProcess,
+      })
+      if (typeof window === "undefined") {
+        registerQueryInjection(queryId, input === undefined ? null : input, {
+          ok: true,
+          data: cached.data,
+        })
+      }
       return Promise.resolve(cached.data as Output)
     }
     if (cached?.pending) {
-      return cached.pending as Promise<Output>
+      traceQueryDispatch("runFetch", {
+        queryId,
+        cacheKey,
+        path: "cache-pending",
+        capturedInProcess: !!capturedInProcess,
+      })
+      const pending = cached.pending as Promise<Output>
+      return pending.catch((err) => {
+        traceQueryDispatch("runFetch:pending-rejected", {
+          queryId,
+          cacheKey,
+          error: err instanceof Error ? err.message : String(err),
+        })
+        clearQueryCachePendingIfMatches(cacheKey, pending)
+        return runFetch()
+      })
     }
 
     const execution = getRemoteExecutionContext()
     const inProcess = capturedInProcess ?? resolveInProcessContext()
     if (inProcess) {
+      traceQueryDispatch("runFetch", {
+        queryId,
+        cacheKey,
+        path: "in-process",
+        capturedInProcess: !!capturedInProcess,
+      })
       return runWithRemoteAbortSignalAsync(inProcess.signal, async () => {
         const body = input === undefined ? null : input
         const signal = resolveRemoteFetchSignal(options) ?? inProcess.signal
@@ -239,6 +275,11 @@ function createQueryInstance<Input, Output>(
           handlerResult
         )
         if (typeof window === "undefined") {
+          registerQueryInjection(
+            queryId,
+            input === undefined ? null : input,
+            { ok: true, data: handlerResult }
+          )
           queueQueryPatch({
             queryId,
             input: input === undefined ? null : input,
@@ -250,7 +291,14 @@ function createQueryInstance<Input, Output>(
       })
     }
 
-    const p = (async () => {
+    traceQueryDispatch("runFetch", {
+      queryId,
+      cacheKey,
+      path: "rpc",
+      capturedInProcess: !!capturedInProcess,
+    })
+    let p!: Promise<Output>
+    p = (async () => {
       const data = await dispatchQueryRpc(
         queryId,
         input === undefined ? null : input,
@@ -258,7 +306,10 @@ function createQueryInstance<Input, Output>(
       )
       setQueryCacheEntry(cacheKey, data)
       return data as Output
-    })()
+    })().catch((err) => {
+      clearQueryCachePendingIfMatches(cacheKey, p)
+      throw err
+    })
     setQueryCachePending(cacheKey, p)
     return p
   }
@@ -284,7 +335,7 @@ function createQueryInstance<Input, Output>(
       }
     },
     optimistic(fn) {
-      const cached = getQueryCacheEntry(cacheKey)
+      const cached = getQueryCacheEntryForKey(cacheKey)
       const next = fn(cached?.data as Output | undefined)
       setQueryCacheEntry(cacheKey, next)
       return { ...instance, __kiruOptimisticOverride: next } as RemoteQueryOverride<
@@ -340,6 +391,10 @@ function createRemoteQuery<Input, Output>(
     const { callArgs, options } = peelRemoteCallArgs(args)
     const input = (isVoid ? undefined : callArgs[0]) as Input
     const capturedInProcess = resolveInProcessContext()
+    traceQueryDispatch("call", {
+      queryId: queryRef.__kiruQueryId ?? "",
+      capturedInProcess: !!capturedInProcess,
+    })
     return createQueryInstance(
       queryRef,
       input,
