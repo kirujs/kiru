@@ -61,6 +61,8 @@ export type SsgPrerenderCache = {
   routes: unknown
   buildMeta: SsgRouteBuildMeta
   manifest: SsgRouteManifest
+  /** Build-time manifest of route interceptors (optional). */
+  interceptorManifest?: unknown
 }
 
 /** `kiru/router` exports used during `runSsgPrerender`. */

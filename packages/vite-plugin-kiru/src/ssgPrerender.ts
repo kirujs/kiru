@@ -177,6 +177,24 @@ export async function runSsgPrerender(input: {
     }
 
     const manifest = compileRouteTree(routes)
+    let interceptorManifest: unknown = undefined
+    try {
+      const { discoverRouteInterceptors } =
+        (await vite.ssrLoadModule("kiru/router")) as SsgPrerenderRouter & {
+          discoverRouteInterceptors: (
+            manifest: unknown,
+            loadModule: (loader: () => Promise<unknown>) => Promise<unknown>
+          ) => Promise<unknown>
+        }
+      interceptorManifest = await discoverRouteInterceptors(
+        manifest,
+        async (loader: () => Promise<unknown>) => loader()
+      )
+    } catch {
+      // Interceptor discovery is build validation only. Avoid failing builds if
+      // the Vite SSR module runner lifecycle prevents loading route modules here.
+      interceptorManifest = undefined
+    }
     const loadPageModule = async (route: {
       component: () => Promise<unknown>
     }) => route.component()
@@ -206,6 +224,7 @@ export async function runSsgPrerender(input: {
       routes,
       buildMeta,
       manifest,
+      interceptorManifest,
     }
   } finally {
     await vite.close()

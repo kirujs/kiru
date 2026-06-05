@@ -1,12 +1,12 @@
 import type { RouteMiddleware } from "kiru/router"
-import type { PageRoute } from "./routes.gen.js"
+import type { AppRoute } from "./routes.gen.js"
 
 declare module "kiru/router" {
   interface RouteMeta {
     requiresAuth?: boolean
-    unauthorizedRedirect?: PageRoute
+    unauthorizedRedirect?: AppRoute
     guestOnly?: boolean
-    guestRedirect?: PageRoute
+    guestRedirect?: AppRoute
   }
 }
 

@@ -68,7 +68,7 @@ export type RouteTreeChild = CreatedRoute<string> | CreatedRouteScope
  * ```ts
  * declare module "kiru/router" {
  *   interface RouteTree {
- *     routes: [typeof r0, typeof r1]
+ *     routes: AppRoute
  *   }
  * }
  * ```
@@ -76,18 +76,10 @@ export type RouteTreeChild = CreatedRoute<string> | CreatedRouteScope
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface RouteTree {}
 
-type RegisteredRoutes = RouteTree extends {
-  routes: infer R extends readonly CreatedRoute<string>[]
-}
-  ? R
-  : readonly never[]
-
-type AllRouteNodes = RegisteredRoutes[number]
-
 /** Union of registered logical paths; `never` when no registry is augmented. */
-export type AppRoutePath = [AllRouteNodes] extends [never]
-  ? never
-  : Extract<AllRouteNodes, CreatedRoute<string>>["path"]
+export type AppRoutePath = RouteTree extends { routes: infer R extends string }
+  ? R
+  : never
 
 export type ParamsForPath<P extends AppRoutePath> = RouteParams<P>
 

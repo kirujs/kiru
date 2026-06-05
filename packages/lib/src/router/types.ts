@@ -325,6 +325,15 @@ export interface RouteDefinitionConfig {
   error?: RouteLoader
 }
 
+export type RouteConfigModule<T extends Record<string, unknown>> = {
+  default?: T
+  config?: T
+} & Record<string, unknown>
+
+export type RouteConfigLoader<T extends Record<string, unknown>> = () => Promise<
+  RouteConfigModule<T>
+>
+
 /**
  * Metadata for file-based `{page}.config.ts` / `index.config.ts`.
  *
@@ -346,6 +355,13 @@ export interface RouteDefinition {
   method: "GET"
   path: string
   component: RouteLoader
+  /**
+   * Lazy config module loader for this leaf.
+   *
+   * When present, it is mutually exclusive with inline `static`, `head`, `meta`,
+   * `middleware`, and `error` on the same node (enforced by authoring helpers).
+   */
+  config?: RouteConfigLoader<RoutePageConfig>
   static?: boolean
   head?: RouteHeadMetaInput
   meta?: RouteMetaInput
@@ -363,6 +379,13 @@ export interface RouteScopeDefinition {
   static?: boolean
   layout?: RouteLoader
   notFound?: RouteLoader
+  /**
+   * Lazy config module loader for this scope.
+   *
+   * When present, it is mutually exclusive with inline `static`, `head`, `meta`,
+   * `middleware`, and `error` on the same node (enforced by authoring helpers).
+   */
+  config?: RouteConfigLoader<RouteScopeConfig>
   head?: RouteHeadMetaInput
   meta?: RouteMetaInput
   middleware?: RouteMiddlewareInput
@@ -414,6 +437,8 @@ export interface CompiledRouteScope {
   static: boolean
   layout?: RouteLoader
   notFound?: RouteLoader
+  /** Optional lazy config module for this scope. */
+  config?: RouteConfigLoader<RouteScopeConfig>
   /** Resolved head for this scope (ancestor chain + this layer). */
   head: RouteHeadMeta
   /** Resolved meta for this scope (ancestor chain + this layer). */
@@ -438,6 +463,8 @@ export interface CompiledRoute {
   params: string[]
   static: boolean
   component: RouteLoader
+  /** Optional lazy config module for this leaf. */
+  config?: RouteConfigLoader<RoutePageConfig>
   /** Ancestor scopes from root to parent (inclusive). */
   scopes: CompiledRouteScope[]
   /** Resolved scope + leaf declarative head (before page export merge). */

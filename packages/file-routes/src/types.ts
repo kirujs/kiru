@@ -44,7 +44,6 @@ export type FileRouteDirNode = {
   /** URL path segments contributed by ancestors (excluding route groups). */
   urlSegments: string[]
   layout?: string
-  middleware?: string
   error?: string
   notFound?: string
   page?: string

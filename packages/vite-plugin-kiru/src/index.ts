@@ -718,41 +718,14 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
             "utf8"
           )
 
-          const {
-            discoverRouteInterceptors,
-            INTERCEPTOR_MANIFEST_FILENAME,
-          } = await import("kiru/router")
-          const bindingsByPath = new Map(
-            routeBindings.map((b) => [b.pathname, b] as const)
-          )
-          const routeIdToPath = new Map(
-            manifest.routes.map((r: { id: string; path: string }) => [
-              r.id,
-              r.path,
-            ])
-          )
-          const interceptorManifest = await discoverRouteInterceptors(
-            manifest as import("kiru/router").RouteManifest,
-            async (loader: () => Promise<unknown>) => loader(),
-            {
-              getModuleKey: (ownerId, ownerKind) => {
-                if (ownerKind === "route") {
-                  const routePath = routeIdToPath.get(ownerId)
-                  const binding =
-                    routePath != null
-                      ? bindingsByPath.get(routePath)
-                      : undefined
-                  return binding?.pageModuleKey ?? ownerId
-                }
-                return routeBindings[0]?.layoutModuleKeys[0] ?? ownerId
-              },
-            }
-          )
-          await fs.writeFile(
-            path.join(state.outDir, INTERCEPTOR_MANIFEST_FILENAME),
-            JSON.stringify(interceptorManifest, null, 2),
-            "utf8"
-          )
+          const { INTERCEPTOR_MANIFEST_FILENAME } = await import("kiru/router")
+          if (cache.interceptorManifest) {
+            await fs.writeFile(
+              path.join(state.outDir, INTERCEPTOR_MANIFEST_FILENAME),
+              JSON.stringify(cache.interceptorManifest, null, 2),
+              "utf8"
+            )
+          }
         }
 
         for (const output of outputs) {

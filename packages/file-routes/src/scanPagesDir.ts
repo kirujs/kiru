@@ -16,7 +16,6 @@ import {
   DEFAULT_PAGE_FILES,
 } from "./types.js"
 
-const MIDDLEWARE_RE = /^middleware\.ts$/
 const SCOPE_CONFIG_RE = /^scope\.config\.(ts|js)$/
 const PAGE_CONFIG_RE = /^(.+)\.config\.(ts|js)$/
 
@@ -127,14 +126,6 @@ export async function scanPagesDir(
         throw new Error(`[file-routes] Multiple layout files in ${node.dirPath}`)
       }
       node.layout = absFile.replace(/\\/g, "/")
-      continue
-    }
-
-    if (MIDDLEWARE_RE.test(fileName)) {
-      if (node.middleware) {
-        throw new Error(`[file-routes] Multiple middleware files in ${node.dirPath}`)
-      }
-      node.middleware = absFile.replace(/\\/g, "/")
       continue
     }
 

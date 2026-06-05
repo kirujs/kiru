@@ -37,6 +37,7 @@ import { RouteMiddlewareHttpError } from "./types.js"
 import { runEnterGuards, runGuards, toRedirect } from "./runNavigationGuards.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { collectMiddlewareChain, mergeRouteMeta } from "./routeMeta.js"
+import { ensureResolvedRouteLayersForMatch } from "./routeLayerResolution.js"
 import { runRouteMiddleware, toMiddlewareRedirect } from "./routeMiddleware.js"
 import {
   findMatchingInterceptor,
@@ -483,6 +484,9 @@ export function createNavigateInternal(
         ? snapshotFromParts(fromParts, fromMatch.params)
         : null
 
+      if (toMatch) {
+        await ensureResolvedRouteLayersForMatch(toMatch)
+      }
       if (toMatch && collectMiddlewareChain(toMatch).length > 0) {
         const segments = toMatch ? buildMatchSegments(toMatch) : []
         const mwTo = toMatch

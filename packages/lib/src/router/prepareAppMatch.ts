@@ -5,6 +5,7 @@ import {
   buildMiddlewareLocation,
 } from "./navigation.js"
 import { mergeRouteMeta } from "./routeMeta.js"
+import { ensureResolvedRouteLayersForMatch } from "./routeLayerResolution.js"
 import {
   runRouteMiddleware,
   toMiddlewareRedirect,
@@ -92,6 +93,7 @@ export async function runMiddlewareForPath(
   requestContext: CustomRequestContext,
   request?: Request
 ): Promise<MiddlewareStepResult | PrepareError> {
+  await ensureResolvedRouteLayersForMatch(routeMatch)
   const href = `${path}${requestUrl.search}${requestUrl.hash}`
   const segments = buildMatchSegments(routeMatch)
   const mwTo = buildMiddlewareLocation(
@@ -156,6 +158,8 @@ export async function buildPreparedAppForMatch(
 
   const renderSignal = loaderSignalFromRequest(request)
   throwIfAborted(renderSignal)
+
+  await ensureResolvedRouteLayersForMatch(routeMatch)
 
   const loaderCtx = buildLoaderContext({
     params: searchCheck.params,

@@ -7,6 +7,8 @@ import type {
   RouteNodeDefinition,
   RouteScopeDefinition,
   RouteScopeConfig,
+  RouteConfigLoader,
+  RoutePageConfig,
   RouteTreeDefinition,
 } from "./types.js"
 import type { CreatedRoute, CreatedRouteScope, RouteTreeChild } from "./routePaths.js"
@@ -19,6 +21,16 @@ type RouteDefinitionConfigWithMiddleware = Omit<
   RouteDefinitionConfig,
   "middleware"
 >
+
+type RouteDefinitionConfigByLoader = {
+  component: RouteLoader
+  config: RouteConfigLoader<RoutePageConfig>
+  static?: never
+  head?: never
+  meta?: never
+  middleware?: never
+  error?: never
+}
 
 function buildRoute<P extends string>(
   path: P,
@@ -68,12 +80,25 @@ export function createRoute<const P extends string>(
 ): CreatedRoute<P>
 export function createRoute<const P extends string>(
   path: P,
-  value: RouteLoader | RouteDefinitionConfig
+  value: RouteLoader | RouteDefinitionConfig | RouteDefinitionConfigByLoader
 ): CreatedRoute<P>
 export function createRoute<const P extends string>(
   path: P,
-  value: RouteLoader | RouteDefinitionConfig
+  value: RouteLoader | RouteDefinitionConfig | RouteDefinitionConfigByLoader
 ): CreatedRoute<P> {
+  if (typeof value === "object" && value != null && "config" in value) {
+    if (!path.startsWith("/")) {
+      throw new Error(`Route paths must start with '/': ${path}`)
+    }
+    const cfg = value as RouteDefinitionConfigByLoader
+    return {
+      kind: "route",
+      method: "GET",
+      path,
+      component: cfg.component,
+      config: cfg.config,
+    } as CreatedRoute<P>
+  }
   return buildRoute(path, value)
 }
 
@@ -90,8 +115,30 @@ export function createRouteScope(
   config: RouteScopeConfigWithChildren & { middleware?: RouteMiddlewareInput }
 ): CreatedRouteScope
 export function createRouteScope(
+  config: RouteScopeConfigWithChildren & {
+    config: RouteConfigLoader<RouteScopeConfig>
+    static?: never
+    head?: never
+    meta?: never
+    middleware?: never
+    error?: never
+  }
+): CreatedRouteScope
+export function createRouteScope(
   config: RouteScopeConfigWithChildren & { middleware?: RouteMiddlewareInput }
 ): CreatedRouteScope {
+  if (typeof config === "object" && config != null && "config" in config) {
+    const cfg = config as RouteScopeConfigWithChildren & {
+      config: RouteConfigLoader<RouteScopeConfig>
+    }
+    return {
+      kind: "scope",
+      layout: cfg.layout,
+      notFound: cfg.notFound,
+      config: cfg.config,
+      children: cfg.children as RouteNodeDefinition[],
+    }
+  }
   return {
     kind: "scope",
     static: config.static,
@@ -118,8 +165,31 @@ export function createRouteTree(
   config: RouteScopeConfigWithChildren & { middleware?: RouteMiddlewareInput }
 ): RouteTreeDefinition
 export function createRouteTree(
+  config: RouteScopeConfigWithChildren & {
+    config: RouteConfigLoader<RouteScopeConfig>
+    static?: never
+    head?: never
+    meta?: never
+    middleware?: never
+    error?: never
+  }
+): RouteTreeDefinition
+export function createRouteTree(
   config: RouteScopeConfigWithChildren & { middleware?: RouteMiddlewareInput }
 ): RouteTreeDefinition {
+  if (typeof config === "object" && config != null && "config" in config) {
+    const cfg = config as RouteScopeConfigWithChildren & {
+      config: RouteConfigLoader<RouteScopeConfig>
+    }
+    const root: RouteScopeDefinition = {
+      kind: "scope",
+      layout: cfg.layout,
+      notFound: cfg.notFound,
+      config: cfg.config,
+      children: cfg.children as RouteNodeDefinition[],
+    }
+    return { root }
+  }
   const root: RouteScopeDefinition = {
     kind: "scope",
     static: config.static,
