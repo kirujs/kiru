@@ -185,7 +185,7 @@ export type InterceptorOptions<
   render: InterceptorRenderFn<P, Data>
 }
 
-/** Declarative interceptor config for `defineRouteInterceptors`. */
+/** Declarative interceptor config for `defineInterceptors`. */
 export type RouteInterceptorDefinition<
   P extends string = string,
   Data = unknown
@@ -203,6 +203,10 @@ export type InterceptorHandle = {
   isActive: Kiru.Signal<boolean>
   isPending: Kiru.Signal<boolean>
   restore: () => void
+  /** Slot key from `defineInterceptors`. */
+  readonly slot: string
+  /** Target route path pattern. */
+  readonly path: NavigatePath
 }
 
 function encodeParamValue(value: string): string {

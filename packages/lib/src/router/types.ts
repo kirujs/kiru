@@ -1,5 +1,17 @@
+import type { InterceptorHandle } from "./routePaths.js"
+
+/** Who owns a co-exported `interceptors` module (layout scope or leaf route). */
+export type InterceptorOwner =
+  | { kind: "scope"; scopeId: string }
+  | { kind: "route"; routeId: string }
+
 /** Default export or bare component from a route page module. */
-export type RouteModule = { default: Kiru.Component<any> } | Kiru.Component<any>
+export type RouteModule =
+  | Kiru.Component<any>
+  | {
+      default: Kiru.Component<any>
+      interceptors?: Record<string, InterceptorHandle>
+    }
 
 /** Dynamic `import()` of a page, layout, error, or `notFound` module. */
 export type RouteLoader = () => Promise<RouteModule>

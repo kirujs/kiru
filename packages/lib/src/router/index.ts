@@ -5,6 +5,7 @@ export * from "./resolveRouteConfig.js"
 export * from "./routePaths.js"
 export * from "./requestUrl.js"
 export * from "./routeBuildMeta.js"
+export * from "./discoverRouteInterceptors.js"
 export * from "./loaders.js"
 export {
   onStaticLoaderPrerenderCapture,

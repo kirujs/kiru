@@ -217,6 +217,7 @@ export async function buildClientOutletSubtree(
     return tree && routeModule
       ? buildRoutedSubtree(tree.layoutModules, routeModule, leafProps, {
           onLeafRenderError,
+          match,
         })
       : null
   } catch (err) {

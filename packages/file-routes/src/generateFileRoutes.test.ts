@@ -19,14 +19,20 @@ describe("generateFileRoutes", () => {
     assert.ok(source.includes("interface RouteTree"))
     assert.ok(source.includes("collectRouteMiddlewareModule"))
     assert.ok(source.includes("guarded/middleware"))
-    assert.deepStrictEqual(
-      [...routes.keys()].sort(),
-      ["/", "/about", "/guarded"]
-    )
+    assert.deepStrictEqual([...routes.keys()].sort(), [
+      "/",
+      "/about",
+      "/guarded",
+    ])
 
     const { writeFile } = await import("node:fs/promises")
     const tmpRoutes = path.join(fixtures, "basic", "routes.gen.ts")
-    await writeFile(tmpRoutes, source, "utf8")
+    const { source: fixtureSource } = await generateFileRoutes({
+      pagesDir,
+      outFile,
+      augmentRouteTree: false,
+    })
+    await writeFile(tmpRoutes, fixtureSource, "utf8")
     const loaded = await import(pathToFileUrl(tmpRoutes))
     const manifest = compileRouteTree(loaded.routes)
     assert.ok(matchRoute(manifest, "/"))
@@ -43,12 +49,18 @@ describe("generateFileRoutes", () => {
     const outFile = path.join(fixtures, "advanced", "routes.gen.ts")
     const { routes } = await generateFileRoutes({ pagesDir, outFile })
 
-    assert.deepStrictEqual(
-      [...routes.keys()].sort(),
-      ["/", "/blog/[slug]", "/docs/[...slug]", "/pricing"]
-    )
+    assert.deepStrictEqual([...routes.keys()].sort(), [
+      "/",
+      "/blog/[slug]",
+      "/docs/[...slug]",
+      "/pricing",
+    ])
 
-    const { source } = await generateFileRoutes({ pagesDir, outFile })
+    const { source } = await generateFileRoutes({
+      pagesDir,
+      outFile,
+      augmentRouteTree: false,
+    })
     const { writeFile } = await import("node:fs/promises")
     const tmpRoutes = path.join(fixtures, "advanced", "routes.gen.ts")
     await writeFile(tmpRoutes, source, "utf8")
@@ -102,7 +114,11 @@ export const extendRoutes = [
   it("generates route and scope config spreads", async () => {
     const pagesDir = path.join(fixtures, "config", "pages")
     const outFile = path.join(fixtures, "config", "routes.gen.ts")
-    const { source } = await generateFileRoutes({ pagesDir, outFile })
+    const { source } = await generateFileRoutes({
+      pagesDir,
+      outFile,
+      augmentRouteTree: false,
+    })
 
     assert.ok(source.includes("page.config"))
     assert.ok(source.includes("...resolveRouteConfig(__cfg_"))
@@ -111,7 +127,7 @@ export const extendRoutes = [
     assert.ok(source.includes("scope.config"))
     assert.ok(source.includes("static: true") || source.includes("__cfg_"))
     assert.ok(source.includes("satisfies RoutePageConfig") === false)
-    assert.ok(source.includes("createRoute(\"/about\", {"))
+    assert.ok(source.includes('createRoute("/about", {'))
     assert.ok(source.includes("createRouteScope({"))
 
     const { writeFile } = await import("node:fs/promises")
@@ -122,7 +138,23 @@ export const extendRoutes = [
     assert.equal(about.route.static, true)
     assert.equal(about.route.head.title, "About (config)")
     const admin = matchRoute(manifest, "/admin")!
-    assert.equal(admin.route.meta.requiresAuth, true)
+    assert.equal(
+      (admin.route.meta as { requiresAuth?: boolean }).requiresAuth,
+      true
+    )
+  })
+
+  it("can omit RouteTree augmentation for fixtures", async () => {
+    const pagesDir = path.join(fixtures, "basic", "pages")
+    const outFile = path.join(fixtures, "basic", "routes.gen.ts")
+    const { source } = await generateFileRoutes({
+      pagesDir,
+      outFile,
+      augmentRouteTree: false,
+    })
+    assert.ok(!source.includes("interface RouteTree"))
+    assert.ok(source.includes("export { routes, type PageRoute }"))
+    assert.ok(source.includes("type PageRoute ="))
   })
 
   it("accepts custom layout and not-found filename patterns", async () => {

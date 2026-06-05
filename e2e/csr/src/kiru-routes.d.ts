@@ -1,6 +1,6 @@
 import type { CreatedRoute } from "kiru/router"
 
-/** Leaf route paths for type-safe `Link` and `defineRouteInterceptors`. */
+/** Leaf route paths for type-safe `Link` and `defineInterceptors`. */
 declare module "kiru/router" {
   interface RouteTree {
     routes: [

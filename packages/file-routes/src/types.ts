@@ -28,6 +28,12 @@ export type FileRoutesOptions = {
   errorFiles?: string[]
   /** Glob patterns for not-found files in each directory. */
   notFoundFiles?: string[]
+  /**
+   * Emit `declare module "kiru/router" { interface RouteTree { ... } }`.
+   * Disable for test fixtures so multiple generated files do not clash in the IDE.
+   * @default true
+   */
+  augmentRouteTree?: boolean
 }
 
 export type FileRouteDirNode = {

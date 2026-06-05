@@ -1,14 +1,10 @@
 import { defineSiteConfig } from "kiru/router"
 
-/**
- * Used at `vite build` for the hybrid client bundle: prerenders `/docs` and
- * writes sitemap.xml / robots.txt next to other static assets in `dist/client`.
- */
 export const site = defineSiteConfig({
-  url: "https://kiru-ssr-sandbox.example",
+  url: "https://threadboard.kiru.example",
   sitemap: {
-    include: ["/users/[id]"],
-    exclude: ["/break-ssr", "/break-ssr-leaf"],
+    include: ["/u/[username]"],
+    exclude: ["/dev/errors"],
   },
   robots: true,
 })

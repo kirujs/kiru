@@ -1,13 +1,19 @@
 import { createElement } from "../element.js"
+import {
+  InterceptorModuleShell,
+  InterceptorOwnerProvider,
+} from "./interceptorOwner.js"
 import { resolveNotFoundScopes } from "./manifest.js"
 import type { KiruLoader, PageProps } from "./loaders.js"
 import type {
   ErrorPageProps,
+  InterceptorOwner,
   RouteManifest,
   RouteMatch,
   RouteModule,
 } from "./types.js"
 import { toRenderError } from "./types.js"
+import type { InterceptorHandle } from "./routePaths.js"
 
 export type LeafRouteProps =
   | ErrorPageProps
@@ -66,9 +72,12 @@ export async function renderClientErrorOutlet(
   let tree = match != null ? await loadErrorRouteTree(match) : null
   if (!tree) tree = await loadRootErrorRouteTree(manifest)
   if (!tree) return null
-  return buildRoutedSubtree(tree.layoutModules, tree.routeModule, {
-    error: renderErr,
-  })
+  return buildRoutedSubtree(
+    tree.layoutModules,
+    tree.routeModule,
+    { error: renderErr },
+    { match }
+  )
 }
 
 export async function loadRootErrorRouteTree(
@@ -113,6 +122,33 @@ function wrapComponentWithRenderErrorCapture(
 export type BuildRoutedSubtreeOptions = {
   /** Client-only: route render throws invoke this instead of bubbling to Cypress. */
   onLeafRenderError?: (err: unknown) => void
+  /** When set, co-exported `interceptors` are wired with owner-aware Outlets. */
+  match?: RouteMatch | null
+}
+
+function readInterceptorsFromModule(
+  module: RouteModule
+): Record<string, InterceptorHandle> | null {
+  if (typeof module === "function") return null
+  return module.interceptors ?? null
+}
+
+function wrapWithInterceptorOwner(
+  module: RouteModule,
+  owner: InterceptorOwner,
+  inner: Kiru.Element
+): Kiru.Element {
+  const handles = readInterceptorsFromModule(module)
+  let content = inner
+  if (handles) {
+    const slotNames = Object.keys(handles)
+    content = createElement(InterceptorModuleShell, {
+      handles,
+      slotNames,
+      children: content,
+    })
+  }
+  return createElement(InterceptorOwnerProvider, { owner, children: content })
 }
 
 /** Layout stack + page only (no RouterProvider). Matches SSR/SSG body HTML. */
@@ -127,9 +163,28 @@ export function buildRoutedSubtree(
     leaf = wrapComponentWithRenderErrorCapture(leaf, options.onLeafRenderError)
   }
   let app = createElement(leaf, (leafProps ?? {}) as Record<string, unknown>)
-  for (const module of layoutModules.slice().reverse()) {
+  const match = options?.match ?? null
+
+  if (match) {
+    app = wrapWithInterceptorOwner(routeModule, {
+      kind: "route",
+      routeId: match.route.id,
+    }, app)
+  }
+
+  const scopes = match?.route.scopes ?? []
+  for (let i = layoutModules.length - 1; i >= 0; i--) {
+    const module = layoutModules[i]
     if (!module) continue
     app = createElement(asComponent(module), { children: app })
+    const scope = scopes[i]
+    if (match && scope) {
+      app = wrapWithInterceptorOwner(
+        module,
+        { kind: "scope", scopeId: scope.id },
+        app
+      )
+    }
   }
   return app
 }

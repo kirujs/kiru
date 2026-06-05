@@ -1,11 +1,12 @@
 import type { RouteMiddleware } from "kiru/router"
+import type { PageRoute } from "./routes.gen.js"
 
 declare module "kiru/router" {
   interface RouteMeta {
     requiresAuth?: boolean
-    unauthorizedRedirect?: string
+    unauthorizedRedirect?: PageRoute
     guestOnly?: boolean
-    guestRedirect?: string
+    guestRedirect?: PageRoute
   }
 }
 
@@ -25,10 +26,10 @@ export const guestOnly: RouteMiddleware = ({ context, to }) => {
   if (!to.meta.guestOnly) return
   if (!context.user) return
   const dest =
-    typeof to.meta.guestRedirect === "string" ? to.meta.guestRedirect : "/todos"
+    typeof to.meta.guestRedirect === "string" ? to.meta.guestRedirect : "/"
   return { redirect: dest }
 }
 
 export const blockUserZero: RouteMiddleware = ({ to }) => {
-  if (to.params.id === "0") return { redirect: "/about" }
+  if (to.params.username === "0") return { redirect: "/about" }
 }

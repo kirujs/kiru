@@ -21,6 +21,7 @@ import {
 } from "./routePaths.js"
 import type {
   CustomRequestContext,
+  InterceptorOwner,
   RouteInterceptState,
   RouteLocation,
   RouteMatch,
@@ -31,7 +32,7 @@ import type { RouterRuntime } from "./routerRuntime.js"
 
 export type InterceptorRegistration = {
   id: number
-  fromRouteId: string
+  owner: InterceptorOwner
   targetPath: string
   load?: InterceptorOptions<string>["load"]
   render: InterceptorOptions<string>["render"]
@@ -150,20 +151,30 @@ export async function prefetchInterceptorLoad(
   }
 }
 
+export function registrationMatchesFrom(
+  registration: InterceptorRegistration,
+  fromMatch: RouteMatch
+): boolean {
+  const owner = registration.owner
+  if (owner.kind === "route") {
+    return owner.routeId === fromMatch.route.id
+  }
+  return fromMatch.route.scopes.some((scope) => scope.id === owner.scopeId)
+}
+
 export function findMatchingInterceptor(
   registrations: readonly InterceptorRegistration[],
   fromMatch: RouteMatch,
   toMatch: RouteMatch
 ): InterceptorRegistration | null {
-  for (const reg of registrations) {
-    if (
-      reg.fromRouteId === fromMatch.route.id &&
+  const matching = registrations.filter(
+    (reg) =>
+      registrationMatchesFrom(reg, fromMatch) &&
       reg.targetPath === toMatch.route.path
-    ) {
-      return reg
-    }
-  }
-  return null
+  )
+  if (matching.length === 0) return null
+  const routeOwned = matching.find((reg) => reg.owner.kind === "route")
+  return routeOwned ?? matching[0]!
 }
 
 export function assertInterceptorSetupContext(): void {
@@ -179,7 +190,7 @@ export function assertInterceptorSetupContext(): void {
 function validateTargetPath(manifest: RouteManifest, target: string): void {
   if (!manifest.routes.some((r) => r.path === target)) {
     throw new Error(
-      `[kiru] defineRouteInterceptors path "${target}" does not match any route in the manifest`
+      `[kiru] defineInterceptors path "${target}" does not match any route in the manifest`
     )
   }
 }
@@ -209,7 +220,7 @@ export function buildInterceptorRuntimeDeps(
   const buildTargetLocation = runtime.buildTargetLocation
   if (!registrations || !dismissIntercept || !buildTargetLocation) {
     throw new Error(
-      "[kiru] defineRouteInterceptors requires createRouter (client history mode)"
+      "[kiru] defineInterceptors requires createRouter (client history mode)"
     )
   }
   return {
@@ -226,22 +237,29 @@ export function buildInterceptorRuntimeDeps(
 
 let nextRegistrationId = 1
 
+function ownerRegistrationKey(owner: InterceptorOwner, target: string): string {
+  return owner.kind === "route"
+    ? `route:${owner.routeId}:${target}`
+    : `scope:${owner.scopeId}:${target}`
+}
+
 export function registerRouteInterceptor<P extends NavigatePath>(
   deps: InterceptorRuntimeDeps,
   target: P,
   options: InterceptorOptions<P>,
-  fromRouteId: string,
+  owner: InterceptorOwner,
   signals?: RouteInterceptorSignals
 ): InterceptorHandle {
   validateTargetPath(deps.manifest, target)
 
+  const ownerKey = ownerRegistrationKey(owner, target)
   const existing = deps.registrations.find(
-    (r) => r.fromRouteId === fromRouteId && r.targetPath === target
+    (r) => ownerRegistrationKey(r.owner, r.targetPath) === ownerKey
   )
   if (existing && __DEV__) {
     warnOnce(
-      `intercept-dup-${fromRouteId}-${target}`,
-      `[kiru] Duplicate route interceptor for from "${fromRouteId}" → "${target}"`
+      `intercept-dup-${ownerKey}`,
+      `[kiru] Duplicate route interceptor for owner "${ownerKey}"`
     )
   }
 
@@ -251,7 +269,7 @@ export function registerRouteInterceptor<P extends NavigatePath>(
 
   const registration: InterceptorRegistration = {
     id,
-    fromRouteId,
+    owner,
     targetPath: target,
     load: options.load as InterceptorOptions<string>["load"],
     render: options.render as InterceptorOptions<string>["render"],
@@ -289,26 +307,33 @@ export function registerRouteInterceptor<P extends NavigatePath>(
     }
   }
 
-  return { Outlet, isActive, isPending, restore }
+  return {
+    Outlet,
+    isActive,
+    isPending,
+    restore,
+    slot: "",
+    path: target,
+  }
 }
 
 export function bindRouteInterceptorInSetup<P extends NavigatePath>(
   deps: InterceptorRuntimeDeps,
   target: P,
   options: InterceptorOptions<P>,
-  signals?: RouteInterceptorSignals
+  signals: RouteInterceptorSignals | undefined,
+  owner: InterceptorOwner
 ): InterceptorHandle {
   assertInterceptorSetupContext()
-  const fromRouteId = options.from ?? deps.getBackgroundMatch()?.route.id ?? "_"
   const handle = registerRouteInterceptor(
     deps,
     target,
     options,
-    fromRouteId,
+    owner,
     signals
   )
   onCleanup(() => {
-    unregisterRouteInterceptor(deps, target, fromRouteId, handle)
+    unregisterRouteInterceptor(deps, target, owner, handle)
   })
   return handle
 }
@@ -316,11 +341,12 @@ export function bindRouteInterceptorInSetup<P extends NavigatePath>(
 export function unregisterRouteInterceptor(
   deps: InterceptorRuntimeDeps,
   target: string,
-  fromRouteId: string,
+  owner: InterceptorOwner,
   handle: InterceptorHandle
 ): void {
+  const ownerKey = ownerRegistrationKey(owner, target)
   const reg = deps.registrations.find(
-    (r) => r.targetPath === target && r.fromRouteId === fromRouteId
+    (r) => ownerRegistrationKey(r.owner, r.targetPath) === ownerKey
   )
   if (reg) {
     clearInterceptorPrefetchForRegistration(reg.id)

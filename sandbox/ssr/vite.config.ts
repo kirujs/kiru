@@ -11,6 +11,7 @@ export default defineConfig({
     kiru({
       router: {
         serverEntry: "./src/server/index.ts",
+        fileRoutes: true,
         ssg: {
           routes: "./src/routes.ts",
           siteModule: "./src/site.config.{ts,js}",

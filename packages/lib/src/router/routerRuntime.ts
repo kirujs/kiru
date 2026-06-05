@@ -6,7 +6,7 @@ import type {
   InterceptorOptions,
   NavigatePath,
 } from "./routePaths.js"
-import type { RouteMatch } from "./types.js"
+import type { InterceptorOwner, RouteMatch } from "./types.js"
 import type {
   NavigationFailure,
   NavigationGuard,
@@ -50,7 +50,7 @@ export type RouterRuntime = {
   registerRouteInterceptor?: <P extends NavigatePath>(
     target: P,
     options: InterceptorOptions<P>,
-    fromRouteId?: string,
+    owner?: InterceptorOwner,
     signals?: import("./routeInterceptors.js").RouteInterceptorSignals
   ) => InterceptorHandle
   getRouteInterceptorRegistrations?: () => readonly InterceptorRegistration[]

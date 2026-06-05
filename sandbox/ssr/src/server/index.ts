@@ -1,4 +1,5 @@
 import "virtual:kiru:remote-registry"
+import "./seed.js"
 import { createServer } from "node:http"
 import { createKiruHandler, toNodeListener } from "@kirujs/adapter-node"
 import { getUserFromRequest, type SandboxUser } from "./auth.js"

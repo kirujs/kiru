@@ -18,7 +18,7 @@ import {
 function reg(id: number): InterceptorRegistration {
   return {
     id,
-    fromRouteId: "route:0",
+    owner: { kind: "route", routeId: "route:0" },
     targetPath: "/photos/[id]",
     load: async () => ({ ok: id }),
     render: () => null,

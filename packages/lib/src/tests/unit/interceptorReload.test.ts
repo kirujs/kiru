@@ -55,7 +55,7 @@ describe("interceptor reload", () => {
         },
         render: () => null,
       },
-      fromMatch.route.id
+      { kind: "route", routeId: fromMatch.route.id }
     )
     const registration = runtime.getRouteInterceptorRegistrations!()[0]!
 

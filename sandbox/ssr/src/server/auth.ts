@@ -1,49 +1,36 @@
-/** Dummy auth for the sandbox — cookie sessions + in-memory data (dev only). */
+/** Cookie sessions for Threadboard (dev only). */
 
 import type { KiruSetCookie } from "kiru/remote"
+import { db } from "./db.js"
 
 export const SESSION_COOKIE = "sandbox_session"
-
 const SESSION_MAX_AGE = 604800
 
 export type SandboxUser = {
   id: string
+  username: string
   name: string
   email: string
-}
-
-/** Login credentials (password === username for demo accounts). */
-export const DUMMY_ACCOUNTS: Record<
-  string,
-  { id: string; password: string }
-> = {
-  demo: { id: "demo", password: "demo" },
-  admin: { id: "admin", password: "admin" },
+  bio: string
+  avatarUrl: string
 }
 
 const sessions = new Map<string, string>()
 
-/** Mutable profile fields (name / email) per user id. */
-const profiles = new Map<string, { name: string; email: string }>()
-
-function ensureProfile(userId: string): { name: string; email: string } | null {
-  if (!DUMMY_ACCOUNTS[userId] && !profiles.has(userId)) return null
-  let profile = profiles.get(userId)
-  if (!profile) {
-    const label = userId.charAt(0).toUpperCase() + userId.slice(1)
-    profile = {
-      name: userId === "demo" ? "Demo User" : userId === "admin" ? "Admin" : label,
-      email: `${userId}@sandbox.local`,
-    }
-    profiles.set(userId, profile)
+function toPublicUser(user: NonNullable<ReturnType<typeof db.users.get>>): SandboxUser {
+  return {
+    id: user.id,
+    username: user.username,
+    name: user.name,
+    email: user.email,
+    bio: user.bio,
+    avatarUrl: user.avatarUrl,
   }
-  return profile
 }
 
 export function userFromId(userId: string): SandboxUser | null {
-  const profile = ensureProfile(userId)
-  if (!profile) return null
-  return { id: userId, name: profile.name, email: profile.email }
+  const user = db.users.get(userId)
+  return user ? toPublicUser(user) : null
 }
 
 export function createSession(userId: string): string {
@@ -72,12 +59,26 @@ export function getSessionIdFromCookieHeader(
   return readCookie(cookieHeader ?? null, SESSION_COOKIE)
 }
 
-export function getUserFromCookieHeader(
-  cookieHeader: string | undefined
+export function validateCredentials(
+  username: string,
+  password: string
 ): SandboxUser | null {
-  const raw = getSessionIdFromCookieHeader(cookieHeader)
-  if (!raw) return null
-  return userForSessionId(raw)
+  const user = db.users.getByUsername(username.trim().toLowerCase())
+  if (!user || user.password !== password) return null
+  return toPublicUser(user)
+}
+
+export function updateUserProfile(
+  userId: string,
+  data: { name: string; email: string; bio?: string; avatarUrl?: string }
+): SandboxUser | null {
+  const updated = db.users.update(userId, {
+    name: data.name.trim(),
+    email: data.email.trim(),
+    bio: data.bio?.trim(),
+    avatarUrl: data.avatarUrl?.trim(),
+  })
+  return updated ? toPublicUser(updated) : null
 }
 
 function userForSessionId(sessionId: string): SandboxUser | null {
@@ -86,31 +87,7 @@ function userForSessionId(sessionId: string): SandboxUser | null {
   return userFromId(userId)
 }
 
-export function validateCredentials(
-  username: string,
-  password: string
-): SandboxUser | null {
-  const key = username.trim().toLowerCase()
-  const account = DUMMY_ACCOUNTS[key]
-  if (!account || account.password !== password) return null
-  return userFromId(account.id)
-}
-
-export function updateUserProfile(
-  userId: string,
-  data: { name: string; email: string }
-): SandboxUser | null {
-  const profile = ensureProfile(userId)
-  if (!profile) return null
-  profile.name = data.name.trim()
-  profile.email = data.email.trim()
-  return userFromId(userId)
-}
-
-function readCookie(
-  cookieHeader: string | null,
-  name: string
-): string | null {
+function readCookie(cookieHeader: string | null, name: string): string | null {
   if (!cookieHeader) return null
   for (const part of cookieHeader.split(";")) {
     const [k, ...rest] = part.trim().split("=")
@@ -119,7 +96,6 @@ function readCookie(
   return null
 }
 
-/** Set-Cookie spec for a new session (used by login form action). */
 export function sessionCookieSpec(sessionId: string): KiruSetCookie {
   return {
     name: SESSION_COOKIE,
@@ -131,7 +107,6 @@ export function sessionCookieSpec(sessionId: string): KiruSetCookie {
   }
 }
 
-/** Set-Cookie spec that clears the session cookie (logout). */
 export function clearSessionCookieSpec(): KiruSetCookie {
   return {
     name: SESSION_COOKIE,
@@ -141,4 +116,9 @@ export function clearSessionCookieSpec(): KiruSetCookie {
     sameSite: "Lax",
     httpOnly: true,
   }
+}
+
+/** Demo account usernames for login page hint. */
+export function listDemoUsernames(): string[] {
+  return db.users.list().map((u) => u.username)
 }

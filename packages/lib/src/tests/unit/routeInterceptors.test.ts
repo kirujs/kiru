@@ -12,13 +12,13 @@ import {
 } from "../../router/routeInterceptors.js"
 
 function reg(
-  fromRouteId: string,
+  owner: InterceptorRegistration["owner"],
   targetPath: string,
   id: number
 ): InterceptorRegistration {
   return {
     id,
-    fromRouteId,
+    owner,
     targetPath,
     render: () => null,
     isActive: {
@@ -42,11 +42,11 @@ describe("findMatchingInterceptor", () => {
     })
   )
 
-  it("matches from route id and target path pattern", () => {
+  it("matches route owner and target path pattern", () => {
     const from = matchRoute(manifest, "/photos", { baseUrl: "" })!
     const to = matchRoute(manifest, "/photos/abc", { baseUrl: "" })!
     const found = findMatchingInterceptor(
-      [reg(from.route.id, "/photos/[id]", 1)],
+      [reg({ kind: "route", routeId: from.route.id }, "/photos/[id]", 1)],
       from,
       to
     )
@@ -54,11 +54,57 @@ describe("findMatchingInterceptor", () => {
     assert.equal(found.id, 1)
   })
 
-  it("returns null when from route id differs", () => {
+  it("matches scope owner from any leaf in scope", () => {
+    const manifestWithLayout = compileRouteTree(
+      createRouteTree({
+        layout: async () => ({
+          default: () => null,
+          interceptors: undefined,
+        }),
+        children: [
+          createRoute("/", async () => ({ default: () => null })),
+          createRoute("/photos", async () => ({ default: () => null })),
+          createRoute("/photos/[id]", async () => ({ default: () => null })),
+        ],
+      })
+    )
+    const from = matchRoute(manifestWithLayout, "/", { baseUrl: "" })!
+    const to = matchRoute(manifestWithLayout, "/photos/abc", { baseUrl: "" })!
+    const scopeId = from.route.scopes[0]!.id
+    const found = findMatchingInterceptor(
+      [reg({ kind: "scope", scopeId }, "/photos/[id]", 2)],
+      from,
+      to
+    )
+    assert.ok(found)
+    assert.equal(found.id, 2)
+  })
+
+  it("prefers route owner over scope owner for same target", () => {
+    const from = matchRoute(manifest, "/photos", { baseUrl: "" })!
+    const to = matchRoute(manifest, "/photos/abc", { baseUrl: "" })!
+    const scopeId = from.route.scopes[0]?.id ?? "scope:0"
+    const found = findMatchingInterceptor(
+      [
+        reg({ kind: "scope", scopeId }, "/photos/[id]", 1),
+        reg({ kind: "route", routeId: from.route.id }, "/photos/[id]", 2),
+      ],
+      from,
+      to
+    )
+    assert.ok(found)
+    assert.equal(found.id, 2)
+  })
+
+  it("returns null when owner does not match from route", () => {
     const from = matchRoute(manifest, "/photos", { baseUrl: "" })!
     const to = matchRoute(manifest, "/photos/abc", { baseUrl: "" })!
     assert.equal(
-      findMatchingInterceptor([reg("route:999", "/photos/[id]", 1)], from, to),
+      findMatchingInterceptor(
+        [reg({ kind: "route", routeId: "route:999" }, "/photos/[id]", 1)],
+        from,
+        to
+      ),
       null
     )
   })
@@ -68,7 +114,7 @@ describe("findMatchingInterceptor", () => {
     const to = matchRoute(manifest, "/photos/abc", { baseUrl: "" })!
     assert.equal(
       findMatchingInterceptor(
-        [reg(from.route.id, "/photos/other", 1)],
+        [reg({ kind: "route", routeId: from.route.id }, "/photos/other", 1)],
         from,
         to
       ),

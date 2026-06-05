@@ -51,11 +51,12 @@ describe("interceptor prefetch", () => {
         load: async ({ params }) => ({ cached: params.id }),
         render: () => null,
       },
-      fromMatch.route.id
+      { kind: "route", routeId: fromMatch.route.id }
     )
     const registration = getRouterInstanceRuntime(router)
       .getRouteInterceptorRegistrations!().find(
-      (r) => r.fromRouteId === fromMatch.route.id
+      (r) =>
+        r.owner.kind === "route" && r.owner.routeId === fromMatch.route.id
     )!
 
     const toMatch = matchRoute(manifest, "/photos/7", { baseUrl: "" })!

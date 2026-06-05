@@ -102,13 +102,11 @@ import {
   applyInterceptLoadResult,
   runInterceptorLoad,
   syncAllInterceptorHandlesActive,
+  registrationMatchesFrom,
   type InterceptorRegistration,
   type KiruHistoryInterceptState,
 } from "./routeInterceptors.js"
-export {
-  defineRouteInterceptors,
-  routeInterceptor,
-} from "./defineRouteInterceptors.js"
+export { defineInterceptors } from "./defineInterceptors.js"
 import { ensureRouteAnnouncerInDocument } from "./navigationAnnouncer.js"
 import { validateSearchForMatch } from "./validateSearchForMatch.js"
 import { invalidateLoaderCache } from "./loaderCache.js"
@@ -708,7 +706,7 @@ export function createRouter({
           const bgMatch = match.peek()
           if (
             bgMatch &&
-            bgMatch.route.id === reg.fromRouteId &&
+            registrationMatchesFrom(reg, bgMatch) &&
             bgMatch.pathname === state.kiruIntercept.background.pathname
           ) {
             void commitInterceptLocation({
@@ -1020,8 +1018,10 @@ export function createRouter({
     getRouteInterceptorRegistrations: () => interceptorRegistrations,
     buildTargetLocation,
     dismissRouteIntercept: dismissIntercept,
-    registerRouteInterceptor(target, options, fromRouteId, signals) {
-      const from = fromRouteId ?? match.peek()?.route.id ?? "_"
+    registerRouteInterceptor(target, options, owner, signals) {
+      const resolvedOwner =
+        owner ??
+        ({ kind: "route", routeId: match.peek()?.route.id ?? "_" } as const)
       return registerRouteInterceptor(
         {
           manifest,
@@ -1036,7 +1036,7 @@ export function createRouter({
         },
         target,
         options,
-        from,
+        resolvedOwner,
         signals
       )
     },

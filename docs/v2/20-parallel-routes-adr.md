@@ -142,7 +142,7 @@ type SlotMatch = {
 
 ### 6. Intercepting
 
-**Shipped (CSR):** runtime source-side API — `defineRouteInterceptors` on the page that owns the outlet. See [22-route-interceptors.md](./22-route-interceptors.md). URL = target; background outlet unchanged; page-local `<handle.Outlet />` (no layout `slots` required).
+**Shipped (CSR):** module-co-located `defineInterceptors` on page or layout modules (scope/route owners). See [22-route-interceptors.md](./22-route-interceptors.md). URL = target; background outlet unchanged; Outlets auto-append by default.
 
 **Deferred (v2.1b):** declarative intercept on the **target** route + scope `slots.modal`, not filesystem `(.)`:
 
