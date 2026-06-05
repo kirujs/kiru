@@ -80,6 +80,8 @@ _Note: All contributions will be licensed under the project's license._
 
 - **Follow existing coding style and conventions.** Keep your code consistent with the style, formatting, and conventions in the rest of the code base. When possible, these will be enforced with a linter. Consistency makes it easier to review and modify in the future.
 
+- **Kiru components:** stateless components (no `signal` / `resource` / reactive hooks in setup) must **return JSX directly** — not `return () => JSX`. Reserve the setup → render-function pattern for stateful components. See [Component render shape](docs/v2/04-route-tree-and-matching.md#component-render-shape-required-convention).
+
 - **Include test coverage.** Add unit tests or UI tests when possible. Follow existing patterns for implementing tests.
 
 - **Update the example project** if one exists to exercise any new functionality you have added.

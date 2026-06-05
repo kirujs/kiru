@@ -67,7 +67,7 @@ export function isRemoteQuery(v: unknown): v is RemoteQuery<unknown, unknown> {
 export type RemoteQueryInstance<Input = unknown, Output = unknown> = {
   readonly input: Input
   readonly __kiruQueryId?: string
-  /** Set when built via `.withOverride()` for client-requested wire serialization. */
+  /** Set when built via `.optimistic()` for client-requested wire serialization. */
   readonly __kiruOptimisticOverride?: unknown
   then<TResult1 = Output, TResult2 = never>(
     onfulfilled?:
@@ -79,11 +79,15 @@ export type RemoteQueryInstance<Input = unknown, Output = unknown> = {
   ): Promise<TResult1 | TResult2>
   refresh(): Promise<Output>
   set(data: Output): void
-  withOverride(fn: (current: Output | undefined) => Output): RemoteQueryInstance<
+  optimistic(fn: (current: Output | undefined) => Output): RemoteQueryOverride<
     Input,
     Output
   >
 }
+
+/** Cache-bound query handle with an optimistic override for `updates()` wire. */
+export type RemoteQueryOverride<Input = unknown, Output = unknown> =
+  RemoteQueryInstance<Input, Output> & { readonly __kiruOptimisticOverride: Output }
 
 type RemoteQueryCall<Input, Output> = [Input] extends [void]
   ? (options?: RemoteCallOptions) => Promise<Output>
@@ -93,6 +97,10 @@ type RemoteQueryExtras<Input, Output> = [Input] extends [void]
   ? {
       set(data: Output): void
       refresh(): Promise<Output>
+      optimistic(fn: (current: Output | undefined) => Output): RemoteQueryOverride<
+        void,
+        Output
+      >
     }
   : { key: (input: Input) => RemoteQueryInstance<Input, Output> }
 
@@ -108,16 +116,22 @@ export function refreshQueryForWireEntry<Input, Output>(
   queryFn: RemoteQuery<Input, Output>,
   input: unknown
 ): Promise<Output> {
+  return queryHandleForWireEntry(queryFn, input).refresh() as Promise<Output>
+}
+
+/** Cache-bound handle for a wire entry (`requested()` iterator, refresh helpers). */
+export function queryHandleForWireEntry<Input, Output>(
+  queryFn: RemoteQuery<Input, Output>,
+  input: unknown
+): RemoteQueryInstance<Input, Output> | RemoteQuery<void, Output> {
   if (queryFn.__kiruQueryVoid) {
-    return (queryFn as unknown as RemoteQuery<void, Output>).refresh()
+    return queryFn as unknown as RemoteQuery<void, Output>
   }
   return (
     queryFn as RemoteQuery<Input, Output> & {
       key: (input: Input) => RemoteQueryInstance<Input, Output>
     }
-  )
-    .key(input as Input)
-    .refresh()
+  ).key(input as Input)
 }
 
 /** Prevent inference from flowing out of this position (schema drives `Input`). */
@@ -269,11 +283,14 @@ function createQueryInstance<Input, Output>(
         })
       }
     },
-    withOverride(fn) {
+    optimistic(fn) {
       const cached = getQueryCacheEntry(cacheKey)
       const next = fn(cached?.data as Output | undefined)
       setQueryCacheEntry(cacheKey, next)
-      return { ...instance, __kiruOptimisticOverride: next }
+      return { ...instance, __kiruOptimisticOverride: next } as RemoteQueryOverride<
+        Input,
+        Output
+      >
     },
   }
   return instance
@@ -350,6 +367,9 @@ function createRemoteQuery<Input, Output>(
           },
           refresh() {
             return voidInstance().refresh()
+          },
+          optimistic(fn: (current: Output | undefined) => Output) {
+            return voidInstance().optimistic(fn)
           },
         }
       : {

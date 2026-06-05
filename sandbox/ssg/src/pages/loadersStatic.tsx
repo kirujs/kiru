@@ -7,7 +7,7 @@ export const load = staticLoader(async () => ({
 }))
 
 export default function LoadersStaticPage({ data, error }: PageProps<typeof load>) {
-  return () => (
+  return (
     <div className="space-y-2">
       <p data-testid="loader-data">
         {error ? error.message : `${data.builtAt}: ${data.message}`}

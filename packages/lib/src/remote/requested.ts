@@ -1,10 +1,17 @@
-import type { RemoteQuery } from "./query.js"
-import { refreshQueryForWireEntry } from "./query.js"
+import type { RemoteQuery, RemoteQueryInstance } from "./query.js"
+import {
+  queryHandleForWireEntry,
+  refreshQueryForWireEntry,
+} from "./query.js"
 import { getActiveRequestedEntries } from "./requestedScope.js"
+
+export type RequestedQueryRefreshable =
+  | RemoteQueryInstance<unknown, unknown>
+  | (RemoteQuery<void, unknown> & { refresh(): Promise<unknown> })
 
 export type RequestedQueryEntry = {
   input: unknown
-  query: RemoteQuery<unknown, unknown>
+  query: RequestedQueryRefreshable
   refresh(): Promise<unknown>
 }
 
@@ -28,11 +35,15 @@ export function requested<Input, Output>(
     },
     *[Symbol.iterator]() {
       for (const entry of entries) {
+        const query = queryHandleForWireEntry(
+          queryFn,
+          entry.input
+        ) as RequestedQueryRefreshable
         yield {
           input: entry.input,
-          query: queryFn as RemoteQuery<unknown, unknown>,
+          query,
           refresh(): Promise<unknown> {
-            return refreshQueryForWireEntry(queryFn, entry.input)
+            return query.refresh()
           },
         }
       }

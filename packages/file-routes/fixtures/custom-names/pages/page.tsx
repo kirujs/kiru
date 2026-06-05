@@ -1,3 +1,3 @@
 export default function Home() {
-  return () => <h1 data-testid="custom-home">Custom home</h1>
+  return <h1 data-testid="custom-home">Custom home</h1>
 }

@@ -6,6 +6,7 @@ Templates scaffold modern Kiru app modes (CSR, SSG, SSR) and can consume declara
 
 **Router / SSG / SSR conventions**
 
+- **Components:** return **JSX directly** when the component has no reactive setup (`signal`, `resource`, form controllers, reactive router/context hooks). Use **`return () => JSX`** only when setup creates reactive state. See [Component render shape](../docs/v2/04-route-tree-and-matching.md#component-render-shape-required-convention) in the v2 docs.
 - Use **`Link`** from `kiru/router` in layouts (works for CSR, SSR, and SSG; static prerender omits SPA `click` handlers so links stay crawlable).
 - **SEO**: add a `meta` object on scopes and routes (`title`, `description`, `openGraph`, `twitter`, `canonical`, …). Titles/descriptions support `{param}` placeholders for dynamic segments.
 - **SSG**: enable `router.ssg: true` in `vite-plugin-kiru` and a single `vite build` prerenders pages into your built `index.html` shell—no separate prerender script. Use template tokens in source `index.html`: `{{kiru_head}}` in `<head>` and `{{kiru_body}}` where app markup should be injected.

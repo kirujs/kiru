@@ -6,7 +6,7 @@ export const load = loader(async () => ({
 }))
 
 export default function UniversalLoaderPage({ data, error }: PageProps<typeof load>) {
-  return () => (
+  return (
     <div>
       <h2>Universal loader</h2>
       <p data-testid="loader-data">

@@ -297,6 +297,11 @@ declare global {
       [$CONTEXT]: () => T
     }
 
+    /**
+     * Kiru component. Return JSX directly when setup has no reactive state;
+     * return `() => JSX` when setup uses signals, resources, effects, or reactive hooks.
+     * @see docs/v2/04-route-tree-and-matching.md#component-render-shape-required-convention
+     */
     export interface Component<T = {}> {
       (
         props: T

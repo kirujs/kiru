@@ -71,6 +71,75 @@ export async function generateSitemapParams() { ... }
 
 ---
 
+## Component render shape (required convention)
+
+Kiru `Component` functions may return **JSX directly** or a **render function** `() => JSX`. Pick the shape from whether the component has **reactive setup** — do not default every page to `return () => (…)`.
+
+### Return JSX directly (stateless)
+
+Use when setup does **not** create reactive state: no `signal`, `resource`, `effect`, `ref`, `createFormController`, or router/context hooks whose values appear in the template (`useRouter`, `useRequestContext`, `useI18n`, `useMatches`, etc.).
+
+```tsx
+export default function AboutPage() {
+  return (
+    <article>
+      <h1>About</h1>
+      <Link to="/">Home</Link>
+    </article>
+  )
+}
+```
+
+Static markup, layout shells, and pages that only compose other components (delegating reactivity to children) belong here.
+
+### Return `() => JSX` (stateful)
+
+Use when setup **does** create reactive state that must re-run the template when signals change.
+
+```tsx
+import { signal } from "kiru"
+
+export default function CounterPage() {
+  const count = signal(0)
+  return () => (
+    <button type="button" onclick={() => { count.value++ }}>
+      {count}
+    </button>
+  )
+}
+```
+
+Same rule applies to `resource()`, form controllers, `effect()`, and hooks that read reactive router/context state in the template.
+
+### Mixed components
+
+When a stateful component has a non-reactive early exit, return JSX directly for that branch — not a nested render function:
+
+```tsx
+export default function PostPage({ data, error }: PageProps<typeof load>) {
+  const id = signal(data?.post.id ?? "")
+  const post = resource({ source: { id }, load: getPost })
+
+  if (error) {
+    return <p role="alert">{error.message}</p>
+  }
+
+  return () => (
+    <Derive from={post}>{(detail) => <article>{detail.title}</article>}</Derive>
+  )
+}
+```
+
+### Rare: imperative render function
+
+`return () => { … }` is reserved for logic that must run **on each render**, not at setup time (for example a client-only guard). Prefer direct JSX or `() => JSX` in normal app code.
+
+### Loader fallbacks
+
+`serverLoader({ fallback: () => <p>Loading…</p> })` may use either shape; prefer **direct JSX** when the fallback is static.
+
+---
+
 ## Static path generation
 
 `generateStaticPaths(manifest, pathPolicy)`:

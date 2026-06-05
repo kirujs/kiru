@@ -225,7 +225,7 @@ getCatalog.set(catalog)       // server — push value into void cache
 void getCatalog.refresh()     // server — re-run handler, queue refresh patch
 ```
 
-**Instances** (from call or `.key(input)`): `await instance`, `instance.refresh()`, `instance.set(data)` (server), `instance.withOverride(fn)` (client). Void queries use factory `set` / `refresh` instead of `.key()`.
+**Instances** (from call or `.key(input)`): `await instance`, `instance.refresh()`, `instance.set(data)` (server), `instance.optimistic(fn)` (client). Void queries use factory `set` / `refresh` / `optimistic` instead of `.key()`.
 
 **Optional abort on call only** (not on `.key()`):
 
@@ -335,13 +335,17 @@ When the server cannot know which instances are on screen:
 await form.submit().updates(
   getPosts,
   getPosts.key("santa"),
-  getPosts.key("santa").withOverride((posts) => [newPost, ...posts]),
+  getPosts.key("santa").optimistic((posts) => [newPost, ...posts]),
 )
 
 await form.submit().updates(
   listPosts,
   listPosts.key({ filter: "santa" }),
-  listPosts.key({ filter: "santa" }).withOverride((posts) => [newPost, ...posts]),
+  listPosts.key({ filter: "santa" }).optimistic((posts) => [newPost, ...posts]),
+)
+
+await form.submit().updates(
+  listTodos.optimistic((todos) => [...todos, newTodo]),
 )
 ```
 
@@ -373,11 +377,11 @@ type RemoteMutationWire =
 
 Client cap (~8 requested entries). Server `requested(fn, limit)` — **limit required**.
 
-`.withOverride()` sets optimistic client cache before the RPC; the override value is serialized on the wire as `optimistic` (server may ignore it).
+`.optimistic()` sets optimistic client cache before the RPC; the override value is serialized on the wire as `optimistic` (server may ignore it).
 
 ### Examples in the repo
 
-**Server-driven (void query)** — [`sandbox/ssr/src/pages/todos.remote.ts`](../../sandbox/ssr/src/pages/todos.remote.ts): write handlers call `listTodos.set(...)`; [`todos.tsx`](../../sandbox/ssr/src/pages/todos.tsx) uses `resource({ load: listTodos })` with no manual `refetch()`.
+**Server-driven refresh** — [`sandbox/ssr/src/pages/feed.remote.ts`](../../sandbox/ssr/src/pages/feed.remote.ts): `createPost` / `addComment` call `await requested(getFeed, 8).refreshAll()`; feed pages use `resource({ load: getFeed })` with no manual `refetch()`.
 
 **Client-requested (parameterized query)** — [`e2e/ssr/src/pages/requested-queries-demo`](../../e2e/ssr/src/pages/requested-queries-demo.tsx): `submit().updates(listFiltered, listFiltered.key({ filter }))` + server `await requested(listFiltered, 3).refreshAll()`.
 
@@ -482,7 +486,7 @@ Work top to bottom. Mark `[x]` when done. Do not skip phases without notes.
 ### Phase 5 — `updates()` and `requested()`
 
 - [x] `packages/lib/src/remote/requested.ts` — `requested(fn, limit)`, `refreshAll` (trusts client wire entries)
-- [x] Client: mutation/form result `.updates(...targets)` — factory, call, `.key`, `.withOverride`
+- [x] Client: mutation/form result `.updates(...targets)` — factory, call, `.key`, `.optimistic`
 - [x] Wire `requested` array in mutation POST envelope (cap client entries)
 - [ ] Server: validate requested `input` per query; unauthorized query → per-entry error
 - [x] Tests: `updates` + `requested` limit + optimistic wire serialization

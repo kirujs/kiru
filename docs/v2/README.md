@@ -59,7 +59,7 @@ flowchart TB
 
 1. **[01-architecture.md](./01-architecture.md)** — Packages, lifecycle, compile-time mode guards, dual client outlet paths.
 2. **[03-rendering-modes.md](./03-rendering-modes.md)** — CSR vs SSR vs SSG vs hybrid; when to use each; bootstrap entry points.
-3. **[04-route-tree-and-matching.md](./04-route-tree-and-matching.md)** — Scopes, leaves, `static`, matching, typed `Link`/`navigate`.
+3. **[04-route-tree-and-matching.md](./04-route-tree-and-matching.md)** — Scopes, leaves, `static`, matching, typed `Link`/`navigate`, **component render shape** (stateless → direct JSX; stateful → `return () => JSX`).
 4. **[17-package-exports-and-import-guide.md](./17-package-exports-and-import-guide.md)** — `kiru/router`, `kiru/router/ssr`, tree-shaking rules.
 
 ### Data & auth patterns

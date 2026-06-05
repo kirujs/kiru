@@ -3,7 +3,12 @@ import {
   getQueryCacheEntry,
   setQueryCacheEntry,
 } from "./queryCache.js"
-import type { RemoteQuery, RemoteQueryBrand, RemoteQueryInstance } from "./query.js"
+import type {
+  RemoteQuery,
+  RemoteQueryBrand,
+  RemoteQueryInstance,
+  RemoteQueryOverride,
+} from "./query.js"
 import {
   buildMutationWireBody,
   type RequestedQueryWireEntry,
@@ -11,17 +16,22 @@ import {
 import { dispatchMutationRpc } from "./remoteClientDispatch.js"
 import type { RemoteCallOptions } from "./remoteCallOptions.js"
 
-/** Factory or keyed instance passed to `mutationResult.updates()`. */
+/** Factory or cache-bound instance passed to `mutationResult.updates()`. */
 export type QueryUpdateTarget =
   | RemoteQueryBrand
   | RemoteQueryInstance<unknown, unknown>
+  | RemoteQueryOverride<unknown, unknown>
 
 export type MutationResult<T> = Promise<T> & {
   updates(...targets: QueryUpdateTarget[]): Promise<T>
 }
 
 function wireEntryFromTarget(target: QueryUpdateTarget): RequestedQueryWireEntry {
-  if (typeof target === "function" && "__kiruRemoteQuery" in target) {
+  if (
+    typeof target === "function" &&
+    "__kiruRemoteQuery" in target &&
+    !("__kiruOptimisticOverride" in target)
+  ) {
     const q = target as RemoteQuery<unknown, unknown>
     return { queryId: q.__kiruQueryId ?? "", input: null }
   }

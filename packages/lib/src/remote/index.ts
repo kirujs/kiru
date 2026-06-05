@@ -56,6 +56,7 @@ export {
   isRemoteQuery,
   type RemoteQuery,
   type RemoteQueryInstance,
+  type RemoteQueryOverride,
   type RemoteQueryHandler,
   type InferQueryInput,
   type InferQueryOutput,

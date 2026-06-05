@@ -40,10 +40,10 @@ describe("mutation .updates() wire entries", () => {
     ])
   })
 
-  it("serializes optimistic override from withOverride instances", () => {
+  it("serializes optimistic override from optimistic instances", () => {
     const getPosts = query(idSchema, async (id: string) => [id])
     getPosts.__kiruQueryId = "r:test:opt"
-    const optimistic = getPosts.key("santa").withOverride(() => ["new", "santa"])
+    const optimistic = getPosts.key("santa").optimistic(() => ["new", "santa"])
     const wire = buildRequestedFromTargets([optimistic])
     assert.deepEqual(wire, [
       {

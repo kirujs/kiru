@@ -7,7 +7,7 @@ export const load = clientLoader(async () => ({
 }))
 
 export default function LoadersClientPage({ data, error }: PageProps<typeof load>) {
-  return () => (
+  return (
     <div className="space-y-2 text-slate-700">
       <p data-testid="loader-data">
         {error ? error.message : `${data.label} @ ${data.at}`}

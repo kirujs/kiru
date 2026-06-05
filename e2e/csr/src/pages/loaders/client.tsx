@@ -6,7 +6,7 @@ export const load = clientLoader(async () => ({
 }))
 
 export default function ClientLoaderPage({ data, error }: PageProps<typeof load>) {
-  return () => (
+  return (
     <div>
       <h2>Client loader</h2>
       <p data-testid="loader-data">
