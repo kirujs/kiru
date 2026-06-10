@@ -131,7 +131,8 @@ describe("requested() handler integration", () => {
       })
     )
 
-    const patches = (invokeResult as Record<string, unknown>)[KIRU_QUERY_PATCHES_KEY]
+    const handlerResult = (invokeResult as { handlerResult: unknown }).handlerResult
+    const patches = (handlerResult as Record<string, unknown>)[KIRU_QUERY_PATCHES_KEY]
     assert.ok(Array.isArray(patches))
     assert.deepEqual(
       (patches as Array<{ op: string; data: string[] }>)[0]?.data,

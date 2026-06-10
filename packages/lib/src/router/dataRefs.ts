@@ -250,12 +250,16 @@ export function serializeKDataScript(
   return `<script type="application/json" k-data="${attr}">${json}</script>`
 }
 
-export function parseKDataScriptsFromDocument(): Map<string, KDataPayload> {
+export function parseKDataScriptsFromDocument(options?: {
+  /** When true, skip tail stream `k-data` scripts outside `<head>`. */
+  headOnly?: boolean
+}): Map<string, KDataPayload> {
   const store = new Map<string, KDataPayload>()
   if (typeof document === "undefined") return store
   const queryAll = document.querySelectorAll
   if (typeof queryAll !== "function") return store
   for (const el of queryAll.call(document, "script[k-data]")) {
+    if (options?.headOnly && !(el as Element).closest?.("head")) continue
     const encoded = el.getAttribute("k-data")
     if (!encoded) continue
     let wireRefId: string

@@ -177,4 +177,46 @@ export default users
     assert.match(out, /"users\.get": users\.get/)
     assert.doesNotMatch(out, /"default\.get"/)
   })
+
+  it("client stub passes isVoid false for schema mutations", () => {
+    const out = transformRemote(
+      `
+import { mutation } from "kiru/remote"
+const idSchema = {
+  parse: (input) => String(input),
+}
+export const api = {
+  removeLabel: mutation(idSchema, async (id) => ({ removed: id })),
+}
+`,
+      false
+    )
+    assert.match(out, /removeLabel: async \(\.\.\.args\) => __\$mutation\(/)
+    assert.match(out, /api\.removeLabel`, args, false\)/)
+  })
+})
+
+describe("prepareRemoteFunctions — server-only kiru/router imports", () => {
+  it("client stub strips revalidatePath imports from kiru/router", () => {
+    const out = transformRemote(
+      `
+import { form } from "kiru/remote"
+import { revalidatePath, revalidateTag } from "kiru/router"
+import { bumpRevalidateGeneration } from "./revalidate-demo.state.js"
+
+export const bump = form(async () => {
+  bumpRevalidateGeneration()
+  await revalidatePath("/revalidate-demo")
+  await revalidateTag("revalidate-demo")
+  return { ok: true }
+})
+`,
+      false
+    )
+    assert.match(out, /export const bump = \{ __kiruFormMutation: true/)
+    assert.doesNotMatch(out, /revalidatePath/)
+    assert.doesNotMatch(out, /revalidateTag/)
+    assert.doesNotMatch(out, /kiru\/router/)
+    assert.doesNotMatch(out, /import \{ form \} from "kiru\/remote"/)
+  })
 })

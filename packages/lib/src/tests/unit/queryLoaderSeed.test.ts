@@ -12,6 +12,7 @@ import {
   getQueryCacheEntry,
   getQueryCacheEntryForKey,
 } from "../../remote/queryCache.js"
+import type { KiruQuerySnapshot } from "../../remote/queryCache.js"
 import { KIRU_QUERIES_KEY } from "../../remote/querySnapshot.js"
 import {
   KIRU_QUERY_REF_KEY,
@@ -58,6 +59,53 @@ describe("loader query seed", () => {
 
     const key = buildQueryCacheKey(queryId, input)
     assert.deepEqual(getQueryCacheEntry(key)?.data, data)
+  })
+
+  it("attachQueriesToPayload embeds matching query subtree as $$ref", () => {
+    const queryId = "r:demo:profile"
+    const input = { username: "demo" }
+    const profile = {
+      id: "demo",
+      username: "demo",
+      name: "Demo User",
+      postCount: 1,
+      posts: [{ id: "p-1", title: "Hello" }],
+    }
+    const payload = attachQueriesToPayload(
+      { profile },
+      [{ queryId, input, data: profile }]
+    ) as Record<string, unknown>
+
+    const cacheKey = buildQueryCacheKey(queryId, input)
+    const wireRefId = buildQueryWireRefId(cacheKey)
+    assert.deepEqual(payload.profile, { [KIRU_QUERY_REF_KEY]: wireRefId })
+    assert.ok(Array.isArray(payload[KIRU_QUERIES_KEY]))
+    assert.deepEqual(
+      (payload[KIRU_QUERIES_KEY] as KiruQuerySnapshot[])[0]!.data,
+      profile
+    )
+  })
+
+  it("seedQueriesFromPayload resolves $$ref back to loader data", () => {
+    const queryId = "r:demo:profile"
+    const input = { username: "demo" }
+    const profile = {
+      id: "demo",
+      username: "demo",
+      name: "Demo User",
+      postCount: 1,
+      posts: [{ id: "p-1", title: "Hello" }],
+    }
+    const payload = attachQueriesToPayload(
+      { profile },
+      [{ queryId, input, data: profile }]
+    )
+
+    const seeded = seedQueriesFromPayload(payload) as { profile: typeof profile }
+    assert.deepEqual(seeded.profile, profile)
+
+    const key = buildQueryCacheKey(queryId, input)
+    assert.deepEqual(getQueryCacheEntryForKey(key)?.data, profile)
   })
 
   it("seeds query cache from k-data plus nested $$ref page data", () => {

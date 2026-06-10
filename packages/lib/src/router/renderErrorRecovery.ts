@@ -95,6 +95,7 @@ export async function renderSsrErrorRecovery(
           {
             url: parseRequestUrl(input.url),
             pathPolicy: input.pathPolicy,
+            match: input.failureContext?.match ?? null,
           }
         ),
         requestContext,
@@ -125,11 +126,12 @@ export async function renderSsrErrorRecovery(
           renderToReadableStream(recoveryApp, {
             requestContext: recoveryCtx,
             renderSignal: input.renderSignal,
-            onShellReady: (shell, controller) =>
+            onShellReady: (shell, controller, extras) =>
               enqueueTemplatedShell(controller, {
                 compiledTemplate: input.compiledTemplate,
                 headHtml: document.headHtml,
                 shell,
+                streamedDataSetup: extras?.streamedDataSetup,
               }),
           })
       )

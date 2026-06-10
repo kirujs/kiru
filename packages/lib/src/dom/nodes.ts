@@ -2,7 +2,6 @@ import { svgTags, FLAG_PLACEMENT, FLAG_STATIC_DOM } from "../constants.js"
 import { Signal } from "../signals/base.js"
 import { unwrap } from "../signals/utils.js"
 import { hydrationStack } from "../hydration.js"
-import { devBootstrapTrace } from "../dev/bootstrapTrace.js"
 import {
   getVNodeApp,
   isValidTextChild,
@@ -49,10 +48,6 @@ function hydrateDom(vNode: VNode) {
   hydrationStack.bumpChildIndex()
 
   if (!dom) {
-    devBootstrapTrace("hydration:mismatch", {
-      reason: "no-node",
-      type: String(vNode.type),
-    })
     throw new KiruError({
       message: `Hydration mismatch - no node found`,
       vNode,
@@ -63,11 +58,6 @@ function hydrateDom(vNode: VNode) {
     nodeName = nodeName.toLowerCase()
   }
   if ((vNode.type as string) !== nodeName) {
-    devBootstrapTrace("hydration:mismatch", {
-      reason: "type-mismatch",
-      expected: String(vNode.type),
-      received: nodeName,
-    })
     throw new KiruError({
       message: `Hydration mismatch - expected node of type ${vNode.type.toString()} but received ${nodeName}`,
       vNode,

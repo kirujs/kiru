@@ -7,7 +7,7 @@ export default function SubmitPostPage() {
   const form = createFormController(createPost)
 
   return () => {
-    const slug = router.params.value.slug ?? ""
+    const slug = router.params.value.slug
     return (
       <div className="mx-auto max-w-xl space-y-4">
         <h1 className="text-xl font-semibold text-slate-100">

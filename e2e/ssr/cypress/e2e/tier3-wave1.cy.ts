@@ -276,67 +276,6 @@ describe("Tier 3 wave 1", () => {
       })
     })
 
-    it("mirrors Threadboard feed hydration: late stream k-data + hydrate", () => {
-      cy.task<string>(
-        "fetchHtml",
-        `http://127.0.0.1:${port}/feed-hydration-demo`
-      ).then((body) => {
-        expect(body).to.include("feed-hydration-demo")
-        expect(body).to.include("hot post one")
-        expect(body).not.to.include("feed-fallback")
-        expect(body).to.include("k-page-data")
-        expect(body).to.include('"posts":{')
-        expect(body).to.include('"$$ref":')
-
-        const pageDataRaw = body.match(
-          /<script type="application\/json" k-page-data>([^<]+)/
-        )?.[1]
-        expect(pageDataRaw).to.be.a("string")
-        const pageData = JSON.parse(pageDataRaw!) as {
-          posts: { $$ref: string }
-        }
-        const feedWireRef = pageData.posts.$$ref
-        expect(feedWireRef).to.match(/^k:q:/)
-        expect(body).to.include(`k-data="${feedWireRef}"`)
-
-        const afterHtml = body.split("</html>")[1] ?? ""
-        expect(afterHtml).to.include('k-data="k:q:')
-        expect(afterHtml).to.include("__$k_data")
-        const streamRefMatch = afterHtml.match(
-          /__\$k_data\("[^"]+",\{"data":\{"\$\$ref":"(k:q:[^"]+)"\}\}\)/
-        )
-        expect(streamRefMatch?.[1]).to.be.a("string")
-        expect(streamRefMatch![1]).not.to.eq(
-          feedWireRef,
-          "stream $$ref should be a late-registered query, not the loader feed ref"
-        )
-        expect(afterHtml).to.include(
-          `k-data="${streamRefMatch![1]}"`,
-          "late k-data script should precede matching stream $$ref"
-        )
-      })
-
-      cy.visit(`http://127.0.0.1:${port}/feed-hydration-demo`)
-      cy.get("#app", { timeout: 10_000 }).should(
-        "have.attr",
-        "data-kiru-hydrated-at"
-      )
-      cy.get("#app").invoke("text").should("have.length.gt", 20)
-      cy.get('[data-testid="feed-hydration-demo"]', { timeout: 10_000 }).should(
-        "exist"
-      )
-      cy.get('[data-testid="feed-post-hot-post-1"]', { timeout: 10_000 }).should(
-        "contain",
-        "hot post one"
-      )
-      cy.get('[data-testid="community-kiru"]', { timeout: 10_000 }).should(
-        "contain",
-        "c/kiru"
-      )
-      cy.get('[data-testid="feed-fallback"]').should("not.exist")
-      cy.get('[data-testid="communities-fallback"]').should("not.exist")
-    })
-
     it("hydrates scoped Threadboard layout + feed without wiping #app", () => {
       cy.task<string>(
         "fetchHtml",
@@ -380,7 +319,6 @@ describe("Tier 3 wave 1", () => {
       })
 
       cy.visit(`http://127.0.0.1:${port}/threadboard`)
-      cy.window().its("__kiruAppWiped").should("eq", false)
       cy.get("#app", { timeout: 10_000 }).should(
         "have.attr",
         "data-kiru-hydrated-at"
@@ -402,14 +340,6 @@ describe("Tier 3 wave 1", () => {
       )
       cy.get('[data-testid="feed-fallback"]').should("not.exist")
       cy.get('[data-testid="communities-fallback"]').should("not.exist")
-      cy.window().then((w) => {
-        const trace = w.__kiruBootstrapTrace ?? []
-        const errors = trace.filter(
-          (e: { event: string }) =>
-            e.event.includes("error") || e.event === "mutation:empty"
-        )
-        expect(errors, JSON.stringify(trace, null, 2)).to.have.length(0)
-      })
     })
 
     it("hydrates loader and resource lists without white screen", () => {

@@ -1,7 +1,7 @@
 import { LoginForm } from "./login-form.js"
 
 export function LoginModal(props: { onClose: () => void }) {
-  return () => (
+  return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 p-4 pt-16"
       onclick={(e) => {

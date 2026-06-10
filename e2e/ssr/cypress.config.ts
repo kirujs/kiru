@@ -29,6 +29,14 @@ export default defineConfig({
     setupNodeEvents(on) {
       let server: ViteDevServer | null = null
       on("task", {
+        log(message: string) {
+          console.log(message)
+          return null
+        },
+        logRouterDiagnostics(snapshot: Record<string, unknown>) {
+          console.log("\n[kiru diagnostics]\n" + JSON.stringify(snapshot, null, 2))
+          return null
+        },
         concurrentContextCheck({
           port,
           concurrency,

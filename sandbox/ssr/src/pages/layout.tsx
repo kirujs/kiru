@@ -14,7 +14,7 @@ export const interceptors = defineInterceptors({
   post: {
     path: "/p/[id]",
     load: async ({ params }) => {
-      const id = (params as { id: string }).id
+      const id = params.id
       const post = await getPost({ id })
       return { title: post.title }
     },
@@ -32,8 +32,8 @@ export const interceptors = defineInterceptors({
         </div>
       ) : (
         <PostModal
-          postId={(params as { id: string }).id}
-          title={(data as { title: string } | undefined)?.title ?? "Post"}
+          postId={params.id}
+          title={data.title ?? "Post"}
           onClose={restore}
         />
       ),
@@ -49,16 +49,26 @@ export default function Layout() {
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="border-b border-slate-800 bg-slate-900/80">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-          <Link to="/" className="text-lg font-bold text-orange-400 hover:text-orange-300">
+          <Link
+            to="/"
+            className="text-lg font-bold text-orange-400 hover:text-orange-300"
+          >
             Threadboard
           </Link>
           <nav className="flex items-center gap-3 text-sm">
             {ctx.user ? (
               <>
-                <Link to="/settings" className="text-slate-300 hover:text-white">
+                <Link
+                  to="/settings"
+                  className="text-slate-300 hover:text-white"
+                >
                   u/{ctx.user.username}
                 </Link>
-                <form action={logout.action} method={logout.method} onsubmit={logout.onsubmit}>
+                <form
+                  action={logout.action}
+                  method={logout.method}
+                  onsubmit={logout.onsubmit}
+                >
                   <button
                     type="submit"
                     className="text-slate-500 hover:text-rose-300"
@@ -80,7 +90,7 @@ export default function Layout() {
       </header>
 
       <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 md:grid-cols-[220px_1fr]">
-        <aside className="hidden md:block">
+        <aside className="hidden md:block" data-testid="communities-sidebar">
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
             Communities
           </h2>
@@ -91,7 +101,7 @@ export default function Layout() {
             {(list) => (
               <ul className="space-y-1 text-sm">
                 {list.map((c) => (
-                  <li key={c.id}>
+                  <li key={c.id} data-testid={`community-${c.slug}`}>
                     <Link
                       to="/c/[slug]"
                       params={{ slug: c.slug }}

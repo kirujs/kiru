@@ -1,11 +1,4 @@
-import { serverLoader } from "kiru/router"
-import { getFeed } from "./feed.remote.js"
 import { FeedList } from "./feed/feed-list.js"
-
-export const load = serverLoader(async () => {
-  const posts = await getFeed({ sort: "hot" })
-  return { posts }
-})
 
 export default function ThreadboardHomePage() {
   return (

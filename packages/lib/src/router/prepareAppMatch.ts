@@ -215,7 +215,7 @@ export async function buildPreparedAppForMatch(
     manifest,
     requestContext,
     pageProps as LeafRouteProps,
-    { url: requestUrl, pathPolicy, i18n: i18nPayload, localeRouting }
+    { url: requestUrl, pathPolicy, i18n: i18nPayload, localeRouting, match: routeMatch }
   )
 
   const responseStatus = 200

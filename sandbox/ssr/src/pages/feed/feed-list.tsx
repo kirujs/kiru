@@ -1,6 +1,5 @@
-import { Derive, resource, signal } from "kiru"
+import { Derive, resource, setup, signal } from "kiru"
 import { useRequestContext } from "kiru/router"
-import type { MutationResult } from "kiru/remote"
 import { Link } from "kiru/router"
 import {
   getFeed,
@@ -20,10 +19,11 @@ function formatRelative(ms: number) {
   return `${Math.floor(hours / 24)}d ago`
 }
 
-export function FeedList(props: FeedListProps) {
+export const FeedList: Kiru.Component<FeedListProps> = () => {
+  const $ = setup<typeof FeedList>()
   const ctx = useRequestContext()
   const sort = signal<FeedSort>("hot")
-  const communitySlug = signal(props.communitySlug)
+  const communitySlug = $.derive(({ communitySlug }) => communitySlug)
   const voteError = signal<string | null>(null)
   const feed = resource({
     source: { sort, communitySlug },
@@ -38,13 +38,11 @@ export function FeedList(props: FeedListProps) {
     }
     voteError.value = null
     try {
-      const pending = votePost({
+      await votePost({
         targetType: "post",
         targetId: postId,
         value,
-      }) as MutationResult<{ score: number }>
-      await pending.updates(
-        getFeed.key({ sort: sort.value, communitySlug: communitySlug.value }),
+      }).updates(
         getFeed
           .key({ sort: sort.value, communitySlug: communitySlug.value })
           .optimistic((posts) =>
@@ -164,6 +162,7 @@ export function FeedList(props: FeedListProps) {
                           to="/p/[id]"
                           params={{ id: post.id }}
                           className="hover:text-orange-200"
+                          data-testid={`feed-post-title-${post.id}`}
                         >
                           {post.title}
                         </Link>

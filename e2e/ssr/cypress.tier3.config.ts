@@ -150,7 +150,7 @@ export default defineConfig({
     env: {
       port,
     },
-    specPattern: "cypress/e2e/tier3-wave1.cy.ts",
+    specPattern: "cypress/e2e/{tier3-wave1,threadboard-sandbox,threadboard-nav-tour}.cy.ts",
     setupNodeEvents(on) {
       let prod: { close: () => Promise<void> } | null = null
 
@@ -159,12 +159,31 @@ export default defineConfig({
           const res = await fetch(url)
           return res.text()
         },
+        log(message: string) {
+          console.log(message)
+          return null
+        },
+        logRouterDiagnostics(snapshot: Record<string, unknown>) {
+          console.log("\n[kiru diagnostics]\n" + JSON.stringify(snapshot, null, 2))
+          return null
+        },
       })
 
       on("before:run", async () => {
         if (!fs.existsSync(prodServerEntry)) {
           throw new Error(
             "Run `pnpm run build` in e2e/ssr before tier 3 Cypress tests"
+          )
+        }
+        const { spawnSync } = await import("node:child_process")
+        const verify = spawnSync(
+          process.execPath,
+          ["scripts/verify-hybrid-prerender.mjs"],
+          { cwd: root, stdio: "inherit" }
+        )
+        if (verify.status !== 0) {
+          throw new Error(
+            "Hybrid prerender artifacts missing — run `pnpm run build` in e2e/ssr"
           )
         }
         prod = await startProductionServer()

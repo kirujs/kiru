@@ -1,31 +1,40 @@
-import { Derive, effect, resource } from "kiru"
+import { effect, Show } from "kiru"
 import { createFormController } from "kiru/remote"
-import { Link, useRequestContext } from "kiru/router"
+import { Link, PageProps, serverLoader, useRouter } from "kiru/router"
 import { getProfile, updateProfile } from "../auth.remote.js"
 
+export const load = serverLoader(async () => {
+  const profile = await getProfile()
+  return { profile }
+})
+
 export default function SettingsPage() {
-  const ctx = useRequestContext()
-  const profile = resource(() => getProfile())
+  const router = useRouter()
   const form = createFormController(updateProfile)
 
   effect([form.result], (res) => {
     if (!res || res.ok !== true) return
-    profile.refetch()
+    router.invalidate({ current: true })
     form.result.value = null
   })
 
-  return () => (
-    <div className="mx-auto max-w-lg space-y-5">
-      <div>
-        <h2 className="text-xl font-semibold text-slate-100">Settings</h2>
-        <p className="text-sm text-slate-400">
-          Signed in as{" "}
-          <span className="font-mono text-cyan-200">u/{ctx.user?.username}</span>
-        </p>
-      </div>
+  return ({ data, error }: PageProps<typeof load>) => {
+    if (error) {
+      return <p className="text-rose-300">{error.message}</p>
+    }
 
-      <Derive from={profile} fallback={<p className="text-slate-400">Loading profile…</p>}>
-        {(user) => (
+    const user = data.profile
+    return (
+      <>
+        <div className="mx-auto max-w-lg space-y-5">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-100">Settings</h2>
+            <p className="text-sm text-slate-400">
+              Signed in as{" "}
+              <span className="font-mono text-cyan-200">u/{user.username}</span>
+            </p>
+          </div>
+
           <form
             className="space-y-3 rounded-lg border border-slate-800 bg-slate-950/50 p-4"
             action={form.action}
@@ -69,25 +78,25 @@ export default function SettingsPage() {
                 className="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
               />
             </label>
-            {form.error.value ? (
-              <p className="text-sm text-rose-300">{form.error.value}</p>
-            ) : null}
+            <Show when={form.error}>
+              <p className="text-sm text-rose-300">{form.error}</p>
+            </Show>
             <button
               type="submit"
               className="rounded bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-500"
               disabled={form.isPending.value}
             >
-              {form.isPending.value ? "Saving…" : "Save profile"}
+              {() => (form.isPending.value ? "Saving…" : "Save profile")}
             </button>
           </form>
-        )}
-      </Derive>
+        </div>
 
-      <p className="text-sm text-slate-400">
-        <Link to="/" className="text-cyan-300 hover:underline">
-          ← Back home
-        </Link>
-      </p>
-    </div>
-  )
+        <p className="text-sm text-slate-400">
+          <Link to="/" className="text-cyan-300 hover:underline">
+            ← Back home
+          </Link>
+        </p>
+      </>
+    )
+  }
 }

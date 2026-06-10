@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
+import { mount } from "../../appHandle.js"
 import { createElement } from "../../element.js"
 import { createRouter } from "../../router/csr.js"
 import {
@@ -9,9 +10,35 @@ import {
 import { compileRouteTree } from "../../router/manifest.js"
 import { createI18nConfig } from "../../router/i18n/index.js"
 import { useI18n } from "../../router/i18nContext.js"
-import { buildInitialSsrOutletInShell } from "../../router/ssrClientOutlet.js"
+import { createSsrRouterShell } from "../../router/routerShell.js"
+import {
+  buildInitialSsrOutletInShell,
+  SsrClientOutlet,
+} from "../../router/ssrClientOutlet.js"
+import { readOutletDebugLog } from "../../router/outletDebug.js"
 import { bootstrapSsgClient } from "../../ssr/routerHydrate.js"
 import { withJSDOM } from "./jsdom.js"
+import { waitForSelector } from "./helpers/hydrationFixtures.js"
+import { createElement as el, setup } from "../../index.js"
+
+function SetupIdProbe({ name }: { name: string }) {
+  const $ = setup<{ name: string }>()
+  return () =>
+    el("span", {
+      "data-probe": name,
+      "data-testid": name,
+      "data-setup-id": $.id.value,
+    })
+}
+
+function SharedLayout({ children }: { children?: JSX.Children }) {
+  return () =>
+    el("div", {
+      "data-testid": "layout",
+      "data-probe": "layout",
+      children,
+    })
+}
 
 describe("SsrClientOutlet", () => {
   it("buildInitialSsrOutletInShell returns a route subtree for static hydration", async () => {
@@ -88,6 +115,124 @@ describe("SsrClientOutlet", () => {
         app.unmount()
       },
       { url: "http://localhost/about" }
+    )
+  })
+
+  it("cross-route navigation does not abort-discard outlet load or bump loaderEpoch", async () => {
+    const routes = createRouteTree({
+      children: [
+        createRoute("/", async () => ({
+          default: () =>
+            createElement("div", {
+              "data-testid": "home",
+              children: "home",
+            }),
+        })),
+        createRoute("/about", async () => ({
+          default: () =>
+            createElement("div", {
+              "data-testid": "about",
+              children: "about",
+            }),
+        })),
+      ],
+    })
+    const manifest = compileRouteTree(routes)
+
+    await withJSDOM(
+      async (container) => {
+        window.__kiruOutletDebug = true
+        window.__kiruOutletDebugLog = []
+
+        const router = createRouter({ routes })
+        const app = mount(
+          createSsrRouterShell(
+            router,
+            {},
+            createElement(SsrClientOutlet, { manifest })
+          ),
+          container
+        )
+
+        await waitForSelector(container, '[data-testid="home"]', 5000)
+        const epochBefore = router.loaderEpoch.peek()
+        window.__kiruOutletDebugLog = []
+
+        const result = await router.navigate("/about")
+        assert.equal(result.status, "committed")
+        await waitForSelector(container, '[data-testid="about"]', 5000)
+
+        assert.equal(
+          router.loaderEpoch.peek(),
+          epochBefore,
+          "route change should not bump loaderEpoch"
+        )
+
+        const abortedDiscards = readOutletDebugLog().filter(
+          (entry) =>
+            entry.event === "load:discarded" && entry.data?.reason === "aborted"
+        )
+        assert.equal(
+          abortedDiscards.length,
+          0,
+          `unexpected abort discards: ${JSON.stringify(abortedDiscards)}`
+        )
+
+        app.unmount()
+      },
+      { url: "http://localhost/" }
+    )
+  })
+
+  it("cross-route navigation commits new leaf content and removes the previous leaf", async () => {
+    function HomePage() {
+      return el(SetupIdProbe, { name: "home" })
+    }
+
+    function AboutPage() {
+      return el(SetupIdProbe, { name: "about" })
+    }
+
+    const routes = createRouteTree({
+      layout: async () => ({ default: SharedLayout }),
+      children: [
+        createRoute("/", async () => ({ default: HomePage })),
+        createRoute("/about", async () => ({ default: AboutPage })),
+      ],
+    })
+    const manifest = compileRouteTree(routes)
+
+    await withJSDOM(
+      async (container) => {
+        const router = createRouter({ routes })
+        const app = mount(
+          createSsrRouterShell(
+            router,
+            {},
+            createElement(SsrClientOutlet, { manifest })
+          ),
+          container
+        )
+
+        await waitForSelector(container, '[data-testid="home"]', 5000)
+        assert.ok(
+          !container.querySelector('[data-testid="about"]'),
+          "about leaf should not be mounted on home"
+        )
+
+        const toAbout = await router.navigate("/about")
+        assert.equal(toAbout.status, "committed")
+        assert.equal(router.pathname.peek(), "/about")
+        await waitForSelector(container, '[data-testid="about"]', 5000)
+
+        const toHome = await router.navigate("/")
+        assert.equal(toHome.status, "committed")
+        assert.equal(router.pathname.peek(), "/")
+        await waitForSelector(container, '[data-testid="home"]', 5000)
+
+        app.unmount()
+      },
+      { url: "http://localhost/" }
     )
   })
 })

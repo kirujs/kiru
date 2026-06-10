@@ -1,8 +1,8 @@
-import { Derive, resource } from "kiru"
 import { defineInterceptors, Link, useRequestContext } from "kiru/router"
-import { listCommunities, getPost } from "./feed.remote.js"
+import { getPost } from "./feed.remote.js"
 import { LoginModal } from "./login-modal.js"
 import { PostModal } from "./post-modal.js"
+import { CommunitiesSidebar } from "./communities-sidebar.js"
 
 export const interceptors = defineInterceptors({
   login: {
@@ -12,7 +12,7 @@ export const interceptors = defineInterceptors({
   post: {
     path: "/threadboard/p/[id]",
     load: async ({ params }) => {
-      const id = (params as { id: string }).id
+      const id = params.id
       const post = await getPost({ id })
       return { title: post.title }
     },
@@ -25,18 +25,13 @@ export const interceptors = defineInterceptors({
           </button>
         </div>
       ) : (
-        <PostModal
-          postId={(params as { id: string }).id}
-          title={(data as { title: string } | undefined)?.title ?? "Post"}
-          onClose={restore}
-        />
+        <PostModal postId={params.id} title={data.title} onClose={restore} />
       ),
   },
 })
 
 export default function ThreadboardLayout() {
   const ctx = useRequestContext()
-  const communities = resource(() => listCommunities())
 
   return ({ children }: { children: JSX.Children }) => (
     <div
@@ -60,6 +55,7 @@ export default function ThreadboardLayout() {
               <Link
                 to="/threadboard/login"
                 className="rounded-full bg-orange-600 px-3 py-1 font-medium text-white"
+                data-testid="threadboard-sign-in"
               >
                 Sign in
               </Link>
@@ -69,37 +65,14 @@ export default function ThreadboardLayout() {
       </header>
 
       <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 md:grid-cols-[220px_1fr]">
-        <aside className="md:block" data-testid="communities-sidebar">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Communities
-          </h2>
-          <Derive
-            from={communities}
-            fallback={
-              <p className="text-sm text-slate-500" data-testid="communities-fallback">
-                Loading…
-              </p>
-            }
-          >
-            {(list) => (
-              <ul className="space-y-1 text-sm" data-testid="communities-list">
-                {list.map((c) => (
-                  <li key={c.id} data-testid={`community-${c.slug}`}>
-                    <Link
-                      to="/threadboard"
-                      className="block rounded px-2 py-1 text-slate-300 hover:bg-slate-800"
-                    >
-                      c/{c.slug}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Derive>
-        </aside>
-
+        <CommunitiesSidebar />
         <main>{children}</main>
       </div>
+      <p className="mx-auto max-w-6xl px-4 pb-6 text-xs text-slate-600">
+        <Link to="/threadboard/about" data-testid="threadboard-about-link">
+          About
+        </Link>
+      </p>
     </div>
   )
 }

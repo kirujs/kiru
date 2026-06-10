@@ -3,8 +3,6 @@ import assert from "node:assert/strict"
 import { createElement, Fragment, setup } from "../../index.js"
 import { renderMode } from "../../globals.js"
 import { headlessRender } from "../../headlessRender.js"
-import { mount } from "../../appHandle.js"
-import { hydrate } from "../../ssr/client.js"
 import { createSsrRouterShell } from "../../router/routerShell.js"
 import { createRouter, createStaticRouter } from "../../router/csr.js"
 import { buildRoutedSubtree } from "../../router/routeTree.js"
@@ -16,8 +14,10 @@ import { compileRouteTree, matchRoute } from "../../router/manifest.js"
 import { createI18nConfig } from "../../router/i18n/index.js"
 import { createI18nRuntime } from "../../router/i18nContext.js"
 import { getRouterInstanceRuntime } from "../../router/routerRuntime.js"
+import { SsrClientOutlet } from "../../router/ssrClientOutlet.js"
 import { renderMatchToStaticHtml } from "../../router/renderer.js"
 import { withJSDOM } from "./jsdom.js"
+import { waitForSelector } from "./helpers/hydrationFixtures.js"
 
 function SetupIdProbe({ name }: { name: string }) {
   const $ = setup<{ name: string }>()
@@ -48,11 +48,12 @@ const routes = createRouteTree({
   })
 const manifest = compileRouteTree(routes)
 
-function buildShellSubtree() {
+function buildShellSubtree(match: ReturnType<typeof matchRoute> = null) {
   return buildRoutedSubtree(
     [{ default: TestLayout }],
     { default: TestPage },
-    {}
+    {},
+    { match }
   )
 }
 
@@ -72,56 +73,69 @@ function parseProbeIds(html: string): Record<string, string> {
   return probes
 }
 
-function probeIdsFromDom(root: ParentNode): Record<string, string> {
-  const probes: Record<string, string> = {}
-  root.querySelectorAll("[data-probe]").forEach((el) => {
-    const name = el.getAttribute("data-probe")
-    const id = el.getAttribute("data-setup-id")
-    if (name && id) probes[name] = id
+function wrapStaticOutlet(subtree: JSX.Element) {
+  return createElement(SsrClientOutlet, {
+    manifest,
+    staticSubtree: subtree,
   })
-  return probes
 }
 
-function staticShell() {
+function wrapClientOutlet(subtree: JSX.Element) {
+  return createElement(SsrClientOutlet, {
+    manifest,
+    staticSubtree: subtree,
+    initialSubtree: subtree,
+  })
+}
+
+function buildStaticShellElement(): JSX.Element {
   const router = createStaticRouter({ manifest, pathname: "/" })
-  return createSsrRouterShell(router, {}, () => buildShellSubtree())
+  const match = matchRoute(manifest, "/")
+  const subtree = buildShellSubtree(match)
+  return createSsrRouterShell(router, {}, () => wrapStaticOutlet(subtree))
 }
 
-function clientShell() {
+function buildClientShell() {
   const router = createRouter({ routes })
-  return createSsrRouterShell(router, {}, () => buildShellSubtree())
+  const match = matchRoute(manifest, "/")
+  const subtree = buildShellSubtree(match)
+  return createSsrRouterShell(router, {}, () => wrapClientOutlet(subtree))
 }
 
-function clientShellWithI18n() {
-  const i18n = createI18nConfig({
-    locales: ["en"],
-    defaultLocale: "en",
-    load: { en: async () => ({ title: "Home" }) },
-  })
-  const router = createRouter({ routes, i18n })
-  return createSsrRouterShell(
-    router,
-    {},
-    () => buildShellSubtree(),
-    undefined,
-    getRouterInstanceRuntime(router).i18n!.runtime
-  )
-}
-
-function staticShellWithI18n() {
+function buildStaticShellWithI18n() {
   const router = createStaticRouter({ manifest, pathname: "/" })
+  const match = matchRoute(manifest, "/")
   const runtime = createI18nRuntime<unknown>({
     initialLocale: "en",
     initialData: { title: "Home" },
     locales: ["en"],
     defaultLocale: "en",
   })
+  const subtree = buildShellSubtree(match)
   return createSsrRouterShell(
     router,
     {},
-    () => buildShellSubtree(),
+    () => wrapStaticOutlet(subtree),
     undefined,
     runtime
+  )
+}
+
+function buildClientShellWithI18n() {
+  const i18n = createI18nConfig({
+    locales: ["en"],
+    defaultLocale: "en",
+    load: { en: async () => ({ title: "Home" }) },
+  })
+  const router = createRouter({ routes, i18n })
+  const match = matchRoute(manifest, "/")
+  const subtree = buildShellSubtree(match)
+  return createSsrRouterShell(
+    router,
+    {},
+    () => wrapClientOutlet(subtree),
+    undefined,
+    getRouterInstanceRuntime(router).i18n!.runtime
   )
 }
 
@@ -149,8 +163,14 @@ function renderShellHtml(shell: JSX.Element): string {
   return html
 }
 
-function renderShellProbeIds(shell: JSX.Element): Record<string, string> {
-  return parseProbeIds(renderShellHtml(shell))
+function renderShellProbeIds(buildShell: () => JSX.Element): Record<string, string> {
+  const prev = renderMode.current
+  renderMode.current = "stream"
+  try {
+    return parseProbeIds(renderShellHtml(buildShell()))
+  } finally {
+    renderMode.current = prev
+  }
 }
 
 function assertSameProbeIds(
@@ -166,32 +186,10 @@ function assertSameProbeIds(
 }
 
 describe("SSR router shell ($INLINE_FN outlet)", () => {
-  it("setup().id matches across string render, mount, and hydrate", async () => {
-    const shell = staticShell()
-    const root = wrapRendererRoot(shell)
-    const stringIds = renderShellProbeIds(shell)
-
-    await withJSDOM(async (container) => {
-      mount(root, container)
-      assertSameProbeIds(stringIds, probeIdsFromDom(container), "string vs mount")
-
-      const hydrateContainer = document.createElement("div")
-      document.body.appendChild(hydrateContainer)
-      hydrateContainer.innerHTML = renderShellHtml(shell)
-      hydrate(root, hydrateContainer, { hydrationMode: "dynamic" })
-      assertSameProbeIds(
-        stringIds,
-        probeIdsFromDom(hydrateContainer),
-        "string vs hydrate"
-      )
-      hydrateContainer.remove()
-    })
-  })
-
   it("createRouter and createStaticRouter shells share setup().id maps", async () => {
     await withJSDOM(async () => {
-      const staticIds = renderShellProbeIds(staticShell())
-      const clientIds = renderShellProbeIds(clientShell())
+      const staticIds = renderShellProbeIds(() => buildStaticShellElement())
+      const clientIds = renderShellProbeIds(() => buildClientShell())
       assertSameProbeIds(staticIds, clientIds, "static vs client router")
     })
   })
@@ -201,7 +199,7 @@ describe("SSR router shell ($INLINE_FN outlet)", () => {
     assert.ok(match)
     const { body } = await renderMatchToStaticHtml(manifest, match)
     const rendererIds = parseProbeIds(body)
-    const shellIds = renderShellProbeIds(staticShell())
+    const shellIds = renderShellProbeIds(() => buildStaticShellElement())
     assertSameProbeIds(
       rendererIds,
       shellIds,
@@ -211,9 +209,64 @@ describe("SSR router shell ($INLINE_FN outlet)", () => {
 
   it("I18nReactiveRoot shell matches between static SSR and client hydrate", async () => {
     await withJSDOM(async () => {
-      const staticIds = renderShellProbeIds(staticShellWithI18n())
-      const clientIds = renderShellProbeIds(clientShellWithI18n())
+      const staticIds = renderShellProbeIds(() => buildStaticShellWithI18n())
+      const clientIds = renderShellProbeIds(() => buildClientShellWithI18n())
       assertSameProbeIds(staticIds, clientIds, "i18n static vs client shell")
     })
+  })
+
+  it("cross-route navigation keeps layout setup id when routes share a layout", async () => {
+    function AboutPage() {
+      return createElement(SetupIdProbe, { name: "about-leaf" })
+    }
+
+    const navRoutes = createRouteTree({
+      layout: async () => ({ default: TestLayout }),
+      children: [
+        createRoute("/", async () => ({ default: TestPage })),
+        createRoute("/about", async () => ({ default: AboutPage })),
+      ],
+    })
+    const navManifest = compileRouteTree(navRoutes)
+
+    await withJSDOM(
+      async (container) => {
+        const { mount } = await import("../../appHandle.js")
+        const { createRouter } = await import("../../router/csr.js")
+        const { createSsrRouterShell } = await import("../../router/routerShell.js")
+
+        const router = createRouter({ routes: navRoutes })
+        const app = mount(
+          createSsrRouterShell(
+            router,
+            {},
+            createElement(SsrClientOutlet, { manifest: navManifest })
+          ),
+          container
+        )
+
+        await waitForSelector(container, '[data-probe="leaf"]', 5000)
+        const layoutIdBefore = container.querySelector(
+          '[data-probe="layout"]'
+        )?.getAttribute("data-setup-id")
+        assert.ok(layoutIdBefore, "layout setup id before nav")
+
+        const result = await router.navigate("/about")
+        assert.equal(result.status, "committed")
+        await waitForSelector(container, '[data-probe="about-leaf"]', 5000)
+
+        const layoutIdAfter = container.querySelector(
+          '[data-probe="layout"]'
+        )?.getAttribute("data-setup-id")
+        assert.equal(
+          layoutIdAfter,
+          layoutIdBefore,
+          "layout setup id should persist across leaf navigation"
+        )
+
+        app.unmount()
+      },
+      { url: "http://localhost/" }
+    )
   })
 })

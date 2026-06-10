@@ -24,27 +24,12 @@ import {
 import { runPageLoadFromModule } from "../../router/runPageLoad.js"
 import { serverLoader } from "../../router/loaders.js"
 import { staticLoaderSignal } from "../../router/navigationScope.js"
-
-const MINIMAL_TPL =
-  "<!doctype html><html><head>{{kiru_head}}</head><body>{{kiru_body}}</body></html>"
-const STREAM_SECRET = "test-stream-loader-query-secret"
-
-const feedSchema = {
-  parse: (input: unknown) => {
-    if (!input || typeof input !== "object") {
-      return { sort: "hot" as const }
-    }
-    const record = input as { sort?: unknown; communitySlug?: unknown }
-    const sort = record.sort === "new" ? ("new" as const) : ("hot" as const)
-    const communitySlug =
-      typeof record.communitySlug === "string" && record.communitySlug
-        ? record.communitySlug
-        : undefined
-    return communitySlug === undefined
-      ? { sort }
-      : { sort, communitySlug }
-  },
-}
+import {
+  feedSchema,
+  MINIMAL_STREAM_TPL,
+  readStreamHtml,
+  STREAM_TEST_SECRET,
+} from "./helpers/hydrationFixtures.js"
 
 describe("serverLoader + parametric query on server", () => {
   const prevFetch = globalThis.fetch
@@ -95,6 +80,41 @@ describe("serverLoader + parametric query on server", () => {
     assert.equal(seen.length, 1)
     assert.equal(seen[0]!.sort, "hot")
     assert.deepEqual(seen[0]!.context, { user: { name: "ada" } })
+    assert.deepEqual(data.posts, [{ id: "p1", sort: "hot" }])
+  })
+
+  it("runPageLoadFromModule invokes query in-process after an await without fetch", async () => {
+    fetchCalls = 0
+    globalThis.fetch = async () => {
+      fetchCalls += 1
+      throw new Error("fetch should not be called for in-process server loader query")
+    }
+
+    const getFeed = query(feedSchema, async ({ sort }) => [{ id: "p1", sort }])
+    getFeed.__kiruQueryId = "r_test_feed_await:getFeed"
+    __INTERNAL_REMOTE_REGISTRY.register("test/feed-await", { getFeed })
+
+    const load = serverLoader(async () => {
+      await Promise.resolve()
+      const posts = await getFeed({ sort: "hot" })
+      return { posts }
+    })
+
+    const loaderCtx = {
+      params: {},
+      url: { pathname: "/", search: "", hash: "" },
+      query: {},
+      context: { user: { name: "ada" } },
+      meta: {},
+      route: { id: "r_test_home" },
+      signal: staticLoaderSignal(),
+    }
+
+    const data = (await runPageLoadFromModule({ load }, loaderCtx)) as {
+      posts: Array<{ id: string; sort: string }>
+    }
+
+    assert.equal(fetchCalls, 0)
     assert.deepEqual(data.posts, [{ id: "p1", sort: "hot" }])
   })
 
@@ -152,20 +172,13 @@ describe("serverLoader + parametric query on server", () => {
     const renderer = createRenderer({
       stream: true,
       routes,
-      htmlTemplate: MINIMAL_TPL,
-      actions: { secret: STREAM_SECRET },
+      htmlTemplate: MINIMAL_STREAM_TPL,
+      actions: { secret: STREAM_TEST_SECRET },
     })
 
     const response = await renderer.render("/", { context: {} })
     assert.ok(response)
-    const reader = (response.body as ReadableStream<string>).getReader()
-    let html = ""
-    while (true) {
-      const next = await reader.read()
-      if (next.done) break
-      html += next.value
-    }
-    reader.releaseLock()
+    const html = await readStreamHtml(response)
 
     assert.equal(fetchCalls, 0)
     assert.ok(
@@ -263,20 +276,13 @@ describe("serverLoader + parametric query on server", () => {
     const renderer = createRenderer({
       stream: true,
       routes,
-      htmlTemplate: MINIMAL_TPL,
-      actions: { secret: STREAM_SECRET },
+      htmlTemplate: MINIMAL_STREAM_TPL,
+      actions: { secret: STREAM_TEST_SECRET },
     })
 
     const response = await renderer.render("/", { context: {} })
     assert.ok(response)
-    const reader = (response.body as ReadableStream<string>).getReader()
-    let html = ""
-    while (true) {
-      const next = await reader.read()
-      if (next.done) break
-      html += next.value
-    }
-    reader.releaseLock()
+    const html = await readStreamHtml(response)
 
     assert.equal(fetchCalls, 0)
     assert.ok(html.includes("p1"), "stream should include resolved feed data")

@@ -14,6 +14,7 @@ import {
   buildStreamPayloadForInjection,
   setQueryInjectionStreamEmitter,
 } from "./queryInjection.js"
+import { setStreamPageDataEmitter } from "../router/pageData.js"
 
 const STREAMED_DATA_SETUP = `
 <script type="text/javascript">
@@ -60,7 +61,9 @@ export interface RenderToReadableStreamOptions {
    * shell HTML buffered into a string. Whatever the callback writes to the
    * supplied controller becomes the first emission(s) of the stream;
    * streamed data scripts are then appended as their resolving promises
-   * settle.
+   * settle. When the shell contained streamed resources, `streamedDataSetup`
+   * holds the `__$k_data` bootstrap script (injected outside `#app` by the
+   * caller — it must not live in the shell body or hydration will mismatch).
    *
    * Use this to assemble surrounding template fragments (prefix/suffix),
    * inject CSS into the shell, or otherwise transform the static portion
@@ -76,7 +79,8 @@ export interface RenderToReadableStreamOptions {
    */
   onShellReady?: (
     shell: string,
-    controller: ReadableStreamDefaultController<string>
+    controller: ReadableStreamDefaultController<string>,
+    extras?: { streamedDataSetup?: string }
   ) => void | Promise<void>
 }
 
@@ -94,7 +98,7 @@ export function renderToReadableStream(
   const rootNode = Fragment({ children: element })
   const streamPromises = new Set<Kiru.StatefulPromise<unknown>>()
   const pendingWritePromises: Promise<void>[] = []
-  let didQueueStreamedDataSetup = false
+  let streamedDataSetup = ""
 
   // Buffer sync shell writes so the caller can transform / wrap the whole
   // shell in `onShellReady` instead of intercepting individual chunks.
@@ -104,11 +108,14 @@ export function renderToReadableStream(
     resolveShellFlushed = r
   })
 
-  setQueryInjectionStreamEmitter((script) => {
+  const enqueueTailScript = (script: string) => {
     void shellFlushed.then(() => {
       controller.enqueue(script)
     })
-  })
+  }
+
+  setQueryInjectionStreamEmitter(enqueueTailScript)
+  setStreamPageDataEmitter(enqueueTailScript)
 
   const speculativeByRoot = new Map<
     Kiru.StatefulPromise<unknown>,
@@ -116,12 +123,10 @@ export function renderToReadableStream(
   >()
 
   const onStreamData: HeadlessRenderContext["onStreamData"] = (data) => {
-    if (!didQueueStreamedDataSetup) {
-      // The setup script primes `window.__$k_data`. It must execute
-      // before any `__$k_data(...)` callsite, so it belongs in the
-      // shell (which is flushed first), not in the streamed data tail.
-      shellBuffer += STREAMED_DATA_SETUP
-      didQueueStreamedDataSetup = true
+    if (!streamedDataSetup) {
+      // The setup script primes `window.__$k_data`. It must execute before
+      // tail callsites but stay outside the app shell so client VDOM matches.
+      streamedDataSetup = STREAMED_DATA_SETUP
     }
     for (const promise of data) {
       if (streamPromises.has(promise)) continue
@@ -244,10 +249,16 @@ export function renderToReadableStream(
 
   void promiseTry(async () => {
     try {
+      const shellExtras = streamedDataSetup
+        ? { streamedDataSetup }
+        : undefined
       if (options?.onShellReady) {
-        await options.onShellReady(shellBuffer, controller)
+        await options.onShellReady(shellBuffer, controller, shellExtras)
       } else {
         controller.enqueue(shellBuffer)
+        if (streamedDataSetup) {
+          controller.enqueue(streamedDataSetup)
+        }
       }
     } finally {
       resolveShellFlushed()
@@ -255,9 +266,11 @@ export function renderToReadableStream(
     await speculativeChain
     await Promise.all(pendingWritePromises)
     setQueryInjectionStreamEmitter(null)
+    setStreamPageDataEmitter(null)
     controller.close()
   }).catch((error) => {
     setQueryInjectionStreamEmitter(null)
+    setStreamPageDataEmitter(null)
     controller.error(error)
   })
 

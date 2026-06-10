@@ -16,6 +16,11 @@ import {
   prefetchInterceptorLoad,
 } from "./routeInterceptors.js"
 import { tryGetRouterInstanceRuntime } from "./routerRuntime.js"
+import {
+  buildLoaderCacheKey,
+  getLoaderCacheEntry,
+  getLoaderRpcInFlight,
+} from "./loaderCache.js"
 type PrefetchFlight = {
   abort: AbortController
   promise: Promise<void>
@@ -113,6 +118,19 @@ async function runPrefetchRoute(
       validatedQuery: searchCheck.validatedQuery,
       params: searchCheck.params,
     })
+    const cacheKey = buildLoaderCacheKey(
+      toMatch.route.id,
+      loaderCtx.url.pathname,
+      loaderCtx.url.search
+    )
+    if (getLoaderCacheEntry(cacheKey)?.data !== undefined) {
+      return
+    }
+    const inFlightLoader = getLoaderRpcInFlight(cacheKey)
+    if (inFlightLoader) {
+      await inFlightLoader
+      return
+    }
     await resolvePagePropsFromModule(pageMod, loaderCtx, {
       useHydratedPageData: false,
       routeId: toMatch.route.id,

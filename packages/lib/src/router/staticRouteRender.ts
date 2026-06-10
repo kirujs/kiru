@@ -104,7 +104,7 @@ async function renderMatchToStaticHtmlInner(
     manifest,
     {},
     pageProps,
-    { pathPolicy, i18n: i18nPayload, localeRouting }
+    { pathPolicy, i18n: i18nPayload, localeRouting, match }
   )
   const pageData = serializedDataFromPageProps(pageProps)
   if (

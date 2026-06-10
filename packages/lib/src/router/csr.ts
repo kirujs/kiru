@@ -98,11 +98,14 @@ import { releaseActiveRouter } from "./routerGlobal.js"
 import {
   registerRouteInterceptor,
   buildInterceptorPrefetchKey,
+  clearInterceptorPrefetchForRegistration,
   consumePrefetchedInterceptorData,
   applyInterceptLoadResult,
   runInterceptorLoad,
   syncAllInterceptorHandlesActive,
   registrationMatchesFrom,
+  findRegistrationForHistoryIntercept,
+  backgroundMatchFromHistoryIntercept,
   type InterceptorRegistration,
   type KiruHistoryInterceptState,
 } from "./routeInterceptors.js"
@@ -126,6 +129,8 @@ import {
 } from "./i18n/index.js"
 import { parseAppLocation } from "./i18n/routing.js"
 import { createI18nRuntime, readHydratedI18n } from "./i18nContext.js"
+import { logOutletDebug } from "./outletDebug.js"
+import { canEndClientNavigation } from "./outletNavigation.js"
 
 export {
   createI18nConfig,
@@ -304,6 +309,7 @@ export function createRouter({
   const validatedRouteParams = signal<Record<string, unknown> | null>(null)
   const interceptState = signal<RouteInterceptState | null>(null)
   const interceptorRegistrations: InterceptorRegistration[] = []
+  const scopeInterceptorOutlets: Record<string, Kiru.Component> = {}
   const hydratedCtx =
     typeof document !== "undefined" ? readHydratedRequestContext() : {}
   const requestContext = signal<CustomRequestContext>(hydratedCtx)
@@ -444,13 +450,16 @@ export function createRouter({
   const dismissIntercept = (options?: { skipHistoryBack?: boolean }) => {
     const state = interceptState.value
     if (!state) return
-    interceptState.value = null
+    clearInterceptorPrefetchForRegistration(state.registrationId)
     syncInterceptorHandles()
+    interceptState.value = null
     const bg = state.backgroundMatch
     pathname.value = bg.pathname
     params.value = bg.params
     match.value = bg
     matches.value = buildMatchSegments(bg)
+    isNavigating.value = false
+    currentNavigation.value = null
     if (!options?.skipHistoryBack && typeof window !== "undefined") {
       history.back()
     }
@@ -477,8 +486,8 @@ export function createRouter({
       data: null,
       error: null,
     }
+    syncAllInterceptorHandlesActive(interceptorRegistrations, nextState)
     interceptState.value = nextState
-    syncInterceptorHandles()
     const prefetchKey = buildInterceptorPrefetchKey(
       input.registration.id,
       input.targetMatch
@@ -499,16 +508,30 @@ export function createRouter({
     )
     if (input.signal.aborted) return
     if (interceptState.peek()?.registrationId === input.registration.id) {
-      interceptState.value = applyInterceptLoadResult(nextState, result)
+      const loadedState = applyInterceptLoadResult(nextState, result)
+      syncAllInterceptorHandlesActive(interceptorRegistrations, loadedState)
+      interceptState.value = loadedState
+      if (canEndClientNavigation({ pathname, match, currentNavigation, isNavigating, interceptState })) {
+        isNavigating.value = false
+        currentNavigation.value = null
+      }
     }
   }
 
   const commitLocation = (next: RouteLocationParts) => {
     outletRenderError.value = null
-    interceptState.value = null
     syncInterceptorHandles()
+    interceptState.value = null
     const prevPath = pathname.peek()
-    if (next.pathname !== prevPath) {
+    const prevMatch = match.peek()
+    const nextMatch = matchRoute(
+      manifest,
+      next.pathname,
+      resolvedPathPolicy,
+      requestLimits
+    )
+    const routeChanged = prevMatch?.route.id !== nextMatch?.route.id
+    if (next.pathname !== prevPath || routeChanged) {
       resetHydratedPageData()
       clearStreamedSsrClientState()
       if (prevPath) {
@@ -518,15 +541,19 @@ export function createRouter({
     pathname.value = next.pathname
     hash.value = next.hash
     query.value = next.query
-    const nextMatch = matchRoute(
-      manifest,
-      next.pathname,
-      resolvedPathPolicy,
-      requestLimits
-    )
     match.value = nextMatch
     params.value = nextMatch?.params ?? {}
     matches.value = buildMatchSegments(nextMatch)
+    if (routeChanged) {
+      forceLoaderReload.value = true
+    }
+    logOutletDebug("nav:commitLocation", {
+      fromPath: prevPath,
+      toPath: next.pathname,
+      fromRouteId: prevMatch?.route.id ?? null,
+      toRouteId: nextMatch?.route.id ?? null,
+      navGen: navToken.value,
+    })
     if (typeof document !== "undefined" && nextMatch) {
       void syncDocumentHeadAfterCommit(nextMatch, next)
     }
@@ -681,8 +708,8 @@ export function createRouter({
       if (activeIntercept) {
         const bgPath = activeIntercept.backgroundMatch.pathname
         if (targetPath === bgPath) {
-          interceptState.value = null
           syncInterceptorHandles()
+          interceptState.value = null
           pathname.value = resolved.pathname
           hash.value = resolved.hash
           query.value = resolved.query
@@ -697,18 +724,43 @@ export function createRouter({
         }
       }
 
-      if (state?.kiruIntercept) {
-        const reg = interceptorRegistrations.find(
-          (r) => r.id === state.kiruIntercept!.registrationId
-        )
+      if (
+        !activeIntercept &&
+        !state?.kiruIntercept &&
+        targetPath === pathname.peek() &&
+        resolved.hash === hash.peek() &&
+        formatRouterSearch(resolved.query) === formatRouterSearch(query.peek())
+      ) {
         const toMatch = matchRoute(manifest, targetPath, resolvedPathPolicy)
-        if (reg && toMatch) {
-          const bgMatch = match.peek()
-          if (
-            bgMatch &&
-            registrationMatchesFrom(reg, bgMatch) &&
-            bgMatch.pathname === state.kiruIntercept.background.pathname
-          ) {
+        const currentMatch = match.peek()
+        if (
+          toMatch &&
+          currentMatch &&
+          toMatch.route.id === currentMatch.route.id &&
+          JSON.stringify(toMatch.params) === JSON.stringify(currentMatch.params)
+        ) {
+          isNavigating.value = false
+          currentNavigation.value = null
+          return
+        }
+      }
+
+      if (state?.kiruIntercept) {
+        const toMatch = matchRoute(manifest, targetPath, resolvedPathPolicy)
+        if (toMatch) {
+          const reg = findRegistrationForHistoryIntercept(
+            state.kiruIntercept,
+            interceptorRegistrations,
+            manifest,
+            toMatch,
+            resolvedPathPolicy
+          )
+          const bgMatch = backgroundMatchFromHistoryIntercept(
+            manifest,
+            state.kiruIntercept,
+            resolvedPathPolicy
+          )
+          if (reg && bgMatch && registrationMatchesFrom(reg, bgMatch)) {
             void commitInterceptLocation({
               target: resolved,
               targetMatch: toMatch,
@@ -1016,6 +1068,7 @@ export function createRouter({
       lastNavigationHolder.entry = entry
     },
     getRouteInterceptorRegistrations: () => interceptorRegistrations,
+    getScopeInterceptorOutlets: () => scopeInterceptorOutlets,
     buildTargetLocation,
     dismissRouteIntercept: dismissIntercept,
     registerRouteInterceptor(target, options, owner, signals) {
@@ -1033,6 +1086,7 @@ export function createRouter({
           getRequestContext: () => requestContext.peek(),
           dismissIntercept,
           buildTargetLocation,
+          scopeInterceptorOutlets,
         },
         target,
         options,

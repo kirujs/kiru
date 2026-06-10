@@ -14,6 +14,13 @@ import type {
   RouteMatch,
 } from "./types.js"
 
+function injectBeforeBodyClose(html: string, injection: string): string {
+  if (!injection) return html
+  const idx = html.lastIndexOf("</body>")
+  if (idx === -1) return html + injection
+  return html.slice(0, idx) + injection + html.slice(idx)
+}
+
 export function buildStreamDocumentHead(
   meta: RouteHeadMeta,
   pathname: string,
@@ -25,10 +32,9 @@ export function buildStreamDocumentHead(
   }
 ): DocumentHead {
   const ctxScript = serializeRequestContextScript(requestContext)
-  const pageDataScript =
-    opts.pageData !== undefined
-      ? serializePageDataHeadScripts(opts.pageData)
-      : ""
+  // Always collect k-data / mark head emitted on the server, even when the route
+  // has no loader pageData (streaming pages register queries after shell flush).
+  const pageDataScript = serializePageDataHeadScripts(opts.pageData)
   const i18nScript =
     opts.i18nPayload !== undefined ? serializeI18nScript(opts.i18nPayload) : ""
   const document: DocumentHead = {
@@ -97,11 +103,12 @@ export function renderStreamForRouteMatch(
           streamedHeadEarly = true
         }
       : undefined,
-    onShellReady: async (shell, controller) => {
+    onShellReady: async (shell, controller, extras) => {
       if (streamedHeadEarly) {
         enqueueTemplatedShellBody(controller, {
           compiledTemplate: opts.compiledTemplate,
           shell,
+          streamedDataSetup: extras?.streamedDataSetup,
         })
         return
       }
@@ -125,6 +132,7 @@ export function renderStreamForRouteMatch(
         headHtml: document.headHtml,
         shell,
         documentLang: opts.documentLang,
+        streamedDataSetup: extras?.streamedDataSetup,
       })
     },
   })
@@ -145,11 +153,12 @@ export function renderUnmatchedAppStream(
   const stream = renderToReadableStream(app, {
     requestContext,
     renderSignal,
-    onShellReady: (shell, controller) =>
+    onShellReady: (shell, controller, extras) =>
       enqueueTemplatedShell(controller, {
         compiledTemplate,
         headHtml: document.headHtml,
         shell,
+        streamedDataSetup: extras?.streamedDataSetup,
       }),
   })
   return stream
@@ -162,10 +171,14 @@ export function enqueueTemplatedShell(
     headHtml: string
     shell: string
     documentLang?: string
+    streamedDataSetup?: string
   }
 ): void {
   if (!args.compiledTemplate) {
     controller.enqueue(args.shell)
+    if (args.streamedDataSetup) {
+      controller.enqueue(args.streamedDataSetup)
+    }
     return
   }
   const split = args.compiledTemplate.splitForStream(
@@ -174,7 +187,9 @@ export function enqueueTemplatedShell(
   )
   controller.enqueue(split.prefix)
   controller.enqueue(args.shell)
-  controller.enqueue(split.suffix)
+  controller.enqueue(
+    injectBeforeBodyClose(split.suffix, args.streamedDataSetup ?? "")
+  )
 }
 
 export function enqueueTemplatedShellBody(
@@ -182,12 +197,21 @@ export function enqueueTemplatedShellBody(
   args: {
     compiledTemplate: CompiledRouteHtmlTemplate | null
     shell: string
+    streamedDataSetup?: string
   }
 ): void {
   if (!args.compiledTemplate) {
     controller.enqueue(args.shell)
+    if (args.streamedDataSetup) {
+      controller.enqueue(args.streamedDataSetup)
+    }
     return
   }
   controller.enqueue(args.shell)
-  controller.enqueue(args.compiledTemplate.splitForStream("").suffix)
+  controller.enqueue(
+    injectBeforeBodyClose(
+      args.compiledTemplate.splitForStream("").suffix,
+      args.streamedDataSetup ?? ""
+    )
+  )
 }

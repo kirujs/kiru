@@ -20,8 +20,6 @@ export default function Layout({ children }: { children: JSX.Children }) {
         {" | "}
         <Link to="/query-dedup-demo">Query dedup</Link>
         {" | "}
-        <Link to="/feed-hydration-demo">Feed hydration</Link>
-        {" | "}
         <Link to="/threadboard">Threadboard</Link>
         {" | "}
         <Link to="/seo">SEO</Link>

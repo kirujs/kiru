@@ -1,7 +1,10 @@
-import { runWithSsrRequestContext } from "../remote/action.js"
-import { traceQueryDispatch } from "../remote/queryTrace.dev.js"
-import { getSsrRemoteScopeEntry } from "../remote/ssrRemoteScope.js"
+import {
+  createRemoteExecutionForRequest,
+  runInRemoteExecution,
+} from "../remote/remoteInvokeScope.js"
+import { isRemoteError } from "../remote/errors.js"
 import { unwrapKiruToken } from "../remote/token.js"
+import { isAbortError } from "./navigationScope.js"
 import { attachQueriesToPayload } from "../remote/pageDataQueries.js"
 import {
   beginQuerySnapshotCollector,
@@ -43,6 +46,7 @@ export const __INTERNAL_LOADER_REGISTRY = {
 
 export type CreateLoaderHandlerOptions = {
   allowedOrigins?: string[]
+  exposeErrors?: boolean
   requestLimits?: Partial<KiruRequestLimits>
 }
 
@@ -162,15 +166,18 @@ export function createLoaderHandler(
       loaderCtx.signal = request.signal
 
       try {
-        traceQueryDispatch("loader:rpc-invoke-start", {
-          routeId,
-          ssrScope: getSsrRemoteScopeEntry() != null,
+        const execution = createRemoteExecutionForRequest({
+          context,
+          signal: request.signal,
+          request,
+          headers: request.headers,
+          body,
+          query: {},
+          entryActionId: loaderId,
         })
         beginQuerySnapshotCollector()
-        const data = await runWithSsrRequestContext(
-          context,
-          request.signal,
-          () => handler.__kiruInvoke(loaderCtx)
+        const data = await runInRemoteExecution(execution, () =>
+          handler.__kiruInvoke(loaderCtx)
         )
         const queries = endQuerySnapshotCollector()
         const payload = attachQueriesToPayload(data, queries)
@@ -178,7 +185,19 @@ export function createLoaderHandler(
           status: 200,
           headers: jsonHeaders,
         })
-      } catch {
+      } catch (e) {
+        if (isAbortError(e) || request.signal.aborted) {
+          return new Response(null, { status: 499 })
+        }
+        if (isRemoteError(e)) {
+          return new Response(null, { status: e.status })
+        }
+        if (options?.exposeErrors && e instanceof Error) {
+          return new Response(JSON.stringify({ error: e.message }), {
+            status: 500,
+            headers: jsonHeaders,
+          })
+        }
         return new Response(null, { status: 500 })
       }
     } catch (e) {

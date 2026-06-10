@@ -8,11 +8,10 @@ export type QueryTracePath =
   | "rpc"
 
 export function isQueryTraceEnabled(): boolean {
-  return (
-    __DEV__ &&
-    (process.env.KIRU_QUERY_TRACE === "1" ||
-      process.env.KIRU_QUERY_TRACE === "true")
-  )
+  if (!__DEV__) return false
+  const env =
+    typeof process !== "undefined" && process.env ? process.env : undefined
+  return env?.KIRU_QUERY_TRACE === "1" || env?.KIRU_QUERY_TRACE === "true"
 }
 
 export function traceQueryDispatch(

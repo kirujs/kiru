@@ -1,6 +1,11 @@
 /**
  * In-memory loader result cache for client navigations.
  *
+ * Loader dedupe layers:
+ * - {@link runLoaderRpcSingleFlight} — canonical RPC single-flight by cache key
+ * - prefetchRoute `prefetchFlightByHref` — href-level coalesce + abort on re-hover
+ * - routeInterceptors `interceptorPrefetchInFlight` — soft-intercept load prefetch
+ *
  * @see docs/router/tier-3-wave-1.md#loader-caching
  */
 
@@ -16,6 +21,29 @@ export type LoaderCacheEntry<T = unknown> = {
 
 const cache = new Map<string, LoaderCacheEntry>()
 const staleRevalidateInFlight = new Map<string, Promise<void>>()
+/** Canonical loader RPC single-flight map (see also href prefetch + interceptor prefetch). */
+const loaderRpcInFlight = new Map<string, Promise<unknown>>()
+
+export function getLoaderRpcInFlight(
+  key: string
+): Promise<unknown> | undefined {
+  return loaderRpcInFlight.get(key)
+}
+
+export function runLoaderRpcSingleFlight(
+  key: string,
+  fn: () => Promise<unknown>
+): Promise<unknown> {
+  const existing = loaderRpcInFlight.get(key)
+  if (existing) return existing
+  const promise = fn().finally(() => {
+    if (loaderRpcInFlight.get(key) === promise) {
+      loaderRpcInFlight.delete(key)
+    }
+  })
+  loaderRpcInFlight.set(key, promise)
+  return promise
+}
 
 /** Single-flight stale background refetch per cache key. */
 export function scheduleStaleLoaderRevalidate(
@@ -99,4 +127,5 @@ export function invalidateLoaderCache(
 export function clearLoaderCacheForTests(): void {
   cache.clear()
   staleRevalidateInFlight.clear()
+  loaderRpcInFlight.clear()
 }

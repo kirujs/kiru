@@ -31,6 +31,7 @@ import { dispatchMutationRpc } from "../remote/remoteClientDispatch.js"
 import { loadClientHydrationChunksManifest } from "../router/hydrationChunks.js"
 import { getRouterInstanceRuntime } from "../router/routerRuntime.js"
 import { ensureKiruRouterRuntime } from "../kiruRuntime.js"
+import { bootstrapStreamedHydration } from "../router/pageData.js"
 
 type ServerActionsClient = {
   dispatch: (id: string, args?: unknown[] | RemoteCallOptions) => Promise<unknown>
@@ -190,6 +191,7 @@ export async function bootstrapSsrClient(
       )
     : Promise.resolve(undefined)
   await Promise.all([chunksReady, i18nReady, outletReady])
+  bootstrapStreamedHydration({ replay: false, seedKData: false })
   const initialSubtree = match ? await outletReady : undefined
 
   const app = hydrate(
@@ -197,10 +199,11 @@ export async function bootstrapSsrClient(
       children: createSsrRouterShell(
         router,
         requestContext,
-        createElement(SsrClientOutlet, {
-          manifest,
-          ...(initialSubtree !== undefined ? { initialSubtree } : {}),
-        }),
+        () =>
+          createElement(SsrClientOutlet, {
+            manifest,
+            ...(initialSubtree != null ? { initialSubtree } : {}),
+          }),
         undefined,
         getRouterInstanceRuntime(router).i18n?.runtime
       ),

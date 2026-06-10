@@ -2,6 +2,7 @@ import {
   $HMR_ACCEPT,
   STREAMED_DATA_DESCENDANTS,
   STREAMED_DATA_EVENT,
+  STREAM_BOOTSTRAP_COMPLETE,
 } from "./constants.js"
 import { hydrationMode, node, renderMode } from "./globals.js"
 import { Signal, signal } from "./signals/base.js"
@@ -10,7 +11,10 @@ import { createVNodeId, registerVNodeCleanup } from "./utils/vdom.js"
 import { generateRandomID } from "./utils/generateId.js"
 import { __DEV__, isBrowser } from "./env.js"
 import { GenericHMRAcceptor, performHmrAccept } from "./hmr.js"
-import { isInitialSsrStreamPending } from "./router/pageData.js"
+import {
+  getSsrHydratePhase,
+  isAwaitingStreamTail,
+} from "./router/pageData.js"
 import { runWithRemoteAbortSignalAsync } from "./remote/abortScope.js"
 import { isRemoteQuery, type RemoteQuery } from "./remote/query.js"
 import {
@@ -29,7 +33,7 @@ import {
   createQueryCacheSubscriptionBinder,
 } from "./remote/queryCacheTrack.js"
 import { getSsrRenderAbortSignal } from "./remote/ssrRemoteScope.js"
-import { devBootstrapTrace } from "./dev/bootstrapTrace.js"
+import { isAbortError } from "./router/navigationScope.js"
 
 export type ResourceSource = Record<string, Signal<unknown>> | Signal<unknown>
 
@@ -44,7 +48,7 @@ interface ResourceState<T> {
   error: Signal<Error | null>
   isPending: Signal<boolean>
   promise: Kiru.StatefulPromise<T>
-  refetch: () => void
+  refetch: (options?: { force?: boolean }) => void
   dispose: () => void
 }
 
@@ -155,20 +159,39 @@ function getAnnouncedStreamDescendants(): Set<string> | undefined {
   return isStringSet(pending) ? pending : undefined
 }
 
-function shouldResolveDeferredPromise(promiseId: string): boolean {
-  if (renderMode.current === "hydrate" && hydrationMode.current === "dynamic") {
-    return true
+function shouldResolveDeferredPromise(
+  promiseId: string,
+  options: {
+    queryAsLoad: RemoteQuery<unknown, unknown> | undefined
+    hasSource: boolean
   }
+): boolean {
+  // Outlet / router resources use `load(...)` with `source`; they never resolve
+  // from tail `__$k_data` scripts.
+  const streamableResource =
+    options.queryAsLoad != null || !options.hasSource
+  if (!streamableResource) return false
+
   const announced = getAnnouncedStreamDescendants()
+  const cache = getStreamedDataCache()
+
+  if (renderMode.current === "hydrate" && hydrationMode.current === "dynamic") {
+    if (announced?.has(promiseId)) return true
+    if (cache?.has(promiseId)) return true
+    // Wait for tail `__$k_data` replay on mount before load-gate RPC fallback.
+    if (isAwaitingStreamTail() && promiseId.startsWith("k:")) {
+      return true
+    }
+    return false
+  }
   if (announced?.has(promiseId)) {
     return true
   }
-  const cache = getStreamedDataCache()
   if (cache?.has(promiseId)) {
     return true
   }
   // Initial document only: wait for tail `__$k_data` scripts after `</html>`.
-  return isInitialSsrStreamPending() && promiseId.startsWith("k:")
+  return isAwaitingStreamTail() && promiseId.startsWith("k:")
 }
 
 function isRelevantStreamId(localId: string, streamId: string): boolean {
@@ -300,10 +323,25 @@ function resourceImpl<T, Source extends ResourceSource>(
   }
 
   const observedSignalUnsubs = new Map<string, () => void>()
+  const applyQueryCachePatch = () => {
+    if (queryAsLoad) {
+      const input =
+        source == null
+          ? undefined
+          : unwrapResourceSource(source as ResourceSource)
+      const cached = getQueryCacheEntryForKey(
+        buildQueryCacheKeyForQuery(queryAsLoad, input)
+      )
+      if (cached?.data !== undefined) {
+        data.value = cached.data as T
+        isPending.value = false
+        error.value = null
+        return
+      }
+    }
+  }
   const queryCacheBinder = isBrowser
-    ? createQueryCacheSubscriptionBinder(() => {
-        resource.refetch()
-      })
+    ? createQueryCacheSubscriptionBinder(applyQueryCachePatch)
     : undefined
 
   const reconcileQueryCacheKeys = (keys: Set<string>, input?: unknown) => {
@@ -337,9 +375,12 @@ function resourceImpl<T, Source extends ResourceSource>(
     set promise(newPromise) {
       promise = newPromise
     },
-    refetch() {
-      data.value = hasDefaultState ? (defaultState as T) : null
-      resource.promise = createPromise(true)
+    refetch(options?: { force?: boolean }) {
+      const force = options?.force ?? true
+      if (force) {
+        data.value = hasDefaultState ? (defaultState as T) : null
+      }
+      resource.promise = createPromise(force)
     },
     dispose,
   })
@@ -384,10 +425,13 @@ function resourceImpl<T, Source extends ResourceSource>(
     const preferSeededQueryCache =
       typeof window === "undefined" ||
       renderMode.current === "hydrate" ||
-      (isInitialSsrStreamPending() && promiseId.startsWith("k:"))
+      (isAwaitingStreamTail() && promiseId.startsWith("k:"))
 
     const canShortCircuitQueryCache =
-      queryAsLoad && !forceFetch && preferSeededQueryCache
+      queryAsLoad &&
+      !forceFetch &&
+      preferSeededQueryCache &&
+      getSsrHydratePhase() !== "buildingOutlet"
 
     if (canShortCircuitQueryCache) {
       const input =
@@ -424,11 +468,9 @@ function resourceImpl<T, Source extends ResourceSource>(
             statefulPromise as Kiru.StatefulPromise<unknown>
           )
         }
-        devBootstrapTrace("resource:createPromise", {
-          path: "cache-short-circuit",
-          promiseId,
-          cacheKey,
-        })
+        if (isBrowser && queryCacheBinder) {
+          reconcileQueryCacheKeys(new Set([cacheKey]), input)
+        }
         return statefulPromise
       }
     }
@@ -439,18 +481,18 @@ function resourceImpl<T, Source extends ResourceSource>(
         if (renderMode.current === "string") {
           // if we're rendering to a string, there's no need to fire the callback
           promise = Promise.resolve() as Promise<T>
-        } else if (!forceFetch && shouldResolveDeferredPromise(promiseId)) {
-          devBootstrapTrace("resource:createPromise", {
-            path: "deferred-stream",
-            promiseId,
+        } else if (
+          !forceFetch &&
+          shouldResolveDeferredPromise(promiseId, {
+            queryAsLoad,
+            hasSource: source != null,
           })
-          promise = resolveDeferredPromise<T>(promiseId, signal)
+        ) {
+          promise = resolveDeferredPromise<T>(promiseId, signal, {
+            queryAsLoad: queryAsLoad != null,
+            streamableWithoutSource: source == null && queryAsLoad == null,
+          })
         } else {
-          devBootstrapTrace("resource:createPromise", {
-            path: "query-fetch",
-            promiseId,
-            queryAsLoad: !!queryAsLoad,
-          })
           // stream / dom / (hydrate + static)
           const ctx: ResourceLoaderContext = { signal }
           const runLoad = async () => {
@@ -544,10 +586,28 @@ function resourceImpl<T, Source extends ResourceSource>(
         data.value = value
         isPending.value = false
         error.value = null
+        if (isBrowser && queryCacheBinder && queryAsLoad) {
+          const input =
+            source == null
+              ? undefined
+              : unwrapResourceSource(source as ResourceSource)
+          reconcileQueryCacheKeys(
+            new Set([buildQueryCacheKeyForQuery(queryAsLoad, input)]),
+            input
+          )
+        }
       })
       .catch((e) => {
+        const err = e instanceof Error ? e : new Error(String(e))
+        if (isAbortError(err)) {
+          if (isCurrentLoad()) {
+            isPending.value = false
+          }
+          return
+        }
+
         statefulPromise.state = "rejected"
-        statefulPromise.error = e instanceof Error ? e : new Error(e)
+        statefulPromise.error = err
 
         if (!isCurrentLoad()) return
         error.value = statefulPromise.error
@@ -560,6 +620,17 @@ function resourceImpl<T, Source extends ResourceSource>(
     queueMicrotask(() => (resource.promise = createPromise()))
   } else {
     resource.promise ??= createPromise()
+  }
+
+  if (isBrowser && queryCacheBinder && queryAsLoad) {
+    const input =
+      source == null
+        ? undefined
+        : unwrapResourceSource(source as ResourceSource)
+    reconcileQueryCacheKeys(
+      new Set([buildQueryCacheKeyForQuery(queryAsLoad, input)]),
+      input
+    )
   }
 
   return resource as Resource<T> | NullableResource<T>
@@ -603,7 +674,8 @@ function consumeStreamedPayload<T>(
 
 function resolveDeferredPromise<T>(
   id: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  options: { queryAsLoad: boolean; streamableWithoutSource?: boolean }
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const deferralCache = getStreamedDataCache()
@@ -612,19 +684,19 @@ function resolveDeferredPromise<T>(
     }
 
     const announced = getAnnouncedStreamDescendants()
-
-    if (consumeStreamedPayload(id, deferralCache, announced, resolve, reject)) {
-      return
-    }
-
-    if (announced) {
-      for (const streamId of announced) {
-        if (
-          !isRelevantStreamId(id, streamId) &&
-          !(isInitialSsrStreamPending() && deferralCache.has(streamId))
-        ) {
-          continue
-        }
+    const phase = getSsrHydratePhase()
+    const deferConsume =
+      phase === "buildingOutlet" || phase === "hydrating"
+    const tryConsumeAnyCachedStream = (forceCrossId = false): boolean => {
+      if (consumeStreamedPayload(id, deferralCache, announced, resolve, reject)) {
+        return true
+      }
+      const crossId =
+        forceCrossId ||
+        (isAwaitingStreamTail() &&
+          (options.queryAsLoad || options.streamableWithoutSource === true))
+      if (!crossId) return false
+      for (const streamId of deferralCache.keys()) {
         if (
           consumeStreamedPayload(
             streamId,
@@ -634,28 +706,45 @@ function resolveDeferredPromise<T>(
             reject
           )
         ) {
-          return
+          return true
         }
+      }
+      if (announced) {
+        for (const streamId of announced) {
+          if (
+            consumeStreamedPayload(
+              streamId,
+              deferralCache,
+              announced,
+              resolve,
+              reject
+            )
+          ) {
+            return true
+          }
+        }
+      }
+      return false
+    }
+
+    if (!deferConsume) {
+      if (tryConsumeAnyCachedStream()) {
+        return
       }
     }
 
     const onDataEvent = (event: Event) => {
       const { detail } = event as CustomEvent<DeferredPromiseEventDetail<T>>
       const streamId = detail.id
-      const cacheHasStream =
-        isInitialSsrStreamPending() && deferralCache.has(streamId)
+      const crossId =
+        isAwaitingStreamTail() &&
+        (options.queryAsLoad || options.streamableWithoutSource === true)
+      const cacheHasStream = crossId && deferralCache.has(streamId)
       if (!isRelevantStreamId(id, streamId) && !cacheHasStream) return
       window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
+      window.removeEventListener(STREAM_BOOTSTRAP_COMPLETE, onBootstrapComplete)
 
-      if (
-        consumeStreamedPayload(
-          streamId,
-          deferralCache,
-          announced,
-          resolve,
-          reject
-        )
-      ) {
+      if (tryConsumeAnyCachedStream()) {
         return
       }
 
@@ -666,10 +755,19 @@ function resolveDeferredPromise<T>(
       resolve(resolved.data as T)
     }
 
+    const onBootstrapComplete = () => {
+      window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
+      window.removeEventListener(STREAM_BOOTSTRAP_COMPLETE, onBootstrapComplete)
+      if (tryConsumeAnyCachedStream(true)) return
+      reject(new Error("Stream bootstrap completed without matching payload"))
+    }
+
     window.addEventListener(STREAMED_DATA_EVENT, onDataEvent)
+    window.addEventListener(STREAM_BOOTSTRAP_COMPLETE, onBootstrapComplete)
     signal.addEventListener("abort", () => {
       window.removeEventListener(STREAMED_DATA_EVENT, onDataEvent)
-      reject(new Error("Aborted"))
+      window.removeEventListener(STREAM_BOOTSTRAP_COMPLETE, onBootstrapComplete)
+      reject(new DOMException("Aborted", "AbortError"))
     })
   })
 }

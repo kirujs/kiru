@@ -1,6 +1,7 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { buildRequestedFromTargets } from "../../remote/mutationResult.js"
+import { wrapInProcessMutationResult } from "../../remote/mutationResult.js"
 import { buildMutationWireBody } from "../../remote/mutationWire.js"
 import { query } from "../../remote/query.js"
 import { mutation, requested } from "../../remote/index.js"
@@ -55,6 +56,37 @@ describe("mutation .updates() wire entries", () => {
   })
 })
 
+describe("mutation lazy dispatch", () => {
+  it("await mutation() performs exactly one RPC dispatch", async () => {
+    let dispatchCount = 0
+    const wrapped = wrapInProcessMutationResult<{ ok: boolean }>(async () => {
+      dispatchCount++
+      return { ok: true }
+    }, null)
+
+    const result = await wrapped
+    assert.equal(result.ok, true)
+    assert.equal(dispatchCount, 1)
+  })
+
+  it("mutation().updates() performs exactly one RPC dispatch", async () => {
+    let dispatchCount = 0
+    const getPosts = query(idSchema, async (id: string) => [id])
+    getPosts.__kiruQueryId = "r:test:lazyPosts"
+
+    const wrapped = wrapInProcessMutationResult<{ ok: boolean }>(async (body) => {
+      dispatchCount++
+      assert.ok(body)
+      return { ok: true }
+    }, null)
+
+    await wrapped.updates(
+      getPosts.key("a").optimistic(() => ["optimistic"])
+    )
+    assert.equal(dispatchCount, 1)
+  })
+})
+
 describe("mutation requested() integration", () => {
   it("refreshAll via wire requested entries attaches __kiruQueryPatches", async () => {
     const items = [
@@ -102,7 +134,7 @@ describe("mutation requested() integration", () => {
 
     const handlerResult = (invokeResult as { handlerResult: unknown }).handlerResult
     assert.equal((handlerResult as { ok: boolean }).ok, true)
-    const patches = (invokeResult as Record<string, unknown>)[KIRU_QUERY_PATCHES_KEY]
+    const patches = (handlerResult as Record<string, unknown>)[KIRU_QUERY_PATCHES_KEY]
     assert.ok(Array.isArray(patches))
     assert.ok((patches as unknown[]).length >= 1)
     const patch = (patches as Array<{ queryId: string; op: string; data: unknown }>)[0]

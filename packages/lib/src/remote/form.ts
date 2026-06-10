@@ -104,7 +104,10 @@ function createFormMutation<Input, Output>(options: {
       })
       const patches = endQueryPatchCollector()
       if (patches.length) {
-        return attachQueryPatchesToPayload(result, patches) as HandlerWithScopeResult
+        return {
+          handlerResult: attachQueryPatchesToPayload(result.handlerResult, patches),
+          meta: result.meta,
+        }
       }
       return result
     } catch (e) {

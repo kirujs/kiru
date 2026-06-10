@@ -13,7 +13,7 @@ export default function RequestedQueriesDemoPage() {
     load: listFiltered,
     defaultState: [] as CatalogItem[],
   })
-  const form = createFormController(addItem, { updates: [listFiltered] })
+  const form = createFormController(addItem)
 
   async function onFilterChange(next: string) {
     filter.value = next
@@ -24,7 +24,7 @@ export default function RequestedQueriesDemoPage() {
     event.preventDefault()
     await form
       .submit(event.currentTarget)
-      .updates(listFiltered, listFiltered.key({ filter: filter.value }))
+      .updates(listFiltered.key({ filter: filter.value }))
   }
 
   return () => (

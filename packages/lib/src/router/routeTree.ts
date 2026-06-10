@@ -1,4 +1,4 @@
-import { createElement } from "../element.js"
+import { createElement, Fragment } from "../element.js"
 import {
   InterceptorModuleShell,
   InterceptorOwnerProvider,
@@ -154,36 +154,70 @@ function wrapWithInterceptorOwner(
       children: content,
     })
   }
-  return createElement(InterceptorOwnerProvider, { owner, children: content })
+  return createElement(InterceptorOwnerProvider, {
+    owner,
+    handles,
+    slotNames: handles ? Object.keys(handles) : undefined,
+    children: content,
+  })
 }
 
-/** Layout stack + page only (no RouterProvider). Matches SSR/SSG body HTML. */
-export function buildRoutedSubtree(
+/** Stable key for a layout stack — used to persist layouts across leaf navigations. */
+export function computeLayoutStackKey(
   layoutModules: Array<LayoutModule | null>,
+  match: RouteMatch | null
+): string {
+  const scopes = match?.route.scopes ?? []
+  return layoutModules
+    .map((module, i) =>
+      module == null ? "" : (scopes[i]?.id ?? `layout:${i}`)
+    )
+    .join("|")
+}
+
+/** Leaf route element only (no layout wrappers). */
+export function buildRoutedLeaf(
   routeModule: LeafRouteModule,
   leafProps?: LeafRouteProps,
-  options?: BuildRoutedSubtreeOptions
-) {
+  options?: Pick<BuildRoutedSubtreeOptions, "onLeafRenderError" | "match">
+): JSX.Element {
   let leaf = asComponent(routeModule)
   if (options?.onLeafRenderError) {
     leaf = wrapComponentWithRenderErrorCapture(leaf, options.onLeafRenderError)
   }
   let app = createElement(leaf, (leafProps ?? {}) as Record<string, unknown>)
   const match = options?.match ?? null
-
   if (match) {
-    app = wrapWithInterceptorOwner(routeModule, {
-      kind: "route",
-      routeId: match.route.id,
-    }, app)
+    app = wrapWithInterceptorOwner(
+      routeModule,
+      { kind: "route", routeId: match.route.id },
+      app
+    )
   }
+  return app
+}
 
+/** Wrap an existing child inside the layout stack (layouts persist; child swaps). */
+export function composeLayoutWithChild(
+  layoutModules: Array<LayoutModule | null>,
+  child: JSX.Element | null,
+  options?: BuildRoutedSubtreeOptions & { leafKey?: string }
+): JSX.Element | null {
+  if (child == null) return null
+  let app = child
+  if (options?.leafKey) {
+    app = createElement(Fragment, { key: options.leafKey }, child)
+  }
+  const match = options?.match ?? null
   const scopes = match?.route.scopes ?? []
   for (let i = layoutModules.length - 1; i >= 0; i--) {
     const module = layoutModules[i]
     if (!module) continue
-    app = createElement(asComponent(module), { children: app })
     const scope = scopes[i]
+    app = createElement(asComponent(module), {
+      key: scope?.id ?? `layout:${i}`,
+      children: app,
+    })
     if (match && scope) {
       app = wrapWithInterceptorOwner(
         module,
@@ -193,6 +227,19 @@ export function buildRoutedSubtree(
     }
   }
   return app
+}
+
+/** Layout stack + page only (no RouterProvider). Matches SSR/SSG body HTML. */
+export function buildRoutedSubtree(
+  layoutModules: Array<LayoutModule | null>,
+  routeModule: LeafRouteModule,
+  leafProps?: LeafRouteProps,
+  options?: BuildRoutedSubtreeOptions
+) {
+  const leaf = buildRoutedLeaf(routeModule, leafProps, options)
+  const match = options?.match ?? null
+  const leafKey = match ? `${match.route.id}:${match.pathname}` : undefined
+  return composeLayoutWithChild(layoutModules, leaf, { ...options, leafKey })
 }
 
 function asComponent(

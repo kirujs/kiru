@@ -34,13 +34,21 @@ export const listFiltered = query(filterSchema, async ({ filter }) =>
   catalog.filter((item) => item.tag === filter)
 )
 
-/** Form write — adds item then refreshes client-requested query instances. */
+/** Form write — adds item then patches client-requested query instances. */
 export const addItem = form(addItemSchema, async (data) => {
   catalog.push({
     id: crypto.randomUUID(),
     label: data.label,
     tag: data.tag,
   })
-  await requested(listFiltered, 3).refreshAll()
+  for (const { input } of requested(listFiltered, 3)) {
+    const filter =
+      typeof input === "object" && input !== null && "filter" in input
+        ? String((input as { filter: unknown }).filter)
+        : data.tag
+    listFiltered
+      .key({ filter })
+      .set(catalog.filter((item) => item.tag === filter))
+  }
   return { ok: true as const }
 })

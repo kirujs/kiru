@@ -31,7 +31,6 @@ import {
   depthSort,
 } from "./utils/index.js"
 import { __DEV__ } from "./env.js"
-import { devBootstrapTrace } from "./dev/bootstrapTrace.js"
 import { KiruError } from "./error.js"
 import { node, postEffectCleanups, renderMode, setups } from "./globals.js"
 import { hydrationStack } from "./hydration.js"
@@ -288,11 +287,6 @@ function updateVNode(vNode: VNode): VNode | null {
     }
 
     if (KiruError.isKiruError(error)) {
-      if (error.message.includes("Hydration mismatch")) {
-        devBootstrapTrace("scheduler:hydration-mismatch", {
-          message: error.message,
-        })
-      }
       if (error.fatal) {
         throw error
       }

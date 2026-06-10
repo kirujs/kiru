@@ -195,6 +195,8 @@ export type InterceptorHandle = {
   isActive: Kiru.Signal<boolean>
   isPending: Kiru.Signal<boolean>
   restore: () => void
+  /** Live registration id returned by {@link registerRouteInterceptor}. */
+  readonly registrationId: number
   /** Slot key from `defineInterceptors`. */
   readonly slot: string
   /** Target route path pattern. */

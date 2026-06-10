@@ -21,9 +21,8 @@ import {
   peelRemoteCallArgs,
   type RemoteCallOptions,
 } from "./remoteCallOptions.js"
-import { dispatchMutationRpc } from "./remoteClientDispatch.js"
 import { parseMutationWireBody } from "./mutationWire.js"
-import { wrapMutationResult } from "./mutationResult.js"
+import { wrapMutationResult, wrapInProcessMutationResult } from "./mutationResult.js"
 import {
   beginRequestedScope,
   endRequestedScope,
@@ -168,7 +167,10 @@ function createRemoteMutation<Input, Output>(
       })
       const patches = endQueryPatchCollector()
       if (patches.length) {
-        return attachQueryPatchesToPayload(result, patches) as HandlerWithScopeResult
+        return {
+          handlerResult: attachQueryPatchesToPayload(result.handlerResult, patches),
+          meta: result.meta,
+        }
       }
       return result
     } catch (e) {
@@ -190,24 +192,26 @@ function createRemoteMutation<Input, Output>(
     const mutationId = mutationFn.__kiruMutationId ?? ""
 
     if (execution && inProcess) {
-      const promise = (async () => {
-        const { handlerResult } = await runWithRemoteFrame(mutationId, () =>
-          mutationFn.__kiruInvoke({
-            body,
-            query: {},
-            context: inProcess.context,
-            signal: options?.signal ?? inProcess.signal,
-            request: execution.request.raw,
-            execution,
-          })
-        )
-        return handlerResult as Output
-      })()
-      return wrapMutationResult(promise, mutationId, body, options)
+      return wrapInProcessMutationResult<Output>(
+        async (wireBody) => {
+          const { handlerResult } = await runWithRemoteFrame(mutationId, () =>
+            mutationFn.__kiruInvoke({
+              body: wireBody,
+              query: {},
+              context: inProcess.context,
+              signal: options?.signal ?? inProcess.signal,
+              request: execution.request.raw,
+              execution,
+            })
+          )
+          return handlerResult as Output
+        },
+        body
+      )
     }
 
     return wrapMutationResult(
-      dispatchMutationRpc(mutationId, body, options) as Promise<Output>,
+      Promise.resolve(undefined as Output),
       mutationId,
       body,
       options
@@ -267,13 +271,14 @@ function mutationImpl(
 /** Client codegen entry for positional mutation calls. */
 export function __$mutation(
   mutationId: string,
-  args: unknown[]
+  args: unknown[],
+  isVoid = true
 ): Promise<unknown> {
   const stub = createRemoteMutation({
     handler: () => {
       throw new Error("Mutation handler missing on client bundle")
     },
-    isVoid: true,
+    isVoid,
   }) as RemoteMutation<unknown, unknown>
   stub.__kiruMutationId = mutationId
   return (stub as (...a: unknown[]) => Promise<unknown>)(...args)

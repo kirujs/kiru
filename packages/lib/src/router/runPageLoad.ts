@@ -32,9 +32,10 @@ import {
   throwIfAborted,
 } from "./navigationScope.js"
 import { runWithRemoteAbortSignalAsync } from "../remote/abortScope.js"
-import { runWithSsrRequestContext } from "../remote/action.js"
-import { traceQueryDispatch } from "../remote/queryTrace.dev.js"
-import { getSsrRemoteScopeEntry } from "../remote/ssrRemoteScope.js"
+import {
+  createRemoteExecutionForRequest,
+  runInRemoteExecution,
+} from "../remote/remoteInvokeScope.js"
 import {
   beginQuerySnapshotCollector,
   endQuerySnapshotCollector,
@@ -152,18 +153,18 @@ export async function runPageLoadFromModule(
   }
   const collectQueries = typeof window === "undefined"
   if (collectQueries) beginQuerySnapshotCollector()
-  if (typeof window === "undefined") {
-    traceQueryDispatch("loader:invoke-start", {
-      routeId: ctx.route.id,
-      kind: load.__kiruLoader,
-      ssrScope: getSsrRemoteScopeEntry() != null,
-    })
-  }
-  const invokeLoad = () => {
+  const invokeLoad = async () => {
     if (typeof window === "undefined") {
-      return runWithSsrRequestContext(ctx.context, ctx.signal, () =>
-        load.__kiruInvoke(ctx)
-      )
+      const execution = createRemoteExecutionForRequest({
+        context: ctx.context,
+        signal: ctx.signal,
+        request: ctx.request ?? new Request("http://localhost/"),
+        headers: ctx.request?.headers ?? new Headers(),
+        body: null,
+        query: {},
+        entryActionId: ctx.route.id,
+      })
+      return runInRemoteExecution(execution, () => load.__kiruInvoke(ctx))
     }
     return load.__kiruInvoke(ctx)
   }

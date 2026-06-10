@@ -144,12 +144,12 @@ export function formatNavigationSnapshotLabel(
 }
 
 export async function runTransition(
-  callback: () => void,
+  callback: () => void | Promise<void>,
   enableTransition: boolean,
   signal?: AbortSignal
 ) {
   if (!enableTransition) {
-    callback()
+    await callback()
     await new Promise<void>((resolve) => nextIdle(resolve))
     return
   }
@@ -291,10 +291,8 @@ export function createNavigateInternal(
     locale,
     onLocaleChange,
     setOutletRenderError,
-    interceptState,
     interceptorRegistrations,
     commitInterceptLocation,
-    dismissIntercept,
     requestLimits = DEFAULT_REQUEST_LIMITS,
   } = deps
 
@@ -645,14 +643,15 @@ export function createNavigateInternal(
           historyIndex.value = nextIndex
         }
         await runTransition(
-          () =>
-            commitIntercept({
+          async () => {
+            await commitIntercept({
               target: resolved,
               targetMatch: toMatch,
               backgroundMatch: fromMatch,
               registration: interceptor,
               signal: navAbort.signal,
-            }),
+            })
+          },
           enableTransition,
           navAbort.signal
         )
@@ -662,9 +661,9 @@ export function createNavigateInternal(
         }
         navResult = { status: "intercepted" }
       } else {
-        if (interceptState?.value && dismissIntercept) {
-          dismissIntercept({ skipHistoryBack: true })
-        }
+        // Hard commit: commitLocation clears intercept atomically. Do not
+        // dismissIntercept first — that resets match/pathname to background
+        // mid-flight while the URL already shows the intercept target.
         if (replace) {
           saveScrollAt(historyIndex.value)
           history.replaceState(

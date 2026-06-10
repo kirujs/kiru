@@ -585,7 +585,13 @@ describe("remote / handler", () => {
     const req = makePostRequest(`${routeId}:updateUser`, token, null)
     const res = await handler(req)
     assert.strictEqual(res?.status, 200)
-    assert.deepStrictEqual(await res?.json(), { updated: "Ada" })
+    const body = (await res?.json()) as {
+      updated: string
+      __kiruQueryPatches?: unknown[]
+    }
+    assert.strictEqual(body.updated, "Ada")
+    assert.ok(Array.isArray(body.__kiruQueryPatches))
+    assert.ok(body.__kiruQueryPatches!.length >= 1)
   })
 
   it("concurrent RPC handlers do not leak action context", async () => {

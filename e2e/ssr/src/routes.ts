@@ -80,10 +80,6 @@ export const routes = createRouteTree({
         component: () => import("./pages/query-dedup-demo"),
         head: { title: "E2E SSR query dedup" },
       }),
-      createRoute("/feed-hydration-demo", {
-        component: () => import("./pages/feed-hydration-demo"),
-        head: { title: "E2E SSR feed hydration" },
-      }),
       createRouteScope({
         config: () => import("./pages/threadboard/scope.config"),
         layout: () => import("./pages/threadboard/layout"),
@@ -91,6 +87,34 @@ export const routes = createRouteTree({
           createRoute("/threadboard", {
             component: () => import("./pages/threadboard/page"),
             head: { title: "Threadboard E2E Home" },
+          }),
+          createRoute("/threadboard/login", {
+            component: () => import("./pages/threadboard/login/page"),
+            head: { title: "Threadboard E2E Sign in" },
+          }),
+          createRoute("/threadboard/p/[id]", {
+            component: () => import("./pages/threadboard/p/[id]/page"),
+            head: { title: "Threadboard E2E Post" },
+          }),
+          createRoute("/threadboard/about", {
+            component: () => import("./pages/threadboard/about/page"),
+            head: { title: "Threadboard E2E About" },
+          }),
+          createRoute("/threadboard/c/[slug]", {
+            component: () => import("./pages/threadboard/c/[slug]/page"),
+            head: { title: "Threadboard E2E Community" },
+          }),
+          createRoute("/threadboard/c/[slug]/submit", {
+            component: () => import("./pages/threadboard/c/[slug]/submit/page"),
+            head: { title: "Threadboard E2E Submit" },
+          }),
+          createRoute("/threadboard/settings", {
+            component: () => import("./pages/threadboard/settings/page"),
+            head: { title: "Threadboard E2E Settings" },
+          }),
+          createRoute("/threadboard/u/[username]", {
+            component: () => import("./pages/threadboard/u/[username]/page"),
+            head: { title: "Threadboard E2E User" },
           }),
         ],
       }),

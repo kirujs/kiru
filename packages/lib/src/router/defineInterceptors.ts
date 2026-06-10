@@ -1,12 +1,12 @@
 import { signal } from "../signals/base.js"
-import { getActiveRouter } from "./routerGlobal.js"
-import { useInterceptorOwner, useInterceptorPlacement } from "./interceptorOwner.js"
+import { useRouter } from "./routerContext.js"
+import { useInterceptorOwner } from "./interceptorOwner.js"
 import {
   bindRouteInterceptorInSetup,
   buildInterceptorRuntimeDeps,
   type RouteInterceptorSignals,
 } from "./routeInterceptors.js"
-import { getRouterInstanceRuntime, tryGetRouterInstanceRuntime } from "./routerRuntime.js"
+import { getRouterInstanceRuntime } from "./routerRuntime.js"
 import type {
   InterceptLoadContext,
   InterceptRenderContext,
@@ -53,11 +53,15 @@ function createDefinedInterceptorHandle(
   const signals: RouteInterceptorSignals = { isActive, isPending }
   let restoreImpl: () => void = () => {}
 
+  const bindOptions = {
+    load: def.load,
+    render: def.render as InterceptorSlotDefinition<string, unknown>["render"],
+  }
+
   const Outlet: Kiru.Component = () => {
-    const router = getActiveRouter()
-    if (!router) return null
-    const runtime = tryGetRouterInstanceRuntime(router)
-    if (!runtime?.registerRouteInterceptor) return null
+    const router = useRouter()
+    const runtime = getRouterInstanceRuntime(router)
+    if (!runtime.registerRouteInterceptor) return null
 
     const owner = useInterceptorOwner()
     if (!owner) {
@@ -66,16 +70,11 @@ function createDefinedInterceptorHandle(
       )
     }
 
-    const placement = useInterceptorPlacement()
-    if (placement) {
-      placement.markPlaced(slot)
-    }
-
     const deps = buildInterceptorRuntimeDeps(router, getRouterInstanceRuntime(router))
     const handle = bindRouteInterceptorInSetup(
       deps,
       def.path,
-      { load: def.load, render: def.render },
+      bindOptions,
       signals,
       owner
     )
@@ -83,12 +82,43 @@ function createDefinedInterceptorHandle(
     return handle.Outlet({})
   }
 
-  return {
+  const handle: InterceptorHandle = {
     Outlet,
     isActive,
     isPending,
     restore: () => restoreImpl(),
+    registrationId: -1,
     slot,
     path: def.path,
   }
+  setInterceptorBindOptions(handle, bindOptions)
+  return handle
+}
+
+/** @internal Slot load/render options for {@link InterceptorModuleShell} registration. */
+export const INTERCEPTOR_BIND_OPTIONS = Symbol.for("kiru.interceptor.bindOptions")
+
+type InterceptorBindOptions = {
+  load?: InterceptorSlotDefinition<string, unknown>["load"]
+  render: InterceptorSlotDefinition<string, unknown>["render"]
+}
+
+export function setInterceptorBindOptions(
+  handle: InterceptorHandle,
+  options: InterceptorBindOptions
+): void {
+  Object.defineProperty(handle, INTERCEPTOR_BIND_OPTIONS, {
+    value: options,
+    enumerable: false,
+    configurable: true,
+  })
+}
+
+export function readInterceptorBindOptions(
+  handle: InterceptorHandle
+): InterceptorBindOptions | null {
+  const options = (handle as InterceptorHandle & {
+    [INTERCEPTOR_BIND_OPTIONS]?: InterceptorBindOptions
+  })[INTERCEPTOR_BIND_OPTIONS]
+  return options ?? null
 }

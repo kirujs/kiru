@@ -14,9 +14,7 @@ import {
   type PluginState,
 } from "./config.js"
 import { writeGeneratedRoutes } from "./fileRoutesCodegen.js"
-import {
-  attachFileRoutesDevWatcher,
-} from "./fileRoutesDev.js"
+import { attachFileRoutesDevWatcher } from "./fileRoutesDev.js"
 import {
   LOADER_MODULES_MANIFEST,
   mergeLoaderModules,
@@ -30,10 +28,7 @@ import {
   resolveSingleModulePattern,
   toViteModuleId,
 } from "./resolveModulePattern.js"
-import {
-  createDevtoolsHtmlTransform,
-  setupDevtools,
-} from "./devtools.js"
+import { createDevtoolsHtmlTransform, setupDevtools } from "./devtools.js"
 import {
   extractEntryUrls,
   handleSsrDevRequest,
@@ -133,7 +128,9 @@ async function injectStaticLoaderPayloadIntoClientChunks(input: {
   clientManifest?: Record<string, unknown>
 }): Promise<void> {
   const { clientDir, staticLoaderPayloadByModule, clientManifest } = input
-  for (const [moduleKey, payload] of Object.entries(staticLoaderPayloadByModule)) {
+  for (const [moduleKey, payload] of Object.entries(
+    staticLoaderPayloadByModule
+  )) {
     const manifestKey = moduleKey.replace(/^\//, "")
     const entry = clientManifest?.[manifestKey] as { file?: string } | undefined
     const chunkRel = entry?.file
@@ -147,7 +144,9 @@ async function injectStaticLoaderPayloadIntoClientChunks(input: {
     }
     if (!src.includes(STATIC_LOADER_PAYLOAD_CONST)) continue
     if (src.includes(`const ${STATIC_LOADER_PAYLOAD_CONST}`)) continue
-    const injection = `const ${STATIC_LOADER_PAYLOAD_CONST}=${JSON.stringify(payload)};`
+    const injection = `const ${STATIC_LOADER_PAYLOAD_CONST}=${JSON.stringify(
+      payload
+    )};`
     await fs.writeFile(filePath, `${injection}${src}`, "utf8")
   }
 }
@@ -193,7 +192,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           outDir: clientOutDir,
           emptyOutDir:
             env.command === "build"
-              ? (config.build?.emptyOutDir ?? true)
+              ? config.build?.emptyOutDir ?? true
               : config.build?.emptyOutDir,
         }
         if (config.environments?.client) {
@@ -219,7 +218,11 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       ) {
         partial.appType = "mpa"
       }
-      if (opts.router?.ssg && env.command === "build" && !isSsrBundleBuild(config)) {
+      if (
+        opts.router?.ssg &&
+        env.command === "build" &&
+        !isSsrBundleBuild(config)
+      ) {
         partial.build = {
           ...config.build,
           ...partial.build,
@@ -304,7 +307,12 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           serverEntry = resolvePreviewServerEntry(clientDir)
           if (!previewServerBundleExists(clientDir)) {
             log(
-              `${ANSI.yellow("!")} vite preview: no SSR bundle at ${path.relative(resolvedViteConfig.root, serverEntry)} — run \`vite build\` first`
+              `${ANSI.yellow(
+                "!"
+              )} vite preview: no SSR bundle at ${path.relative(
+                resolvedViteConfig.root,
+                serverEntry
+              )} — run \`vite build\` first`
             )
             serverEntry = null
           }
@@ -572,7 +580,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       const raw = id.slice(1)
       if (raw === LOADER_REGISTRY_VIRTUAL_ID) {
         const clientOutDir = state.isSSRBuild
-          ? path.join(path.dirname(path.resolve(state.projectRoot, state.outDir)), "client")
+          ? path.join(
+              path.dirname(path.resolve(state.projectRoot, state.outDir)),
+              "client"
+            )
           : path.resolve(state.projectRoot, state.outDir)
         const fromDisk = await readLoaderModuleManifest(
           state.projectRoot,
@@ -587,7 +598,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       if (!(raw in virtualModules)) return null
       return virtualModules[raw]()
     },
-    async transform(src, id) {
+    async transform(src, id, options) {
       if (!shouldTransformFile(id, state)) {
         if (
           !state.includedPaths.some((p) => id.startsWith(p)) &&
@@ -615,7 +626,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         prepareJSXHoisting(ctx)
       }
 
-      if (!state.isProduction && !state.isBuild) {
+      if (!state.isProduction && !state.isBuild && !options?.ssr) {
         prepareHMR(ctx)
       }
 
@@ -748,10 +759,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           }
           html = injectClientEntryScripts(
             html,
-            clientManifest as Record<
-              string,
-              { file?: string; css?: string[] }
-            >
+            clientManifest as Record<string, { file?: string; css?: string[] }>
           )
           const logicalPath = localeRouting
             ? splitAppPathname(output.path, localeRouting).pathname
@@ -777,7 +785,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
           await fs.writeFile(target, html, "utf8")
 
           if (routeMatch) {
-            const metaEntry = getRouteBuildMetaEntry(routeMatch.route, buildMeta)
+            const metaEntry = getRouteBuildMetaEntry(
+              routeMatch.route,
+              buildMeta
+            )
             persistPrerenderBuildOutput({
               clientDir: state.outDir,
               pathname: output.storageKey ?? output.path,
@@ -818,7 +829,10 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       const isWorker = adapter === "cloudflare"
       const serverBundleLabel = isWorker ? "Worker" : "Node"
       log(
-        `${ANSI.green("✓")} SSR ${serverBundleLabel} bundle → ${path.relative(root, path.join(serverOutAbs, "index.js"))}`
+        `${ANSI.green("✓")} SSR ${serverBundleLabel} bundle → ${path.relative(
+          root,
+          path.join(serverOutAbs, "index.js")
+        )}`
       )
 
       const configFile =
@@ -866,7 +880,9 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         const wranglerPath = path.join(root, "wrangler.toml.generated")
         await fs.writeFile(wranglerPath, snippet, "utf8")
         log(
-          `${ANSI.green("✓")} wrangler.toml.generated (review and rename to wrangler.toml)`
+          `${ANSI.green(
+            "✓"
+          )} wrangler.toml.generated (review and rename to wrangler.toml)`
         )
 
         const pages = await glob(["src/pages/**/*.{tsx,ts}"], {
@@ -953,9 +969,9 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
         state!.projectRoot,
         !!options?.ssr,
         (ref) => {
-        state!.loaderModulesByRouteId.set(ref.routeId, ref.viteModuleId)
-        loaderRegistryTouched = true
-      },
+          state!.loaderModulesByRouteId.set(ref.routeId, ref.viteModuleId)
+          loaderRegistryTouched = true
+        },
         { staticLoaderClient, staticLoaderPayload }
       )
       if (isRemote) {
@@ -972,11 +988,7 @@ export default function kiru(opts: KiruPluginOptions = {}): PluginOption {
       }
 
       const serverEntryAbs = state!.router.serverEntryAbs?.replace(/\\/g, "/")
-      if (
-        options?.ssr &&
-        serverEntryAbs &&
-        normalizedId === serverEntryAbs
-      ) {
+      if (options?.ssr && serverEntryAbs && normalizedId === serverEntryAbs) {
         code.prepend(`import ${JSON.stringify(LOADER_REGISTRY_VIRTUAL_ID)};\n`)
       }
 

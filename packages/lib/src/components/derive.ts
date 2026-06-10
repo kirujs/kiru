@@ -7,6 +7,7 @@ import { $STREAM_DATA } from "../constants.js"
 import { node } from "../globals.js"
 import { requestUpdate } from "../scheduler.js"
 import { isResource, Resource } from "../resource.js"
+import { isAbortError } from "../router/navigationScope.js"
 import type { RecordHas } from "../types.utils.js"
 
 export type Derivable =
@@ -98,6 +99,7 @@ export const Derive: Derive = () => {
 
     for (const p of promises) {
       if (p.state === "rejected") {
+        if (isAbortError(p.error)) continue
         throw p.error
       }
     }
@@ -122,6 +124,7 @@ export const Derive: Derive = () => {
     }
     for (const p of promises) {
       if (p.state === "rejected") {
+        if (isAbortError(p.error)) continue
         throw p.error
       }
       if (p.state === "pending") {

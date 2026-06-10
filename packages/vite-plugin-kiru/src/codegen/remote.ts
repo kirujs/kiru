@@ -53,6 +53,10 @@ export function prepareRemoteFunctions(
   }
 }
 
+function mutationStubCall(id: string, isVoid?: boolean): string {
+  return `__$mutation(${id}, args, ${isVoid ? "true" : "false"})`
+}
+
 function clientStubForMatch(match: ActionMatch): string {
   const id = `\`\${__$r__}:${match.name}\``
   if (match.kind === "form") {
@@ -69,11 +73,12 @@ function clientStubForMatch(match: ActionMatch): string {
     }
     return `export const ${match.name} = ${expr};`
   }
+  const mutationExpr = `async (...args) => ${mutationStubCall(id, match.isVoid)}`
   if (match.replaceNode.type === "Property") {
     const key = propertyKeyName(match.replaceNode)
-    return `${key}: async (...args) => __$mutation(${id}, args)`
+    return `${key}: ${mutationExpr}`
   }
-  return `export async function ${match.name}(...args) { return __$mutation(${id}, args); }`
+  return `export async function ${match.name}(...args) { return ${mutationStubCall(id, match.isVoid)}; }`
 }
 
 function clientDefaultFlatStub(match: ActionMatch): string {
@@ -84,7 +89,7 @@ function clientDefaultFlatStub(match: ActionMatch): string {
   if (match.kind === "query") {
     return `export default __$defineQuery(${id}, ${match.isVoid ? "true" : "false"});`
   }
-  return `export default async (...args) => __$mutation(${id}, args);`
+  return `export default async (...args) => ${mutationStubCall(id, match.isVoid)};`
 }
 
 function propertyKeyName(prop: AstNode): string {
@@ -187,7 +192,7 @@ function clientStubExpression(match: ActionMatch): string {
   if (match.kind === "query") {
     return `__$defineQuery(${id}, ${match.isVoid ? "true" : "false"})`
   }
-  return `async (...args) => __$mutation(${id}, args)`
+  return `async (...args) => ${mutationStubCall(id, match.isVoid)}`
 }
 
 function rewriteDefaultExportForSsr(code: MagicString, matches: ActionMatch[]): void {
@@ -311,16 +316,33 @@ function clientFormatRemoteFunctions(
   })
 
   stripAuthorKiruRemoteImports(bodyNodes, code)
+  stripDeadClientRemoteImports(bodyNodes, code)
+}
+
+function importSourceLiteral(node: AstNode): string | null {
+  if (node.type !== "ImportDeclaration") return null
+  const source = node.source
+  if (source?.type !== "Literal" || typeof source.value !== "string") {
+    return null
+  }
+  return source.value
 }
 
 function isKiruRemoteImportSource(node: AstNode): boolean {
-  if (node.type !== "ImportDeclaration") return false
-  const source = node.source
-  return (
-    source?.type === "Literal" &&
-    typeof source.value === "string" &&
-    source.value === "kiru/remote"
-  )
+  return importSourceLiteral(node) === "kiru/remote"
+}
+
+const CLIENT_STUB_STRIP_IMPORTS = new Set(["kiru/remote", "kiru/router"])
+
+function removeImportDeclaration(node: AstNode, code: MagicString): void {
+  let removeEnd = node.end
+  const nextChar = code.original[removeEnd]
+  if (nextChar === "\r" && code.original[removeEnd + 1] === "\n") {
+    removeEnd += 2
+  } else if (nextChar === "\n") {
+    removeEnd += 1
+  }
+  code.remove(node.start, removeEnd)
 }
 
 /** Drop authoring imports; codegen prepends the client RPC runtime it needs. */
@@ -330,14 +352,19 @@ function stripAuthorKiruRemoteImports(
 ): void {
   for (const node of bodyNodes) {
     if (!isKiruRemoteImportSource(node)) continue
-    let removeEnd = node.end
-    const nextChar = code.original[removeEnd]
-    if (nextChar === "\r" && code.original[removeEnd + 1] === "\n") {
-      removeEnd += 2
-    } else if (nextChar === "\n") {
-      removeEnd += 1
-    }
-    code.remove(node.start, removeEnd)
+    removeImportDeclaration(node, code)
+  }
+}
+
+/** Remove server-only imports left over after client stubbing (handler bodies erased). */
+function stripDeadClientRemoteImports(
+  bodyNodes: AstNode[],
+  code: MagicString
+): void {
+  for (const node of bodyNodes) {
+    const source = importSourceLiteral(node)
+    if (!source || !CLIENT_STUB_STRIP_IMPORTS.has(source)) continue
+    removeImportDeclaration(node, code)
   }
 }
 
@@ -453,7 +480,7 @@ function collectActionsFromObject(
         name: namePath,
         ref: refPath,
         kind,
-        isVoid: kind === "query" ? isVoidRemoteCall(value) : undefined,
+        isVoid: kind === "form" ? undefined : isVoidRemoteCall(value),
         linkedDeclaration: options?.linkedDeclaration,
         linkedBinding: options?.linkedBinding,
       })
@@ -514,7 +541,7 @@ function collectNamedExportMatches(
       name: binding,
       ref: binding,
       kind,
-      isVoid: kind === "query" ? isVoidRemoteCall(init) : undefined,
+      isVoid: kind === "form" ? undefined : isVoidRemoteCall(init),
     })
   }
 }
@@ -575,7 +602,7 @@ function collectDefaultExportMatches(
       linkedDeclaration: linked.declarationNode,
       linkedBinding: linked.binding,
       kind: linkedKind,
-      isVoid: linkedKind === "query" ? isVoidRemoteCall(linked.init) : undefined,
+      isVoid: linkedKind === "form" ? undefined : isVoidRemoteCall(linked.init),
     })
     return
   }
@@ -588,7 +615,7 @@ function collectDefaultExportMatches(
     name: DEFAULT_RPC_PREFIX,
     ref: DEFAULT_EXPORT_BINDING,
     kind: declKind,
-    isVoid: declKind === "query" ? isVoidRemoteCall(decl) : undefined,
+    isVoid: declKind === "form" ? undefined : isVoidRemoteCall(decl),
   })
 }
 

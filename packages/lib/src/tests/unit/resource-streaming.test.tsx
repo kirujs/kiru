@@ -6,6 +6,8 @@ import {
 } from "../../constants.js"
 import {
   parseKDataScriptsFromDocument,
+  resetClientKDataStore,
+  seedQueryCacheFromKDataStore,
   serializeKDataScript,
 } from "../../router/dataRefs.js"
 import {
@@ -17,9 +19,10 @@ import {
 import {
   clearStreamedSsrClientState,
   readHydratedPageData,
+  replayInitialStreamedResources,
   resetHydratedPageData,
+  setBuildingInitialSsrOutlet,
 } from "../../router/pageData.js"
-import { resetClientKDataStore } from "../../router/dataRefs.js"
 import { renderMode } from "../../globals.js"
 import { withJSDOM } from "./jsdom.js"
 
@@ -242,6 +245,155 @@ describe("resource streamed SSR client hydration", () => {
 
       assert.strictEqual(loaderCalls, 1)
       assert.strictEqual(reviews.value?.[0], "fresh")
+      renderMode.current = prev
+    })
+  })
+
+  it("defers sync cache consume during scratch outlet build and replays after", async () => {
+    await withJSDOM(async (container, kiru) => {
+      clearStreamedSsrClientState()
+
+      const cache = new window.Map<string, { data?: unknown; error?: string }>()
+      ;(window as unknown as Record<string, unknown>)[STREAMED_DATA_EVENT] =
+        cache
+
+      let loaderCalls = 0
+      let reviews!: ReturnType<typeof kiru.resource<string[]>>
+
+      function ReviewsCard() {
+        reviews = kiru.resource(() => {
+          loaderCalls++
+          return Promise.resolve(["client fetch"])
+        })
+        return () => (
+          <span data-testid="reviews">{reviews.value?.[0] ?? ""}</span>
+        )
+      }
+
+      const prev = renderMode.current
+      renderMode.current = "dom"
+      setBuildingInitialSsrOutlet(true)
+
+      kiru.mount(<ReviewsCard />, container)
+      await waitForMicrotask()
+
+      const streamId = reviews.promise.id
+      const payload = ["from deferred replay"]
+      cache.set(streamId, { data: payload })
+
+      assert.strictEqual(
+        loaderCalls,
+        0,
+        "scratch defer should not fetch while cache entry remains"
+      )
+      assert.strictEqual(
+        cache.has(streamId),
+        true,
+        "cache entry should survive deferred consume"
+      )
+
+      setBuildingInitialSsrOutlet(false)
+      replayInitialStreamedResources()
+
+      await reviews.promise
+      for (let i = 0; i < 5; i++) await waitForMicrotask()
+
+      assert.strictEqual(loaderCalls, 0)
+      assert.strictEqual(reviews.value?.[0], "from deferred replay")
+      renderMode.current = prev
+    })
+  })
+
+  it("does not mark resource rejected when load is aborted", async () => {
+    await withJSDOM(async (container, kiru) => {
+      let reviews!: ReturnType<typeof kiru.resource<string[]>>
+
+      function ReviewsCard() {
+        reviews = kiru.resource(({ signal }) =>
+          new Promise<string[]>((resolve, reject) => {
+            signal.addEventListener("abort", () => {
+              reject(new DOMException("Aborted", "AbortError"))
+            })
+            setTimeout(() => resolve(["late"]), 500)
+          })
+        )
+        return () => (
+          <span data-testid="reviews">{reviews.value?.[0] ?? "pending"}</span>
+        )
+      }
+
+      const prev = renderMode.current
+      renderMode.current = "dom"
+      const app = kiru.mount(<ReviewsCard />, container)
+      await waitForMicrotask()
+
+      app.unmount()
+      await waitForMicrotask()
+
+      assert.notEqual(reviews.promise.state, "rejected")
+      renderMode.current = prev
+    })
+  })
+
+  it("defers query cache short-circuit during scratch outlet build", async () => {
+    await withJSDOM(async (container, kiru) => {
+      clearAllQueryCache()
+      resetClientKDataStore()
+
+      const queryId = "r:test:communities"
+      const payload = [{ id: "c1", slug: "kiru" }]
+      const wireRefId = buildQueryWireRefId(buildQueryCacheKey(queryId, null))
+      document.head.innerHTML = serializeKDataScript(wireRefId, { data: payload })
+      seedQueryCacheFromKDataStore(parseKDataScriptsFromDocument())
+
+      const listCommunities = Object.assign(
+        async () => {
+          loaderCalls++
+          return payload
+        },
+        { __kiruQueryId: queryId, __kiruRemoteQuery: true as const, __kiruQueryVoid: true }
+      )
+
+      let loaderCalls = 0
+      let communities!: ReturnType<typeof kiru.resource<typeof payload>>
+
+      function Sidebar() {
+        communities = kiru.resource({
+          load: listCommunities as typeof listCommunities & { __kiruQueryId: string },
+          defaultState: [] as typeof payload,
+        })
+        return () => (
+          <span data-testid="count">{communities.value?.length ?? 0}</span>
+        )
+      }
+
+      ;(window as unknown as Record<string, unknown>)[STREAMED_DATA_EVENT] =
+        new window.Map()
+
+      const prev = renderMode.current
+      renderMode.current = "dom"
+      setBuildingInitialSsrOutlet(true)
+
+      kiru.mount(<Sidebar />, container)
+      await waitForMicrotask()
+
+      assert.strictEqual(loaderCalls, 0)
+      assert.strictEqual(communities.promise.state, "pending")
+      assert.strictEqual(
+        container.querySelector('[data-testid="count"]')?.textContent,
+        "0"
+      )
+
+      setBuildingInitialSsrOutlet(false)
+      communities.refetch()
+      await communities.promise
+      await waitForMicrotask()
+
+      assert.deepEqual(
+        getQueryCacheEntryForKey(buildQueryCacheKey(queryId, null))?.data,
+        payload
+      )
+      assert.strictEqual(communities.value?.[0]?.slug, "kiru")
       renderMode.current = prev
     })
   })

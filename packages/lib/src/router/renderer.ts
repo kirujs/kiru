@@ -725,6 +725,7 @@ function prepareRenderer(options: CreateRendererOptions) {
   const handleLoader = actions
     ? createLoaderHandler(actions.secret, {
         allowedOrigins: actions.allowedOrigins,
+        exposeErrors: actions.exposeErrors,
         requestLimits: actions.requestLimits,
       })
     : null

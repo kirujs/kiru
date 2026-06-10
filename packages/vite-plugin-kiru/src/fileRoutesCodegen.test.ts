@@ -30,7 +30,7 @@ describe("writeGeneratedRoutes", () => {
       const source = await fs.readFile(outFile, "utf8")
       assert.ok(source.includes("/guarded"))
       assert.ok(source.includes("createRouteTree"))
-      assert.ok(source.includes("guarded/middleware"))
+      assert.ok(source.includes("guarded/scope.config"))
     } finally {
       await fs.unlink(outFile).catch(() => {})
     }

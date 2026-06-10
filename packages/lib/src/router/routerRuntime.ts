@@ -58,6 +58,8 @@ export type RouterRuntime = {
     match: RouteMatch
   ) => import("./types.js").RouteLocation
   dismissRouteIntercept?: (options?: { skipHistoryBack?: boolean }) => void
+  /** Scope-owned interceptor Outlets that survive layout remounts within a scope. */
+  getScopeInterceptorOutlets?: () => Readonly<Record<string, Kiru.Component>>
 }
 
 const ROUTER_RUNTIME = Symbol.for("kiru.router.runtime")

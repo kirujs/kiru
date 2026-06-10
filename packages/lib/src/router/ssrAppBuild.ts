@@ -10,11 +10,14 @@ import { mergeRouteAndPageHead } from "./pageHead.js"
 import type { RouteHeadMeta } from "./types.js"
 import { runWithSsrRequestContext } from "../remote/action.js"
 import { createStaticRouter } from "./csr.js"
+import { createElement } from "../element.js"
+import { SsrClientOutlet } from "./ssrClientOutlet.js"
 import { createSsrRouterShell } from "./routerShell.js"
 import {
   buildRoutedSubtree,
   type LeafRouteProps,
 } from "./routeTree.js"
+import { matchRoute } from "./manifest.js"
 import type {
   CustomRequestContext,
   DocumentHead,
@@ -90,6 +93,8 @@ export function buildAppElement(
     pathPolicy?: RouterPathPolicy
     i18n?: HydratedI18nPayload
     localeRouting?: I18nLocaleRouting
+    /** When set, co-exported route interceptors are wired in the SSR subtree. */
+    match?: RouteMatch | null
   }
 ): JSX.Element {
   const staticRouter = createStaticRouter({
@@ -102,7 +107,13 @@ export function buildAppElement(
     locale: options?.i18n?.locale,
   })
   staticRouter.params.value = params
-  const subtree = buildRoutedSubtree(layoutModules, routeModule, leafProps)
+  const routeMatch =
+    options?.match ??
+    matchRoute(manifest, pathname, options?.pathPolicy) ??
+    null
+  const subtree = buildRoutedSubtree(layoutModules, routeModule, leafProps, {
+    match: routeMatch,
+  })
   const i18nRuntime = options?.i18n
     ? createI18nRuntime({
         initialLocale: options.i18n.locale,
@@ -114,7 +125,11 @@ export function buildAppElement(
   return createSsrRouterShell(
     staticRouter,
     requestContext,
-    () => subtree,
+    () =>
+      createElement(SsrClientOutlet, {
+        manifest,
+        staticSubtree: subtree,
+      }),
     undefined,
     i18nRuntime
   )

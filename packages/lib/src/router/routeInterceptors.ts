@@ -4,7 +4,6 @@ import { __DEV__ } from "../env.js"
 import { node } from "../globals.js"
 import { onCleanup } from "../hooks/onCleanup.js"
 import { sideEffectsEnabled } from "../utils/index.js"
-import { warnOnce } from "./devWarnings.dev.js"
 import type { RouteLocationParts } from "./navigation.js"
 import type {
   InterceptLoadContext,
@@ -27,7 +26,10 @@ import type {
   RouteMatch,
 } from "./types.js"
 import type { RouteManifest } from "./types.js"
+import type { RouterPathPolicy } from "./pathPolicy.js"
+import { matchRoute } from "./manifest.js"
 import type { Router } from "./routerInstance.js"
+import { runWithRemoteAbortSignalAsync } from "../remote/abortScope.js"
 import type { RouterRuntime } from "./routerRuntime.js"
 
 export type InterceptorRegistration = {
@@ -162,6 +164,61 @@ export function registrationMatchesFrom(
   return fromMatch.route.scopes.some((scope) => scope.id === owner.scopeId)
 }
 
+/** Reconstruct the background match stored in a history intercept entry. */
+export function backgroundMatchFromHistoryIntercept(
+  manifest: RouteManifest,
+  kiruIntercept: KiruHistoryInterceptState,
+  resolvedPathPolicy: RouterPathPolicy
+): RouteMatch | null {
+  const bgMatch = matchRoute(
+    manifest,
+    kiruIntercept.background.pathname,
+    resolvedPathPolicy
+  )
+  if (!bgMatch) return null
+  return {
+    ...bgMatch,
+    params: { ...bgMatch.params, ...kiruIntercept.backgroundParams },
+  }
+}
+
+/**
+ * Resolve a live interceptor registration from popstate history metadata.
+ * Falls back to owner + target path when registration ids drift after layout remount.
+ */
+export function findRegistrationForHistoryIntercept(
+  kiruIntercept: KiruHistoryInterceptState,
+  registrations: readonly InterceptorRegistration[],
+  manifest: RouteManifest,
+  targetMatch: RouteMatch,
+  resolvedPathPolicy: RouterPathPolicy
+): InterceptorRegistration | null {
+  const bgMatch = backgroundMatchFromHistoryIntercept(
+    manifest,
+    kiruIntercept,
+    resolvedPathPolicy
+  )
+  if (!bgMatch) return null
+
+  const byId = registrations.find((r) => r.id === kiruIntercept.registrationId)
+  if (
+    byId &&
+    byId.targetPath === targetMatch.route.path &&
+    registrationMatchesFrom(byId, bgMatch)
+  ) {
+    return byId
+  }
+
+  const matching = registrations.filter(
+    (reg) =>
+      reg.targetPath === targetMatch.route.path &&
+      registrationMatchesFrom(reg, bgMatch)
+  )
+  if (matching.length === 0) return null
+  const routeOwned = matching.find((reg) => reg.owner.kind === "route")
+  return routeOwned ?? matching[0]!
+}
+
 export function findMatchingInterceptor(
   registrations: readonly InterceptorRegistration[],
   fromMatch: RouteMatch,
@@ -209,6 +266,15 @@ export type InterceptorRuntimeDeps = {
   getRequestContext: () => CustomRequestContext
   dismissIntercept: (options?: { skipHistoryBack?: boolean }) => void
   buildTargetLocation: (match: RouteMatch) => RouteLocation
+  /** Scope-owned Outlets keyed by {@link scopeInterceptorOutletKey}. */
+  scopeInterceptorOutlets?: Record<string, Kiru.Component>
+}
+
+export function scopeInterceptorOutletKey(
+  owner: Extract<InterceptorOwner, { kind: "scope" }>,
+  target: string
+): string {
+  return `scope:${owner.scopeId}:${target}`
 }
 
 export function buildInterceptorRuntimeDeps(
@@ -232,15 +298,81 @@ export function buildInterceptorRuntimeDeps(
     getRequestContext: () => router.requestContext.peek(),
     dismissIntercept,
     buildTargetLocation,
+    scopeInterceptorOutlets: runtime.getScopeInterceptorOutlets?.(),
   }
 }
 
 let nextRegistrationId = 1
 
+export function renderInterceptorRegistration(
+  deps: InterceptorRuntimeDeps,
+  registration: InterceptorRegistration
+): JSX.Element | null {
+  const { id } = registration
+  if (!registration.isActive.value) return null
+  const state = deps.interceptState.value
+  if (!state || state.registrationId !== id) return null
+  const restore = () => {
+    if (deps.interceptState.value?.registrationId === id) {
+      deps.dismissIntercept()
+    }
+  }
+  const reload = () => {
+    void reloadInterceptorLoad(deps, id)
+  }
+  const ctx: InterceptRenderContext<Record<string, string>> = {
+    params: state.targetMatch.params,
+    location: deps.buildTargetLocation(state.targetMatch),
+    signal: deps.getNavSignal(),
+    context: deps.getRequestContext(),
+    restore,
+    reload,
+    ...interceptLoadResultFromState(state),
+  }
+  return registration.render(ctx)
+}
+
+function buildInterceptorHandle(
+  deps: InterceptorRuntimeDeps,
+  registration: InterceptorRegistration
+): InterceptorHandle {
+  const { id } = registration
+  const isActive = registration.isActive
+  const isPending = registration.isPending
+
+  const restore = () => {
+    const state = deps.interceptState.value
+    if (state?.registrationId === id) {
+      deps.dismissIntercept()
+    }
+  }
+
+  const Outlet: Kiru.Component = () => {
+    return () => renderInterceptorRegistration(deps, registration)
+  }
+
+  return {
+    Outlet,
+    isActive,
+    isPending,
+    restore,
+    registrationId: id,
+    slot: "",
+    path: registration.targetPath,
+  }
+}
+
 function ownerRegistrationKey(owner: InterceptorOwner, target: string): string {
   return owner.kind === "route"
     ? `route:${owner.routeId}:${target}`
     : `scope:${owner.scopeId}:${target}`
+}
+
+export function registrationOwnerKey(
+  owner: InterceptorOwner,
+  target: string
+): string {
+  return ownerRegistrationKey(owner, target)
 }
 
 export function registerRouteInterceptor<P extends NavigatePath>(
@@ -256,11 +388,16 @@ export function registerRouteInterceptor<P extends NavigatePath>(
   const existing = deps.registrations.find(
     (r) => ownerRegistrationKey(r.owner, r.targetPath) === ownerKey
   )
-  if (existing && __DEV__) {
-    warnOnce(
-      `intercept-dup-${ownerKey}`,
-      `[kiru] Duplicate route interceptor for owner "${ownerKey}"`
-    )
+  if (existing) {
+    if (options.load) existing.load = options.load as InterceptorOptions<string>["load"]
+    existing.render = options.render as InterceptorOptions<string>["render"]
+    syncInterceptorHandleActive(existing, deps.interceptState.value)
+    const handle = buildInterceptorHandle(deps, existing)
+    if (owner.kind === "scope" && deps.scopeInterceptorOutlets) {
+      deps.scopeInterceptorOutlets[scopeInterceptorOutletKey(owner, target)] =
+        handle.Outlet
+    }
+    return handle
   }
 
   const id = nextRegistrationId++
@@ -278,43 +415,12 @@ export function registerRouteInterceptor<P extends NavigatePath>(
   }
   deps.registrations.push(registration)
 
-  const restore = () => {
-    const state = deps.interceptState.value
-    if (state?.registrationId === id) {
-      deps.dismissIntercept()
-    }
+  const handle = buildInterceptorHandle(deps, registration)
+  if (owner.kind === "scope" && deps.scopeInterceptorOutlets) {
+    deps.scopeInterceptorOutlets[scopeInterceptorOutletKey(owner, target)] =
+      handle.Outlet
   }
-
-  const reload = () => {
-    void reloadInterceptorLoad(deps, id)
-  }
-
-  const Outlet: Kiru.Component = () => {
-    return () => {
-      if (!isActive.peek()) return null
-      const state = deps.interceptState.value
-      if (!state || state.registrationId !== id) return null
-      const ctx: InterceptRenderContext<Record<string, string>> = {
-        params: state.targetMatch.params,
-        location: deps.buildTargetLocation(state.targetMatch),
-        signal: deps.getNavSignal(),
-        context: deps.getRequestContext(),
-        restore,
-        reload,
-        ...interceptLoadResultFromState(state),
-      }
-      return registration.render(ctx)
-    }
-  }
-
-  return {
-    Outlet,
-    isActive,
-    isPending,
-    restore,
-    slot: "",
-    path: target,
-  }
+  return handle
 }
 
 export function bindRouteInterceptorInSetup<P extends NavigatePath>(
@@ -348,17 +454,20 @@ export function unregisterRouteInterceptor(
   const reg = deps.registrations.find(
     (r) => ownerRegistrationKey(r.owner, r.targetPath) === ownerKey
   )
-  if (reg) {
+  if (reg && reg.id === handle.registrationId) {
     clearInterceptorPrefetchForRegistration(reg.id)
     const i = deps.registrations.indexOf(reg)
     if (i !== -1) deps.registrations.splice(i, 1)
+    if (owner.kind === "scope" && deps.scopeInterceptorOutlets) {
+      delete deps.scopeInterceptorOutlets[scopeInterceptorOutletKey(owner, target)]
+    }
     const state = deps.interceptState.value
     if (state?.registrationId === reg.id) {
       deps.dismissIntercept({ skipHistoryBack: true })
     }
+    handle.isActive.value = false
+    handle.isPending.value = false
   }
-  handle.isActive.value = false
-  handle.isPending.value = false
 }
 
 export function applyInterceptLoadResult(
@@ -396,7 +505,9 @@ export async function runInterceptorLoad(
       signal,
       context: deps.getRequestContext(),
     }
-    const data = await registration.load(ctx)
+    const data = await runWithRemoteAbortSignalAsync(signal, async () =>
+      registration.load!(ctx)
+    )
     return buildInterceptSuccessResult(data)
   } catch (err) {
     return buildInterceptErrorResult(err)

@@ -19,7 +19,9 @@ import {
   type LoaderContextRouterSlice,
 } from "./runPageLoad.js"
 import {
-  buildRoutedSubtree,
+  buildRoutedLeaf,
+  composeLayoutWithChild,
+  computeLayoutStackKey,
   loadNotFoundRouteTree,
   loadRouteTree,
   renderClientErrorOutlet,
@@ -151,13 +153,21 @@ export type BuildClientOutletSubtreeInput = {
   getNavGeneration: () => number
   useHydratedPageData?: boolean
   forceReload?: boolean
+  /** When set, reuse this scope instead of creating a new one after async gaps. */
+  scope?: NavigationScope
   /** SSR/SSG client outlet: sync render throws on leaf routes (see bootstrapSsrClient). */
   onLeafRenderError?: (err: unknown) => void
 }
 
-export async function buildClientOutletSubtree(
+export type BuildClientLeafSubtreeResult = {
+  leaf: JSX.Element | null
+  layoutModules: Array<import("./types.js").LayoutModule | null>
+  layoutStackKey: string
+}
+
+export async function buildClientLeafSubtree(
   input: BuildClientOutletSubtreeInput
-): Promise<JSX.Element | null> {
+): Promise<BuildClientLeafSubtreeResult> {
   const {
     router,
     match,
@@ -166,10 +176,12 @@ export async function buildClientOutletSubtree(
     getNavGeneration,
     useHydratedPageData = true,
     forceReload,
+    scope: scopeInput,
     onLeafRenderError,
   } = input
   const scope =
-    match !== null
+    scopeInput ??
+    (match !== null
       ? createNavigationScope(
           getNavGeneration(),
           signal,
@@ -179,12 +191,14 @@ export async function buildClientOutletSubtree(
             formatRouterSearch(router.query.peek())
           )
         )
-      : createNavigationScope(getNavGeneration(), signal)
+      : createNavigationScope(getNavGeneration(), signal))
   try {
     const tree = match
       ? await loadRouteTree(match)
       : await loadNotFoundRouteTree(router.manifest, pathname)
-    if (!isScopeCurrent(scope, getNavGeneration) || signal.aborted) return null
+    if (!isScopeCurrent(scope, getNavGeneration) || signal.aborted) {
+      return { leaf: null, layoutModules: [], layoutStackKey: "" }
+    }
 
     let leafProps: LeafRouteProps = {}
     let routeModule = tree?.routeModule
@@ -205,7 +219,7 @@ export async function buildClientOutletSubtree(
         !isScopeCurrent(scope, getNavGeneration) ||
         signal.aborted
       ) {
-        return null
+        return { leaf: null, layoutModules: [], layoutStackKey: "" }
       }
       router.forceLoaderReload.value = false
       router.isLoaderStale.value = prepared.isLoaderStale === true
@@ -213,21 +227,50 @@ export async function buildClientOutletSubtree(
       leafProps = prepared.leafProps
     }
 
-    if (!isScopeCurrent(scope, getNavGeneration) || signal.aborted) return null
-    return tree && routeModule
-      ? buildRoutedSubtree(tree.layoutModules, routeModule, leafProps, {
-          onLeafRenderError,
-          match,
-        })
-      : null
+    if (!isScopeCurrent(scope, getNavGeneration) || signal.aborted) {
+      return { leaf: null, layoutModules: [], layoutStackKey: "" }
+    }
+    const layoutModules = tree?.layoutModules ?? []
+    const layoutStackKey = computeLayoutStackKey(layoutModules, match)
+    const leaf =
+      tree && routeModule
+        ? buildRoutedLeaf(routeModule, leafProps, {
+            onLeafRenderError,
+            match,
+          })
+        : null
+    return { leaf, layoutModules, layoutStackKey }
   } catch (err) {
-    if (signal.aborted) return null
+    if (signal.aborted) {
+      return { leaf: null, layoutModules: [], layoutStackKey: "" }
+    }
     const recovery = await renderClientErrorOutlet(
       router.manifest,
       match,
       err
     )
-    if (recovery) return recovery
+    if (recovery) {
+      return {
+        leaf: recovery,
+        layoutModules: [],
+        layoutStackKey: "",
+      }
+    }
     throw err
   }
+}
+
+export async function buildClientOutletSubtree(
+  input: BuildClientOutletSubtreeInput
+): Promise<JSX.Element | null> {
+  const { match, onLeafRenderError } = input
+  const { leaf, layoutModules } = await buildClientLeafSubtree(input)
+  if (!leaf) return null
+  if (layoutModules.length === 0) return leaf
+  const leafKey = match ? `${match.route.id}:${match.pathname}` : undefined
+  return composeLayoutWithChild(layoutModules, leaf, {
+    onLeafRenderError,
+    match,
+    leafKey,
+  })
 }

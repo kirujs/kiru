@@ -4,6 +4,7 @@ const NOW = Date.UTC(2026, 5, 1, 12, 0, 0)
 
 const users: User[] = [
   { id: "demo", username: "demo", name: "Demo User" },
+  { id: "e2e", username: "e2e_user", name: "E2E User" },
 ]
 
 const communities: Community[] = [
