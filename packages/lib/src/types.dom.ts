@@ -273,6 +273,7 @@ type LinkRel =
   | "stylesheet"
   | "tag"
   | "up"
+  | "manifest"
 
 type Loading = "eager" | "lazy"
 
