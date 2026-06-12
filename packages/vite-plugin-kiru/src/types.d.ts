@@ -121,13 +121,13 @@ export interface KiruPluginOptions {
           dir?: string
           /** @default "./src/routes.gen.ts" */
           outFile?: string
-          /** @default ["page.{tsx,ts,jsx,js}", "index.{tsx,ts,jsx,js}"] */
+          /** @default ["page.{tsx,ts,jsx,js}"] */
           pageFiles?: string[]
-          /** @default ["layout.{tsx,ts,jsx,js,mdx}"] */
+          /** @default ["layout.{tsx,ts,jsx,js}"] */
           layoutFiles?: string[]
-          /** @default ["error.{tsx,ts,jsx,js,mdx}"] */
+          /** @default ["error.{tsx,ts,jsx,js}"] */
           errorFiles?: string[]
-          /** @default ["not-found.{tsx,ts,jsx,js,mdx}"] */
+          /** @default ["not-found.{tsx,ts,jsx,js}"] */
           notFoundFiles?: string[]
           /** Module exporting `extendRoutes` (see file-based-routes docs). */
           extend?: string

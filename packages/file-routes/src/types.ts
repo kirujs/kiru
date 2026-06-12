@@ -1,19 +1,10 @@
-export const DEFAULT_PAGE_FILES = [
-  "page.{tsx,ts,jsx,js}",
-  "index.{tsx,ts,jsx,js}",
-] as const
+export const DEFAULT_PAGE_FILES = ["page.{tsx,ts,jsx,js}"] as const
 
-export const DEFAULT_LAYOUT_FILES = [
-  "layout.{tsx,ts,jsx,js,mdx}",
-] as const
+export const DEFAULT_LAYOUT_FILES = ["layout.{tsx,ts,jsx,js}"] as const
 
-export const DEFAULT_ERROR_FILES = [
-  "error.{tsx,ts,jsx,js,mdx}",
-] as const
+export const DEFAULT_ERROR_FILES = ["error.{tsx,ts,jsx,js}"] as const
 
-export const DEFAULT_NOT_FOUND_FILES = [
-  "not-found.{tsx,ts,jsx,js,mdx}",
-] as const
+export const DEFAULT_NOT_FOUND_FILES = ["not-found.{tsx,ts,jsx,js}"] as const
 
 export type FileRoutesOptions = {
   /** Absolute path to the pages directory. */

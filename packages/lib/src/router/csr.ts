@@ -76,7 +76,6 @@ export {
   createRoute,
   createRouteScope,
   createRouteTree,
-  mergeRouteTree,
 } from "./createRouteTree.js"
 export { RouterView } from "./routerView.js"
 import { useRouter } from "./routerContext.js"
@@ -262,8 +261,7 @@ export function createRouter({
     initialSplit.locale ??
     hydratedI18n?.locale ??
     (i18n ? i18n.defaultLocale : "en")
-  const origin =
-    location.origin || "http://localhost"
+  const origin = location.origin || "http://localhost"
   const pathname = signal(initialSplit.pathname)
   const locale = i18n ? signal(initialLocale) : undefined
   const i18nRuntime = i18n
@@ -511,7 +509,15 @@ export function createRouter({
       const loadedState = applyInterceptLoadResult(nextState, result)
       syncAllInterceptorHandlesActive(interceptorRegistrations, loadedState)
       interceptState.value = loadedState
-      if (canEndClientNavigation({ pathname, match, currentNavigation, isNavigating, interceptState })) {
+      if (
+        canEndClientNavigation({
+          pathname,
+          match,
+          currentNavigation,
+          isNavigating,
+          interceptState,
+        })
+      ) {
         isNavigating.value = false
         currentNavigation.value = null
       }

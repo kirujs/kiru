@@ -11,7 +11,11 @@ import type {
   RoutePageConfig,
   RouteTreeDefinition,
 } from "./types.js"
-import type { CreatedRoute, CreatedRouteScope, RouteTreeChild } from "./routePaths.js"
+import type {
+  CreatedRoute,
+  CreatedRouteScope,
+  RouteTreeChild,
+} from "./routePaths.js"
 
 type RouteScopeConfigWithChildren = Omit<RouteScopeConfig, "middleware"> & {
   children: readonly RouteTreeChild[]
@@ -202,20 +206,4 @@ export function createRouteTree(
     children: config.children as RouteNodeDefinition[],
   }
   return { root }
-}
-
-/** Append hand-written route nodes to a generated tree root. */
-export function mergeRouteTree(
-  tree: RouteTreeDefinition,
-  extraChildren: readonly RouteTreeChild[]
-): RouteTreeDefinition {
-  return {
-    root: {
-      ...tree.root,
-      children: [
-        ...tree.root.children,
-        ...(extraChildren as RouteNodeDefinition[]),
-      ],
-    },
-  }
 }
