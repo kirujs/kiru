@@ -555,9 +555,25 @@ export async function generateStaticPaths(
   pathPolicy?: RouterPathPolicy,
   buildMeta?: RouteBuildMeta
 ): Promise<string[]> {
+  if (!buildMeta) {
+    const { ensureResolvedRouteLayersForMatch } = await import(
+      "./routeLayerResolution.js"
+    )
+    for (const route of manifest.routes) {
+      if (route.config || route.scopes.some((scope) => scope.config)) {
+        await ensureResolvedRouteLayersForMatch({
+          route,
+          params: {},
+          pathname: formatPathname(route.path, pathPolicy),
+        })
+      }
+    }
+  }
+
   const meta =
     buildMeta ??
     (await discoverRouteBuildMeta(manifest, (route) => route.component()))
+
   const out = new Set<string>()
   const staticRoutes = manifest.routes
     .filter((r) => r.static)
@@ -622,6 +638,11 @@ export async function generateSitemapPaths(
 
   const pathPolicy = site.pathPolicy
   const sitemapOpts = site.sitemap
+
+  const out = new Set(
+    await generateStaticPaths(manifest, pathPolicy, options?.buildMeta)
+  )
+
   const meta =
     options?.buildMeta ??
     (await discoverRouteBuildMeta(
@@ -629,10 +650,6 @@ export async function generateSitemapPaths(
       (route) => route.component(),
       { includeRoutePaths: sitemapOpts.include }
     ))
-
-  const out = new Set(
-    await generateStaticPaths(manifest, pathPolicy, meta)
-  )
 
   if (options?.defaultSsrPaths) {
     for (const route of manifest.routes) {

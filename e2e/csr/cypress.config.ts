@@ -31,6 +31,13 @@ export default defineConfig({
       let server: ViteDevServer | null = null
       const restoreAllHmrFiles = registerHmrFileTasks(on)
 
+      on("task", {
+        logRouterDiagnostics(snapshot: Record<string, unknown>) {
+          console.log("\n[kiru csr diagnostics]\n" + JSON.stringify(snapshot, null, 2))
+          return null
+        },
+      })
+
       on("before:run", async () => {
         freeListeningPort(port)
         freeListeningPort(hmrPort)

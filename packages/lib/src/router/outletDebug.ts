@@ -6,11 +6,24 @@ export type OutletDebugEntry = {
 
 const MAX_OUTLET_DEBUG_ENTRIES = 80
 
+export type OutletStatePeek = {
+  resourcePending: boolean
+  resourceHasValue: boolean
+  routeId: string | null
+  mode: string
+}
+
 declare global {
   interface Window {
     __kiruOutletDebug?: boolean
     __kiruOutletDebugLog?: OutletDebugEntry[]
+    __kiruOutletState?: OutletStatePeek
   }
+}
+
+export function publishOutletState(state: OutletStatePeek): void {
+  if (typeof window === "undefined") return
+  window.__kiruOutletState = state
 }
 
 export function isOutletDebugEnabled(): boolean {

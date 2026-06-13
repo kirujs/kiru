@@ -30,6 +30,7 @@ import {
 import type { CurrentNavigation } from "./types.js"
 import type { RouteManifest, RouteMatch, PageModule } from "./types.js"
 import type { Router } from "./routerInstance.js"
+import { logOutletDebug } from "./outletDebug.js"
 
 export type ClientOutletRouter = LoaderContextRouterSlice & {
   manifest: RouteManifest
@@ -197,6 +198,10 @@ export async function buildClientLeafSubtree(
       ? await loadRouteTree(match)
       : await loadNotFoundRouteTree(router.manifest, pathname)
     if (!isScopeCurrent(scope, getNavGeneration) || signal.aborted) {
+      logOutletDebug("leaf:discarded", {
+        routeId: match?.route.id ?? null,
+        reason: signal.aborted ? "aborted" : "scope-stale",
+      })
       return { leaf: null, layoutModules: [], layoutStackKey: "" }
     }
 
@@ -219,6 +224,14 @@ export async function buildClientLeafSubtree(
         !isScopeCurrent(scope, getNavGeneration) ||
         signal.aborted
       ) {
+        logOutletDebug("leaf:discarded", {
+          routeId: match.route.id,
+          reason: prepared.discarded
+            ? "prepared-discarded"
+            : signal.aborted
+              ? "aborted"
+              : "scope-stale",
+        })
         return { leaf: null, layoutModules: [], layoutStackKey: "" }
       }
       router.forceLoaderReload.value = false
@@ -228,6 +241,10 @@ export async function buildClientLeafSubtree(
     }
 
     if (!isScopeCurrent(scope, getNavGeneration) || signal.aborted) {
+      logOutletDebug("leaf:discarded", {
+        routeId: match?.route.id ?? null,
+        reason: signal.aborted ? "aborted" : "scope-stale",
+      })
       return { leaf: null, layoutModules: [], layoutStackKey: "" }
     }
     const layoutModules = tree?.layoutModules ?? []
@@ -239,9 +256,18 @@ export async function buildClientLeafSubtree(
             match,
           })
         : null
+    logOutletDebug("leaf:built", {
+      routeId: match?.route.id ?? null,
+      hasLeaf: leaf != null,
+      layoutCount: layoutModules.length,
+    })
     return { leaf, layoutModules, layoutStackKey }
   } catch (err) {
     if (signal.aborted) {
+      logOutletDebug("leaf:discarded", {
+        routeId: match?.route.id ?? null,
+        reason: "aborted",
+      })
       return { leaf: null, layoutModules: [], layoutStackKey: "" }
     }
     const recovery = await renderClientErrorOutlet(
@@ -250,6 +276,10 @@ export async function buildClientLeafSubtree(
       err
     )
     if (recovery) {
+      logOutletDebug("leaf:recovery", {
+        routeId: match?.route.id ?? null,
+        error: err instanceof Error ? err.message : String(err),
+      })
       return {
         leaf: recovery,
         layoutModules: [],

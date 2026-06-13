@@ -13,6 +13,13 @@ describe("htmlAssetCandidates", () => {
     assert.equal(normalizeAssetPathname("/"), "/")
   })
 
+  it("normalizeAssetPathname preserves percent-encoded path segments", () => {
+    assert.equal(
+      normalizeAssetPathname("/blog/hello%20world"),
+      "/blog/hello%20world"
+    )
+  })
+
   it("resolveHtmlAssetCandidates maps public paths to prerender pathnames", () => {
     assert.deepEqual(resolveHtmlAssetCandidates("/about"), [
       "/about",
@@ -27,6 +34,19 @@ describe("htmlAssetCandidates", () => {
     assert.deepEqual(resolveHtmlAssetCandidates("/posts/one/"), [
       "/posts/one/index.html",
     ])
+  })
+
+  it("resolveHtmlAssetCandidates probes encoded and decoded dynamic segment paths", () => {
+    assert.ok(
+      resolveHtmlAssetCandidates("/blog/hello%20world").includes(
+        "/blog/hello%20world.html"
+      )
+    )
+    assert.ok(
+      resolveHtmlAssetCandidates("/blog/hello world").includes(
+        "/blog/hello%20world.html"
+      )
+    )
   })
 
   it("resolveHtmlAssetCandidates handles .html path and rejects other extensions", () => {

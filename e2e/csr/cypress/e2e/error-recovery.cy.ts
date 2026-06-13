@@ -3,11 +3,13 @@ describe("CSR error recovery", () => {
 
   beforeEach(() => {
     cy.visit(`http://localhost:${port()}/`)
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
   })
 
   it("shows route error UI when page throws after client navigation", () => {
     cy.get('[data-testid="nav-csr-break"]').click()
-    cy.get('[data-testid="csr-error-page"]').should(
+    cy.location("pathname").should("eq", "/csr-break")
+    cy.get('[data-testid="csr-error-page"]', { timeout: 10000 }).should(
       "contain",
       "CSR error boundary: e2e-csr-boom"
     )
@@ -18,7 +20,8 @@ describe("CSR error recovery", () => {
 
   it("passes loader failure to the page via PageProps.error", () => {
     cy.get('[data-testid="nav-csr-break-loader"]').click()
-    cy.get('[data-testid="csr-loader-error"]').should(
+    cy.location("pathname").should("eq", "/csr-break-loader")
+    cy.get('[data-testid="csr-loader-error"]', { timeout: 10000 }).should(
       "contain",
       "Loader error: e2e-csr-loader-boom"
     )

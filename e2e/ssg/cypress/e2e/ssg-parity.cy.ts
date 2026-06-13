@@ -7,6 +7,7 @@ describe("SSG client parity (S3)", () => {
 
   it("router.invalidate on current route does not full-reload the document", () => {
     cy.visit("/invalidate-demo")
+    cy.get("#app").should("have.attr", "data-kiru-hydrated-at")
     cy.get("#app").invoke("attr", "data-kiru-hydrated-at").then((t0) => {
       cy.get('[data-testid="ssg-invalidate-trigger"]').click()
       cy.get("#app").invoke("attr", "data-kiru-hydrated-at").should("eq", t0)

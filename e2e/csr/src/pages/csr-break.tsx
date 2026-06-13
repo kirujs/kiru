@@ -1,3 +1,3 @@
-export default function CsrBreak(): null {
+export default function CsrBreak() {
   throw new Error("e2e-csr-boom")
 }

@@ -77,32 +77,28 @@ SSG and SSR share **outlet subscription** architecture — same parity considera
 
 ---
 
-## Dual outlet architecture (critical)
+## Unified outlet + navigation FSM
 
-| Path | Outlet mechanism | Pending UX |
-|------|------------------|------------|
-| CSR | `RouterView` → `resource()` | `isLoaderPending`, `ErrorBoundary` |
-| SSR/SSG | `signal` + `subscribeSsrClientOutlet` | `isLoaderPending`, `isNavigating`, manual refresh |
+CSR and SSR/SSG share one outlet component: `ClientRouteOutlet` in `packages/lib/src/router/clientRouteOutlet.tsx`.
+
+| Export | Mode | Use |
+|--------|------|-----|
+| `RouterView` | `csr` | `createRouterApp` from `kiru/router/csr` |
+| `SsrClientOutlet` | `ssr-hydrate` | `bootstrapSsrClient` / `bootstrapSsgClient` |
 
 Both call `buildClientOutletSubtree` → `prepareRouteWithDocumentHead` → `prepareRouteForNavigation`.
 
-Shared navigation-end logic: `canEndClientNavigation` / `tryClearClientNavigation` in `packages/lib/src/router/outletNavigation.ts` (used by `RouterView` and `subscribeSsrClientOutlet`).
+**Navigation** is driven by a single `RouterPhase` enum (`navigationMachine.ts`), an async-generator workflow (`navigationWorkflow.ts`), and a `NavigationRunner` owned by `NavigationController` (`navigationController.ts`). The workflow yields FSM events and `awaitOutlet` steps; the runner applies transitions, returns `committed`/`errored` before the outlet settles, and resumes after `notifyOutletSettled`. Public signals (`isNavigating`, `interceptState`, `currentNavigation`) are synced from the active phase.
 
-### Decision: keep dual outlets (Sprint 2, 2026-05-22)
-
-**Unification deferred.** CSR `RouterView` and SSR/SSG `subscribeSsrClientOutlet` stay separate because:
-
-- CSR needs `resource()` + `ErrorBoundary` for async outlet work and render throws.
-- SSR/SSG need a pre-hydrate outlet build, per-refresh `AbortController`, and `useHydratedPageData: true` only on first paint.
-
-Tree building is already shared (`clientRoutePrep.ts`). Scheduling and error recovery stay in two modules until a later spike proves a single outlet can cover both without regressing hydration.
+**Display policy** (not FSM state): `resolveOutletDisplay()` handles SSR hydrate defer (`initialSubtree` until post-hydrate microtask), stale-while-revalidate during cross-route pending loads, and error outlets.
 
 | Concern | CSR | SSR/SSG |
 |---------|-----|---------|
-| Scheduling | `resource()` deps | `match` / `isNavigating` / `outletRenderError` subscriptions |
-| `useHydratedPageData` | always `true` in outlet | `true` first paint, `false` after hydrate |
-| Invalidate | `loaderEpoch` in `resource()` deps | `loaderEpoch.subscribe` → `refreshOutletOnInvalidate` |
-| Render throw | `ErrorBoundary` → `outletRenderError` | `onLeafRenderError` + `outletRenderError` subscription |
+| Scheduling | `resource()` on `match` / `loaderEpoch` / nav signals | same component; `initialSubtree` + hydrate gate when prebuilt |
+| `useHydratedPageData` | always `true` | `true` until hydrate gate opens, then `false` |
+| Invalidate | `loaderEpoch` in `resource()` deps | same |
+| Render throw | `ErrorBoundary` → `outletRenderError` | same (+ optional `onLeafRenderError` during load) |
+| Nav end | `NavigationController.notifyOutletSettled` | same |
 
 ### Parity checklist (e2e / integration)
 
@@ -121,7 +117,7 @@ Behaviors both paths must match after hydrate. Checked in Cypress or lib tests.
 | Hash-only change | parity.cy.ts | url-state e2e | ssg hash e2e |
 | Locale prefix nav | i18n e2e | tier3 / i18n | i18n e2e |
 
-**Risk:** Bug fixes must often be applied in **two** scheduling layers — see [16-gaps-risks-and-launch-checklist.md](./16-gaps-risks-and-launch-checklist.md).
+Outlet scheduling is unified; regressions should be caught by `ssrClientOutlet.test.ts`, `routerShellTree.test.tsx`, and the parity checklist below.
 
 ---
 

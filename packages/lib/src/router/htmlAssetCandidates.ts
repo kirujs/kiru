@@ -33,22 +33,52 @@ export function normalizeAssetPathname(urlOrPath: string): string {
   return stripped || "/"
 }
 
+function pathnameLookupVariants(pathname: string): string[] {
+  const variants = new Set<string>([pathname])
+  try {
+    const decoded = decodeURI(pathname)
+    if (decoded !== pathname) variants.add(decoded)
+  } catch {
+    /* ignore malformed escape sequences */
+  }
+  try {
+    const encoded = pathname
+      .split("/")
+      .map((segment, index) => {
+        if (index === 0 && segment === "") return ""
+        return encodeURIComponent(decodeURIComponent(segment))
+      })
+      .join("/")
+    if (encoded !== pathname) variants.add(encoded)
+  } catch {
+    /* ignore malformed escape sequences */
+  }
+  return [...variants]
+}
+
 /**
  * URL pathnames to probe for prerendered HTML (preview disk, Workers `getAsset`, etc.).
  * Order matters: first hit wins.
  */
 export function resolveHtmlAssetCandidates(pathname: string): string[] {
-  const p = normalizeAssetPathname(pathname)
-  const ext = extname(p)
+  const candidates: string[] = []
+  for (const p of pathnameLookupVariants(normalizeAssetPathname(pathname))) {
+    const ext = extname(p)
 
-  if (ext === ".html") return [p]
-  if (ext) return []
+    if (ext === ".html") {
+      candidates.push(p)
+      continue
+    }
+    if (ext) continue
 
-  if (p.endsWith("/")) {
-    return [`${p}index.html`]
+    if (p.endsWith("/")) {
+      candidates.push(`${p}index.html`)
+      continue
+    }
+
+    candidates.push(p, `${p}.html`, `${p}/index.html`)
   }
-
-  return [p, `${p}.html`, `${p}/index.html`]
+  return candidates
 }
 
 /** Try each {@link resolveHtmlAssetCandidates} pathname until `getAsset` returns HTML. */

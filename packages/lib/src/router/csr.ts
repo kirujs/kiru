@@ -32,7 +32,6 @@ import { mergeRouteMeta } from "./routeMeta.js"
 import {
   buildMatchSegments,
   buildQueryString,
-  createNavigateInternal,
   formatRouterSearch,
   ensureHistoryIndex,
   parseResolvedLocation,
@@ -77,7 +76,7 @@ export {
   createRouteScope,
   createRouteTree,
 } from "./createRouteTree.js"
-export { RouterView } from "./routerView.js"
+export { RouterView, ClientRouteOutlet } from "./clientRouteOutlet.js"
 import { useRouter } from "./routerContext.js"
 import { buildLoaderContext } from "./runPageLoad.js"
 import { setRouterInstanceRuntime } from "./routerRuntime.js"
@@ -104,7 +103,6 @@ import {
   syncAllInterceptorHandlesActive,
   registrationMatchesFrom,
   findRegistrationForHistoryIntercept,
-  backgroundMatchFromHistoryIntercept,
   type InterceptorRegistration,
   type KiruHistoryInterceptState,
 } from "./routeInterceptors.js"
@@ -126,10 +124,10 @@ import {
   splitAppPathnameDetailed,
   type InternationalizationConfig,
 } from "./i18n/index.js"
-import { parseAppLocation } from "./i18n/routing.js"
 import { createI18nRuntime, readHydratedI18n } from "./i18nContext.js"
 import { logOutletDebug } from "./outletDebug.js"
-import { canEndClientNavigation } from "./outletNavigation.js"
+import { createNavigationController } from "./navigationController.js"
+import type { NavigationController } from "./navigationController.js"
 
 export {
   createI18nConfig,
@@ -359,13 +357,6 @@ export function createRouter({
     }
   }
 
-  if (typeof document !== "undefined") {
-    const initialMatch = match.peek()
-    if (initialMatch) {
-      void runInitialClientSetup(initialMatch)
-    }
-  }
-
   const afterEachHooks: AfterEachHook[] = []
   const leaveByRoute = new Map<string, NavigationGuard[]>()
   const updateByRoute = new Map<string, NavigationGuard[]>()
@@ -381,11 +372,8 @@ export function createRouter({
     return list
   }
 
-  const navToken = { value: 0 }
-  const navAbortController: { current: AbortController | null } = {
-    current: null,
-  }
   const transitionsEnabled = !!transition
+  let navController!: NavigationController
   const historyIndex = { value: 0 }
   const scrollStack = {
     value:
@@ -450,14 +438,12 @@ export function createRouter({
     if (!state) return
     clearInterceptorPrefetchForRegistration(state.registrationId)
     syncInterceptorHandles()
-    interceptState.value = null
+    navController.dismissInterceptPhase()
     const bg = state.backgroundMatch
     pathname.value = bg.pathname
     params.value = bg.params
     match.value = bg
     matches.value = buildMatchSegments(bg)
-    isNavigating.value = false
-    currentNavigation.value = null
     if (!options?.skipHistoryBack && typeof window !== "undefined") {
       history.back()
     }
@@ -509,17 +495,10 @@ export function createRouter({
       const loadedState = applyInterceptLoadResult(nextState, result)
       syncAllInterceptorHandlesActive(interceptorRegistrations, loadedState)
       interceptState.value = loadedState
-      if (
-        canEndClientNavigation({
-          pathname,
-          match,
-          currentNavigation,
-          isNavigating,
-          interceptState,
-        })
-      ) {
-        isNavigating.value = false
-        currentNavigation.value = null
+      if (loadedState.error) {
+        navController.notifyInterceptLoadError(loadedState.error)
+      } else {
+        navController.notifyInterceptLoadDone(loadedState.data)
       }
     }
   }
@@ -558,7 +537,7 @@ export function createRouter({
       toPath: next.pathname,
       fromRouteId: prevMatch?.route.id ?? null,
       toRouteId: nextMatch?.route.id ?? null,
-      navGen: navToken.value,
+      navGen: navController.getGeneration(),
     })
     if (typeof document !== "undefined" && nextMatch) {
       void syncDocumentHeadAfterCommit(nextMatch, next)
@@ -573,69 +552,75 @@ export function createRouter({
     }
   } = {}
 
-  const navigateInternal = createNavigateInternal(
-    {
-      manifest,
-      resolvedPathPolicy,
-      normalizedBaseUrl,
-      origin,
-      pathname,
-      hash,
-      query,
-      match,
-      params,
-      matches,
-      isNavigating,
-      currentNavigation,
-      requestContext,
-      afterEachHooks,
-      leaveByRoute,
-      updateByRoute,
-      componentEnterGuards,
-      history,
-      navToken,
-      navAbortController,
-      historyIndex,
-      scrollStack,
-      saveScrollAt,
-      commitLocation: (next) => commitLocation(next),
-      setValidatedQuery: (data) => {
-        validatedQuery.value = data
-      },
-      setValidatedRouteParams: (data) => {
-        validatedRouteParams.value = data
-      },
-      buildMatchSegments,
-      locationFromMatch,
-      snapshotFromParts,
-      currentLocationParts,
-      setLastNavigation: (entry) => {
-        lastNavigationHolder.entry = entry
-      },
-      setOutletRenderError: (err) => {
-        outletRenderError.value = err
-      },
-      interceptState,
-      interceptorRegistrations,
-      commitInterceptLocation,
-      dismissIntercept,
-      requestLimits,
-      localeRouting,
-      locale,
-      onLocaleChange:
-        i18n && i18nRuntime
-          ? (loc) => {
-              i18nRuntime.setLocale(loc, i18nRuntime.data.peek())
-              void loadI18nMessages(i18n, loc).then((data) => {
-                if (i18nRuntime.locale.peek() === loc) {
-                  i18nRuntime.setLocale(loc, data)
-                }
-              })
-            }
-          : undefined,
+  navController = createNavigationController({
+    manifest,
+    resolvedPathPolicy,
+    normalizedBaseUrl,
+    origin,
+    pathname,
+    hash,
+    query,
+    match,
+    params,
+    matches,
+    isNavigating,
+    currentNavigation,
+    interceptState,
+    requestContext,
+    afterEachHooks,
+    leaveByRoute,
+    updateByRoute,
+    componentEnterGuards,
+    history,
+    historyIndex,
+    scrollStack,
+    saveScrollAt,
+    commitLocation: (next) => commitLocation(next),
+    setValidatedQuery: (data) => {
+      validatedQuery.value = data
     },
-    transitionsEnabled
-  )
+    setValidatedRouteParams: (data) => {
+      validatedRouteParams.value = data
+    },
+    buildMatchSegments,
+    locationFromMatch,
+    snapshotFromParts,
+    currentLocationParts,
+    setLastNavigation: (entry) => {
+      lastNavigationHolder.entry = entry
+    },
+    setOutletRenderError: (err) => {
+      outletRenderError.value = err
+    },
+    interceptorRegistrations,
+    commitInterceptLocation,
+    dismissIntercept,
+    requestLimits,
+    localeRouting,
+    locale,
+    onLocaleChange:
+      i18n && i18nRuntime
+        ? (loc) => {
+            i18nRuntime.setLocale(loc, i18nRuntime.data.peek())
+            void loadI18nMessages(i18n, loc).then((data) => {
+              if (i18nRuntime.locale.peek() === loc) {
+                i18nRuntime.setLocale(loc, data)
+              }
+            })
+          }
+        : undefined,
+    transitionsEnabled,
+  })
+
+  const navigateInternal = navController.navigateInternal
+  const navAbortController = navController.getNavAbortController()
+
+  if (typeof document !== "undefined") {
+    const initialMatch = match.peek()
+    if (initialMatch) {
+      void runInitialClientSetup(initialMatch)
+    }
+  }
 
   if (typeof window !== "undefined" && localeRouting) {
     const initialDetailed = splitAppPathnameDetailed(
@@ -699,87 +684,66 @@ export function createRouter({
         historyIndex.value = state.index
       }
       const href = window.location.href
-      const resolved = localeRouting
-        ? parseAppLocation(
-            new URL(href),
-            normalizedBaseUrl,
-            localeRouting,
-            resolvedPathPolicy,
-            requestLimits
-          )
-        : parseResolvedLocation(new URL(href), normalizedBaseUrl, requestLimits)
-      const targetPath = resolved.pathname
-      const activeIntercept = interceptState.peek()
+      const resolved = navController.parsePopstateUrl(href)
+      const classification = navController.classifyPopstate({
+        resolved,
+        historyState: state,
+        activeIntercept: interceptState.peek(),
+        pathname: pathname.peek(),
+        hash: hash.peek(),
+        query: query.peek(),
+        match: match.peek(),
+      })
 
-      if (activeIntercept) {
-        const bgPath = activeIntercept.backgroundMatch.pathname
-        if (targetPath === bgPath) {
-          syncInterceptorHandles()
-          interceptState.value = null
-          pathname.value = resolved.pathname
-          hash.value = resolved.hash
-          query.value = resolved.query
-          params.value = activeIntercept.backgroundMatch.params
-          match.value = activeIntercept.backgroundMatch
-          matches.value = buildMatchSegments(activeIntercept.backgroundMatch)
-          isNavigating.value = false
-          currentNavigation.value = null
-          const offset = scrollStack.value[historyIndex.value]
-          if (offset) window.scrollTo(offset[0], offset[1])
-          return
-        }
+      const scrollToHistory = () => {
+        const offset = scrollStack.value[historyIndex.value]
+        if (offset) window.scrollTo(offset[0], offset[1])
       }
 
-      if (
-        !activeIntercept &&
-        !state?.kiruIntercept &&
-        targetPath === pathname.peek() &&
-        resolved.hash === hash.peek() &&
-        formatRouterSearch(resolved.query) === formatRouterSearch(query.peek())
-      ) {
-        const toMatch = matchRoute(manifest, targetPath, resolvedPathPolicy)
-        const currentMatch = match.peek()
-        if (
-          toMatch &&
-          currentMatch &&
-          toMatch.route.id === currentMatch.route.id &&
-          JSON.stringify(toMatch.params) === JSON.stringify(currentMatch.params)
-        ) {
-          isNavigating.value = false
-          currentNavigation.value = null
-          return
+      if (classification.kind === "dismiss_intercept") {
+        const bg = interceptState.peek()?.backgroundMatch
+        navController.dispatchPopstate(classification)
+        syncInterceptorHandles()
+        pathname.value = classification.resolved.pathname
+        hash.value = classification.resolved.hash
+        query.value = classification.resolved.query
+        if (bg) {
+          params.value = bg.params
+          match.value = bg
+          matches.value = buildMatchSegments(bg)
         }
+        scrollToHistory()
+        return
       }
 
-      if (state?.kiruIntercept) {
-        const toMatch = matchRoute(manifest, targetPath, resolvedPathPolicy)
-        if (toMatch) {
+      if (classification.kind === "noop") {
+        navController.dispatchPopstate(classification)
+        scrollToHistory()
+        return
+      }
+
+      if (classification.kind === "restore_intercept") {
+        const payload = navController.restoreInterceptFromPopstate({
+          resolved: classification.resolved,
+          historyIntercept: classification.historyIntercept,
+          interceptorRegistrations,
+        })
+        if (payload) {
           const reg = findRegistrationForHistoryIntercept(
-            state.kiruIntercept,
+            classification.historyIntercept,
             interceptorRegistrations,
             manifest,
-            toMatch,
+            payload.target,
             resolvedPathPolicy
           )
-          const bgMatch = backgroundMatchFromHistoryIntercept(
-            manifest,
-            state.kiruIntercept,
-            resolvedPathPolicy
-          )
-          if (reg && bgMatch && registrationMatchesFrom(reg, bgMatch)) {
+          if (reg && registrationMatchesFrom(reg, payload.background)) {
             void commitInterceptLocation({
-              target: resolved,
-              targetMatch: toMatch,
-              backgroundMatch: bgMatch,
+              target: classification.resolved,
+              targetMatch: payload.target,
+              backgroundMatch: payload.background,
               registration: reg,
-              signal:
-                navAbortController.current?.signal ?? staticLoaderSignal(),
-            }).then(() => {
-              isNavigating.value = false
-              currentNavigation.value = null
-              const offset = scrollStack.value[historyIndex.value]
-              if (offset) window.scrollTo(offset[0], offset[1])
-            })
+              signal: navController.getNavSignal(),
+            }).then(scrollToHistory)
             return
           }
         }
@@ -788,10 +752,7 @@ export function createRouter({
       void navigateInternal(new URL(href), {
         replace: true,
         fromPopstate: true,
-      }).then(() => {
-        const offset = scrollStack.value[historyIndex.value]
-        if (offset) window.scrollTo(offset[0], offset[1])
-      })
+      }).then(scrollToHistory)
     }
     window.addEventListener("popstate", onPopstate)
     disposeCleanups.push(() =>
@@ -1043,9 +1004,9 @@ export function createRouter({
   }
 
   setRouterInstanceRuntime(routerRef, {
-    getNavGeneration: () => navToken.value,
-    getNavSignal: () =>
-      navAbortController.current?.signal ?? staticLoaderSignal(),
+    getNavGeneration: () => navController.getGeneration(),
+    getNavSignal: () => navController.getNavSignal(),
+    getNavigationController: () => navController,
     ...(i18n && i18nRuntime
       ? {
           i18n: {

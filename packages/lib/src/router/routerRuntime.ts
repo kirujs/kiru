@@ -15,6 +15,7 @@ import type {
 import type { createI18nRuntime, I18nContextValue } from "./i18nContext.js"
 import type { Router } from "./routerInstance.js"
 import { getActiveRouter } from "./routerGlobal.js"
+import type { NavigationController } from "./navigationController.js"
 
 export type RouterI18nRuntime = {
   config: InternationalizationConfig<readonly string[], unknown>
@@ -60,6 +61,7 @@ export type RouterRuntime = {
   dismissRouteIntercept?: (options?: { skipHistoryBack?: boolean }) => void
   /** Scope-owned interceptor Outlets that survive layout remounts within a scope. */
   getScopeInterceptorOutlets?: () => Readonly<Record<string, Kiru.Component>>
+  getNavigationController?: () => NavigationController
 }
 
 const ROUTER_RUNTIME = Symbol.for("kiru.router.runtime")

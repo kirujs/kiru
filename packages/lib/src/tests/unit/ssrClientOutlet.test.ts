@@ -170,7 +170,8 @@ describe("SsrClientOutlet", () => {
 
         const abortedDiscards = readOutletDebugLog().filter(
           (entry) =>
-            entry.event === "load:discarded" && entry.data?.reason === "aborted"
+            entry.event === "outlet:load:discarded" &&
+            entry.data?.reason === "aborted"
         )
         assert.equal(
           abortedDiscards.length,
@@ -229,6 +230,78 @@ describe("SsrClientOutlet", () => {
         assert.equal(toHome.status, "committed")
         assert.equal(router.pathname.peek(), "/")
         await waitForSelector(container, '[data-testid="home"]', 5000)
+
+        app.unmount()
+      },
+      { url: "http://localhost/" }
+    )
+  })
+
+  it("records outlet debug timeline for successful / → /about navigation", async () => {
+    const routes = createRouteTree({
+      children: [
+        createRoute("/", async () => ({
+          default: () =>
+            createElement("div", {
+              "data-testid": "home",
+              children: "home",
+            }),
+        })),
+        createRoute("/about", async () => ({
+          default: () =>
+            createElement("div", {
+              "data-testid": "about",
+              children: "about",
+            }),
+        })),
+      ],
+    })
+    const manifest = compileRouteTree(routes)
+
+    await withJSDOM(
+      async (container) => {
+        window.__kiruOutletDebug = true
+        window.__kiruOutletDebugLog = []
+
+        const router = createRouter({ routes })
+        const app = mount(
+          createSsrRouterShell(
+            router,
+            {},
+            createElement(SsrClientOutlet, { manifest })
+          ),
+          container
+        )
+
+        await waitForSelector(container, '[data-testid="home"]', 5000)
+        window.__kiruOutletDebugLog = []
+
+        const result = await router.navigate("/about")
+        assert.equal(result.status, "committed")
+        await waitForSelector(container, '[data-testid="about"]', 5000)
+
+        const events = readOutletDebugLog().map((e) => e.event)
+        const loadStarts = events.filter((e) => e === "outlet:load:start")
+        const loadCompletes = readOutletDebugLog().filter(
+          (e) => e.event === "outlet:load:complete"
+        )
+
+        assert.ok(
+          loadStarts.length >= 1,
+          `expected outlet:load:start, got ${JSON.stringify(events)}`
+        )
+        assert.ok(
+          loadCompletes.some((e) => e.data?.subtree === "ok"),
+          `expected outlet:load:complete subtree ok, got ${JSON.stringify(loadCompletes)}`
+        )
+        assert.ok(
+          events.includes("leaf:built"),
+          `expected leaf:built, got ${JSON.stringify(events)}`
+        )
+        assert.ok(
+          container.querySelector('[data-testid="about"]'),
+          "about DOM should be visible after navigation"
+        )
 
         app.unmount()
       },
